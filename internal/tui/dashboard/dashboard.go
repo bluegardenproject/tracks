@@ -87,6 +87,11 @@ type model struct {
 	height   int
 	err      error
 	lastPoll time.Time
+
+	// info is non-nil while the per-track info modal is open. The
+	// modal hides the rest of the table view. Set by `i`, cleared
+	// by `esc`.
+	info *info
 }
 
 func newModel(cfg config.Config) *model {
@@ -158,6 +163,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		// The info modal swallows keystrokes so navigation in the
+		// table doesn't happen while the popup is open.
+		if m.info != nil {
+			switch msg.String() {
+			case "esc", "i", "q", "ctrl+c":
+				m.info = nil
+				return m, nil
+			case "enter":
+				t := m.info.track
+				m.info = nil
+				_ = m.attachTrack(t.ID)
+				return m, nil
+			case "r":
+				m.info = openInfo(m.cfg, m.info.track)
+				return m, nil
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -173,6 +196,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				_ = m.attachTrack(t.ID)
+			}
+		case "i":
+			if len(m.tracks) > 0 {
+				m.info = openInfo(m.cfg, m.tracks[m.cursor])
 			}
 		case "y", "Y":
 			if len(m.prompts) > 0 {
@@ -277,6 +304,9 @@ func min(a, b int) int {
 }
 
 func (m *model) View() string {
+	if m.info != nil {
+		return m.renderInfo(m.info)
+	}
 	return m.renderTable(m.width)
 }
 
@@ -330,7 +360,7 @@ func (m *model) renderTable(width int) string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"))
+	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   i info   d end   K kill   x forget   X clear completed   y/n approve"))
 	b.WriteString("\n")
 	b.WriteString(m.styles.dim.Render("r refresh   q quit   (open menu from any window with <prefix>+t)"))
 	return lipgloss.NewStyle().Width(width).Render(b.String())
