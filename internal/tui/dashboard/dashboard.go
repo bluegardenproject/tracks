@@ -23,6 +23,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 )
 
 // pollInterval is the cadence at which the dashboard re-reads
@@ -33,14 +34,15 @@ const pollInterval = 1 * time.Second
 // styles holds all lipgloss styles. Centralized so a future theme
 // switch is a single edit.
 type styles struct {
-	header    lipgloss.Style
-	row       lipgloss.Style
-	rowActive lipgloss.Style
-	status    map[state.Status]lipgloss.Style
-	prompt    lipgloss.Style
-	dim       lipgloss.Style
-	pr        lipgloss.Style
-	snippet   lipgloss.Style
+	header        lipgloss.Style
+	row           lipgloss.Style
+	rowActive     lipgloss.Style
+	status        map[state.Status]lipgloss.Style
+	prompt        lipgloss.Style
+	dim           lipgloss.Style
+	pr            lipgloss.Style
+	snippetText   lipgloss.Style
+	snippetBorder lipgloss.Style
 }
 
 func defaultStyles() styles {
@@ -57,10 +59,11 @@ func defaultStyles() styles {
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		},
-		prompt:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
-		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		pr:      lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
-		snippet: lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("207")).Padding(0, 1),
+		prompt:        lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
+		dim:           lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		pr:            lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
+		snippetText:   lipgloss.NewStyle().Foreground(lipgloss.Color("250")),
+		snippetBorder: lipgloss.NewStyle().Foreground(lipgloss.Color("207")),
 	}
 }
 
@@ -393,16 +396,95 @@ func (m *model) renderRight(width int) string {
 
 	if t.LastOutput != "" {
 		b.WriteString("\n")
+		title := "pane snapshot"
 		if t.AwaitingInput {
-			b.WriteString(m.styles.status[state.StatusWaiting].Render("Claude is asking — enter to attach"))
-		} else {
-			b.WriteString(m.styles.dim.Render("pane snapshot"))
+			title = "Claude is asking — enter to attach"
 		}
-		b.WriteString("\n")
-		b.WriteString(m.styles.snippet.Width(width - 4).Render(t.LastOutput))
+		// Hand-roll the frame so we own the width math instead of
+		// relying on lipgloss's border + Width interaction (which
+		// silently breaks on lines containing East-Asian-Width or
+		// box-drawing characters).
+		b.WriteString(m.renderFrame(title, t.LastOutput, width-4, t.AwaitingInput))
 	}
 
 	return lipgloss.NewStyle().Width(width).Padding(1, 2).Render(b.String())
+}
+
+// renderFrame draws a rounded box around content. width is the total
+// outer width including border characters. The title is inlined into
+// the top border. Content lines are soft-wrapped to fit; trailing
+// padding is computed in display columns (runewidth) so unicode box
+// characters and emoji don't break the right border.
+func (m *model) renderFrame(title, content string, width int, hot bool) string {
+	if width < 10 {
+		width = 10
+	}
+	innerWidth := width - 4 // "│ " + " │"
+
+	borderStyle := m.styles.snippetBorder
+	if !hot {
+		borderStyle = m.styles.dim
+	}
+
+	var b strings.Builder
+
+	// Top border with inline title.
+	titleSegment := "╭─ " + title + " "
+	pad := width - runewidth.StringWidth(titleSegment) - 1
+	if pad < 0 {
+		pad = 0
+	}
+	b.WriteString(borderStyle.Render(titleSegment + strings.Repeat("─", pad) + "╮"))
+	b.WriteString("\n")
+
+	for _, raw := range strings.Split(content, "\n") {
+		for _, line := range wrapToWidth(raw, innerWidth) {
+			padCols := innerWidth - runewidth.StringWidth(line)
+			if padCols < 0 {
+				padCols = 0
+			}
+			b.WriteString(borderStyle.Render("│ "))
+			b.WriteString(m.styles.snippetText.Render(line))
+			b.WriteString(strings.Repeat(" ", padCols))
+			b.WriteString(borderStyle.Render(" │"))
+			b.WriteString("\n")
+		}
+	}
+
+	// Bottom border.
+	b.WriteString(borderStyle.Render("╰" + strings.Repeat("─", width-2) + "╯"))
+	return b.String()
+}
+
+// wrapToWidth breaks line at width display columns, preferring word
+// boundaries. Returns at least one slice element (the original line)
+// when the input is already short enough.
+func wrapToWidth(line string, width int) []string {
+	if width <= 0 || runewidth.StringWidth(line) <= width {
+		return []string{line}
+	}
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return []string{line}
+	}
+	var out []string
+	current := ""
+	for _, w := range words {
+		if current == "" {
+			current = w
+			continue
+		}
+		if runewidth.StringWidth(current)+1+runewidth.StringWidth(w) > width {
+			out = append(out, current)
+			current = w
+			continue
+		}
+		current += " " + w
+	}
+	if current != "" {
+		out = append(out, current)
+	}
+	return out
 }
 
 // wrapText soft-wraps s at width, preserving paragraph breaks.

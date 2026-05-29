@@ -182,27 +182,56 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 func paneSnippet(snapshot string) (string, bool) {
 	stripped := stripANSI(snapshot)
 	lines := strings.Split(stripped, "\n")
+	// `tmux capture-pane` returns each line padded to the original
+	// pane's width with trailing spaces. Strip them so downstream
+	// renderers don't think a 200-char blank tail is real content.
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t\r")
+	}
 
 	if start := findPromptStart(lines); start >= 0 {
-		// Walk down from start, drop trailing empty lines.
 		end := len(lines)
-		for end > start && strings.TrimSpace(lines[end-1]) == "" {
+		for end > start && lines[end-1] == "" {
 			end--
 		}
-		return strings.Join(lines[start:end], "\n"), true
+		return collapseBlanks(lines[start:end]), true
 	}
 
 	// No prompt marker — return last 8 non-empty lines.
 	const n = 8
 	out := make([]string, 0, n)
 	for i := len(lines) - 1; i >= 0 && len(out) < n; i-- {
-		line := strings.TrimRight(lines[i], " \t\r")
-		if strings.TrimSpace(line) == "" {
+		if lines[i] == "" {
 			continue
 		}
-		out = append([]string{line}, out...)
+		out = append([]string{lines[i]}, out...)
 	}
 	return strings.Join(out, "\n"), false
+}
+
+// collapseBlanks turns runs of empty lines into a single empty line.
+// Claude's TUI double-spaces its option lists, which looks great in
+// the live pane but wastes vertical real estate in the dashboard
+// detail panel.
+func collapseBlanks(lines []string) string {
+	out := make([]string, 0, len(lines))
+	prevBlank := false
+	for _, line := range lines {
+		blank := line == ""
+		if blank && prevBlank {
+			continue
+		}
+		out = append(out, line)
+		prevBlank = blank
+	}
+	// Drop leading/trailing blanks too.
+	for len(out) > 0 && out[0] == "" {
+		out = out[1:]
+	}
+	for len(out) > 0 && out[len(out)-1] == "" {
+		out = out[:len(out)-1]
+	}
+	return strings.Join(out, "\n")
 }
 
 // promptMarker matches the `☐ <title>` headline that Claude's TUI
