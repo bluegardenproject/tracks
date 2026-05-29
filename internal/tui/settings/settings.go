@@ -42,8 +42,8 @@ var ErrCancelled = errors.New("cancelled")
 func Run(startingCfg config.Config, loadError error) error {
 	cfg := startingCfg
 	if loadError != nil {
-		fmt.Println("⚠️  config file did not parse:", loadError)
-		fmt.Println("   the next save will back it up to config.yaml.bak.<timestamp> and overwrite.")
+		fmt.Println("warning: config file did not parse:", loadError)
+		fmt.Println("the next save will back it up to config.yaml.bak.<timestamp> and overwrite.")
 		fmt.Println()
 		if err := backupBrokenConfig(); err != nil {
 			fmt.Println("warning: could not back up broken config:", err)
@@ -76,7 +76,7 @@ func Run(startingCfg config.Config, loadError error) error {
 		// Save after every iteration. Validate() runs inside Save,
 		// so the disk is never written with invalid data.
 		if _, err := config.Save(cfg); err != nil {
-			fmt.Println("⚠️  save failed:", err)
+			fmt.Println("save failed:", err)
 			waitForKey()
 		}
 	}
@@ -100,15 +100,16 @@ func pickAction(cfg config.Config) (action, error) {
 		huh.NewGroup(
 			huh.NewSelect[action]().
 				Title(fmt.Sprintf("Settings — %d repos configured", len(cfg.Repos))).
+				Description("Up/Down to navigate, Enter to select, Esc to go back.").
 				Options(
-					huh.NewOption("➕ Add repo", actionAdd),
-					huh.NewOption("✏️  Edit repo", actionEdit),
-					huh.NewOption("➖ Remove repo", actionRemove),
-					huh.NewOption("← Back", actionBack),
+					huh.NewOption("Add repo", actionAdd),
+					huh.NewOption("Edit repo", actionEdit),
+					huh.NewOption("Remove repo", actionRemove),
+					huh.NewOption("Back", actionBack),
 				).
 				Value(&pick),
 		),
-	).WithShowHelp(false)
+	)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
@@ -135,7 +136,7 @@ func addRepo(cfg *config.Config) error {
 		return nil
 	}
 	cfg.Repos = append(cfg.Repos, r)
-	fmt.Printf("✓ added %s\n", r.Name)
+	fmt.Printf("added %s\n", r.Name)
 	waitForKey()
 	return nil
 }
@@ -163,7 +164,7 @@ func editRepo(cfg *config.Config) error {
 		}
 	}
 	cfg.Repos[idx] = r
-	fmt.Printf("✓ updated %s\n", r.Name)
+	fmt.Printf("updated %s\n", r.Name)
 	waitForKey()
 	return nil
 }
@@ -183,12 +184,12 @@ func removeRepo(cfg *config.Config) error {
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Remove %q from the config?", r.Name)).
-				Description("This does not touch the actual checkout — only `tracks` forgets about it.").
+				Description("This does not touch the actual checkout. Only `tracks` forgets about it.").
 				Affirmative("Remove").
 				Negative("Cancel").
 				Value(&confirm),
 		),
-	).WithShowHelp(false)
+	)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
@@ -199,7 +200,7 @@ func removeRepo(cfg *config.Config) error {
 		return nil
 	}
 	cfg.Repos = append(cfg.Repos[:idx], cfg.Repos[idx+1:]...)
-	fmt.Printf("✓ removed %s\n", r.Name)
+	fmt.Printf("removed %s\n", r.Name)
 	waitForKey()
 	return nil
 }
@@ -220,9 +221,13 @@ func pickRepoIndex(cfg config.Config, title string) (int, error) {
 	var idx int
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[int]().Title(title).Options(options...).Value(&idx),
+			huh.NewSelect[int]().
+				Title(title).
+				Description("Up/Down to navigate, Enter to select, Esc to cancel.").
+				Options(options...).
+				Value(&idx),
 		),
-	).WithShowHelp(false)
+	)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return 0, ErrCancelled
