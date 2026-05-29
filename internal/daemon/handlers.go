@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/git"
@@ -112,6 +113,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	t := state.Track{
 		ID:         trackID,
 		Branch:     resolvedBranch,
+		Slug:       strings.TrimSpace(p.Slug),
 		Repos:      trackRepos,
 		Status:     state.StatusPending,
 		LogPath:    logPath,

@@ -70,6 +70,13 @@ type Track struct {
 	// Branch is the <type>/<slug> branch created in every worktree.
 	Branch string `json:"branch"`
 
+	// Slug is an optional human label the user typed at track
+	// creation time. Independent of the branch name (Claude picks
+	// that). Shown in the dashboard so several tracks against the
+	// same repo are easy to tell apart. Empty when the user left
+	// the field blank.
+	Slug string `json:"slug,omitempty"`
+
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
 	// appended).

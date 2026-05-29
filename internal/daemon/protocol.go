@@ -120,6 +120,9 @@ type NewParams struct {
 	// Claude is expected to rename it to a proper <type>/<slug>
 	// before its first commit, per the user's CLAUDE.md rules.
 	TaskPrompt string `json:"task_prompt"`
+	// Slug is an optional human label for the track. Independent
+	// of the branch name. Shown in the dashboard. Empty allowed.
+	Slug string `json:"slug,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.
