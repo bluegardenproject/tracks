@@ -35,6 +35,7 @@ const (
 	ActionSettings    Action = "settings"
 	ActionGC          Action = "gc"
 	ActionQuitSession Action = "quit"
+	ActionClose       Action = "close"
 )
 
 // PickAction shows the top-level menu and returns the user's choice.
@@ -44,20 +45,22 @@ func PickAction() (Action, error) {
 		huh.NewGroup(
 			huh.NewSelect[Action]().
 				Title("tracks").
+				Description("Up/Down to navigate, Enter to select, Esc to close.").
 				Options(
-					huh.NewOption("➕ New track", ActionNewTrack),
-					huh.NewOption("📋 Dashboard", ActionDashboard),
-					huh.NewOption("📜 List tracks", ActionList),
-					huh.NewOption("🔌 Attach to track…", ActionAttach),
-					huh.NewOption("✅ End track (done)…", ActionDone),
-					huh.NewOption("💥 Kill track…", ActionKill),
-					huh.NewOption("🧹 GC orphans", ActionGC),
-					huh.NewOption("⚙️  Edit config (settings)", ActionSettings),
-					huh.NewOption("🚪 Quit session", ActionQuitSession),
+					huh.NewOption("New track", ActionNewTrack),
+					huh.NewOption("Dashboard", ActionDashboard),
+					huh.NewOption("List tracks", ActionList),
+					huh.NewOption("Attach to track...", ActionAttach),
+					huh.NewOption("End track (done)...", ActionDone),
+					huh.NewOption("Kill track...", ActionKill),
+					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
+					huh.NewOption("Settings", ActionSettings),
+					huh.NewOption("Quit session", ActionQuitSession),
+					huh.NewOption("Close menu", ActionClose),
 				).
 				Value(&pick),
 		),
-	).WithShowHelp(false)
+	)
 
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
@@ -94,10 +97,11 @@ func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Trac
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title(title).
+				Description("Up/Down to navigate, Enter to select, Esc to cancel.").
 				Options(options...).
 				Value(&pick),
 		),
-	).WithShowHelp(false)
+	)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return state.Track{}, ErrCancelled
@@ -119,7 +123,7 @@ func ConfirmQuit(sessionName string) (bool, error) {
 				Negative("Cancel").
 				Value(&yes),
 		),
-	).WithShowHelp(false)
+	)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return false, ErrCancelled

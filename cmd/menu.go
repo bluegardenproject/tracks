@@ -39,6 +39,9 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 	tm := tmux.New()
 
 	switch action {
+	case menu.ActionClose:
+		return nil
+
 	case menu.ActionNewTrack:
 		return runNewTrackFromMenu(cfg)
 
