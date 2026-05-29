@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -130,8 +132,12 @@ const paneIdleThreshold = 6 * time.Second
 
 // refreshRunningStatus captures the pane content and updates the
 // stored track to Running or Waiting based on whether the snapshot
-// changed since the last poll. Errors from capture-pane are
-// swallowed — they shouldn't bring down the supervisor.
+// changed since the last poll. Also persists a short
+// ANSI-stripped tail of the pane on the track so the dashboard can
+// surface what's happening without switching windows.
+//
+// Errors from capture-pane are swallowed — they shouldn't bring
+// down the supervisor.
 func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	snapshot, err := tm.CapturePane(s.cfg.Tmux.SessionName, sup.windowName)
 	if err != nil {
@@ -146,14 +152,47 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		return
 	}
 	idle := time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
+	target := t.Status
 	switch {
 	case idle && t.Status != state.StatusWaiting:
-		t.Status = state.StatusWaiting
-		_ = s.store.Put(t)
+		target = state.StatusWaiting
 	case !idle && t.Status != state.StatusRunning:
-		t.Status = state.StatusRunning
-		_ = s.store.Put(t)
+		target = state.StatusRunning
 	}
+	snippet := paneTail(snapshot, 8)
+	if target == t.Status && snippet == t.LastOutput {
+		return
+	}
+	t.Status = target
+	t.LastOutput = snippet
+	_ = s.store.Put(t)
+}
+
+// paneTail returns the last n non-empty lines of the pane content
+// with ANSI escape sequences stripped. Used to give the dashboard
+// a peek at what Claude is showing.
+func paneTail(snapshot string, n int) string {
+	stripped := stripANSI(snapshot)
+	lines := strings.Split(stripped, "\n")
+	out := make([]string, 0, n)
+	// Walk from the bottom, collect non-empty lines.
+	for i := len(lines) - 1; i >= 0 && len(out) < n; i-- {
+		line := strings.TrimRight(lines[i], " \t\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		out = append([]string{line}, out...)
+	}
+	return strings.Join(out, "\n")
+}
+
+// ansiSeq matches the common ANSI escape sequences (CSI, OSC, and
+// terminal-mode shifts). Good enough to clean a tmux capture-pane
+// snapshot for human display; not a full terminal emulator.
+var ansiSeq = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]|\x1b\\][^\x07]*\x07|\x1b[()][AB012]")
+
+func stripANSI(s string) string {
+	return ansiSeq.ReplaceAllString(s, "")
 }
 
 // finalizeTrack writes the terminal status for trackID if it isn't
