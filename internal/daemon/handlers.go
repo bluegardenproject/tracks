@@ -60,7 +60,7 @@ func placeholderBranch(trackID string) string {
 	return "tracks/" + tail
 }
 
-func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
+func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p NewParams
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fail("bad params: " + err.Error())
@@ -83,10 +83,6 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules})
 	}
 
-	// Build a unique track ID. The placeholder branch we create in
-	// the worktree uses the tail of this ID. Claude is expected to
-	// rename the branch to its proper <type>/<slug> per the
-	// instructions in the user's CLAUDE.md before its first commit.
 	trackID, err := generateTrackID()
 	if err != nil {
 		return fail("generate id: " + err.Error())
@@ -100,15 +96,14 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 	worktreeRoot := filepath.Join(stateDir, "worktrees", trackID)
 	logPath := filepath.Join(stateDir, "logs", trackID+".jsonl")
 
-	// Resolve any branch-name collision by appending -<n>.
+	emit(fmt.Sprintf("track id %s", trackID))
+
 	resolvedBranch, err := s.resolveBranchCollision(ctx, repos, branch)
 	if err != nil {
 		return fail(err.Error())
 	}
 
-	// Create worktrees. Any failure rolls back partial creations so
-	// the caller can retry without orphans.
-	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch)
+	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, emit)
 	if err != nil {
 		rollback()
 		return fail(err.Error())
@@ -128,14 +123,13 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 		return fail("persist state: " + err.Error())
 	}
 
-	// Spawn the Claude supervisor. If the spawn fails we keep the
-	// worktrees but mark the track Errored so the user can inspect
-	// the log file.
+	emit("spawning claude...")
 	if _, err := s.startSupervisor(ctx, t); err != nil {
 		t.Status = state.StatusErrored
 		_ = s.store.Put(t)
 		return fail("spawn claude: " + err.Error())
 	}
+	emit("claude running")
 
 	return ok(NewResult{TrackID: trackID, Branch: resolvedBranch})
 }
@@ -180,7 +174,10 @@ func (s *Server) resolveBranchCollision(ctx context.Context, repos []repoSpec, w
 // createWorktrees provisions a worktree per repo. Returns the
 // per-repo TrackRepo entries on success, or a rollback closure that
 // the caller can invoke to clean up partial state on failure.
-func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string) ([]state.TrackRepo, func(), error) {
+//
+// emit is called before each slow step (fetch, worktree add,
+// submodule init) so callers can stream progress to a user.
+func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string, emit Emit) ([]state.TrackRepo, func(), error) {
 	created := make([]state.TrackRepo, 0, len(repos))
 	rollback := func() {
 		for _, tr := range created {
@@ -191,23 +188,26 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 	for _, r := range repos {
 		dest := filepath.Join(root, r.Name)
 		primary := git.NewPrimaryRepoClient(r.Path)
+		emit(fmt.Sprintf("fetching origin/%s in %s...", r.Base, r.Name))
 		if err := primary.Fetch(ctx, "origin", r.Base); err != nil {
 			return nil, rollback, fmt.Errorf("fetch %s/%s: %w", r.Name, r.Base, err)
 		}
+		emit(fmt.Sprintf("creating worktree for %s on %s...", r.Name, branch))
 		if err := primary.AddWorktreeWithRetry(ctx, dest, branch, "origin/"+r.Base); err != nil {
 			return nil, rollback, fmt.Errorf("create worktree for %s: %w", r.Name, err)
 		}
 		created = append(created, state.TrackRepo{Name: r.Name, Path: dest})
 		if r.InitSubmodules {
+			emit(fmt.Sprintf("initializing submodules in %s (may take a while)...", r.Name))
 			wt := git.NewWorktreeClient(dest)
 			if err := wt.InitSubmodules(ctx); err != nil {
 				return nil, rollback, fmt.Errorf("init submodules in %s: %w", r.Name, err)
 			}
 		}
 		// Install the tracks-add-repo skill so Claude knows it can
-		// pull in more repos mid-session. Failure here is logged but
-		// not fatal — Claude can still do useful work without the
-		// skill, just won't know about add-repo.
+		// pull in more repos mid-session. Failure here is logged
+		// but not fatal — Claude can still do useful work without
+		// the skill, just won't know about add-repo.
 		if err := s.installSkill(dest); err != nil {
 			fmt.Fprintf(os.Stderr, "tracks daemon: install skill in %s: %v\n", dest, err)
 		}

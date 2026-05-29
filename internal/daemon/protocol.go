@@ -80,6 +80,15 @@ type Response struct {
 	Error  string          `json:"error,omitempty"`
 }
 
+// Progress is sent zero or more times BEFORE the final Response on
+// the same connection. The client distinguishes a Progress payload
+// from a Response by the presence of the "progress" field. Used by
+// long-running methods like MethodNew so the caller can show a
+// live log while git fetches and worktree checkouts happen.
+type Progress struct {
+	Progress string `json:"progress"`
+}
+
 // PingResult is returned by MethodPing.
 type PingResult struct {
 	Version string `json:"version"`

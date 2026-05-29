@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
@@ -193,8 +194,16 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		return nil
 	}
 	cl := daemon.NewClient(cfg)
-	res, err := cl.New(params)
+	// Long-running step — stream progress so the popup shows the
+	// fetch / worktree-add / spawn steps as they happen instead of
+	// looking frozen.
+	fmt.Println("creating track...")
+	fmt.Println()
+	res, err := cl.NewWithProgress(params, func(msg string) {
+		fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+	})
 	if err != nil {
+		fmt.Println()
 		fmt.Println("daemon refused track:", err)
 		fmt.Println()
 		fmt.Println("If this looks like a protocol mismatch, the daemon may be running an")
