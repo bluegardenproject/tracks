@@ -182,13 +182,18 @@ func ensureWindowAndSelect(cfg config.Config, tm *tmux.Client, window, command s
 	return tm.SelectWindow(cfg.Tmux.SessionName, window)
 }
 
-// openConfigInEditor execs $EDITOR (or vi as fallback) on the user's
-// config file. Inside the tmux popup this opens a usable editor.
+// openConfigInEditor opens the user's config in the most
+// user-friendly editor available. Resolution order:
+//
+//  1. $VISUAL (explicit user choice for terminal editing)
+//  2. $EDITOR
+//  3. First of nano / micro / vim / nvim / vi found on PATH
+//
+// Before launching we print a one-line hint with the editor's exit
+// command. This prevents the "stuck in vi" trap when a user without
+// $EDITOR set picks Settings and has no idea how to escape.
 func openConfigInEditor() error {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
-	}
+	editor, exitHint := resolveEditor()
 	path, err := config.Path()
 	if err != nil {
 		return err
@@ -196,11 +201,54 @@ func openConfigInEditor() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	fmt.Printf("opening %s in %s\n", path, editor)
+	if exitHint != "" {
+		fmt.Printf("(to exit %s: %s)\n", editor, exitHint)
+	}
+	fmt.Println()
 	cmd := exec.Command(editor, path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// resolveEditor returns the editor name to invoke plus a short
+// human-readable exit hint (empty when we can't tell). The hint
+// goes only by editor *name*, not by what the binary really is —
+// good enough to keep a user from being stranded in vi.
+func resolveEditor() (string, string) {
+	if v := os.Getenv("VISUAL"); v != "" {
+		return v, hintFor(v)
+	}
+	if v := os.Getenv("EDITOR"); v != "" {
+		return v, hintFor(v)
+	}
+	for _, candidate := range []string{"nano", "micro", "vim", "nvim", "vi"} {
+		if _, err := exec.LookPath(candidate); err == nil {
+			return candidate, hintFor(candidate)
+		}
+	}
+	return "vi", hintFor("vi")
+}
+
+// hintFor returns the exit incantation for editors we recognize.
+// The lookup is by basename so "/usr/bin/nano" still resolves.
+func hintFor(editor string) string {
+	base := filepath.Base(editor)
+	switch base {
+	case "nano":
+		return "Ctrl-X, then Y to save"
+	case "micro":
+		return "Ctrl-Q (Ctrl-S to save first)"
+	case "vi", "vim", "nvim":
+		return "press Esc, then type :wq to save and quit, or :q! to discard"
+	case "emacs":
+		return "Ctrl-X Ctrl-C (save with Ctrl-X Ctrl-S first)"
+	case "code", "cursor", "subl", "subl3":
+		return "close the file in the GUI; the editor returns when the file is closed"
+	}
+	return ""
 }
 
 // waitForKey blocks until the user presses any key. Used after a
