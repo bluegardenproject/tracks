@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 
@@ -35,10 +34,27 @@ func bootstrap(ctx context.Context) error {
 	tm := tmux.New()
 
 	if !tm.HasSession(cfg.Tmux.SessionName) {
-		startDir, _ := os.UserHomeDir()
-		if err := tm.NewSession(cfg.Tmux.SessionName, "console", "", startDir); err != nil {
+		// The dashboard is the landing window: it shows every track
+		// at a glance and is where most users will live. We invoke
+		// `tracks dashboard` directly so the bubbletea TUI owns the
+		// pane — no intermediate shell.
+		self, err := selfBinary()
+		if err != nil {
+			return fmt.Errorf("find self binary: %w", err)
+		}
+		dashboardCmd := fmt.Sprintf("%s dashboard", shellQuote(self))
+		if err := tm.NewSession(cfg.Tmux.SessionName, "dashboard", dashboardCmd, ""); err != nil {
 			return fmt.Errorf("create tmux session: %w", err)
 		}
+		// Bind <prefix><menu_key> globally on this tmux server.
+		// `display-popup -E` runs the command in a centered overlay
+		// and dismisses on exit. 80%/80% gives the nested huh
+		// pickers room to breathe.
+		if err := configureMenuKey(cfg, self); err != nil {
+			return fmt.Errorf("bind menu key: %w", err)
+		}
+		// Friendly hint at the bottom-right of every window.
+		_ = setStatusHint(cfg)
 	}
 
 	// Ensure the daemon is up.
@@ -58,6 +74,29 @@ func bootstrap(ctx context.Context) error {
 		return nil
 	}
 	return tm.Attach(cfg.Tmux.SessionName)
+}
+
+// configureMenuKey binds <prefix><menu_key> to open the tracks menu
+// popup. This is a global tmux binding (tmux doesn't support
+// per-session keybindings cleanly), so we deliberately pick a key
+// that's unbound by default ("t" by default; configurable).
+func configureMenuKey(cfg config.Config, selfPath string) error {
+	popupCmd := fmt.Sprintf("display-popup -E -w 80%% -h 80%% %s menu",
+		shellQuote(selfPath))
+	cmd := exec.Command("tmux", "bind-key", cfg.Tmux.MenuKey, popupCmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux bind-key: %w: %s", err, string(out))
+	}
+	return nil
+}
+
+// setStatusHint adds a status-right hint reminding the user of the
+// menu keybind. Scoped to our session so we don't pollute the user's
+// other tmux sessions.
+func setStatusHint(cfg config.Config) error {
+	hint := fmt.Sprintf("#[fg=cyan]<prefix>+%s menu  #[default]%%H ", cfg.Tmux.MenuKey)
+	cmd := exec.Command("tmux", "set-option", "-t", cfg.Tmux.SessionName, "status-right", hint)
+	return cmd.Run()
 }
 
 // ensureDaemonUp pings the daemon; if unreachable, spawns it as a
