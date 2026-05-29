@@ -96,8 +96,14 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 // process, and watches the pane's rendered contents to detect when
 // Claude is sitting at its prompt waiting for user input.
 //
-//   - pid dead OR window gone → Done (or Errored — we don't have
-//     a reliable exit-code source from tmux here).
+// We deliberately do NOT use `has-window` as a liveness signal —
+// the dashboard's embed flow physically moves the pane out of its
+// `t-<id>` window into the Dashboard window (and back again), so
+// the window briefly disappears even though Claude is alive and
+// well. Process liveness is sufficient: when the user kills the
+// window via tmux, the SIGHUP propagates and the pid dies anyway.
+//
+//   - pid dead → Done (or Errored — tmux doesn't surface exit code).
 //   - pane content unchanged for paneIdleThreshold → Waiting.
 //   - pane content changed within paneIdleThreshold → Running.
 func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
@@ -110,9 +116,7 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			alive := processAlive(sup.pid)
-			windowExists, _ := tm.HasWindow(s.cfg.Tmux.SessionName, sup.windowName)
-			if !alive || !windowExists {
+			if !processAlive(sup.pid) {
 				s.finalizeTrack(sup.trackID)
 				s.mu.Lock()
 				delete(s.supervisors, sup.trackID)
