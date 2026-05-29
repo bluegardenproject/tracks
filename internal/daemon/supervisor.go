@@ -36,6 +36,11 @@ type supervisor struct {
 	// detect a stalled pane (= Claude waiting for user input).
 	lastPane         string
 	lastPaneChangeAt time.Time
+
+	// prWatcherStarted gates startPRWatcher to a single goroutine
+	// per track, since the pane-snapshot scan can re-detect the
+	// same URL on every poll.
+	prWatcherStarted bool
 }
 
 // windowNameFor returns the tmux window name for a track. Kept here
@@ -197,6 +202,8 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	if t.PRURL != "" && prevPRURL == "" {
 		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",
 			labelFor(t)+" → "+t.PRURL)
+		// Kick off the gh-poll loop for this PR.
+		s.startPRWatcher(sup, t.PRURL)
 	}
 }
 
