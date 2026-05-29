@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/claude"
+	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 )
@@ -164,13 +165,76 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		target = state.StatusRunning
 	}
 	snippet, awaiting := paneSnippet(snapshot)
-	if target == t.Status && snippet == t.LastOutput && awaiting == t.AwaitingInput {
+	prURL := scanForPRURL(snapshot)
+
+	prevStatus := t.Status
+	prevPRURL := t.PRURL
+
+	if target == t.Status &&
+		snippet == t.LastOutput &&
+		awaiting == t.AwaitingInput &&
+		(prURL == "" || prURL == t.PRURL) {
 		return
 	}
 	t.Status = target
 	t.LastOutput = snippet
 	t.AwaitingInput = awaiting
+	if prURL != "" && prURL != t.PRURL {
+		t.PRURL = prURL
+	}
 	_ = s.store.Put(t)
+
+	// Fire notifications on the transitions that matter to a user
+	// who isn't looking at the dashboard right now.
+	if target == state.StatusWaiting && prevStatus != state.StatusWaiting {
+		s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
+			labelFor(t)+" is waiting for input")
+	}
+	if t.PRURL != "" && prevPRURL == "" {
+		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",
+			labelFor(t)+" → "+t.PRURL)
+	}
+}
+
+// labelFor returns a short human label for a track — slug if the
+// user gave one, otherwise the branch name. Used in notification
+// bodies so the user can tell which track wants them.
+func labelFor(t state.Track) string {
+	if t.Slug != "" {
+		return t.Slug
+	}
+	return t.Branch
+}
+
+// notifyEvent forwards to the notifier only when the user's
+// config has the event enabled. Centralised here so every call
+// site stays a one-liner.
+func (s *Server) notifyEvent(event, title, body string) {
+	if !s.cfg.Notify.EventEnabled(event) {
+		return
+	}
+	s.notifier.Send(title, body)
+}
+
+// prURLPattern matches the TRACKS_PR_URL=<url> marker Claude is
+// asked to emit in the prompt suffix (see internal/claude/spawn.go).
+// Used by refreshRunningStatus to surface a PR URL into state.Track
+// without log-parsing.
+var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(\S+)`)
+
+// scanForPRURL pulls the URL portion out of a TRACKS_PR_URL=<url>
+// marker in the pane snapshot. Returns "" when no marker is
+// present or the value is the sentinel "none".
+func scanForPRURL(snapshot string) string {
+	matches := prURLPattern.FindStringSubmatch(snapshot)
+	if len(matches) < 2 {
+		return ""
+	}
+	v := strings.TrimSpace(matches[1])
+	if v == "" || v == "none" {
+		return ""
+	}
+	return v
 }
 
 // paneSnippet returns a snippet of pane content suitable for the
@@ -281,7 +345,9 @@ func stripANSI(s string) string {
 }
 
 // finalizeTrack writes the terminal status for trackID if it isn't
-// already terminal.
+// already terminal. Also fires the done/errored notification — by
+// the time we get here, the user almost certainly isn't watching
+// this track's window, so a system notification is the right cue.
 func (s *Server) finalizeTrack(trackID string) {
 	t, ok := s.store.Get(trackID)
 	if !ok || t.Status.IsTerminal() {
@@ -289,8 +355,14 @@ func (s *Server) finalizeTrack(trackID string) {
 	}
 	now := time.Now().UTC()
 	t.ExitedAt = &now
+	// We don't have a reliable exit code from the tmux-hosted
+	// process; treat any natural exit as Done. (Future: parse
+	// pane_dead_status via tmux.)
 	t.Status = state.StatusDone
 	_ = s.store.Put(t)
+
+	s.notifyEvent(string(notify.EventDone), "tracks: track finished",
+		labelFor(t)+" is done")
 }
 
 // Stop signals the supervisor to wind down by killing the tmux
