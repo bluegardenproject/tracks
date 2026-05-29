@@ -43,6 +43,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 
 	var (
 		repos []string
+		slug  string
 		task  string
 	)
 
@@ -59,6 +60,11 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 					return nil
 				}).
 				Value(&repos),
+			huh.NewInput().
+				Title("Slug (optional)").
+				Description("Short human label shown in the dashboard. Independent of the branch name (Claude picks that). Leave empty if you don't need it.").
+				Placeholder("e.g. rate-bug-investigation").
+				Value(&slug),
 			huh.NewText().
 				Title("Task prompt").
 				Description("What should Claude do? Free-form. Mention a Jira ticket (e.g. LIVE-1234) and Claude will use it in the branch name and commit message.").
@@ -82,6 +88,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 
 	return daemon.NewParams{
 		Repos:      repos,
+		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 	}, nil
 }
