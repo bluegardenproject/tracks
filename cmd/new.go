@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
@@ -37,7 +38,11 @@ func init() {
 			}
 
 			cl := daemon.NewClient(cfg)
-			res, err := cl.New(params)
+			fmt.Println("creating track...")
+			fmt.Println()
+			res, err := cl.NewWithProgress(params, func(msg string) {
+				fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+			})
 			if err != nil {
 				return fmt.Errorf("daemon: %w", err)
 			}

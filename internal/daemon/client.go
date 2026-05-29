@@ -76,6 +76,69 @@ func (c *Client) callMethod(method Method, params, out any) error {
 	return nil
 }
 
+// callStreaming is callMethod's variant that reads zero or more
+// Progress frames before the final Response. Progress messages are
+// forwarded to onProgress (which may be nil to drop them).
+func (c *Client) callStreaming(method Method, params, out any, onProgress func(string)) error {
+	socketPath, err := SocketPath(c.cfg)
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialTimeout("unix", socketPath, c.DialTimeout)
+	if err != nil {
+		return fmt.Errorf("dial daemon socket %s: %w", socketPath, err)
+	}
+	defer conn.Close()
+
+	var paramsRaw json.RawMessage
+	if params != nil {
+		data, err := json.Marshal(params)
+		if err != nil {
+			return fmt.Errorf("marshal params: %w", err)
+		}
+		paramsRaw = data
+	}
+	if err := json.NewEncoder(conn).Encode(Request{Method: method, Params: paramsRaw}); err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+
+	// Wire frames either look like {"progress": "..."} (a
+	// streaming update) or {"ok": ..., "result": ..., "error": ...}
+	// (the final response). We use pointer-typed Ok to distinguish
+	// "field missing" from "field is false".
+	type wireFrame struct {
+		Progress *string         `json:"progress,omitempty"`
+		Ok       *bool           `json:"ok,omitempty"`
+		Result   json.RawMessage `json:"result,omitempty"`
+		Error    string          `json:"error,omitempty"`
+	}
+	dec := json.NewDecoder(bufio.NewReader(conn))
+	for {
+		var msg wireFrame
+		if err := dec.Decode(&msg); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+		if msg.Progress != nil {
+			if onProgress != nil {
+				onProgress(*msg.Progress)
+			}
+			continue
+		}
+		if msg.Ok == nil {
+			return fmt.Errorf("malformed frame: %+v", msg)
+		}
+		if !*msg.Ok {
+			return errors.New(msg.Error)
+		}
+		if out != nil && len(msg.Result) > 0 {
+			if err := json.Unmarshal(msg.Result, out); err != nil {
+				return fmt.Errorf("decode result: %w", err)
+			}
+		}
+		return nil
+	}
+}
+
 // Ping returns the daemon's version + PID if reachable.
 func (c *Client) Ping() (PingResult, error) {
 	var r PingResult
@@ -101,10 +164,21 @@ func (c *Client) Get(id string) (state.Track, bool, error) {
 	return r.Track, r.Found, nil
 }
 
-// New creates a new track.
+// New creates a new track without streaming progress. Prefer
+// NewWithProgress for interactive contexts so the user sees the
+// fetch / worktree / spawn steps as they happen.
 func (c *Client) New(p NewParams) (NewResult, error) {
 	var r NewResult
 	return r, c.callMethod(MethodNew, p, &r)
+}
+
+// NewWithProgress creates a new track and invokes onProgress for
+// each progress event the daemon emits before the final response.
+// onProgress may be nil, in which case progress events are dropped.
+func (c *Client) NewWithProgress(p NewParams, onProgress func(string)) (NewResult, error) {
+	var r NewResult
+	err := c.callStreaming(MethodNew, p, &r, onProgress)
+	return r, err
 }
 
 // Done marks a track done and removes its worktrees (keeping

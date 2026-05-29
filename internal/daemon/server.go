@@ -194,20 +194,36 @@ func (s *Server) acceptLoop(ctx context.Context) {
 // dispatches them, and writes responses. One connection per request
 // is the simple case; we also support multiple sequential requests
 // over the same connection.
+//
+// Long-running handlers can stream Progress payloads on the same
+// connection before the final Response by calling the emit callback
+// passed via dispatch. The client decodes either shape and routes
+// accordingly.
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	dec := json.NewDecoder(bufio.NewReader(conn))
 	enc := json.NewEncoder(conn)
+	var encMu sync.Mutex
+	emit := func(msg string) {
+		encMu.Lock()
+		_ = enc.Encode(Progress{Progress: msg})
+		encMu.Unlock()
+	}
 	for {
 		var req Request
 		if err := dec.Decode(&req); err != nil {
 			if !errors.Is(err, io.EOF) && ctx.Err() == nil {
+				encMu.Lock()
 				_ = enc.Encode(Response{Ok: false, Error: "decode: " + err.Error()})
+				encMu.Unlock()
 			}
 			return
 		}
-		resp := s.dispatch(ctx, req)
-		if err := enc.Encode(resp); err != nil {
+		resp := s.dispatch(ctx, req, emit)
+		encMu.Lock()
+		err := enc.Encode(resp)
+		encMu.Unlock()
+		if err != nil {
 			return
 		}
 		if req.Method == MethodShutdown && resp.Ok {
@@ -218,9 +234,13 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	}
 }
 
+// Emit is a progress callback the daemon passes to long-running
+// handlers. Short handlers ignore it.
+type Emit func(msg string)
+
 // dispatch routes one request to its handler. Handlers live in
 // handlers.go so this file stays focused on plumbing.
-func (s *Server) dispatch(ctx context.Context, req Request) Response {
+func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response {
 	switch req.Method {
 	case MethodPing:
 		return s.handlePing()
@@ -229,7 +249,7 @@ func (s *Server) dispatch(ctx context.Context, req Request) Response {
 	case MethodGet:
 		return s.handleGet(req.Params)
 	case MethodNew:
-		return s.handleNew(ctx, req.Params)
+		return s.handleNew(ctx, req.Params, emit)
 	case MethodDone:
 		return s.handleDone(ctx, req.Params)
 	case MethodKill:
