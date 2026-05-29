@@ -346,6 +346,44 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 	return ok(AddRepoResult{WorktreePath: dest})
 }
 
+func (s *Server) handleForget(raw json.RawMessage) Response {
+	var p ForgetParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fail("bad params: " + err.Error())
+	}
+	if p.ID == "" {
+		return fail("id required")
+	}
+	t, found := s.store.Get(p.ID)
+	if !found {
+		return fail("track not found: " + p.ID)
+	}
+	// Refuse to forget a still-running track. Doing so would
+	// orphan the supervisor goroutine and leave Claude with no
+	// state entry to report into.
+	if !t.Status.IsTerminal() {
+		return fail(fmt.Sprintf("track %s is %s; run `tracks done %s` first",
+			p.ID, t.Status, p.ID))
+	}
+	if _, err := s.store.Delete(p.ID); err != nil {
+		return fail(err.Error())
+	}
+	return ok(nil)
+}
+
+func (s *Server) handlePruneCompleted() Response {
+	removed := 0
+	for _, t := range s.store.All() {
+		if !t.Status.IsTerminal() {
+			continue
+		}
+		if _, err := s.store.Delete(t.ID); err == nil {
+			removed++
+		}
+	}
+	return ok(PruneCompletedResult{Removed: removed})
+}
+
 func (s *Server) handlePendingPrompts() Response {
 	s.mu.Lock()
 	defer s.mu.Unlock()

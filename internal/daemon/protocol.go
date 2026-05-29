@@ -52,6 +52,16 @@ const (
 	// MethodShutdown asks the daemon to exit. Used when the tmux
 	// session is being torn down explicitly.
 	MethodShutdown Method = "shutdown"
+
+	// MethodForget removes a single track entry from persistent
+	// state. The track must already be in a terminal status
+	// (Done / Errored) — forgetting a running track would orphan
+	// the supervisor goroutine.
+	MethodForget Method = "forget"
+
+	// MethodPruneCompleted removes every track entry with a
+	// terminal status. Returns the count removed.
+	MethodPruneCompleted Method = "prune_completed"
 )
 
 // Request is the wire payload from CLI → daemon.
@@ -147,4 +157,15 @@ type PendingPromptsResult struct {
 type AnswerPromptParams struct {
 	ID    string `json:"id"`
 	Allow bool   `json:"allow"`
+}
+
+// ForgetParams selects which track to drop from state.
+type ForgetParams struct {
+	ID string `json:"id"`
+}
+
+// PruneCompletedResult reports how many entries were removed by
+// MethodPruneCompleted.
+type PruneCompletedResult struct {
+	Removed int `json:"removed"`
 }

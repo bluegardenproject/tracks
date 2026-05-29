@@ -32,6 +32,8 @@ const (
 	ActionAttach      Action = "attach"
 	ActionDone        Action = "done"
 	ActionKill        Action = "kill"
+	ActionForget      Action = "forget"
+	ActionPrune       Action = "prune"
 	ActionSettings    Action = "settings"
 	ActionGC          Action = "gc"
 	ActionQuitSession Action = "quit"
@@ -53,6 +55,8 @@ func PickAction() (Action, error) {
 					huh.NewOption("Attach to track...", ActionAttach),
 					huh.NewOption("End track (done)...", ActionDone),
 					huh.NewOption("Kill track...", ActionKill),
+					huh.NewOption("Forget completed track...", ActionForget),
+					huh.NewOption("Clear all completed tracks", ActionPrune),
 					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Settings", ActionSettings),
 					huh.NewOption("Quit session", ActionQuitSession),
@@ -72,9 +76,9 @@ func PickAction() (Action, error) {
 }
 
 // PickTrack shows a single-select picker over the live track list.
-// activeOnly filters to non-terminal statuses (running / waiting /
-// pending), which is what "attach" and "done" want.
-func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Track, error) {
+// filter, when non-nil, is applied to each track; only tracks where
+// filter returns true are offered. Pass nil to show all tracks.
+func PickTrack(client *daemon.Client, title string, filter func(state.Track) bool) (state.Track, error) {
 	tracks, err := client.Ls()
 	if err != nil {
 		return state.Track{}, fmt.Errorf("daemon: %w", err)
@@ -82,7 +86,7 @@ func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Trac
 	options := []huh.Option[string]{}
 	byID := map[string]state.Track{}
 	for _, t := range tracks {
-		if activeOnly && t.Status.IsTerminal() {
+		if filter != nil && !filter(t) {
 			continue
 		}
 		label := fmt.Sprintf("%s  %s  [%s]  %s", shortID(t.ID), t.Branch, t.Status, reposLabel(t))
@@ -90,7 +94,7 @@ func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Trac
 		byID[t.ID] = t
 	}
 	if len(options) == 0 {
-		return state.Track{}, fmt.Errorf("no %stracks", activeFilterText(activeOnly))
+		return state.Track{}, errors.New("no tracks match")
 	}
 	var pick string
 	form := huh.NewForm(
@@ -113,13 +117,20 @@ func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Trac
 
 // ConfirmQuit is a small yes/no for the destructive quit action.
 func ConfirmQuit(sessionName string) (bool, error) {
+	return Confirm("Quit the tracks tmux session?",
+		fmt.Sprintf("Kills tmux session %q and stops the daemon. Running Claude processes will be SIGTERMed.", sessionName))
+}
+
+// Confirm is a generic yes/no popup used by any menu action that
+// needs an explicit go-ahead before doing something destructive.
+func Confirm(title, description string) (bool, error) {
 	var yes bool
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Quit the tracks tmux session?").
-				Description(fmt.Sprintf("Kills tmux session %q and stops the daemon. Running Claude processes will be SIGTERMed.", sessionName)).
-				Affirmative("Quit").
+				Title(title).
+				Description(description).
+				Affirmative("Yes").
 				Negative("Cancel").
 				Value(&yes),
 		),
@@ -162,9 +173,10 @@ func joinShort(items []string, max int) string {
 	return out
 }
 
-func activeFilterText(activeOnly bool) string {
-	if activeOnly {
-		return "active "
-	}
-	return ""
-}
+// ActiveOnly is a PickTrack filter that excludes terminal-state
+// tracks. Use for Attach / End / Kill flows.
+func ActiveOnly(t state.Track) bool { return !t.Status.IsTerminal() }
+
+// CompletedOnly is a PickTrack filter that excludes still-running
+// tracks. Use for Forget / Clean flows.
+func CompletedOnly(t state.Track) bool { return t.Status.IsTerminal() }

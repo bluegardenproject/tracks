@@ -162,6 +162,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.client.AnswerPrompt(m.prompts[0].ID, false)
 				return m, m.poll()
 			}
+		case "x":
+			// Forget the highlighted track (must be terminal).
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if t.Status.IsTerminal() {
+					_ = m.client.Forget(t.ID)
+					return m, m.poll()
+				}
+			}
+		case "X":
+			// Prune every completed track.
+			_, _ = m.client.PruneCompleted()
+			return m, m.poll()
 		case "r":
 			return m, m.poll()
 		}
@@ -258,7 +271,7 @@ func (m *model) View() string {
 
 	// Footer.
 	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select  enter switch window  y/n answer prompt  r refresh  q quit"))
+	b.WriteString(m.styles.dim.Render("↑/↓ select  enter switch window  y/n answer prompt  x forget  X clear completed  r refresh  q quit"))
 	return b.String()
 }
 

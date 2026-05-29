@@ -143,3 +143,19 @@ func (c *Client) AnswerPrompt(id string, allow bool) error {
 func (c *Client) Shutdown() error {
 	return c.callMethod(MethodShutdown, nil, nil)
 }
+
+// Forget removes a single terminal-state track from persistent
+// state. Errors when the track is still running.
+func (c *Client) Forget(id string) error {
+	return c.callMethod(MethodForget, ForgetParams{ID: id}, nil)
+}
+
+// PruneCompleted removes every terminal-state track from
+// persistent state. Returns the count removed.
+func (c *Client) PruneCompleted() (int, error) {
+	var r PruneCompletedResult
+	if err := c.callMethod(MethodPruneCompleted, nil, &r); err != nil {
+		return 0, err
+	}
+	return r.Removed, nil
+}

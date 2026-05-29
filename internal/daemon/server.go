@@ -242,6 +242,10 @@ func (s *Server) dispatch(ctx context.Context, req Request) Response {
 		return s.handleAnswerPrompt(req.Params)
 	case MethodShutdown:
 		return ok(nil)
+	case MethodForget:
+		return s.handleForget(req.Params)
+	case MethodPruneCompleted:
+		return s.handlePruneCompleted()
 	default:
 		return fail(fmt.Sprintf("unknown method: %s", req.Method))
 	}
