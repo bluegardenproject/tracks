@@ -175,6 +175,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Prune every completed track.
 			_, _ = m.client.PruneCompleted()
 			return m, m.poll()
+		case "d":
+			// Graceful end of the highlighted track (must be active).
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if !t.Status.IsTerminal() {
+					_ = m.client.Done(t.ID)
+					m.closeTrackWindow(t.ID)
+					return m, m.poll()
+				}
+			}
+		case "K":
+			// Force kill the highlighted track (must be active).
+			// Capital K to distinguish from lowercase k (cursor-up
+			// vim convention) and to make accidental kills harder.
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if !t.Status.IsTerminal() {
+					_ = m.client.Kill(t.ID)
+					m.closeTrackWindow(t.ID)
+					return m, m.poll()
+				}
+			}
 		case "r":
 			return m, m.poll()
 		}
@@ -201,6 +223,17 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// closeTrackWindow removes the per-track tmux window after the
+// track has been ended. Best-effort — failure is silent because the
+// daemon side has already mutated state.
+func (m *model) closeTrackWindow(trackID string) {
+	window := "t-" + trackID[len(trackID)-min(6, len(trackID)):]
+	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, window); !exists {
+		return
+	}
+	_ = m.tmux.KillWindow(m.cfg.Tmux.SessionName, window)
 }
 
 // attachTrack ensures the per-track window exists and switches to it.
@@ -271,7 +304,9 @@ func (m *model) View() string {
 
 	// Footer.
 	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select  enter switch window  y/n answer prompt  x forget  X clear completed  r refresh  q quit"))
+	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach window   d end   K kill   x forget   X clear completed   y/n answer prompt"))
+	b.WriteString("\n")
+	b.WriteString(m.styles.dim.Render("r refresh   q quit dashboard   (open menu from any window with <prefix>+t)"))
 	return b.String()
 }
 
