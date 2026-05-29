@@ -3,57 +3,72 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/claude"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
-// supervisor wraps one running Claude process for one track. It owns
-// the goroutines that watch the process and tail the log, and is
-// responsible for transitioning the track's status from
-// Pending → Running → (Waiting) → Done/Errored as time passes.
+// supervisor wraps one running Claude session for one track.
+// Unlike the original child-process model, the process itself is
+// owned by tmux: we tracked it down via the pane_pid returned when
+// the window was opened, and we watch it with kill(pid, 0) +
+// `tmux has-window` checks.
+//
+// Owning the process via tmux is what lets the user *interact*
+// with Claude in the track window. A daemon-owned child process
+// would have no TTY and no way for the user to type into it.
 type supervisor struct {
-	trackID string
-	cmd     *exec.Cmd
-	cancel  context.CancelFunc
-
-	done chan struct{}
+	trackID    string
+	windowName string
+	pid        int
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
-// startSupervisor launches Claude for the given track and starts the
-// log-tailing + process-waiting goroutines. Returns the supervisor
-// for later Stop() / lookup.
+// windowNameFor returns the tmux window name for a track. Kept here
+// (also duplicated in cmd/attach.go for the CLI side) because both
+// daemon and CLI need to agree on it.
+func windowNameFor(trackID string) string {
+	if len(trackID) >= 6 {
+		return "t-" + trackID[len(trackID)-6:]
+	}
+	return "t-" + trackID
+}
+
+// startSupervisor opens a tmux window for the track with claude
+// running inside it and starts the watcher goroutines.
 func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*supervisor, error) {
 	opts, err := claude.BuildOptions(s.cfg, t, s.socketDir)
 	if err != nil {
 		return nil, err
 	}
-	cmd, err := claude.Spawn(opts)
+	tm := tmux.New()
+	window := windowNameFor(t.ID)
+	pid, err := tm.NewWindowReturningPaneID(s.cfg.Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open tmux window: %w", err)
 	}
 
 	supCtx, cancel := context.WithCancel(ctx)
 	sup := &supervisor{
-		trackID: t.ID,
-		cmd:     cmd,
-		cancel:  cancel,
-		done:    make(chan struct{}),
+		trackID:    t.ID,
+		windowName: window,
+		pid:        pid,
+		cancel:     cancel,
+		done:       make(chan struct{}),
 	}
 
-	// Mark Running with PID.
+	// Persist the live state.
 	t.Status = state.StatusRunning
-	t.PID = cmd.Process.Pid
+	t.PID = pid
 	if err := s.store.Put(t); err != nil {
-		// We've already started the process. Killing it on a
-		// persistence failure is the safer choice — otherwise the
-		// daemon is orphaned from the truth and the user can't
-		// reach the track via `tracks ls`.
-		_ = cmd.Process.Kill()
+		// We've already opened the window. Close it and bail —
+		// otherwise the daemon would be orphaned from the truth.
+		_ = tm.KillWindow(s.cfg.Tmux.SessionName, window)
 		cancel()
 		return nil, fmt.Errorf("persist running state: %w", err)
 	}
@@ -65,132 +80,89 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	s.supervisors[t.ID] = sup
 	s.mu.Unlock()
 
-	// Log-tail goroutine.
-	events := make(chan claude.Event, 32)
-	go func() {
-		_ = claude.TailLog(supCtx, t.LogPath, events)
-		close(events)
-	}()
-
-	// Event consumer goroutine — translates events into state writes.
-	go s.consumeEvents(supCtx, t.ID, events)
-
-	// Process-wait goroutine — when Claude exits, mark Done/Errored.
-	go s.waitProcess(sup, t.ID)
-
+	go s.watchTrackProcess(supCtx, sup)
 	return sup, nil
 }
 
-// consumeEvents updates the track's state row in response to log events.
-func (s *Server) consumeEvents(ctx context.Context, trackID string, events <-chan claude.Event) {
-	idleTicker := time.NewTicker(15 * time.Second)
-	defer idleTicker.Stop()
-	lastActivity := time.Now()
-
-	flushIdle := func() {
-		t, ok := s.store.Get(trackID)
-		if !ok || t.Status.IsTerminal() {
-			return
-		}
-		// If no event for >60s and process is still alive, mark Waiting.
-		if time.Since(lastActivity) > 60*time.Second && t.Status == state.StatusRunning {
-			t.Status = state.StatusWaiting
-			_ = s.store.Put(t)
-		}
-		// Conversely, return to Running if we just saw activity.
-		if time.Since(lastActivity) < 5*time.Second && t.Status == state.StatusWaiting {
-			t.Status = state.StatusRunning
-			_ = s.store.Put(t)
-		}
-	}
-
+// watchTrackProcess polls the pane pid until it stops being a live
+// process. When the process exits, we mark the track Done. If the
+// user kills the tmux window directly (HasWindow returns false)
+// before the process exits, same outcome.
+//
+// We don't try to discriminate Errored vs Done here because tmux
+// doesn't surface the exit code through has-window. Future work
+// could parse `tmux list-panes -F '#{pane_dead_status}'` to get it.
+func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
+	defer close(sup.done)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	tm := tmux.New()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-idleTicker.C:
-			flushIdle()
-		case ev, ok := <-events:
-			if !ok {
+		case <-ticker.C:
+			alive := processAlive(sup.pid)
+			windowExists, _ := tm.HasWindow(s.cfg.Tmux.SessionName, sup.windowName)
+			if !alive || !windowExists {
+				s.finalizeTrack(sup.trackID)
+				s.mu.Lock()
+				delete(s.supervisors, sup.trackID)
+				s.mu.Unlock()
 				return
 			}
-			lastActivity = time.Now()
-			switch e := ev.(type) {
-			case claude.PRMarker:
-				if t, ok := s.store.Get(trackID); ok {
-					t.PRURL = e.URL
-					_ = s.store.Put(t)
-				}
-			default:
-				// AssistantText / ToolUse currently don't mutate
-				// persisted state — they're surfaced to the per-track
-				// tmux pane via tail -F. lastActivity above is what
-				// the Running/Waiting heuristic needs.
-				_ = e
-			}
 		}
 	}
 }
 
-// waitProcess blocks on cmd.Wait() and writes the terminal state.
-func (s *Server) waitProcess(sup *supervisor, trackID string) {
-	defer close(sup.done)
-	err := sup.cmd.Wait()
-	exitCode := 0
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			exitCode = ee.ExitCode()
-		} else {
-			exitCode = -1
-		}
-	}
-	t, found := s.store.Get(trackID)
-	if !found {
+// finalizeTrack writes the terminal status for trackID if it isn't
+// already terminal.
+func (s *Server) finalizeTrack(trackID string) {
+	t, ok := s.store.Get(trackID)
+	if !ok || t.Status.IsTerminal() {
 		return
 	}
-	if !t.Status.IsTerminal() {
-		now := time.Now().UTC()
-		t.ExitedAt = &now
-		t.ExitCode = &exitCode
-		if exitCode == 0 {
-			t.Status = state.StatusDone
-		} else {
-			t.Status = state.StatusErrored
-		}
-		_ = s.store.Put(t)
-	}
-	// Remove from active supervisor map.
-	s.mu.Lock()
-	delete(s.supervisors, trackID)
-	s.mu.Unlock()
+	now := time.Now().UTC()
+	t.ExitedAt = &now
+	t.Status = state.StatusDone
+	_ = s.store.Put(t)
 }
 
-// Stop sends SIGTERM, waits up to 5s, then SIGKILL.
-func (sup *supervisor) Stop() {
-	if sup == nil || sup.cmd == nil || sup.cmd.Process == nil {
+// Stop signals the supervisor to wind down by killing the tmux
+// window (which SIGHUPs claude). Waits for the watcher to see the
+// disappearance and finalize.
+func (sup *supervisor) Stop(sessionName string) {
+	if sup == nil {
 		return
 	}
-	_ = sup.cmd.Process.Signal(syscall.SIGTERM)
+	tm := tmux.New()
+	_ = tm.KillWindow(sessionName, sup.windowName)
 	select {
 	case <-sup.done:
-		return
 	case <-time.After(5 * time.Second):
 	}
-	_ = sup.cmd.Process.Signal(syscall.SIGKILL)
-	<-sup.done
 }
 
-// Kill is Stop with no SIGTERM grace.
-func (sup *supervisor) Kill() {
-	if sup == nil || sup.cmd == nil || sup.cmd.Process == nil {
+// Kill is harsher: SIGKILL the pid directly, then kill the window
+// for good measure.
+func (sup *supervisor) Kill(sessionName string) {
+	if sup == nil {
 		return
 	}
-	_ = sup.cmd.Process.Signal(syscall.SIGKILL)
-	<-sup.done
+	if sup.pid > 0 {
+		_ = syscall.Kill(sup.pid, syscall.SIGKILL)
+	}
+	tm := tmux.New()
+	_ = tm.KillWindow(sessionName, sup.windowName)
+	select {
+	case <-sup.done:
+	case <-time.After(2 * time.Second):
+	}
 }
 
-// stopAllSupervisors is invoked when the daemon itself is shutting
-// down. We SIGTERM everyone in parallel and wait briefly.
+// stopAllSupervisors closes every active track window. Called from
+// Server.Stop when the daemon is winding down. SIGTERMs in parallel
+// so a slow shutdown doesn't hold the others up.
 func (s *Server) stopAllSupervisors() {
 	s.mu.Lock()
 	sups := make([]*supervisor, 0, len(s.supervisors))
@@ -203,7 +175,7 @@ func (s *Server) stopAllSupervisors() {
 		wg.Add(1)
 		go func(sp *supervisor) {
 			defer wg.Done()
-			sp.Stop()
+			sp.Stop(s.cfg.Tmux.SessionName)
 		}(sup)
 	}
 	wg.Wait()

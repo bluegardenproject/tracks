@@ -32,12 +32,7 @@ func init() {
 				return err
 			}
 			if !exists {
-				// Recreate the per-track window if the user closed it.
-				self, _ := selfBinary()
-				cmdLine := fmt.Sprintf("%s log %s", shellQuote(self), shellQuote(t.ID))
-				if err := tm.NewWindow(session, window, cmdLine, "", true); err != nil {
-					return fmt.Errorf("recreate track window: %w", err)
-				}
+				return fmt.Errorf("track window %q no longer exists — claude likely exited; the track may be done", window)
 			}
 			return tm.SelectWindow(session, window)
 		},

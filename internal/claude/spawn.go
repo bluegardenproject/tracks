@@ -1,27 +1,23 @@
 // Package claude wraps how `tracks` invokes the `claude` CLI as a
-// long-running agent, and how it interprets the stream-json log
-// Claude emits.
+// long-running interactive agent inside a tmux window.
 //
-// Spawning is intentionally thin: we exec the binary with the right
-// flags, redirect stdout/stderr to a log file, and return the
-// running process. The daemon owns supervision and state
-// transitions; this package just knows about Claude's own surface.
+// Claude runs *interactively* (no `-p` / one-shot mode) so the user
+// can switch into the track's tmux window and keep chatting with
+// the agent after it finishes the initial task. The tmux pane
+// supplies the TTY; we just compose the right argv and hand it to
+// tmux via `internal/tmux`.
 package claude
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
-// SpawnOptions describes everything `tracks` needs to launch one
-// Claude session.
+// SpawnOptions describes everything needed to launch one Claude
+// session inside a tmux pane.
 type SpawnOptions struct {
 	// CLIBinary is the claude executable. Either a bare name (PATH
 	// lookup) or an absolute path.
@@ -30,7 +26,9 @@ type SpawnOptions struct {
 	// PermissionMode is passed as --permission-mode.
 	PermissionMode string
 
-	// TaskPrompt is the assembled prompt (task + DefaultPromptSuffix).
+	// TaskPrompt is the assembled prompt (user's text +
+	// DefaultPromptSuffix). Passed as the positional argument to
+	// claude so the TUI opens pre-filled.
 	TaskPrompt string
 
 	// AddDirs are the absolute paths passed as --add-dir for each
@@ -38,13 +36,9 @@ type SpawnOptions struct {
 	AddDirs []string
 
 	// CWD is the directory claude is launched from. Conventionally
-	// the first AddDir, so paths in the assistant's output are
+	// the first AddDir so paths in the assistant's output are
 	// relative to the primary repo.
 	CWD string
-
-	// LogPath is where stdout (and stderr) get appended. Created if
-	// missing.
-	LogPath string
 
 	// TrackID is exported as TRACKS_ID in the child's env so any
 	// in-worktree helper script (e.g. tracks-add-repo) can identify
@@ -77,84 +71,45 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOpti
 		TaskPrompt:     prompt,
 		AddDirs:        addDirs,
 		CWD:            t.Repos[0].Path,
-		LogPath:        t.LogPath,
 		TrackID:        t.ID,
 		SocketDir:      socketDir,
 	}, nil
 }
 
-// Args returns the argv (minus argv[0]) `tracks` invokes claude with.
-// Exported for tests and for the verbose logging path.
-func (o SpawnOptions) Args() []string {
-	args := []string{
-		"-p", o.TaskPrompt,
-		"--output-format", "stream-json",
-		"--verbose",
+// ShellCommand returns the single shell-quoted command line tmux
+// should run inside the new pane. tmux's `new-window <command>`
+// passes its argument to /bin/sh -c so we must produce a string
+// (not argv).
+//
+// Env vars (TRACKS_ID, TRACKS_SOCKET_DIR) are exported inline so
+// they reach claude regardless of the parent shell's behavior.
+func (o SpawnOptions) ShellCommand() string {
+	parts := []string{}
+	parts = append(parts,
+		"TRACKS_ID="+shellQuote(o.TrackID),
+		"TRACKS_SOCKET_DIR="+shellQuote(o.SocketDir),
+	)
+	parts = append(parts, shellQuote(o.CLIBinary))
+	if o.TaskPrompt != "" {
+		// Claude takes the prompt as a positional arg: it opens
+		// the TUI pre-filled with that prompt.
+		parts = append(parts, shellQuote(o.TaskPrompt))
 	}
 	if o.PermissionMode != "" {
-		args = append(args, "--permission-mode", o.PermissionMode)
+		parts = append(parts, "--permission-mode", shellQuote(o.PermissionMode))
 	}
 	for _, d := range o.AddDirs {
-		args = append(args, "--add-dir", d)
-	}
-	return args
-}
-
-// Spawn starts the Claude process and returns it. The caller is
-// responsible for Wait()ing on it (typically in a supervisor
-// goroutine).
-//
-// The log file is opened in append mode so a restarted daemon can
-// preserve history. Stdout and stderr are merged — Claude's
-// stream-json format is on stdout, but any setup errors come on
-// stderr, and we want both in the same artifact for post-mortems.
-func Spawn(opts SpawnOptions) (*exec.Cmd, error) {
-	if opts.CLIBinary == "" {
-		return nil, errors.New("CLIBinary is required")
-	}
-	if opts.LogPath == "" {
-		return nil, errors.New("LogPath is required")
-	}
-	if err := os.MkdirAll(filepath.Dir(opts.LogPath), 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir log dir: %w", err)
-	}
-	logFile, err := os.OpenFile(opts.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("open log %s: %w", opts.LogPath, err)
-	}
-
-	cmd := exec.Command(opts.CLIBinary, opts.Args()...)
-	if opts.CWD != "" {
-		cmd.Dir = opts.CWD
-	}
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	// Detach stdin so claude doesn't try to read from our terminal.
-	cmd.Stdin = nil
-	cmd.Env = append(os.Environ(),
-		"TRACKS_ID="+opts.TrackID,
-		"TRACKS_SOCKET_DIR="+opts.SocketDir,
-	)
-
-	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("start claude: %w", err)
-	}
-	// We deliberately don't close logFile — the child has it. When
-	// the child exits, its descriptor closes and our copy can be GC'd.
-	return cmd, nil
-}
-
-// CommandPreview returns a shell-quoted preview of the argv, useful
-// for the --verbose flag and for the daemon log.
-func (o SpawnOptions) CommandPreview() string {
-	parts := []string{o.CLIBinary}
-	for _, a := range o.Args() {
-		if strings.ContainsAny(a, " \t\n\"'`$") {
-			parts = append(parts, `"`+strings.ReplaceAll(a, `"`, `\"`)+`"`)
-		} else {
-			parts = append(parts, a)
-		}
+		parts = append(parts, "--add-dir", shellQuote(d))
 	}
 	return strings.Join(parts, " ")
+}
+
+// shellQuote returns s wrapped in single quotes with embedded
+// single quotes escaped. Safe for inclusion in any /bin/sh command
+// line.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
