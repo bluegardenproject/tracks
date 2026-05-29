@@ -261,16 +261,54 @@ func min(a, b int) int {
 	return b
 }
 
+// minSideBySideWidth is the smallest total terminal width at which
+// the dashboard renders the left/right split. Below this we fall
+// back to a stacked single-column layout so narrow terminals still
+// look usable.
+const minSideBySideWidth = 120
+
 func (m *model) View() string {
+	if m.width >= minSideBySideWidth {
+		left := m.renderLeft(m.leftWidth())
+		right := m.renderRight(m.rightWidth())
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	}
+	return m.renderLeft(m.width) + "\n" + m.renderRight(m.width)
+}
+
+// leftWidth / rightWidth split the screen 55/45 with a small gutter.
+func (m *model) leftWidth() int {
+	if m.width <= 0 {
+		return 80
+	}
+	w := m.width*55/100 - 1
+	if w < 60 {
+		w = 60
+	}
+	return w
+}
+
+func (m *model) rightWidth() int {
+	if m.width <= 0 {
+		return 60
+	}
+	w := m.width - m.leftWidth() - 2
+	if w < 40 {
+		w = 40
+	}
+	return w
+}
+
+// renderLeft draws the table + footer. Width clamps row formatting
+// so we don't overflow into the right panel.
+func (m *model) renderLeft(width int) string {
 	var b strings.Builder
 
-	// Header.
 	b.WriteString(m.styles.header.Render("tracks — dashboard"))
 	b.WriteString("  ")
 	b.WriteString(m.styles.dim.Render(fmt.Sprintf("(%d tracks, %d pending prompts)", len(m.tracks), len(m.prompts))))
 	b.WriteString("\n\n")
 
-	// Pending prompts banner.
 	for _, p := range m.prompts {
 		b.WriteString(m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   [y=allow / n=deny]",
 			shortID(p.TrackID), p.Tool, p.Detail)))
@@ -280,21 +318,20 @@ func (m *model) View() string {
 		b.WriteString("\n")
 	}
 
-	// Tracks table.
 	if m.err != nil {
 		b.WriteString(m.styles.dim.Render("daemon unreachable: ") + m.err.Error() + "\n")
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-30s  %-10s  %-30s  %s",
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-22s  %-10s  %-18s  %s",
 			"ID", "BRANCH", "STATUS", "REPOS", "PR")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
-			line := fmt.Sprintf("  %-15s  %-30s  %s  %-30s  %s",
+			line := fmt.Sprintf("  %-15s  %-22s  %s  %-18s  %s",
 				shortID(t.ID),
-				truncate(t.Branch, 30),
+				truncate(t.Branch, 22),
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-				truncate(joinRepos(t.Repos), 30),
+				truncate(joinRepos(t.Repos), 18),
 				m.styles.pr.Render(t.PRURL),
 			)
 			if i == m.cursor {
@@ -306,31 +343,100 @@ func (m *model) View() string {
 		}
 	}
 
-	// Live snippet of the highlighted track's tmux pane. Shown
-	// whenever we have output to show — gives the user a peek at
-	// what Claude is doing (or what question it's waiting on)
-	// without having to switch windows.
-	if len(m.tracks) > 0 && m.cursor < len(m.tracks) {
-		sel := m.tracks[m.cursor]
-		if sel.LastOutput != "" {
-			label := "current pane"
-			if sel.Status == state.StatusWaiting {
-				label = "WAITING — Claude needs input (enter to attach)"
-			}
-			b.WriteString("\n")
-			b.WriteString(m.styles.dim.Render(label))
-			b.WriteString("\n")
-			b.WriteString(m.styles.snippet.Render(sel.LastOutput))
-			b.WriteString("\n")
+	b.WriteString("\n")
+	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"))
+	b.WriteString("\n")
+	b.WriteString(m.styles.dim.Render("r refresh   q quit   (open menu from any window with <prefix>+t)"))
+	return lipgloss.NewStyle().Width(width).Render(b.String())
+}
+
+// renderRight draws the detail panel for the selected track.
+func (m *model) renderRight(width int) string {
+	if len(m.tracks) == 0 || m.cursor >= len(m.tracks) {
+		hint := m.styles.dim.Render("select a track on the left to see details")
+		return lipgloss.NewStyle().Width(width).Padding(1, 2).Render(hint)
+	}
+	t := m.tracks[m.cursor]
+
+	var b strings.Builder
+	b.WriteString(m.styles.header.Render("Track details"))
+	b.WriteString("\n\n")
+
+	field := func(k, v string) {
+		if v == "" {
+			return
 		}
+		b.WriteString(m.styles.dim.Render(k + ":  "))
+		b.WriteString(v)
+		b.WriteString("\n")
+	}
+	field("id", t.ID)
+	field("branch", t.Branch)
+	field("repos", joinRepos(t.Repos))
+	b.WriteString(m.styles.dim.Render("status:  "))
+	b.WriteString(m.styles.status[t.Status].Render(string(t.Status)))
+	b.WriteString("\n")
+	field("updated", t.UpdatedAt.Format("2006-01-02 15:04:05"))
+	if t.PRURL != "" {
+		b.WriteString(m.styles.dim.Render("pr:  "))
+		b.WriteString(m.styles.pr.Render(t.PRURL))
+		b.WriteString("\n")
 	}
 
-	// Footer.
-	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach window   d end   K kill   x forget   X clear completed   y/n answer prompt"))
-	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("r refresh   q quit dashboard   (open menu from any window with <prefix>+t)"))
-	return b.String()
+	if t.TaskPrompt != "" {
+		b.WriteString("\n")
+		b.WriteString(m.styles.dim.Render("task:"))
+		b.WriteString("\n")
+		b.WriteString(wrapText(t.TaskPrompt, width-4))
+		b.WriteString("\n")
+	}
+
+	if t.LastOutput != "" {
+		b.WriteString("\n")
+		if t.AwaitingInput {
+			b.WriteString(m.styles.status[state.StatusWaiting].Render("Claude is asking — enter to attach"))
+		} else {
+			b.WriteString(m.styles.dim.Render("pane snapshot"))
+		}
+		b.WriteString("\n")
+		b.WriteString(m.styles.snippet.Width(width - 4).Render(t.LastOutput))
+	}
+
+	return lipgloss.NewStyle().Width(width).Padding(1, 2).Render(b.String())
+}
+
+// wrapText soft-wraps s at width, preserving paragraph breaks.
+// Just enough wrapping for the right panel's task field.
+func wrapText(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	var out strings.Builder
+	for _, para := range strings.Split(s, "\n") {
+		if para == "" {
+			out.WriteString("\n")
+			continue
+		}
+		line := ""
+		for _, word := range strings.Fields(para) {
+			if line == "" {
+				line = word
+				continue
+			}
+			if len(line)+1+len(word) > width {
+				out.WriteString(line)
+				out.WriteString("\n")
+				line = word
+				continue
+			}
+			line += " " + word
+		}
+		if line != "" {
+			out.WriteString(line)
+			out.WriteString("\n")
+		}
+	}
+	return strings.TrimRight(out.String(), "\n")
 }
 
 func shortID(id string) string {

@@ -159,23 +159,42 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	case !idle && t.Status != state.StatusRunning:
 		target = state.StatusRunning
 	}
-	snippet := paneTail(snapshot, 8)
-	if target == t.Status && snippet == t.LastOutput {
+	snippet, awaiting := paneSnippet(snapshot)
+	if target == t.Status && snippet == t.LastOutput && awaiting == t.AwaitingInput {
 		return
 	}
 	t.Status = target
 	t.LastOutput = snippet
+	t.AwaitingInput = awaiting
 	_ = s.store.Put(t)
 }
 
-// paneTail returns the last n non-empty lines of the pane content
-// with ANSI escape sequences stripped. Used to give the dashboard
-// a peek at what Claude is showing.
-func paneTail(snapshot string, n int) string {
+// paneSnippet returns a snippet of pane content suitable for the
+// dashboard, plus a bool indicating whether Claude is sitting at a
+// confirmation/choice prompt.
+//
+// Claude's TUI renders such prompts with a distinctive `☐ Confirm`
+// (or other `☐ <title>`) header at the top and a numbered option
+// list with `❯ \d+\.` for the cursor. When we see those markers,
+// we return everything from the marker downward so the user can
+// read the whole question. Otherwise we fall back to the last
+// handful of non-empty lines.
+func paneSnippet(snapshot string) (string, bool) {
 	stripped := stripANSI(snapshot)
 	lines := strings.Split(stripped, "\n")
+
+	if start := findPromptStart(lines); start >= 0 {
+		// Walk down from start, drop trailing empty lines.
+		end := len(lines)
+		for end > start && strings.TrimSpace(lines[end-1]) == "" {
+			end--
+		}
+		return strings.Join(lines[start:end], "\n"), true
+	}
+
+	// No prompt marker — return last 8 non-empty lines.
+	const n = 8
 	out := make([]string, 0, n)
-	// Walk from the bottom, collect non-empty lines.
 	for i := len(lines) - 1; i >= 0 && len(out) < n; i-- {
 		line := strings.TrimRight(lines[i], " \t\r")
 		if strings.TrimSpace(line) == "" {
@@ -183,7 +202,25 @@ func paneTail(snapshot string, n int) string {
 		}
 		out = append([]string{line}, out...)
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), false
+}
+
+// promptMarker matches the `☐ <title>` headline that Claude's TUI
+// puts at the top of every confirmation / choice prompt (Confirm,
+// AskUserQuestion, tool permission, etc.).
+var promptMarker = regexp.MustCompile(`(?m)^\s*☐\s`)
+
+// findPromptStart returns the line index of the most recent `☐ `
+// marker, or -1 if none. Most recent wins so a fresh prompt
+// supersedes any old visible-but-resolved one.
+func findPromptStart(lines []string) int {
+	last := -1
+	for i, line := range lines {
+		if promptMarker.MatchString(line) {
+			last = i
+		}
+	}
+	return last
 }
 
 // ansiSeq matches the common ANSI escape sequences (CSI, OSC, and
