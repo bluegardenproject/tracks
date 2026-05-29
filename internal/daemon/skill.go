@@ -20,9 +20,8 @@ description: |
   this when the task you're solving needs to touch a repo that wasn't part
   of the initial worktree set. The host CLI ` + "(`tracks`)" + ` creates a new
   worktree under the same branch as the current track and gives you the
-  absolute path. TRIGGER when the task references a repo by name (e.g.
-  "fix LIVE-1234 in ledger-live") and that repo's checkout is not visible
-  in the working set.
+  absolute path. TRIGGER when the task references a repo by name and that
+  repo's checkout is not visible in your current working set.
 ---
 
 # tracks-add-repo

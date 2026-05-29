@@ -12,7 +12,7 @@ func makeTrack(id string) Track {
 	return Track{
 		ID:         id,
 		Branch:     "fix/example",
-		Repos:      []TrackRepo{{Name: "ledger-live", Path: "/tmp/" + id + "/ledger-live"}},
+		Repos:      []TrackRepo{{Name: "demo-repo", Path: "/tmp/" + id + "/demo-repo"}},
 		Status:     StatusRunning,
 		LogPath:    "/tmp/" + id + ".jsonl",
 		TaskPrompt: "do the thing",

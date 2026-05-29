@@ -67,7 +67,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 				Value(&slug),
 			huh.NewText().
 				Title("Task prompt").
-				Description("What should Claude do? Free-form. Mention a Jira ticket (e.g. LIVE-1234) and Claude will use it in the branch name and commit message.").
+				Description("What should Claude do? Free-form. Mention a Jira-style ticket (e.g. ABC-123) and Claude will use it in the branch name and commit message.").
 				CharLimit(8192).
 				Validate(func(v string) error {
 					if strings.TrimSpace(v) == "" {
