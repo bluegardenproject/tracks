@@ -63,7 +63,12 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOpti
 	}
 	prompt := t.TaskPrompt
 	if cfg.Claude.DefaultPromptSuffix != "" {
-		prompt += cfg.Claude.DefaultPromptSuffix
+		// Always force a blank-line separator so the suffix never
+		// gets glued onto the end of the user's task ("task.When
+		// you finish, ...") regardless of how the suffix is
+		// authored in YAML.
+		suffix := strings.TrimLeft(cfg.Claude.DefaultPromptSuffix, " \t\n\r")
+		prompt = strings.TrimRight(prompt, " \t\n\r") + "\n\n" + suffix
 	}
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
