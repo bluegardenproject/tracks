@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/git"
@@ -48,11 +47,18 @@ func (s *Server) handleGet(raw json.RawMessage) Response {
 	return ok(GetResult{Track: t, Found: found})
 }
 
-// slugRegex restricts branch slugs to alphanumerics + hyphens.
-// Mixed case is permitted so Jira-style ticket prefixes (LIVE-1234)
-// survive into the branch name; everything else is normalized to
-// lowercase by deriveSlugFromTask.
-var slugRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*$`)
+// placeholderBranch returns the temporary branch name created in
+// the worktree at track start. Format: tracks/<last-6-of-id>. Short
+// because it's only meant to live briefly — the CLAUDE.md
+// instructions tell Claude to rename it to its proper
+// <type>/<slug> before the first commit.
+func placeholderBranch(trackID string) string {
+	tail := trackID
+	if len(tail) > 6 {
+		tail = tail[len(tail)-6:]
+	}
+	return "tracks/" + tail
+}
 
 func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 	var p NewParams
@@ -61,33 +67,6 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 	}
 	if len(p.Repos) == 0 {
 		return fail("at least one repo required")
-	}
-
-	// If the caller didn't supply a slug, derive one from the task
-	// prompt — pulls out a Jira-style ticket if present and the
-	// first few descriptive words, hyphenated.
-	if p.Slug == "" {
-		fallback, err := randomID(3) // last-resort token if task is empty
-		if err != nil {
-			return fail("generate fallback id: " + err.Error())
-		}
-		p.Slug = deriveSlugFromTask(p.TaskPrompt, fallback)
-	}
-	if !slugRegex.MatchString(p.Slug) {
-		return fail(fmt.Sprintf("invalid slug %q (must match %s)", p.Slug, slugRegex))
-	}
-
-	// Validate branch type against config.
-	typeOK := false
-	for _, t := range s.cfg.Branch.Types {
-		if t == p.BranchType {
-			typeOK = true
-			break
-		}
-	}
-	if !typeOK {
-		return fail(fmt.Sprintf("branch type %q not in config (have %v)",
-			p.BranchType, s.cfg.Branch.Types))
 	}
 
 	// Resolve and validate each requested repo against config.
@@ -104,15 +83,15 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules})
 	}
 
-	branch := p.BranchType + "/" + p.Slug
-
-	// Build a unique track ID for filesystem and tmux. We also use
-	// the timestamp prefix as a tiebreaker if the same slug is used
-	// in two tracks in the same second.
+	// Build a unique track ID. The placeholder branch we create in
+	// the worktree uses the tail of this ID. Claude is expected to
+	// rename the branch to its proper <type>/<slug> per the
+	// instructions in the user's CLAUDE.md before its first commit.
 	trackID, err := generateTrackID()
 	if err != nil {
 		return fail("generate id: " + err.Error())
 	}
+	branch := placeholderBranch(trackID)
 
 	stateDir, err := s.cfg.ResolveStateDir()
 	if err != nil {
