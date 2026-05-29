@@ -213,11 +213,7 @@ func runNewTrackFromMenu(cfg config.Config) error {
 	}
 	tm := tmux.New()
 	if tm.HasSession(cfg.Tmux.SessionName) {
-		self, _ := selfBinary()
-		window := windowNameFor(res.TrackID)
-		cmdLine := fmt.Sprintf("%s log %s", shellQuote(self), shellQuote(res.TrackID))
-		_ = tm.NewWindow(cfg.Tmux.SessionName, window, cmdLine, "", true)
-		_ = tm.SelectWindow(cfg.Tmux.SessionName, window)
+		_ = tm.SelectWindow(cfg.Tmux.SessionName, windowNameFor(res.TrackID))
 	}
 	fmt.Printf("created %s on %s\n", res.TrackID, res.Branch)
 	return nil

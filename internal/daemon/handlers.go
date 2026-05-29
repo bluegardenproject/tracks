@@ -247,9 +247,9 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) 
 	s.mu.Unlock()
 	if ok2 {
 		if force {
-			sup.Kill()
+			sup.Kill(s.cfg.Tmux.SessionName)
 		} else {
-			sup.Stop()
+			sup.Stop(s.cfg.Tmux.SessionName)
 		}
 	}
 	// Re-read state — the wait-goroutine may have already written

@@ -104,6 +104,37 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 	return nil
 }
 
+// NewWindowReturningPaneID opens a new window like NewWindow and
+// returns the new pane's pid. We use this for tracks so the daemon
+// can watch the live process (which tmux owns) without dropping the
+// "interactive TTY inside tmux" property that lets the user type
+// to Claude directly.
+//
+// Always uses remain-on-exit=on so the user can read Claude's final
+// output even after the agent itself terminates.
+func (Client) NewWindowReturningPaneID(session, name, command, startDir string) (int, error) {
+	args := []string{"new-window", "-d", "-t", session, "-n", name,
+		"-P", "-F", "#{pane_pid}"}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := exec.Command("tmux", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("tmux new-window: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	pid := 0
+	if _, scanErr := fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &pid); scanErr != nil || pid <= 0 {
+		return 0, fmt.Errorf("tmux new-window: could not parse pid from %q", string(out))
+	}
+	setOpt := exec.Command("tmux", "set-window-option", "-t", session+":"+name, "remain-on-exit", "on")
+	_ = setOpt.Run()
+	return pid, nil
+}
+
 // KillWindow closes the named window. No-op when missing.
 func (Client) KillWindow(session, name string) error {
 	exists, err := Client{}.HasWindow(session, name)

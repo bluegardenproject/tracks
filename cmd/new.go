@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -53,17 +52,11 @@ func init() {
 			fmt.Printf("  branch: %s\n", res.Branch)
 			fmt.Println()
 
-			// Open the per-track tmux window if we have a session.
+			// The daemon has already opened the per-track tmux
+			// window with claude inside. Just switch to it.
 			tm := tmux.New()
 			if tm.HasSession(cfg.Tmux.SessionName) {
-				self, err := selfBinary()
-				if err == nil {
-					window := windowNameFor(res.TrackID)
-					cmdLine := fmt.Sprintf("%s log %s", shellQuote(self), shellQuote(res.TrackID))
-					if err := tm.NewWindow(cfg.Tmux.SessionName, window, cmdLine, "", true); err != nil {
-						fmt.Fprintf(os.Stderr, "warning: could not open tmux window: %v\n", err)
-					}
-				}
+				_ = tm.SelectWindow(cfg.Tmux.SessionName, windowNameFor(res.TrackID))
 			}
 			return nil
 		},
