@@ -209,14 +209,18 @@ func paneSnippet(snapshot string) (string, bool) {
 	return strings.Join(out, "\n"), false
 }
 
-// collapseBlanks turns runs of empty lines into a single empty line.
-// Claude's TUI double-spaces its option lists, which looks great in
-// the live pane but wastes vertical real estate in the dashboard
-// detail panel.
+// collapseBlanks turns runs of empty lines into a single empty
+// line AND drops decorative-only lines (long unbroken runs of
+// box-drawing characters Claude's TUI uses to separate sections).
+// Both look fine in the live pane but waste space — and confuse
+// the dashboard's wrap logic — in the snippet.
 func collapseBlanks(lines []string) string {
 	out := make([]string, 0, len(lines))
 	prevBlank := false
 	for _, line := range lines {
+		if isDecorative(line) {
+			continue
+		}
 		blank := line == ""
 		if blank && prevBlank {
 			continue
@@ -224,7 +228,6 @@ func collapseBlanks(lines []string) string {
 		out = append(out, line)
 		prevBlank = blank
 	}
-	// Drop leading/trailing blanks too.
 	for len(out) > 0 && out[0] == "" {
 		out = out[1:]
 	}
@@ -232,6 +235,18 @@ func collapseBlanks(lines []string) string {
 		out = out[:len(out)-1]
 	}
 	return strings.Join(out, "\n")
+}
+
+// decorativeRE matches lines composed entirely of whitespace and
+// horizontal-rule characters — the separators Claude's TUI draws
+// between groups in a Confirm prompt.
+var decorativeRE = regexp.MustCompile(`^[\s─━═━‾_\-]+$`)
+
+func isDecorative(line string) bool {
+	if strings.TrimSpace(line) == "" {
+		return false
+	}
+	return decorativeRE.MatchString(line)
 }
 
 // promptMarker matches the `☐ <title>` headline that Claude's TUI
