@@ -36,6 +36,7 @@ type Config struct {
 	Paths         Paths  `yaml:"paths,omitempty"`
 	Claude        Claude `yaml:"claude,omitempty"`
 	Branch        Branch `yaml:"branch,omitempty"`
+	Notify        Notify `yaml:"notify,omitempty"`
 	Repos         []Repo `yaml:"repos,omitempty"`
 }
 
@@ -78,6 +79,37 @@ type Claude struct {
 	// "bypassPermissions" for full autonomy (be careful — Claude can
 	// then run arbitrary commands in the worktree without asking).
 	PermissionMode string `yaml:"permission_mode,omitempty"`
+}
+
+// Notify controls how the daemon reaches out when a track wants
+// attention. Each channel is independent; events gates which
+// transitions trigger notifications at all.
+type Notify struct {
+	// MacOS enables the `osascript display notification` channel.
+	// Silently a no-op on non-Darwin platforms.
+	MacOS bool `yaml:"macos"`
+	// Bell enables the terminal-bell channel (writes \a to
+	// /dev/tty). tmux turns this into a status-line activity
+	// marker on the window that fires.
+	Bell bool `yaml:"bell"`
+	// Events lists which transitions emit a notification. Valid
+	// values: waiting, done, errored, pr_opened, pr_state_changed.
+	// Empty defaults to the full set.
+	Events []string `yaml:"events,omitempty"`
+}
+
+// EventEnabled reports whether the given event name is allowed by
+// n.Events. An empty Events slice means "all enabled".
+func (n Notify) EventEnabled(event string) bool {
+	if len(n.Events) == 0 {
+		return true
+	}
+	for _, e := range n.Events {
+		if e == event {
+			return true
+		}
+	}
+	return false
 }
 
 // Branch controls the naming convention for branches the worktrees
@@ -134,6 +166,11 @@ func Default() Config {
 		Branch: Branch{
 			Types:       []string{"feat", "fix", "chore", "refactor", "docs", "test"},
 			DefaultType: "fix",
+		},
+		Notify: Notify{
+			MacOS:  true,
+			Bell:   true,
+			Events: nil, // nil = all events enabled (see EventEnabled).
 		},
 		Repos: nil,
 	}

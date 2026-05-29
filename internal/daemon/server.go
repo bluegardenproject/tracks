@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -31,9 +32,10 @@ import (
 //     exits.
 //  4. Stop is safe to call concurrently with Start.
 type Server struct {
-	cfg     config.Config
-	store   state.Store
-	version string
+	cfg      config.Config
+	store    state.Store
+	version  string
+	notifier *notify.Notifier
 
 	// NoTmuxWatch disables the tmux-has-session polling loop. Set to
 	// true in tests where there is no tmux session to gate on.
@@ -62,9 +64,13 @@ type promptCh struct {
 // in the daemon log line.
 func NewServer(cfg config.Config, store state.Store, version string) *Server {
 	return &Server{
-		cfg:            cfg,
-		store:          store,
-		version:        version,
+		cfg:     cfg,
+		store:   store,
+		version: version,
+		notifier: notify.New(notify.Channel{
+			MacOS: cfg.Notify.MacOS,
+			Bell:  cfg.Notify.Bell,
+		}),
 		pendingPrompts: make(map[string]promptCh),
 	}
 }
