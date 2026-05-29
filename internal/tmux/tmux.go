@@ -187,6 +187,24 @@ func (Client) Attach(name string) error {
 // decide between "create + attach" and "create + switch-client".
 func IsInsideTmux() bool { return os.Getenv("TMUX") != "" }
 
+// CapturePane returns the visible content of a pane. Used by the
+// daemon's supervisor to detect when Claude is sitting at its TUI
+// prompt waiting for user input (the pane stops changing).
+//
+// "-p" sends the capture to stdout; "-J" joins wrapped lines so a
+// long status line doesn't show up as two different snapshots
+// across a terminal resize.
+func (Client) CapturePane(session, window string) (string, error) {
+	cmd := exec.Command("tmux", "capture-pane", "-t", session+":"+window, "-p", "-J")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("tmux capture-pane: %w: %s", err, strings.TrimSpace(buf.String()))
+	}
+	return buf.String(), nil
+}
+
 // Available reports whether the tmux binary is on PATH.
 func Available() error {
 	if _, err := exec.LookPath("tmux"); err != nil {

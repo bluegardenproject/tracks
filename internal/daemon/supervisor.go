@@ -27,6 +27,11 @@ type supervisor struct {
 	pid        int
 	cancel     context.CancelFunc
 	done       chan struct{}
+
+	// lastPane is the most recent capture-pane snapshot. Used to
+	// detect a stalled pane (= Claude waiting for user input).
+	lastPane         string
+	lastPaneChangeAt time.Time
 }
 
 // windowNameFor returns the tmux window name for a track. Kept here
@@ -55,11 +60,12 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 
 	supCtx, cancel := context.WithCancel(ctx)
 	sup := &supervisor{
-		trackID:    t.ID,
-		windowName: window,
-		pid:        pid,
-		cancel:     cancel,
-		done:       make(chan struct{}),
+		trackID:          t.ID,
+		windowName:       window,
+		pid:              pid,
+		cancel:           cancel,
+		done:             make(chan struct{}),
+		lastPaneChangeAt: time.Now(),
 	}
 
 	// Persist the live state.
@@ -85,13 +91,13 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 }
 
 // watchTrackProcess polls the pane pid until it stops being a live
-// process. When the process exits, we mark the track Done. If the
-// user kills the tmux window directly (HasWindow returns false)
-// before the process exits, same outcome.
+// process, and watches the pane's rendered contents to detect when
+// Claude is sitting at its prompt waiting for user input.
 //
-// We don't try to discriminate Errored vs Done here because tmux
-// doesn't surface the exit code through has-window. Future work
-// could parse `tmux list-panes -F '#{pane_dead_status}'` to get it.
+//   - pid dead OR window gone → Done (or Errored — we don't have
+//     a reliable exit-code source from tmux here).
+//   - pane content unchanged for paneIdleThreshold → Waiting.
+//   - pane content changed within paneIdleThreshold → Running.
 func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 	defer close(sup.done)
 	ticker := time.NewTicker(2 * time.Second)
@@ -111,7 +117,42 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 				s.mu.Unlock()
 				return
 			}
+			s.refreshRunningStatus(tm, sup)
 		}
+	}
+}
+
+// paneIdleThreshold is how long the pane must be unchanged before
+// we flip the track to Waiting. Short enough that the dashboard
+// reflects "Claude wants you" within a few seconds; long enough
+// that a brief thinking pause doesn't flicker.
+const paneIdleThreshold = 6 * time.Second
+
+// refreshRunningStatus captures the pane content and updates the
+// stored track to Running or Waiting based on whether the snapshot
+// changed since the last poll. Errors from capture-pane are
+// swallowed — they shouldn't bring down the supervisor.
+func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
+	snapshot, err := tm.CapturePane(s.cfg.Tmux.SessionName, sup.windowName)
+	if err != nil {
+		return
+	}
+	if snapshot != sup.lastPane {
+		sup.lastPane = snapshot
+		sup.lastPaneChangeAt = time.Now()
+	}
+	t, ok := s.store.Get(sup.trackID)
+	if !ok || t.Status.IsTerminal() {
+		return
+	}
+	idle := time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
+	switch {
+	case idle && t.Status != state.StatusWaiting:
+		t.Status = state.StatusWaiting
+		_ = s.store.Put(t)
+	case !idle && t.Status != state.StatusRunning:
+		t.Status = state.StatusRunning
+		_ = s.store.Put(t)
 	}
 }
 
