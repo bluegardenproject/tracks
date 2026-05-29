@@ -205,6 +205,88 @@ func (Client) CapturePane(session, window string) (string, error) {
 	return buf.String(), nil
 }
 
+// JoinPane moves the only pane of srcWindow into targetWindow as a
+// vertical split, leaving srcWindow empty (tmux auto-destroys
+// windows with zero panes). heightPct is the relative size of the
+// joined pane (0..100).
+//
+// Used by the dashboard's two-pane mode to bring the selected
+// track's claude pane below the dashboard table.
+func (Client) JoinPane(session, srcWindow, targetWindow string, heightPct int) error {
+	if heightPct <= 0 || heightPct > 100 {
+		heightPct = 60
+	}
+	cmd := exec.Command("tmux", "join-pane",
+		"-v",
+		"-l", fmt.Sprintf("%d%%", heightPct),
+		"-s", session+":"+srcWindow,
+		"-t", session+":"+targetWindow+".0")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux join-pane: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// BreakPane separates a pane out of its current window into a new
+// window named newWindow. -d keeps the user's focus on the
+// previous window so the dashboard stays visible. After the break,
+// the source pane (the second one in the dashboard window) is the
+// only pane in the new window.
+func (Client) BreakPane(session, srcWindow string, paneIndex int, newWindow string) error {
+	cmd := exec.Command("tmux", "break-pane",
+		"-d",
+		"-s", fmt.Sprintf("%s:%s.%d", session, srcWindow, paneIndex),
+		"-n", newWindow)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux break-pane: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// PaneCount returns the number of panes in window. Used by the
+// dashboard to know whether a track is currently embedded (>=2)
+// or not (1).
+func (Client) PaneCount(session, window string) (int, error) {
+	cmd := exec.Command("tmux", "list-panes", "-t", session+":"+window, "-F", "1")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("tmux list-panes: %w: %s", err, strings.TrimSpace(buf.String()))
+	}
+	return len(strings.Fields(buf.String())), nil
+}
+
+// SetPaneTitle assigns a human-readable title to a pane. The
+// dashboard uses this to remember which track is currently
+// embedded in its second pane — so a fresh dashboard process can
+// still recover the embedded-track-id from tmux state.
+func (Client) SetPaneTitle(session, window string, paneIndex int, title string) error {
+	cmd := exec.Command("tmux", "select-pane",
+		"-t", fmt.Sprintf("%s:%s.%d", session, window, paneIndex),
+		"-T", title)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux select-pane -T: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// PaneTitle reads the title of the given pane. Returns "" when the
+// pane has no title set.
+func (Client) PaneTitle(session, window string, paneIndex int) (string, error) {
+	cmd := exec.Command("tmux", "display-message",
+		"-p",
+		"-t", fmt.Sprintf("%s:%s.%d", session, window, paneIndex),
+		"#{pane_title}")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("tmux display-message: %w: %s", err, strings.TrimSpace(buf.String()))
+	}
+	return strings.TrimSpace(buf.String()), nil
+}
+
 // Available reports whether the tmux binary is on PATH.
 func Available() error {
 	if _, err := exec.LookPath("tmux"); err != nil {

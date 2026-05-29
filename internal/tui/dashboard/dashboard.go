@@ -14,6 +14,7 @@ package dashboard
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -23,7 +24,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mattn/go-runewidth"
 )
 
 // pollInterval is the cadence at which the dashboard re-reads
@@ -88,6 +88,11 @@ type model struct {
 	height   int
 	err      error
 	lastPoll time.Time
+
+	// embeddedTrackID is the ID of the track whose claude pane is
+	// currently joined into the dashboard window. Empty when no
+	// pane is embedded.
+	embeddedTrackID string
 }
 
 func newModel(cfg config.Config) *model {
@@ -110,7 +115,83 @@ type pollResult struct {
 }
 
 func (m *model) Init() tea.Cmd {
+	// On startup, restore any pane that was left embedded from a
+	// previous dashboard process (e.g. it crashed mid-embed).
+	// PaneTitle on pane index 1 holds the track id we last
+	// joined — if found, break it back to its own window so we
+	// start clean.
+	if title, _ := m.tmux.PaneTitle(m.cfg.Tmux.SessionName, dashboardWindow, 1); title != "" {
+		_ = m.tmux.BreakPane(m.cfg.Tmux.SessionName, dashboardWindow, 1, "t-"+lastN(title, 6))
+	}
 	return tea.Batch(m.poll(), tickEvery())
+}
+
+// dashboardWindow is the tmux window name the dashboard runs in.
+// Must match what bootstrap creates.
+const dashboardWindow = "Dashboard"
+
+// embedHeightPct is how much of the dashboard window the embedded
+// claude pane consumes. 65% leaves the table comfortably visible
+// while Claude still has room for its TUI.
+const embedHeightPct = 65
+
+// syncEmbedded ensures the currently selected track's claude pane
+// is the one embedded in the dashboard window. Called whenever the
+// cursor moves.
+//
+// Behavior:
+//   - cursor on an active track with a live window → embed that pane
+//   - cursor on a terminal track or no track → restore embed (back
+//     to its own window), leaving the dashboard with one pane
+//   - same track as before → no-op
+func (m *model) syncEmbedded() {
+	if len(m.tracks) == 0 {
+		m.restoreEmbedded()
+		return
+	}
+	sel := m.tracks[m.cursor]
+	if sel.Status.IsTerminal() {
+		m.restoreEmbedded()
+		return
+	}
+	if sel.ID == m.embeddedTrackID {
+		return
+	}
+	srcWindow := windowNameFor(sel.ID)
+	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, srcWindow); !exists {
+		// No live window for this track (Claude already exited).
+		m.restoreEmbedded()
+		return
+	}
+	// Restore any previous embed first.
+	m.restoreEmbedded()
+	if err := m.tmux.JoinPane(m.cfg.Tmux.SessionName, srcWindow, dashboardWindow, embedHeightPct); err != nil {
+		return
+	}
+	_ = m.tmux.SetPaneTitle(m.cfg.Tmux.SessionName, dashboardWindow, 1, sel.ID)
+	m.embeddedTrackID = sel.ID
+}
+
+// restoreEmbedded breaks the embedded pane (if any) back to its
+// own t-<id> window so the dashboard window has one pane again.
+func (m *model) restoreEmbedded() {
+	if m.embeddedTrackID == "" {
+		return
+	}
+	id := m.embeddedTrackID
+	m.embeddedTrackID = ""
+	_ = m.tmux.BreakPane(m.cfg.Tmux.SessionName, dashboardWindow, 1, windowNameFor(id))
+}
+
+func windowNameFor(trackID string) string {
+	return "t-" + lastN(trackID, 6)
+}
+
+func lastN(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 func tickEvery() tea.Cmd {
@@ -145,14 +226,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
+			// Restore any embedded track to its own window before
+			// exiting — otherwise the next dashboard launch would
+			// inherit a stranded pane.
+			m.restoreEmbedded()
 			return m, tea.Quit
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.syncEmbedded()
 			}
 		case "down", "j":
 			if m.cursor < len(m.tracks)-1 {
 				m.cursor++
+				m.syncEmbedded()
 			}
 		case "enter":
 			if len(m.tracks) > 0 {
@@ -235,24 +322,39 @@ func max(a, b int) int {
 // closeTrackWindow removes the per-track tmux window after the
 // track has been ended. Best-effort — failure is silent because the
 // daemon side has already mutated state.
+//
+// If the track is currently embedded in the dashboard window, we
+// have to release the embed first or the kill-window call would
+// take the dashboard pane with it.
 func (m *model) closeTrackWindow(trackID string) {
-	window := "t-" + trackID[len(trackID)-min(6, len(trackID)):]
+	if m.embeddedTrackID == trackID {
+		m.restoreEmbedded()
+	}
+	window := windowNameFor(trackID)
 	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, window); !exists {
 		return
 	}
 	_ = m.tmux.KillWindow(m.cfg.Tmux.SessionName, window)
 }
 
-// attachTrack ensures the per-track window exists and switches to it.
+// attachTrack switches focus to the embedded pane (or the track's
+// own window if it isn't currently embedded). The dashboard auto-
+// embeds whatever's selected, so in practice `enter` just moves
+// the user into the embedded pane to start typing.
 func (m *model) attachTrack(trackID string) error {
-	window := "t-" + trackID[len(trackID)-min(6, len(trackID)):]
 	session := m.cfg.Tmux.SessionName
+	if m.embeddedTrackID == trackID {
+		// Already embedded — focus the bottom pane.
+		cmd := exec.Command("tmux", "select-pane", "-t", session+":"+dashboardWindow+".1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("select-pane: %w: %s", err, string(out))
+		}
+		return nil
+	}
+	window := windowNameFor(trackID)
 	exists, _ := m.tmux.HasWindow(session, window)
 	if !exists {
-		// We let the user attach via the `tracks attach` CLI rather
-		// than duplicate the window-recreation logic here. Showing
-		// an error is honest.
-		return fmt.Errorf("window %s missing — run `tracks attach %s` from a shell", window, trackID)
+		return fmt.Errorf("window %s missing — claude likely exited", window)
 	}
 	return m.tmux.SelectWindow(session, window)
 }
@@ -264,47 +366,15 @@ func min(a, b int) int {
 	return b
 }
 
-// minSideBySideWidth is the smallest total terminal width at which
-// the dashboard renders the left/right split. Below this we fall
-// back to a stacked single-column layout so narrow terminals still
-// look usable.
-const minSideBySideWidth = 120
-
 func (m *model) View() string {
-	if m.width >= minSideBySideWidth {
-		left := m.renderLeft(m.leftWidth())
-		right := m.renderRight(m.rightWidth())
-		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
-	}
-	return m.renderLeft(m.width) + "\n" + m.renderRight(m.width)
+	return m.renderTable(m.width)
 }
 
-// leftWidth / rightWidth split the screen 55/45 with a small gutter.
-func (m *model) leftWidth() int {
-	if m.width <= 0 {
-		return 80
-	}
-	w := m.width*55/100 - 1
-	if w < 60 {
-		w = 60
-	}
-	return w
-}
-
-func (m *model) rightWidth() int {
-	if m.width <= 0 {
-		return 60
-	}
-	w := m.width - m.leftWidth() - 2
-	if w < 40 {
-		w = 40
-	}
-	return w
-}
-
-// renderLeft draws the table + footer. Width clamps row formatting
-// so we don't overflow into the right panel.
-func (m *model) renderLeft(width int) string {
+// renderTable draws the dashboard's table + footer. The claude
+// pane for the selected track lives in its own tmux pane below
+// (joined in by syncEmbedded) — we don't render any details
+// here.
+func (m *model) renderTable(width int) string {
 	var b strings.Builder
 
 	b.WriteString(m.styles.header.Render("tracks — dashboard"))
@@ -352,215 +422,6 @@ func (m *model) renderLeft(width int) string {
 	b.WriteString("\n")
 	b.WriteString(m.styles.dim.Render("r refresh   q quit   (open menu from any window with <prefix>+t)"))
 	return lipgloss.NewStyle().Width(width).Render(b.String())
-}
-
-// renderRight draws the detail panel for the selected track.
-func (m *model) renderRight(width int) string {
-	if len(m.tracks) == 0 || m.cursor >= len(m.tracks) {
-		hint := m.styles.dim.Render("select a track on the left to see details")
-		return lipgloss.NewStyle().Width(width).Padding(1, 2).Render(hint)
-	}
-	t := m.tracks[m.cursor]
-
-	var b strings.Builder
-	b.WriteString(m.styles.header.Render("Track details"))
-	b.WriteString("\n\n")
-
-	field := func(k, v string) {
-		if v == "" {
-			return
-		}
-		b.WriteString(m.styles.dim.Render(k + ":  "))
-		b.WriteString(v)
-		b.WriteString("\n")
-	}
-	field("id", t.ID)
-	field("branch", t.Branch)
-	field("slug", t.Slug)
-	field("repos", joinRepos(t.Repos))
-	b.WriteString(m.styles.dim.Render("status:  "))
-	b.WriteString(m.styles.status[t.Status].Render(string(t.Status)))
-	b.WriteString("\n")
-	field("updated", t.UpdatedAt.Format("2006-01-02 15:04:05"))
-	if t.PRURL != "" {
-		b.WriteString(m.styles.dim.Render("pr:  "))
-		b.WriteString(m.styles.pr.Render(t.PRURL))
-		b.WriteString("\n")
-	}
-
-	if t.TaskPrompt != "" {
-		b.WriteString("\n")
-		b.WriteString(m.styles.dim.Render("task:"))
-		b.WriteString("\n")
-		b.WriteString(wrapText(t.TaskPrompt, width-4))
-		b.WriteString("\n")
-	}
-
-	if t.LastOutput != "" {
-		b.WriteString("\n")
-		title := "pane snapshot"
-		if t.AwaitingInput {
-			title = "Claude is asking — enter to attach"
-		}
-		// Hand-roll the frame so we own the width math instead of
-		// relying on lipgloss's border + Width interaction (which
-		// silently breaks on lines containing East-Asian-Width or
-		// box-drawing characters).
-		b.WriteString(m.renderFrame(title, t.LastOutput, width-4, t.AwaitingInput))
-	}
-
-	return lipgloss.NewStyle().Width(width).Padding(1, 2).Render(b.String())
-}
-
-// renderFrame draws a rounded box around content. width is the total
-// outer width including border characters. The title is inlined into
-// the top border. Content lines are soft-wrapped to fit; trailing
-// padding is computed in display columns (runewidth) so unicode box
-// characters and emoji don't break the right border.
-func (m *model) renderFrame(title, content string, width int, hot bool) string {
-	if width < 10 {
-		width = 10
-	}
-	innerWidth := width - 4 // "│ " + " │"
-
-	borderStyle := m.styles.snippetBorder
-	if !hot {
-		borderStyle = m.styles.dim
-	}
-
-	var b strings.Builder
-
-	// Top border with inline title.
-	titleSegment := "╭─ " + title + " "
-	pad := width - runewidth.StringWidth(titleSegment) - 1
-	if pad < 0 {
-		pad = 0
-	}
-	b.WriteString(borderStyle.Render(titleSegment + strings.Repeat("─", pad) + "╮"))
-	b.WriteString("\n")
-
-	for _, raw := range strings.Split(content, "\n") {
-		for _, line := range wrapToWidth(raw, innerWidth) {
-			padCols := innerWidth - runewidth.StringWidth(line)
-			if padCols < 0 {
-				padCols = 0
-			}
-			b.WriteString(borderStyle.Render("│ "))
-			b.WriteString(m.styles.snippetText.Render(line))
-			b.WriteString(strings.Repeat(" ", padCols))
-			b.WriteString(borderStyle.Render(" │"))
-			b.WriteString("\n")
-		}
-	}
-
-	// Bottom border.
-	b.WriteString(borderStyle.Render("╰" + strings.Repeat("─", width-2) + "╯"))
-	return b.String()
-}
-
-// wrapToWidth breaks line at width display columns, preferring
-// word boundaries. Tokens that are themselves wider than width get
-// hard-chopped at the rune boundary — without this, snippets
-// containing unbroken runs (like Claude's TUI separator dashes)
-// overflow the snippet box and break the right border.
-func wrapToWidth(line string, width int) []string {
-	if width <= 0 || runewidth.StringWidth(line) <= width {
-		return []string{line}
-	}
-	words := strings.Fields(line)
-	if len(words) == 0 {
-		return chunkByWidth(line, width)
-	}
-	var out []string
-	current := ""
-	flush := func() {
-		if current != "" {
-			out = append(out, current)
-			current = ""
-		}
-	}
-	for _, w := range words {
-		// Hard-chop a single oversized token.
-		if runewidth.StringWidth(w) > width {
-			flush()
-			for _, chunk := range chunkByWidth(w, width) {
-				out = append(out, chunk)
-			}
-			continue
-		}
-		if current == "" {
-			current = w
-			continue
-		}
-		if runewidth.StringWidth(current)+1+runewidth.StringWidth(w) > width {
-			flush()
-			current = w
-			continue
-		}
-		current += " " + w
-	}
-	flush()
-	return out
-}
-
-// chunkByWidth splits s into pieces, each at most width display
-// columns wide. Counts unicode display width via runewidth so
-// multi-column glyphs (CJK, emoji) don't blow the box.
-func chunkByWidth(s string, width int) []string {
-	if width <= 0 {
-		return []string{s}
-	}
-	var out []string
-	var cur strings.Builder
-	curW := 0
-	for _, r := range s {
-		rw := runewidth.RuneWidth(r)
-		if curW+rw > width {
-			out = append(out, cur.String())
-			cur.Reset()
-			curW = 0
-		}
-		cur.WriteRune(r)
-		curW += rw
-	}
-	if cur.Len() > 0 {
-		out = append(out, cur.String())
-	}
-	return out
-}
-
-// wrapText soft-wraps s at width, preserving paragraph breaks.
-// Just enough wrapping for the right panel's task field.
-func wrapText(s string, width int) string {
-	if width <= 0 {
-		return s
-	}
-	var out strings.Builder
-	for _, para := range strings.Split(s, "\n") {
-		if para == "" {
-			out.WriteString("\n")
-			continue
-		}
-		line := ""
-		for _, word := range strings.Fields(para) {
-			if line == "" {
-				line = word
-				continue
-			}
-			if len(line)+1+len(word) > width {
-				out.WriteString(line)
-				out.WriteString("\n")
-				line = word
-				continue
-			}
-			line += " " + word
-		}
-		if line != "" {
-			out.WriteString(line)
-			out.WriteString("\n")
-		}
-	}
-	return strings.TrimRight(out.String(), "\n")
 }
 
 func shortID(id string) string {
