@@ -1,5 +1,6 @@
 // Package newtrack drives the interactive picker flow for
-// `tracks new`: repo multi-select then task prompt.
+// `tracks new`: template choice → repo multi-select → optional
+// slug → task prompt.
 //
 // Uses charmbracelet/huh for the picker chrome. Keeps the daemon
 // free of any terminal concerns: this package collects a
@@ -22,18 +23,25 @@ import (
 // failure.
 var ErrCancelled = errors.New("cancelled by user")
 
-// Run shows the picker flow and returns the validated payload ready
-// to send to the daemon. cfg must already have repos configured —
-// an empty repos list is treated as a hard error since the picker
-// would have nothing to show.
+// Run shows the picker flow and returns the validated payload
+// ready to send to the daemon. cfg must already have repos
+// configured — an empty repos list is treated as a hard error.
 //
-// The form has two fields: repo multi-select and the task prompt.
-// Branch naming is handled by the agent (see the "Working inside
-// `tracks`" section of the user's global CLAUDE.md), not the
-// picker.
+// The flow runs as two consecutive huh forms:
+//
+//  1. Template choice — quick select between Custom and any of the
+//     built-in presets.
+//  2. Repos + Slug + Task — the task field is pre-filled with the
+//     template's body when one was picked, so the user can either
+//     accept as-is or tweak before submitting.
 func Run(cfg config.Config) (daemon.NewParams, error) {
 	if len(cfg.Repos) == 0 {
 		return daemon.NewParams{}, errors.New("no repos configured — run `tracks` and open Settings to add some")
+	}
+
+	template, err := pickTemplate()
+	if err != nil {
+		return daemon.NewParams{}, err
 	}
 
 	repoOptions := make([]huh.Option[string], 0, len(cfg.Repos))
@@ -44,7 +52,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 	var (
 		repos []string
 		slug  string
-		task  string
+		task  = templatePrompts[template]
 	)
 
 	form := huh.NewForm(
@@ -91,4 +99,32 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 	}, nil
+}
+
+// pickTemplate is the first form: a single select between the
+// configured templates. Returns TemplateCustom when the user
+// presses Esc on the picker (treating "no template" the same as
+// "I want a custom prompt").
+func pickTemplate() (Template, error) {
+	choice := TemplateCustom
+	options := []huh.Option[Template]{
+		huh.NewOption(templateLabels[TemplateCustom], TemplateCustom),
+		huh.NewOption(templateLabels[TemplateReview], TemplateReview),
+	}
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[Template]().
+				Title("Template").
+				Description("Pick a starting point for the task prompt. Custom leaves it blank; Review prefills a generic code-review prompt the agent's review skills can take from there.").
+				Options(options...).
+				Value(&choice),
+		),
+	)
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return "", ErrCancelled
+		}
+		return "", err
+	}
+	return choice, nil
 }
