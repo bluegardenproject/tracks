@@ -44,7 +44,7 @@ func bootstrap(ctx context.Context) error {
 			return fmt.Errorf("find self binary: %w", err)
 		}
 		dashboardCmd := fmt.Sprintf("%s dashboard", shellQuote(self))
-		if err := tm.NewSession(cfg.Tmux.SessionName, "dashboard", dashboardCmd, ""); err != nil {
+		if err := tm.NewSession(cfg.Tmux.SessionName, "Dashboard", dashboardCmd, ""); err != nil {
 			return fmt.Errorf("create tmux session: %w", err)
 		}
 		// Bind <prefix><menu_key> globally on this tmux server.
