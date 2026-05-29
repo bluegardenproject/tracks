@@ -51,14 +51,8 @@ func PickAction() (Action, error) {
 				Options(
 					huh.NewOption("New track", ActionNewTrack),
 					huh.NewOption("Dashboard", ActionDashboard),
-					huh.NewOption("List tracks", ActionList),
-					huh.NewOption("Attach to track...", ActionAttach),
-					huh.NewOption("End track (done)...", ActionDone),
-					huh.NewOption("Kill track...", ActionKill),
-					huh.NewOption("Forget completed track...", ActionForget),
-					huh.NewOption("Clear all completed tracks", ActionPrune),
-					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Settings", ActionSettings),
+					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Quit session", ActionQuitSession),
 					huh.NewOption("Close menu", ActionClose),
 				).

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -101,13 +102,36 @@ func setStatusHint(cfg config.Config) error {
 
 // ensureDaemonUp pings the daemon; if unreachable, spawns it as a
 // background child of the tmux server and waits briefly for it to
-// come up.
+// come up. If the daemon is reachable but its version doesn't
+// match the CLI's, automatically restart it — otherwise stale
+// daemons silently reject new protocol fields and the user can't
+// tell what's wrong.
 func ensureDaemonUp(cfg config.Config) error {
 	cl := daemon.NewClient(cfg)
 	cl.DialTimeout = 200 * time.Millisecond
-	if _, err := cl.Ping(); err == nil {
-		return nil
+	if r, err := cl.Ping(); err == nil {
+		if r.Version == Version {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr,
+			"tracks: daemon is %s, CLI is %s — restarting daemon to match.\n",
+			r.Version, Version)
+		_ = cl.Shutdown()
+		// Wait briefly for the socket to actually go away.
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := cl.Ping(); err != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
+	return spawnDaemon(cl)
+}
+
+// spawnDaemon launches the daemon as a tmux-server background child
+// and waits up to 3s for the socket to come up.
+func spawnDaemon(cl *daemon.Client) error {
 	self, err := selfBinary()
 	if err != nil {
 		return fmt.Errorf("find self binary: %w", err)
@@ -122,7 +146,6 @@ func ensureDaemonUp(cfg config.Config) error {
 		return fmt.Errorf("spawn daemon via tmux run-shell: %w: %s",
 			err, string(out))
 	}
-	// Wait up to 3s for the socket to come up.
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if _, err := cl.Ping(); err == nil {
