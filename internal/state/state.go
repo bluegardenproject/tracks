@@ -117,6 +117,14 @@ type Track struct {
 	// in the log. Empty otherwise.
 	PRURL string `json:"pr_url,omitempty"`
 
+	// PRState / PRDraft / PRReviewState / PRComments are filled by
+	// the supervisor's gh-poll goroutine once a PRURL is known.
+	// Empty until that first poll lands.
+	PRState       string `json:"pr_state,omitempty"`        // OPEN / CLOSED / MERGED
+	PRDraft       bool   `json:"pr_draft,omitempty"`
+	PRReviewState string `json:"pr_review_state,omitempty"` // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED
+	PRComments    int    `json:"pr_comments,omitempty"`
+
 	// LastOutput is a freshly-captured snippet of the bottom of the
 	// track's tmux pane — the last few non-empty lines after ANSI
 	// escapes are stripped. Used by the dashboard to surface what

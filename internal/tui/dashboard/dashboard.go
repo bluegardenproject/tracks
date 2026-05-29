@@ -348,7 +348,7 @@ func (m *model) renderTable(width int) string {
 				renderChanges(t.Changes),
 				renderIdle(t),
 				truncate(joinRepos(t.Repos), 16),
-				m.styles.pr.Render(t.PRURL),
+				m.renderPRCell(t),
 			)
 			if i == m.cursor {
 				b.WriteString(m.styles.rowActive.Render(line))
@@ -380,6 +380,73 @@ func renderChanges(c state.Changes) string {
 		return ""
 	}
 	return fmt.Sprintf("+%d -%d (%d)", c.Insertions, c.Deletions, c.Files)
+}
+
+// renderPRCell builds the right-hand PR column: URL + a state
+// badge + an optional comment count. Color picks a hint that
+// matches the badge (pink for changes-requested, green for
+// approved, etc.).
+func (m *model) renderPRCell(t state.Track) string {
+	if t.PRURL == "" {
+		return ""
+	}
+	url := m.styles.pr.Render(t.PRURL)
+	badge := prBadge(t)
+	if badge != "" {
+		badge = m.prBadgeStyle(t).Render(" [" + badge + "]")
+	}
+	count := ""
+	if t.PRComments > 0 {
+		count = m.styles.dim.Render(fmt.Sprintf(" (%d comments)", t.PRComments))
+	}
+	return url + badge + count
+}
+
+// prBadge returns the short label shown after the URL.
+func prBadge(t state.Track) string {
+	if t.PRDraft {
+		return "draft"
+	}
+	switch t.PRState {
+	case "MERGED":
+		return "merged"
+	case "CLOSED":
+		return "closed"
+	}
+	switch t.PRReviewState {
+	case "APPROVED":
+		return "approved"
+	case "CHANGES_REQUESTED":
+		return "changes-requested"
+	case "REVIEW_REQUIRED":
+		return "review-required"
+	}
+	if t.PRState == "OPEN" {
+		return "open"
+	}
+	return ""
+}
+
+// prBadgeStyle picks the lipgloss style for the badge based on
+// the track's PR state. Falls back to dim when we don't have a
+// specific opinion.
+func (m *model) prBadgeStyle(t state.Track) lipgloss.Style {
+	switch {
+	case t.PRDraft:
+		return m.styles.dim
+	case t.PRState == "MERGED":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // purple
+	case t.PRState == "CLOSED":
+		return m.styles.dim
+	case t.PRReviewState == "APPROVED":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
+	case t.PRReviewState == "CHANGES_REQUESTED":
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")) // pink
+	case t.PRReviewState == "REVIEW_REQUIRED":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
+	default:
+		return m.styles.dim
+	}
 }
 
 // renderIdle returns a short "time since last update" string for a
