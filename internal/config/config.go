@@ -119,15 +119,17 @@ type Repo struct {
 	InitSubmodules bool `yaml:"init_submodules,omitempty"`
 }
 
-// defaultPromptSuffix is the instruction we append to every task
-// prompt so the dashboard can detect PR creation reliably. Scraping
-// arbitrary assistant prose is fragile; a strict marker isn't.
-const defaultPromptSuffix = `
-
-When you finish, emit a final assistant message containing exactly one of:
-  TRACKS_PR_URL=<url>   (if you opened a PR)
-  TRACKS_PR_URL=none    (if no PR was opened)
-`
+// defaultPromptSuffix used to inject a "when you finish, emit
+// TRACKS_PR_URL=..." instruction so the dashboard could detect PR
+// creation in the headless one-shot mode. In the interactive
+// model (Claude runs as a TUI inside a tmux pane), that suffix
+// turned every task into "do the thing then immediately exit",
+// which is the opposite of what an interactive session wants.
+//
+// Default is now empty. Users who want a fixed footer on every
+// prompt can still set `claude.default_prompt_suffix` in their
+// config — just be careful not to wording-imply "finish".
+const defaultPromptSuffix = ``
 
 // Default returns a Config with documented defaults. The repos list
 // is intentionally empty — the user must populate it for `tracks new`
