@@ -14,7 +14,6 @@ package dashboard
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -88,11 +87,6 @@ type model struct {
 	height   int
 	err      error
 	lastPoll time.Time
-
-	// embeddedTrackID is the ID of the track whose claude pane is
-	// currently joined into the dashboard window. Empty when no
-	// pane is embedded.
-	embeddedTrackID string
 }
 
 func newModel(cfg config.Config) *model {
@@ -115,83 +109,17 @@ type pollResult struct {
 }
 
 func (m *model) Init() tea.Cmd {
-	// On startup, restore any pane that was left embedded from a
-	// previous dashboard process (e.g. it crashed mid-embed).
-	// PaneTitle on pane index 1 holds the track id we last
-	// joined — if found, break it back to its own window so we
-	// start clean.
-	if title, _ := m.tmux.PaneTitle(m.cfg.Tmux.SessionName, dashboardWindow, 1); title != "" {
-		_ = m.tmux.BreakPane(m.cfg.Tmux.SessionName, dashboardWindow, 1, "t-"+lastN(title, 6))
-	}
 	return tea.Batch(m.poll(), tickEvery())
 }
 
-// dashboardWindow is the tmux window name the dashboard runs in.
-// Must match what bootstrap creates.
-const dashboardWindow = "Dashboard"
-
-// embedHeightPct is how much of the dashboard window the embedded
-// claude pane consumes. 65% leaves the table comfortably visible
-// while Claude still has room for its TUI.
-const embedHeightPct = 65
-
-// syncEmbedded ensures the currently selected track's claude pane
-// is the one embedded in the dashboard window. Called whenever the
-// cursor moves.
-//
-// Behavior:
-//   - cursor on an active track with a live window → embed that pane
-//   - cursor on a terminal track or no track → restore embed (back
-//     to its own window), leaving the dashboard with one pane
-//   - same track as before → no-op
-func (m *model) syncEmbedded() {
-	if len(m.tracks) == 0 {
-		m.restoreEmbedded()
-		return
-	}
-	sel := m.tracks[m.cursor]
-	if sel.Status.IsTerminal() {
-		m.restoreEmbedded()
-		return
-	}
-	if sel.ID == m.embeddedTrackID {
-		return
-	}
-	srcWindow := windowNameFor(sel.ID)
-	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, srcWindow); !exists {
-		// No live window for this track (Claude already exited).
-		m.restoreEmbedded()
-		return
-	}
-	// Restore any previous embed first.
-	m.restoreEmbedded()
-	if err := m.tmux.JoinPane(m.cfg.Tmux.SessionName, srcWindow, dashboardWindow, embedHeightPct); err != nil {
-		return
-	}
-	_ = m.tmux.SetPaneTitle(m.cfg.Tmux.SessionName, dashboardWindow, 1, sel.ID)
-	m.embeddedTrackID = sel.ID
-}
-
-// restoreEmbedded breaks the embedded pane (if any) back to its
-// own t-<id> window so the dashboard window has one pane again.
-func (m *model) restoreEmbedded() {
-	if m.embeddedTrackID == "" {
-		return
-	}
-	id := m.embeddedTrackID
-	m.embeddedTrackID = ""
-	_ = m.tmux.BreakPane(m.cfg.Tmux.SessionName, dashboardWindow, 1, windowNameFor(id))
-}
-
+// windowNameFor returns the tmux window name a track's claude
+// pane lives in. Kept in sync with the daemon-side helper of the
+// same name.
 func windowNameFor(trackID string) string {
-	return "t-" + lastN(trackID, 6)
-}
-
-func lastN(s string, n int) string {
-	if len(s) <= n {
-		return s
+	if len(trackID) >= 6 {
+		return "t-" + trackID[len(trackID)-6:]
 	}
-	return s[len(s)-n:]
+	return "t-" + trackID
 }
 
 func tickEvery() tea.Cmd {
@@ -226,20 +154,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			// Restore any embedded track to its own window before
-			// exiting — otherwise the next dashboard launch would
-			// inherit a stranded pane.
-			m.restoreEmbedded()
 			return m, tea.Quit
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
-				m.syncEmbedded()
 			}
 		case "down", "j":
 			if m.cursor < len(m.tracks)-1 {
 				m.cursor++
-				m.syncEmbedded()
 			}
 		case "enter":
 			if len(m.tracks) > 0 {
@@ -320,16 +242,9 @@ func max(a, b int) int {
 }
 
 // closeTrackWindow removes the per-track tmux window after the
-// track has been ended. Best-effort — failure is silent because the
-// daemon side has already mutated state.
-//
-// If the track is currently embedded in the dashboard window, we
-// have to release the embed first or the kill-window call would
-// take the dashboard pane with it.
+// track has been ended. Best-effort — failure is silent because
+// the daemon side has already mutated state.
 func (m *model) closeTrackWindow(trackID string) {
-	if m.embeddedTrackID == trackID {
-		m.restoreEmbedded()
-	}
 	window := windowNameFor(trackID)
 	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, window); !exists {
 		return
@@ -337,20 +252,9 @@ func (m *model) closeTrackWindow(trackID string) {
 	_ = m.tmux.KillWindow(m.cfg.Tmux.SessionName, window)
 }
 
-// attachTrack switches focus to the embedded pane (or the track's
-// own window if it isn't currently embedded). The dashboard auto-
-// embeds whatever's selected, so in practice `enter` just moves
-// the user into the embedded pane to start typing.
+// attachTrack switches focus to the track's tmux window.
 func (m *model) attachTrack(trackID string) error {
 	session := m.cfg.Tmux.SessionName
-	if m.embeddedTrackID == trackID {
-		// Already embedded — focus the bottom pane.
-		cmd := exec.Command("tmux", "select-pane", "-t", session+":"+dashboardWindow+".1")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("select-pane: %w: %s", err, string(out))
-		}
-		return nil
-	}
 	window := windowNameFor(trackID)
 	exists, _ := m.tmux.HasWindow(session, window)
 	if !exists {
