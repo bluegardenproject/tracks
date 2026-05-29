@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/claude"
+	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -166,6 +167,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	}
 	snippet, awaiting := paneSnippet(snapshot)
 	prURL := scanForPRURL(snapshot)
+	changes := s.aggregateChanges(t)
 
 	prevStatus := t.Status
 	prevPRURL := t.PRURL
@@ -173,12 +175,14 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	if target == t.Status &&
 		snippet == t.LastOutput &&
 		awaiting == t.AwaitingInput &&
-		(prURL == "" || prURL == t.PRURL) {
+		(prURL == "" || prURL == t.PRURL) &&
+		changes == t.Changes {
 		return
 	}
 	t.Status = target
 	t.LastOutput = snippet
 	t.AwaitingInput = awaiting
+	t.Changes = changes
 	if prURL != "" && prURL != t.PRURL {
 		t.PRURL = prURL
 	}
@@ -221,6 +225,29 @@ func (s *Server) notifyEvent(event, title, body string) {
 // Used by refreshRunningStatus to surface a PR URL into state.Track
 // without log-parsing.
 var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(\S+)`)
+
+// aggregateChanges sums ShortStat results across every worktree
+// the track owns. Cross-repo tracks then read as a single row in
+// the dashboard — same shape as the `Repos` field.
+//
+// Uses its own short-deadline context so a stuck git invocation
+// can't wedge the supervisor's 2-second poll loop.
+func (s *Server) aggregateChanges(t state.Track) state.Changes {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var agg state.Changes
+	for _, tr := range t.Repos {
+		repo, ok := s.cfg.RepoByName(tr.Name)
+		if !ok {
+			continue
+		}
+		stat := git.NewWorktreeClient(tr.Path).ShortStat(ctx, "origin/"+repo.Base)
+		agg.Files += stat.Files
+		agg.Insertions += stat.Insertions
+		agg.Deletions += stat.Deletions
+	}
+	return agg
+}
 
 // scanForPRURL pulls the URL portion out of a TRACKS_PR_URL=<url>
 // marker in the pane snapshot. Returns "" when no marker is

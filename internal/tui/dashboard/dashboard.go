@@ -306,16 +306,18 @@ func (m *model) renderTable(width int) string {
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-22s  %-16s  %-10s  %-18s  %s",
-			"ID", "BRANCH", "SLUG", "STATUS", "REPOS", "PR")))
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-22s  %-16s  %-10s  %-14s  %-6s  %-16s  %s",
+			"ID", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE", "REPOS", "PR")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
-			line := fmt.Sprintf("  %-15s  %-22s  %-16s  %s  %-18s  %s",
+			line := fmt.Sprintf("  %-15s  %-22s  %-16s  %s  %-14s  %-6s  %-16s  %s",
 				shortID(t.ID),
 				truncate(t.Branch, 22),
 				truncate(t.Slug, 16),
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-				truncate(joinRepos(t.Repos), 18),
+				renderChanges(t.Changes),
+				renderIdle(t),
+				truncate(joinRepos(t.Repos), 16),
 				m.styles.pr.Render(t.PRURL),
 			)
 			if i == m.cursor {
@@ -339,6 +341,35 @@ func shortID(id string) string {
 		return id
 	}
 	return id[len(id)-15:]
+}
+
+// renderChanges turns a state.Changes into the dashboard's compact
+// `+ins -del (N)` form. Empty when there's nothing to show.
+func renderChanges(c state.Changes) string {
+	if c.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf("+%d -%d (%d)", c.Insertions, c.Deletions, c.Files)
+}
+
+// renderIdle returns a short "time since last update" string for a
+// track. Terminal tracks just show their final state's age. Running
+// tracks see a live count.
+func renderIdle(t state.Track) string {
+	if t.UpdatedAt.IsZero() {
+		return ""
+	}
+	d := time.Since(t.UpdatedAt)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }
 
 func joinRepos(rs []state.TrackRepo) string {
