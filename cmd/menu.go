@@ -176,18 +176,31 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 // runNewTrackFromMenu is a wrapper that runs the same picker as
 // `tracks new` from inside the popup, then asks the daemon and
 // opens the per-track window.
+//
+// We never let an error escape silently here: the popup is `-E`,
+// meaning it closes when this function returns. If we just returned
+// an error to cobra, the popup would vanish and the user would see
+// no feedback. Print + waitForKey on failure so the user can read
+// what happened before the popup closes.
 func runNewTrackFromMenu(cfg config.Config) error {
 	params, err := newtrack.Run(cfg)
 	if err != nil {
 		if errors.Is(err, newtrack.ErrCancelled) {
 			return nil
 		}
-		return err
+		fmt.Println("error running picker:", err)
+		waitForKey()
+		return nil
 	}
 	cl := daemon.NewClient(cfg)
 	res, err := cl.New(params)
 	if err != nil {
-		return err
+		fmt.Println("daemon refused track:", err)
+		fmt.Println()
+		fmt.Println("If this looks like a protocol mismatch, the daemon may be running an")
+		fmt.Println("older binary. Run `tmux kill-session -t tracks && tracks` to refresh.")
+		waitForKey()
+		return nil
 	}
 	tm := tmux.New()
 	if tm.HasSession(cfg.Tmux.SessionName) {

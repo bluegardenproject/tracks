@@ -106,11 +106,10 @@ type GetResult struct {
 type NewParams struct {
 	// Repos is the list of repo names from config the user picked.
 	Repos []string `json:"repos"`
-	// BranchType is one of config.Branch.Types (e.g. "fix").
-	BranchType string `json:"branch_type"`
-	// Slug is the [a-z0-9-]+ portion of the branch name.
-	Slug string `json:"slug"`
-	// TaskPrompt is the free-form prompt typed by the user.
+	// TaskPrompt is the free-form prompt typed by the user. The
+	// daemon creates a placeholder branch (tracks/<id-tail>) and
+	// Claude is expected to rename it to a proper <type>/<slug>
+	// before its first commit, per the user's CLAUDE.md rules.
 	TaskPrompt string `json:"task_prompt"`
 }
 
