@@ -10,8 +10,6 @@ package newtrack
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -23,11 +21,6 @@ import (
 // or Esc). Callers should treat this as a graceful exit, not a
 // failure.
 var ErrCancelled = errors.New("cancelled by user")
-
-// slugPattern is the on-screen validation pattern. The daemon
-// re-validates server-side, so this is mostly a UX nicety to fail
-// fast.
-var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // Run shows the picker flow and returns the validated payload ready
 // to send to the daemon. cfg must already have repos configured —
@@ -51,7 +44,6 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 	var (
 		repos      []string
 		branchType = cfg.Branch.DefaultType
-		slug       string
 		task       string
 	)
 
@@ -59,7 +51,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Repos").
-				Description("Space to toggle, enter to confirm. Pick the repos this track should start with — Claude can request more later via the `tracks-add-repo` skill.").
+				Description("Space to toggle, enter to confirm. Pick the repos this track should start with. Claude can request more later via the `tracks-add-repo` skill.").
 				Options(repoOptions...).
 				Validate(func(v []string) error {
 					if len(v) == 0 {
@@ -72,26 +64,14 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Branch type").
-				Description("Conventional-commit-style prefix. The branch will be created as <type>/<slug> in every selected worktree.").
+				Description("Conventional-commit-style prefix. The branch slug is auto-derived from the task prompt below (ticket reference + first descriptive words).").
 				Options(typeOptions...).
 				Value(&branchType),
 		),
 		huh.NewGroup(
-			huh.NewInput().
-				Title("Slug").
-				Description("Short identifier. Lowercase, digits, and hyphens only.").
-				Placeholder("e.g. swap-rate-bug").
-				Validate(func(v string) error {
-					v = strings.TrimSpace(v)
-					if !slugPattern.MatchString(v) {
-						return fmt.Errorf("must match %s", slugPattern)
-					}
-					return nil
-				}).
-				Value(&slug),
 			huh.NewText().
 				Title("Task prompt").
-				Description("What should Claude do? Free-form. The daemon appends a TRACKS_PR_URL marker so the dashboard can pick up the PR URL reliably.").
+				Description("What should Claude do? Free-form. If the prompt mentions a Jira ticket (e.g. LIVE-1234) it will be used as the branch-name prefix.").
 				CharLimit(8192).
 				Validate(func(v string) error {
 					if strings.TrimSpace(v) == "" {
@@ -113,7 +93,9 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 	return daemon.NewParams{
 		Repos:      repos,
 		BranchType: branchType,
-		Slug:       strings.TrimSpace(slug),
+		// Slug is intentionally empty here — the daemon derives it
+		// from the task prompt so the user doesn't have to type one.
+		Slug:       "",
 		TaskPrompt: strings.TrimSpace(task),
 	}, nil
 }

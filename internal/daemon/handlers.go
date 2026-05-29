@@ -48,10 +48,11 @@ func (s *Server) handleGet(raw json.RawMessage) Response {
 	return ok(GetResult{Track: t, Found: found})
 }
 
-// slugRegex restricts branch slugs to lowercase alphanumerics +
-// hyphens. Anything else would either break filesystem paths (e.g.
-// a slash) or surprise the user (e.g. uppercase, periods).
-var slugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// slugRegex restricts branch slugs to alphanumerics + hyphens.
+// Mixed case is permitted so Jira-style ticket prefixes (LIVE-1234)
+// survive into the branch name; everything else is normalized to
+// lowercase by deriveSlugFromTask.
+var slugRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*$`)
 
 func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 	var p NewParams
@@ -60,6 +61,17 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage) Response {
 	}
 	if len(p.Repos) == 0 {
 		return fail("at least one repo required")
+	}
+
+	// If the caller didn't supply a slug, derive one from the task
+	// prompt — pulls out a Jira-style ticket if present and the
+	// first few descriptive words, hyphenated.
+	if p.Slug == "" {
+		fallback, err := randomID(3) // last-resort token if task is empty
+		if err != nil {
+			return fail("generate fallback id: " + err.Error())
+		}
+		p.Slug = deriveSlugFromTask(p.TaskPrompt, fallback)
 	}
 	if !slugRegex.MatchString(p.Slug) {
 		return fail(fmt.Sprintf("invalid slug %q (must match %s)", p.Slug, slugRegex))

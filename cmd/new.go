@@ -17,7 +17,8 @@ func init() {
 	c := &cobra.Command{
 		Use:   "new",
 		Short: "start a new track via the interactive picker",
-		Long: "Walks the user through repo selection, branch type, slug, and task prompt, then asks the daemon to create the track. " +
+		Long: "Walks the user through repo selection, branch type, and task prompt, then asks the daemon to create the track. " +
+			"The branch slug is auto-derived from the task prompt (Jira ticket + first descriptive words). " +
 			"The daemon does the actual worktree provisioning; this command is just the UI.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -35,20 +36,17 @@ func init() {
 				return err
 			}
 
-			// Echo the resolved choices so the user has a record above
-			// the picker (which clears on exit).
-			fmt.Println()
-			fmt.Println("New track:")
-			fmt.Printf("  repos:  %s\n", strings.Join(params.Repos, ", "))
-			fmt.Printf("  branch: %s/%s\n", params.BranchType, params.Slug)
-			fmt.Println()
-
 			cl := daemon.NewClient(cfg)
 			res, err := cl.New(params)
 			if err != nil {
 				return fmt.Errorf("daemon: %w", err)
 			}
-			fmt.Printf("created track %s on branch %s\n", res.TrackID, res.Branch)
+			fmt.Println()
+			fmt.Println("New track:")
+			fmt.Printf("  id:     %s\n", res.TrackID)
+			fmt.Printf("  repos:  %s\n", strings.Join(params.Repos, ", "))
+			fmt.Printf("  branch: %s\n", res.Branch)
+			fmt.Println()
 
 			// Open the per-track tmux window if we have a session.
 			tm := tmux.New()

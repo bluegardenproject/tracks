@@ -22,8 +22,10 @@ Starts the tmux session, launches the dashboard, brings up the daemon.
 
 Inside the session, press `<prefix>+t` to open the menu:
 
-- **New track** — pick repos → branch type → slug → task prompt. Claude is
-  spawned in a fresh worktree on `<type>/<slug>`.
+- **New track** — pick repos → branch type → task prompt. Claude is spawned
+  in a fresh worktree on `<type>/<auto-slug>`. The slug is derived from the
+  task prompt: if the prompt mentions a Jira ticket (e.g. `LIVE-1234`) it's
+  used as the prefix, followed by the first few descriptive words.
 - **Dashboard** — live list of all tracks, statuses, PR URLs.
 - **List / Attach… / End… / Kill…** — manage tracks.
 - **Settings** — add, edit, or remove repos via a guided form (no YAML
@@ -31,4 +33,4 @@ Inside the session, press `<prefix>+t` to open the menu:
 - **Quit session** — kills tmux and the daemon; running Claudes get SIGTERM.
 
 When a track ends, its worktree is removed but the branch stays locally so
-you can `git checkout <type>/<slug>` from your editor afterwards.
+you can `git checkout <branch>` from your editor afterwards.
