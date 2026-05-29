@@ -68,7 +68,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionAttach:
-		t, err := menu.PickTrack(cl, "Attach to which track?", false)
+		t, err := menu.PickTrack(cl, "Attach to which track?", nil)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -87,7 +87,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return tm.SelectWindow(cfg.Tmux.SessionName, window)
 
 	case menu.ActionDone:
-		t, err := menu.PickTrack(cl, "End which track?", true)
+		t, err := menu.PickTrack(cl, "End which track?", menu.ActiveOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -103,7 +103,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionKill:
-		t, err := menu.PickTrack(cl, "Kill which track?", true)
+		t, err := menu.PickTrack(cl, "Kill which track?", menu.ActiveOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -115,6 +115,35 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		}
 		closeTrackWindow(cfg, t.ID)
 		fmt.Printf("killed: %s\n", t.ID)
+		waitForKey()
+		return nil
+
+	case menu.ActionForget:
+		t, err := menu.PickTrack(cl, "Forget which completed track?", menu.CompletedOnly)
+		if err != nil {
+			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			return err
+		}
+		if err := cl.Forget(t.ID); err != nil {
+			return err
+		}
+		fmt.Printf("forgot %s\n", t.ID)
+		waitForKey()
+		return nil
+
+	case menu.ActionPrune:
+		yes, err := menu.Confirm("Clear all completed tracks?",
+			"Removes every done/errored track from the dashboard. Worktrees are already gone; branches and log files stay on disk.")
+		if err != nil || !yes {
+			return nil
+		}
+		n, err := cl.PruneCompleted()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("cleared %d completed track(s)\n", n)
 		waitForKey()
 		return nil
 
