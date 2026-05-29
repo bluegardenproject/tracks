@@ -42,9 +42,15 @@ type Config struct {
 // Tmux groups tmux-session settings.
 type Tmux struct {
 	// SessionName is the name of the tmux session `tracks` runs inside.
-	// One session hosts the daemon, the console, the dashboard, and one
-	// window per running track.
+	// One session hosts the daemon, the dashboard, and one window per
+	// running track.
 	SessionName string `yaml:"session_name,omitempty"`
+
+	// MenuKey is the key bound after the tmux prefix to open the
+	// `tracks` menu popup. Defaults to "t". Changing this rebinds
+	// `<prefix><key>` globally on the tmux server for the duration
+	// of the session.
+	MenuKey string `yaml:"menu_key,omitempty"`
 }
 
 // Paths groups filesystem locations. All entries support a leading
@@ -129,7 +135,7 @@ When you finish, emit a final assistant message containing exactly one of:
 func Default() Config {
 	return Config{
 		SchemaVersion: CurrentSchemaVersion,
-		Tmux:          Tmux{SessionName: "tracks"},
+		Tmux:          Tmux{SessionName: "tracks", MenuKey: "t"},
 		Paths:         Paths{},
 		Claude: Claude{
 			Binary:              "claude",
@@ -241,6 +247,9 @@ func Load() (Config, error) {
 	// empty strings. Restore must-have defaults that ended up empty.
 	if cfg.Tmux.SessionName == "" {
 		cfg.Tmux.SessionName = "tracks"
+	}
+	if cfg.Tmux.MenuKey == "" {
+		cfg.Tmux.MenuKey = "t"
 	}
 	if cfg.Claude.Binary == "" {
 		cfg.Claude.Binary = "claude"

@@ -41,6 +41,7 @@ schema_version: 1
 
 tmux:
   session_name: tracks
+  menu_key: t                    # <prefix>+<menu_key> opens the overlay menu
 
 claude:
   binary: claude
@@ -68,33 +69,29 @@ Anything you omit picks up sensible defaults.
 ## First track
 
 ```bash
-# Start (or attach to) the tmux session and daemon.
+# Start (or attach to) the tmux session and daemon. The dashboard
+# is the landing window; the menu is bound to <prefix>+t (configurable).
 tracks
+```
 
-# In any terminal:
-tracks new
-# → multi-select repos (space toggles, enter confirms)
-# → pick branch type (feat / fix / chore / …)
-# → enter a slug (lowercase, digits, hyphens)
-# → type the task
-# → daemon creates worktrees + spawns Claude
-# → a tmux window `t-<id>` opens with the live filtered log
+From any tmux window:
 
-# See everything at a glance:
-tracks dashboard
+- `<prefix>+t` → overlay menu (New track · Dashboard · List · Attach… · End… · Kill… · GC · Settings · Quit).
+- Esc closes the menu without action.
+- The status-right hint reminds you of the keybind in every window.
 
-# Force-end a track (worktree gone, branch kept):
-tracks done <track-id>
-tracks kill <track-id>   # SIGKILL variant
+CLI commands work the same as before — the menu just wraps them:
 
-# Re-attach to a track's window (recreates it if you closed it):
-tracks attach <track-id>
-
-# Clean up orphan worktrees (after a crash):
-tracks gc
-
-# When done for the day:
-tmux kill-session -t tracks   # also stops the daemon
+```bash
+tracks new              # interactive picker → daemon spawns Claude
+tracks dashboard        # live bubbletea TUI
+tracks ls               # tabular list
+tracks attach <id>      # switch to a track's tmux window
+tracks done <id>        # SIGTERM, remove worktrees, keep branch
+tracks kill <id>        # SIGKILL variant
+tracks gc               # clean up orphan worktrees
+tracks gc --branches    # also delete branches with no commits
+tmux kill-session -t tracks   # stop everything cleanly
 ```
 
 ## Cross-repo work
@@ -115,6 +112,7 @@ its absolute path. Claude continues without restart.
 | Command                | Purpose                                                |
 | ---------------------- | ------------------------------------------------------ |
 | `tracks`               | Bootstrap the tmux session + daemon, then attach.      |
+| `tracks menu`          | Open the overlay menu (also `<prefix>+t` from tmux).   |
 | `tracks new`           | Interactive picker → daemon creates a new track.       |
 | `tracks ls`            | Tabular list of every known track.                     |
 | `tracks dashboard`     | Live bubbletea TUI; approve pending prompts; switch.   |
@@ -163,9 +161,11 @@ no method exists for anything else.
   an MCP server. `tracks` v1 relies on `--permission-mode auto`
   instead. If Claude pauses for approval, attach to its window
   (`tracks attach <id>`) and answer there.
-- **Console REPL window.** Currently the `console` tmux window is an
-  ordinary shell. The plan's `tracks console` REPL with tab completion
-  is deferred.
+- **Per-session keybinds.** The `<prefix>+t` menu binding is a global
+  tmux binding — it overrides whatever else is bound to that key on
+  the user's tmux server for the lifetime of the session. Change
+  `tmux.menu_key` if it conflicts with an existing binding you rely
+  on.
 - **Cross-platform.** `internal/daemon/lock.go` uses POSIX flock; this
   is macOS / Linux only.
 
@@ -183,6 +183,7 @@ internal/
   tui/
     newtrack/         charmbracelet/huh picker flow
     dashboard/        bubbletea live dashboard
+    menu/             overlay menu (huh selects) used by `tracks menu`
 scripts/
   spike-worktree.sh   throwaway: validates the Cursor isolation invariant
 ```

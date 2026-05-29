@@ -1,0 +1,166 @@
+// Package menu renders the `tracks` overlay menu — the popup the
+// user opens with `<prefix>+<key>` from any tmux window.
+//
+// The menu is intentionally tiny: a single huh.Select that returns
+// an Action. The caller (cmd/menu.go) dispatches the action.
+// Sub-pickers (e.g. "attach to which track?") also live here so
+// the popup stays a single subprocess and the user never has to
+// navigate between processes.
+package menu
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/charmbracelet/huh"
+)
+
+// ErrCancelled signals the user closed the menu without picking
+// anything (Esc / Ctrl-C). Callers should treat this as success
+// with no action.
+var ErrCancelled = errors.New("cancelled")
+
+// Action identifies one top-level menu choice.
+type Action string
+
+const (
+	ActionNewTrack    Action = "new"
+	ActionDashboard   Action = "dashboard"
+	ActionList        Action = "list"
+	ActionAttach      Action = "attach"
+	ActionDone        Action = "done"
+	ActionKill        Action = "kill"
+	ActionSettings    Action = "settings"
+	ActionGC          Action = "gc"
+	ActionQuitSession Action = "quit"
+)
+
+// PickAction shows the top-level menu and returns the user's choice.
+func PickAction() (Action, error) {
+	var pick Action
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[Action]().
+				Title("tracks").
+				Options(
+					huh.NewOption("➕ New track", ActionNewTrack),
+					huh.NewOption("📋 Dashboard", ActionDashboard),
+					huh.NewOption("📜 List tracks", ActionList),
+					huh.NewOption("🔌 Attach to track…", ActionAttach),
+					huh.NewOption("✅ End track (done)…", ActionDone),
+					huh.NewOption("💥 Kill track…", ActionKill),
+					huh.NewOption("🧹 GC orphans", ActionGC),
+					huh.NewOption("⚙️  Edit config (settings)", ActionSettings),
+					huh.NewOption("🚪 Quit session", ActionQuitSession),
+				).
+				Value(&pick),
+		),
+	).WithShowHelp(false)
+
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return "", ErrCancelled
+		}
+		return "", err
+	}
+	return pick, nil
+}
+
+// PickTrack shows a single-select picker over the live track list.
+// activeOnly filters to non-terminal statuses (running / waiting /
+// pending), which is what "attach" and "done" want.
+func PickTrack(client *daemon.Client, title string, activeOnly bool) (state.Track, error) {
+	tracks, err := client.Ls()
+	if err != nil {
+		return state.Track{}, fmt.Errorf("daemon: %w", err)
+	}
+	options := []huh.Option[string]{}
+	byID := map[string]state.Track{}
+	for _, t := range tracks {
+		if activeOnly && t.Status.IsTerminal() {
+			continue
+		}
+		label := fmt.Sprintf("%s  %s  [%s]  %s", shortID(t.ID), t.Branch, t.Status, reposLabel(t))
+		options = append(options, huh.NewOption(label, t.ID))
+		byID[t.ID] = t
+	}
+	if len(options) == 0 {
+		return state.Track{}, fmt.Errorf("no %stracks", activeFilterText(activeOnly))
+	}
+	var pick string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(title).
+				Options(options...).
+				Value(&pick),
+		),
+	).WithShowHelp(false)
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return state.Track{}, ErrCancelled
+		}
+		return state.Track{}, err
+	}
+	return byID[pick], nil
+}
+
+// ConfirmQuit is a small yes/no for the destructive quit action.
+func ConfirmQuit(sessionName string) (bool, error) {
+	var yes bool
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Quit the tracks tmux session?").
+				Description(fmt.Sprintf("Kills tmux session %q and stops the daemon. Running Claude processes will be SIGTERMed.", sessionName)).
+				Affirmative("Quit").
+				Negative("Cancel").
+				Value(&yes),
+		),
+	).WithShowHelp(false)
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return false, ErrCancelled
+		}
+		return false, err
+	}
+	return yes, nil
+}
+
+func shortID(id string) string {
+	if len(id) <= 15 {
+		return id
+	}
+	return id[len(id)-15:]
+}
+
+func reposLabel(t state.Track) string {
+	names := make([]string, 0, len(t.Repos))
+	for _, r := range t.Repos {
+		names = append(names, r.Name)
+	}
+	return joinShort(names, 32)
+}
+
+func joinShort(items []string, max int) string {
+	out := ""
+	for i, s := range items {
+		if i > 0 {
+			out += ","
+		}
+		out += s
+		if len(out) > max {
+			return out[:max-1] + "…"
+		}
+	}
+	return out
+}
+
+func activeFilterText(activeOnly bool) string {
+	if activeOnly {
+		return "active "
+	}
+	return ""
+}
