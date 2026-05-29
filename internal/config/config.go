@@ -78,11 +78,6 @@ type Claude struct {
 	// "bypassPermissions" for full autonomy (be careful — Claude can
 	// then run arbitrary commands in the worktree without asking).
 	PermissionMode string `yaml:"permission_mode,omitempty"`
-
-	// DefaultPromptSuffix is appended to every task prompt. The default
-	// includes an instruction to emit a TRACKS_PR_URL marker so the
-	// dashboard can reliably surface PR links without scraping prose.
-	DefaultPromptSuffix string `yaml:"default_prompt_suffix,omitempty"`
 }
 
 // Branch controls the naming convention for branches the worktrees
@@ -119,17 +114,10 @@ type Repo struct {
 	InitSubmodules bool `yaml:"init_submodules,omitempty"`
 }
 
-// defaultPromptSuffix used to inject a "when you finish, emit
-// TRACKS_PR_URL=..." instruction so the dashboard could detect PR
-// creation in the headless one-shot mode. In the interactive
-// model (Claude runs as a TUI inside a tmux pane), that suffix
-// turned every task into "do the thing then immediately exit",
-// which is the opposite of what an interactive session wants.
-//
-// Default is now empty. Users who want a fixed footer on every
-// prompt can still set `claude.default_prompt_suffix` in their
-// config — just be careful not to wording-imply "finish".
-const defaultPromptSuffix = ``
+// (The previous defaultPromptSuffix const lived here. The suffix
+// is now hardcoded inside the daemon's claude spawn path so it
+// can be edited and versioned with the binary instead of drifting
+// through user YAML — see internal/claude/spawn.go.)
 
 // Default returns a Config with documented defaults. The repos list
 // is intentionally empty — the user must populate it for `tracks new`
@@ -140,9 +128,8 @@ func Default() Config {
 		Tmux:          Tmux{SessionName: "tracks", MenuKey: "t"},
 		Paths:         Paths{},
 		Claude: Claude{
-			Binary:              "claude",
-			PermissionMode:      "auto",
-			DefaultPromptSuffix: defaultPromptSuffix,
+			Binary:         "claude",
+			PermissionMode: "auto",
 		},
 		Branch: Branch{
 			Types:       []string{"feat", "fix", "chore", "refactor", "docs", "test"},
@@ -258,9 +245,6 @@ func Load() (Config, error) {
 	}
 	if cfg.Claude.PermissionMode == "" {
 		cfg.Claude.PermissionMode = "auto"
-	}
-	if cfg.Claude.DefaultPromptSuffix == "" {
-		cfg.Claude.DefaultPromptSuffix = defaultPromptSuffix
 	}
 	if len(cfg.Branch.Types) == 0 {
 		cfg.Branch.Types = Default().Branch.Types

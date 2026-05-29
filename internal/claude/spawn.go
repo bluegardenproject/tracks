@@ -26,9 +26,9 @@ type SpawnOptions struct {
 	// PermissionMode is passed as --permission-mode.
 	PermissionMode string
 
-	// TaskPrompt is the assembled prompt (user's text +
-	// DefaultPromptSuffix). Passed as the positional argument to
-	// claude so the TUI opens pre-filled.
+	// TaskPrompt is the assembled prompt (user's text + the
+	// hardcoded taskSuffix below). Passed as the positional
+	// argument to claude so the TUI opens pre-filled.
 	TaskPrompt string
 
 	// AddDirs are the absolute paths passed as --add-dir for each
@@ -50,6 +50,33 @@ type SpawnOptions struct {
 	SocketDir string
 }
 
+// taskSuffix is appended to every task prompt the daemon sends to
+// Claude. Hardcoded here so we can update the wording with the
+// binary instead of asking every user to edit YAML.
+//
+// Keep it short. Two concerns:
+//
+//  1. Make sure Claude knows it's running interactively. The
+//     previous "When you finish, emit TRACKS_PR_URL" wording made
+//     it treat every task as one-shot and exit after a single
+//     response.
+//  2. Surface the TRACKS_PR_URL marker contract so the dashboard
+//     can detect PR creation — phrased as a side-channel, not a
+//     finish signal.
+//
+// The branch/commit/swap-live-app rules already live in the
+// user's global CLAUDE.md, so we don't repeat them here.
+const taskSuffix = "" +
+	"You're running interactively inside a `tracks` worktree (the " +
+	"TRACKS_ID env var is set). The user can switch into this tmux " +
+	"pane at any time to reply. Stay engaged: if the task naturally " +
+	"ends with a question or a confirmation, ask it and wait — do " +
+	"NOT wrap up the session just to acknowledge completion.\n\n" +
+	"If you open a PR at any point, include the URL on its own line " +
+	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
+	"The branch-naming, commit-message, and swap-live-app dependency " +
+	"rules in your global `~/.claude/CLAUDE.md` apply here."
+
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
@@ -61,15 +88,10 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOpti
 	for _, r := range t.Repos {
 		addDirs = append(addDirs, r.Path)
 	}
-	prompt := t.TaskPrompt
-	if cfg.Claude.DefaultPromptSuffix != "" {
-		// Always force a blank-line separator so the suffix never
-		// gets glued onto the end of the user's task ("task.When
-		// you finish, ...") regardless of how the suffix is
-		// authored in YAML.
-		suffix := strings.TrimLeft(cfg.Claude.DefaultPromptSuffix, " \t\n\r")
-		prompt = strings.TrimRight(prompt, " \t\n\r") + "\n\n" + suffix
-	}
+	// Always-injected suffix below. Lives in code (not user
+	// config) so we can iterate on the wording without users
+	// having to edit YAML.
+	prompt := strings.TrimRight(t.TaskPrompt, " \t\n\r") + "\n\n" + taskSuffix
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
 		PermissionMode: cfg.Claude.PermissionMode,
