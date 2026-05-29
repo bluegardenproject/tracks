@@ -40,6 +40,7 @@ type styles struct {
 	prompt    lipgloss.Style
 	dim       lipgloss.Style
 	pr        lipgloss.Style
+	snippet   lipgloss.Style
 }
 
 func defaultStyles() styles {
@@ -50,13 +51,16 @@ func defaultStyles() styles {
 		status: map[state.Status]lipgloss.Style{
 			state.StatusPending: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 			state.StatusRunning: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-			state.StatusWaiting: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+			// Hot pink — a waiting track is blocking the developer
+			// and should jump out of the table.
+			state.StatusWaiting: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")),
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		},
-		prompt: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
-		dim:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		pr:     lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
+		prompt:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		pr:      lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
+		snippet: lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("207")).Padding(0, 1),
 	}
 }
 
@@ -298,6 +302,25 @@ func (m *model) View() string {
 			} else {
 				b.WriteString(line)
 			}
+			b.WriteString("\n")
+		}
+	}
+
+	// Live snippet of the highlighted track's tmux pane. Shown
+	// whenever we have output to show — gives the user a peek at
+	// what Claude is doing (or what question it's waiting on)
+	// without having to switch windows.
+	if len(m.tracks) > 0 && m.cursor < len(m.tracks) {
+		sel := m.tracks[m.cursor]
+		if sel.LastOutput != "" {
+			label := "current pane"
+			if sel.Status == state.StatusWaiting {
+				label = "WAITING — Claude needs input (enter to attach)"
+			}
+			b.WriteString("\n")
+			b.WriteString(m.styles.dim.Render(label))
+			b.WriteString("\n")
+			b.WriteString(m.styles.snippet.Render(sel.LastOutput))
 			b.WriteString("\n")
 		}
 	}

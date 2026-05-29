@@ -94,6 +94,13 @@ type Track struct {
 	// in the log. Empty otherwise.
 	PRURL string `json:"pr_url,omitempty"`
 
+	// LastOutput is a freshly-captured snippet of the bottom of the
+	// track's tmux pane — the last few non-empty lines after ANSI
+	// escapes are stripped. Used by the dashboard to surface what
+	// Claude is currently doing (or what question it's waiting on)
+	// without the user having to switch windows.
+	LastOutput string `json:"last_output,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 
