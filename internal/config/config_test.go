@@ -40,8 +40,8 @@ func TestSaveThenLoadRoundtrip(t *testing.T) {
 	withXDGConfig(t)
 	in := Default()
 	in.Repos = []Repo{
-		{Name: "ledger-live", Path: "/Users/x/ledger/ledger-live", Base: "develop"},
-		{Name: "swap-live-app", Path: "/Users/x/ledger/swap-live-app", Base: "develop", InitSubmodules: true},
+		{Name: "repo-a", Path: "/Users/x/code/repo-a", Base: "develop"},
+		{Name: "repo-b", Path: "/Users/x/code/repo-b", Base: "develop", InitSubmodules: true},
 	}
 	if _, err := Save(in); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -50,7 +50,7 @@ func TestSaveThenLoadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(out.Repos) != 2 || out.Repos[1].Name != "swap-live-app" || !out.Repos[1].InitSubmodules {
+	if len(out.Repos) != 2 || out.Repos[1].Name != "repo-b" || !out.Repos[1].InitSubmodules {
 		t.Errorf("roundtrip lost data: %+v", out.Repos)
 	}
 }

@@ -54,7 +54,7 @@ type SpawnOptions struct {
 // Claude. Hardcoded here so we can update the wording with the
 // binary instead of asking every user to edit YAML.
 //
-// Keep it short. Two concerns:
+// Two concerns only:
 //
 //  1. Make sure Claude knows it's running interactively. The
 //     previous "When you finish, emit TRACKS_PR_URL" wording made
@@ -64,8 +64,10 @@ type SpawnOptions struct {
 //     can detect PR creation — phrased as a side-channel, not a
 //     finish signal.
 //
-// The branch/commit/swap-live-app rules already live in the
-// user's global CLAUDE.md, so we don't repeat them here.
+// Repo / branch / commit conventions live in whatever CLAUDE.md
+// the user has configured; Claude picks them up automatically.
+// `tracks` deliberately does not duplicate or reference them
+// here, so this binary stays useful for any project.
 const taskSuffix = "" +
 	"You're running interactively inside a `tracks` worktree (the " +
 	"TRACKS_ID env var is set). The user can switch into this tmux " +
@@ -73,9 +75,7 @@ const taskSuffix = "" +
 	"ends with a question or a confirmation, ask it and wait — do " +
 	"NOT wrap up the session just to acknowledge completion.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
-	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
-	"The branch-naming, commit-message, and swap-live-app dependency " +
-	"rules in your global `~/.claude/CLAUDE.md` apply here."
+	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it."
 
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no

@@ -24,7 +24,7 @@ Inside the session, press `<prefix>+t` to open the menu:
 
 - **New track** — pick repos → branch type → task prompt. Claude is spawned
   in a fresh worktree on `<type>/<auto-slug>`. The slug is derived from the
-  task prompt: if the prompt mentions a Jira ticket (e.g. `LIVE-1234`) it's
+  task prompt: if the prompt mentions a Jira-style ticket (e.g. `ABC-123`) it's
   used as the prefix, followed by the first few descriptive words.
 - **Dashboard** — live list of all tracks, statuses, PR URLs.
 - **List / Attach… / End… / Kill…** — manage tracks.

@@ -243,11 +243,12 @@ func pickRepoIndex(cfg config.Config, title string) (int, error) {
 // fresh add the caller passes a zero value.
 //
 // Path input is paste-friendly: the user can paste a full
-// "/Users/.../foo" or "~/ledger/foo" and the form accepts it as
-// long as it expands to an existing directory. Base branch is
-// auto-detected via `git -C <path> symbolic-ref refs/remotes/origin/HEAD`
-// after the path is entered (best-effort — empty when detection
-// fails so the user can type a default).
+// "/Users/.../some-repo" or "~/code/some-repo" and the form
+// accepts it as long as it expands to an existing directory.
+// Base branch is auto-detected via `git -C <path> symbolic-ref
+// refs/remotes/origin/HEAD` after the path is entered
+// (best-effort — empty when detection fails so the user can type
+// a default).
 func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	name := r.Name
 	path := r.Path
@@ -262,7 +263,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 			huh.NewInput().
 				Title("Repo name").
 				Description("Short identifier shown in the picker. Lowercase letters, digits, dot, dash, underscore.").
-				Placeholder("ledger-live").
+				Placeholder("my-repo").
 				Validate(func(v string) error {
 					v = strings.TrimSpace(v)
 					if !nameRE.MatchString(v) {
@@ -274,7 +275,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 			huh.NewInput().
 				Title("Absolute path").
 				Description("Paste the full path to the primary checkout. `~/` is expanded.").
-				Placeholder("~/ledger/ledger-live").
+				Placeholder("~/code/my-repo").
 				Validate(validatePath).
 				Value(&path),
 			huh.NewInput().
@@ -325,10 +326,10 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	return nil
 }
 
-// validatePath accepts an absolute path or a "~/..." path. We expand
-// "~/" and report whether the resulting directory exists. A
-// non-existent path returns a soft warning (not an error) so the
-// user can configure a checkout they haven't cloned yet.
+// validatePath accepts an absolute path or a "~/..." path. We
+// expand "~/" and report whether the resulting directory exists.
+// A non-existent path returns a soft warning (not an error) so
+// the user can configure a checkout they haven't cloned yet.
 func validatePath(v string) error {
 	v = strings.TrimSpace(v)
 	if v == "" {
