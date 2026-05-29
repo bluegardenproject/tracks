@@ -187,6 +187,21 @@ func (Client) Attach(name string) error {
 // decide between "create + attach" and "create + switch-client".
 func IsInsideTmux() bool { return os.Getenv("TMUX") != "" }
 
+// SetCurrentPaneTitle assigns title to the pane the caller is
+// running inside. Used by the dashboard to override tmux's default
+// "<hostname>" pane-title fallback. No-op when not running inside
+// tmux.
+func (Client) SetCurrentPaneTitle(title string) error {
+	if !IsInsideTmux() {
+		return nil
+	}
+	cmd := exec.Command("tmux", "select-pane", "-T", title)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux select-pane -T: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // CapturePane returns the visible content of a pane. Used by the
 // daemon's supervisor to detect when Claude is sitting at its TUI
 // prompt waiting for user input (the pane stops changing).

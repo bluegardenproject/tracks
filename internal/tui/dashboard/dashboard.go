@@ -109,6 +109,12 @@ type pollResult struct {
 }
 
 func (m *model) Init() tea.Cmd {
+	// tmux uses the hostname as the default pane title for any
+	// pane whose program doesn't emit an OSC title sequence.
+	// Claude's TUI sets its own title in track panes; our Go
+	// process doesn't, so without this override the dashboard
+	// pane's border would just show the user's hostname.
+	_ = m.tmux.SetCurrentPaneTitle("Dashboard")
 	return tea.Batch(m.poll(), tickEvery())
 }
 
