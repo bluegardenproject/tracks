@@ -101,6 +101,13 @@ type Track struct {
 	// without the user having to switch windows.
 	LastOutput string `json:"last_output,omitempty"`
 
+	// AwaitingInput is true when the supervisor detected a Claude
+	// confirmation/choice block in the pane (the `☐ ` marker plus a
+	// numbered option list). In that state LastOutput holds the
+	// full prompt — question + options — so the dashboard can
+	// render it as the highlight, not just an arbitrary tail.
+	AwaitingInput bool `json:"awaiting_input,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 
