@@ -61,6 +61,22 @@ type TrackRepo struct {
 	Path string `json:"path"`
 }
 
+// Changes is the diff summary the dashboard shows in the CHANGES
+// column. Summed across all worktrees the track owns, so a
+// cross-repo change reads as one row in the dashboard.
+type Changes struct {
+	Files      int `json:"files,omitempty"`
+	Insertions int `json:"insertions,omitempty"`
+	Deletions  int `json:"deletions,omitempty"`
+}
+
+// IsZero reports whether this Changes value carries no signal
+// (every field is zero). Used by the dashboard to decide whether
+// to render the CHANGES column for a track.
+func (c Changes) IsZero() bool {
+	return c.Files == 0 && c.Insertions == 0 && c.Deletions == 0
+}
+
 // Track is the persistent record of one Claude session.
 type Track struct {
 	// ID is opaque to the user: <YYYYMMDD-HHMMSS>-<6char-rand>.
@@ -114,6 +130,13 @@ type Track struct {
 	// full prompt — question + options — so the dashboard can
 	// render it as the highlight, not just an arbitrary tail.
 	AwaitingInput bool `json:"awaiting_input,omitempty"`
+
+	// Changes is the diff summary (files / insertions / deletions)
+	// between the track's branch and its base, plus uncommitted
+	// edits in the worktree. Refreshed by the supervisor every
+	// poll. Zero values mean nothing produced yet or the worktree
+	// is gone.
+	Changes Changes `json:"changes,omitempty"`
 
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
