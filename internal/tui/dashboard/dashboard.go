@@ -458,33 +458,73 @@ func (m *model) renderFrame(title, content string, width int, hot bool) string {
 	return b.String()
 }
 
-// wrapToWidth breaks line at width display columns, preferring word
-// boundaries. Returns at least one slice element (the original line)
-// when the input is already short enough.
+// wrapToWidth breaks line at width display columns, preferring
+// word boundaries. Tokens that are themselves wider than width get
+// hard-chopped at the rune boundary — without this, snippets
+// containing unbroken runs (like Claude's TUI separator dashes)
+// overflow the snippet box and break the right border.
 func wrapToWidth(line string, width int) []string {
 	if width <= 0 || runewidth.StringWidth(line) <= width {
 		return []string{line}
 	}
 	words := strings.Fields(line)
 	if len(words) == 0 {
-		return []string{line}
+		return chunkByWidth(line, width)
 	}
 	var out []string
 	current := ""
+	flush := func() {
+		if current != "" {
+			out = append(out, current)
+			current = ""
+		}
+	}
 	for _, w := range words {
+		// Hard-chop a single oversized token.
+		if runewidth.StringWidth(w) > width {
+			flush()
+			for _, chunk := range chunkByWidth(w, width) {
+				out = append(out, chunk)
+			}
+			continue
+		}
 		if current == "" {
 			current = w
 			continue
 		}
 		if runewidth.StringWidth(current)+1+runewidth.StringWidth(w) > width {
-			out = append(out, current)
+			flush()
 			current = w
 			continue
 		}
 		current += " " + w
 	}
-	if current != "" {
-		out = append(out, current)
+	flush()
+	return out
+}
+
+// chunkByWidth splits s into pieces, each at most width display
+// columns wide. Counts unicode display width via runewidth so
+// multi-column glyphs (CJK, emoji) don't blow the box.
+func chunkByWidth(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	var out []string
+	var cur strings.Builder
+	curW := 0
+	for _, r := range s {
+		rw := runewidth.RuneWidth(r)
+		if curW+rw > width {
+			out = append(out, cur.String())
+			cur.Reset()
+			curW = 0
+		}
+		cur.WriteRune(r)
+		curW += rw
+	}
+	if cur.Len() > 0 {
+		out = append(out, cur.String())
 	}
 	return out
 }
