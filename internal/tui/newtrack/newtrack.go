@@ -13,6 +13,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/charmbracelet/huh"
 )
 
@@ -72,7 +73,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		),
 	)
 
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return daemon.NewParams{}, ErrCancelled
 		}

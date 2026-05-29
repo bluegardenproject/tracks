@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/charmbracelet/huh"
 )
 
@@ -110,7 +111,7 @@ func pickAction(cfg config.Config) (action, error) {
 				Value(&pick),
 		),
 	)
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -190,7 +191,7 @@ func removeRepo(cfg *config.Config) error {
 				Value(&confirm),
 		),
 	)
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
@@ -228,7 +229,7 @@ func pickRepoIndex(cfg config.Config, title string) (int, error) {
 				Value(&idx),
 		),
 	)
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return 0, ErrCancelled
 		}
@@ -300,7 +301,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	// fill in the detected base. We don't have a per-field "on-blur"
 	// hook in huh, so we accept the values after Run and refine
 	// afterwards if the user left base as its default.
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}

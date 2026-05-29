@@ -14,6 +14,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/charmbracelet/huh"
 )
 
@@ -60,7 +61,7 @@ func PickAction() (Action, error) {
 		),
 	)
 
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -100,7 +101,7 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 				Value(&pick),
 		),
 	)
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return state.Track{}, ErrCancelled
 		}
@@ -129,7 +130,7 @@ func Confirm(title, description string) (bool, error) {
 				Value(&yes),
 		),
 	)
-	if err := form.Run(); err != nil {
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return false, ErrCancelled
 		}
