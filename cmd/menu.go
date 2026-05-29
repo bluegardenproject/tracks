@@ -48,7 +48,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 
 	case menu.ActionDashboard:
 		// Ensure the dashboard window exists, then switch to it.
-		return ensureWindowAndSelect(cfg, tm, "dashboard", "dashboard")
+		return ensureWindowAndSelect(cfg, tm, "Dashboard", "dashboard")
 
 	case menu.ActionList:
 		// `ls` is a one-shot dump — show it inside the popup so the
