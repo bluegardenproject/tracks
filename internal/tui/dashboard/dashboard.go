@@ -70,8 +70,12 @@ func defaultStyles() styles {
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		},
-		prompt:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
-		dim:        lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		prompt: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
+		// AdaptiveColor picks at render time: a mid-dark gray on
+		// light terminals (where ANSI 8 turns nearly invisible)
+		// and a lighter gray on dark terminals. Same code path
+		// for both, no theme-specific configuration.
+		dim: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "245"}),
 		pr:         lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
 		branch:     lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		slug:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
