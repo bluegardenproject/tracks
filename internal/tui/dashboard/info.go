@@ -50,21 +50,24 @@ func gatherDetail(cfg config.Config, t state.Track) detail {
 	return d
 }
 
-// renderDetail draws the inline detail panel below the table. Four
-// horizontal sections: TASK, COMMITS, CHANGES, PR.
+// renderDetail draws the inline detail panel below the table.
+// Layout:
 //
-// width is the full dashboard width; we split it 4 ways with a
-// small gutter between each column.
+//	▍ Details  <track-id>  <slug?>
+//
+//	TASK  (full width)
+//	<task prompt wrapped>
+//
+//	COMMITS        CHANGES        PR
+//	...            ...            ...
+//
+// The TASK section spans the full panel width so long prompts
+// read naturally; the other three split the remaining row evenly.
 func (m *model) renderDetail(d detail, width int) string {
 	if width < 60 {
 		width = 60
 	}
-	gap := 2
-	cols := 4
-	colWidth := (width - 2 - gap*(cols-1)) / cols
-	if colWidth < 14 {
-		colWidth = 14
-	}
+	innerWidth := width - 4 // panel border + padding
 
 	title := m.styles.panelTitle.Render("▍ Details") +
 		"  " + m.styles.dim.Render(d.track.ID)
@@ -72,42 +75,48 @@ func (m *model) renderDetail(d detail, width int) string {
 		title += "  " + m.styles.slug.Render(d.track.Slug)
 	}
 
-	taskCol := m.renderTaskSection(d.track, colWidth)
+	taskSection := m.renderTaskSection(d.track, innerWidth)
+
+	gap := 2
+	cols := 3
+	colWidth := (innerWidth - gap*(cols-1)) / cols
+	if colWidth < 14 {
+		colWidth = 14
+	}
 	commitsCol := m.renderCommitsSection(d.commits, colWidth)
 	changesCol := m.renderChangesSection(d.track, d.files, colWidth)
 	prCol := m.renderPRSection(d.track, colWidth)
 
-	row := lipgloss.JoinHorizontal(lipgloss.Top,
-		taskCol,
-		strings.Repeat(" ", gap),
+	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		commitsCol,
 		strings.Repeat(" ", gap),
 		changesCol,
 		strings.Repeat(" ", gap),
 		prCol,
 	)
-	body := lipgloss.JoinVertical(lipgloss.Left, title, "", row)
+	body := lipgloss.JoinVertical(lipgloss.Left, title, "", taskSection, "", bottomRow)
 	return m.styles.panel.Width(width - 2).Render(body)
 }
 
-// renderTaskSection: task prompt + key metadata (status, branch,
-// idle, last activity).
+// renderTaskSection: section header + inline status/branch/idle
+// metadata line + the wrapped task prompt. Spans the full panel
+// width so long prompts read naturally rather than getting jammed
+// into a 1/4-column gutter.
 func (m *model) renderTaskSection(t state.Track, w int) string {
-	lines := []string{
-		m.styles.sectionHdr.Render("TASK"),
-		m.styles.dim.Render("status ") + m.styles.status[t.Status].Render(string(t.Status)),
-		m.styles.dim.Render("branch ") + m.styles.branch.Render(t.Branch),
-	}
+	header := m.styles.sectionHdr.Render("TASK")
+
+	meta := m.styles.dim.Render("status ") + m.styles.status[t.Status].Render(string(t.Status)) +
+		"  " + m.styles.dim.Render("branch ") + m.styles.branch.Render(t.Branch)
 	if !t.UpdatedAt.IsZero() {
-		lines = append(lines, m.styles.dim.Render("idle   ")+renderIdle(t))
+		meta += "  " + m.styles.dim.Render("idle ") + renderIdle(t)
 	}
-	lines = append(lines, "")
+
+	out := []string{header, meta}
 	if t.TaskPrompt != "" {
-		for _, line := range wrapInfoText(t.TaskPrompt, w) {
-			lines = append(lines, m.styles.dim.Render("│ ")+line)
-		}
+		out = append(out, "")
+		out = append(out, wrapInfoText(t.TaskPrompt, w)...)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(out, "\n")
 }
 
 // renderCommitsSection: short list of commits beyond base.
