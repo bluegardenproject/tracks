@@ -2,9 +2,12 @@ package git
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // WorktreeClient operates inside a worktree that `tracks` itself
@@ -19,10 +22,17 @@ type WorktreeClient struct {
 }
 
 // NewWorktreeClient constructs a client rooted at path.
+//
+// We default the runner to NoOptionalLocks=true because the
+// supervisor (and the dashboard) hit this client every 2 seconds
+// with read-only diff/status calls. Without it, git's implicit
+// index-refresh side effect contends with Claude's own writes
+// inside the same worktree (e.g. `git add` after editing a file)
+// over `.git/worktrees/<name>/index.lock`.
 func NewWorktreeClient(path string) *WorktreeClient {
 	return &WorktreeClient{
 		Path:   path,
-		Runner: ExecRunner{Dir: path},
+		Runner: ExecRunner{Dir: path, NoOptionalLocks: true},
 	}
 }
 
@@ -106,13 +116,39 @@ var shortStatLine = regexp.MustCompile(`(?:(\d+) files? changed)?(?:, (\d+) inse
 // ShortStat computes the diff summary between base..HEAD plus
 // uncommitted edits. Empty/zero on any error so callers can treat
 // failures as "nothing to show yet".
+//
+// Best-effort cleanup of stale index.lock files runs first — if a
+// previous git invocation was SIGKILLed (e.g. a 3-second context
+// timeout) it can leave the lock behind, and that wedges any
+// subsequent write from Claude until removed.
 func (c *WorktreeClient) ShortStat(ctx context.Context, base string) ShortStat {
+	c.CleanStaleIndexLock(ctx, 30*time.Second)
 	committed := parseShortStat(c.runShortStat(ctx, base+"..HEAD"))
 	uncommitted := parseShortStat(c.runShortStat(ctx, "HEAD"))
 	return ShortStat{
 		Files:      committed.Files + uncommitted.Files,
 		Insertions: committed.Insertions + uncommitted.Insertions,
 		Deletions:  committed.Deletions + uncommitted.Deletions,
+	}
+}
+
+// CleanStaleIndexLock removes the worktree's index.lock file when
+// its mtime is older than maxAge. Safe because a healthy git
+// operation holds the lock for milliseconds; anything older is
+// stale from a crashed/killed git process. No-op when the lock
+// doesn't exist.
+func (c *WorktreeClient) CleanStaleIndexLock(ctx context.Context, maxAge time.Duration) {
+	gitDir, _, err := c.Runner.Run(ctx, "rev-parse", "--git-dir")
+	if err != nil {
+		return
+	}
+	lockPath := filepath.Join(c.Path, strings.TrimSpace(gitDir), "index.lock")
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		return
+	}
+	if time.Since(info.ModTime()) > maxAge {
+		_ = os.Remove(lockPath)
 	}
 }
 
