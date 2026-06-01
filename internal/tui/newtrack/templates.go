@@ -34,8 +34,12 @@ The subagent is installed at .claude/agents/tracks-reviewer.md in this
 worktree. It's read-only by design and will end its report with one of
 ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
 
-Present the subagent's findings verbatim and wait for follow-up. Do
-NOT push, commit, or open a PR — this is a read-only audit.`,
+Present the subagent's findings verbatim and wait for follow-up.
+
+This is a **read-only audit**:
+- Do NOT push, commit, or open a PR.
+- Do NOT change any Jira ticket status or assignee (skip the
+  Jira-sync workflow described in the global tracks suffix).`,
 }
 
 // templateLabels gives the picker its human-readable option text.

@@ -89,7 +89,21 @@ const taskSuffix = "" +
 	"include the final `REVIEW OUTCOME` line so the human reviewer " +
 	"knows what was already vetted.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
-	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it."
+	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
+	"**Jira sync** (only if your task prompt references a Jira-style " +
+	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +
+	"  1. At the start, use `Bash` to read `git config user.email`. " +
+	"Resolve it with `lookupJiraAccountId`, then call `editJiraIssue` " +
+	"to set that account as the ticket's assignee.\n" +
+	"  2. If you will be modifying code (not a read-only review), " +
+	"call `getTransitionsForJiraIssue` and `transitionJiraIssue` " +
+	"to move the ticket to the closest match for \"In Progress\". " +
+	"If the task is a read-only audit, SKIP the status change.\n" +
+	"  3. When you open a PR, transition the ticket to the closest " +
+	"match for \"In Review\" (or \"Code Review\" / \"Awaiting Review\"). " +
+	"Add a comment with the PR URL via `addCommentToJiraIssue`.\n" +
+	"  4. Any Atlassian-tool error is non-fatal — note it in your " +
+	"reply and carry on with the actual work."
 
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
