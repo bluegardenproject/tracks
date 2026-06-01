@@ -206,13 +206,6 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 				return nil, rollback, fmt.Errorf("init submodules in %s: %w", r.Name, err)
 			}
 		}
-		// Install the tracks-add-repo skill so Claude knows it can
-		// pull in more repos mid-session. Failure here is logged
-		// but not fatal — Claude can still do useful work without
-		// the skill, just won't know about add-repo.
-		if err := s.installSkill(dest); err != nil {
-			fmt.Fprintf(os.Stderr, "tracks daemon: install skill in %s: %v\n", dest, err)
-		}
 	}
 	return created, rollback, nil
 }
@@ -316,9 +309,6 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 		if err := wt.InitSubmodules(ctx); err != nil {
 			return fail(err.Error())
 		}
-	}
-	if err := s.installSkill(dest); err != nil {
-		fmt.Fprintf(os.Stderr, "tracks daemon: install skill in %s: %v\n", dest, err)
 	}
 	t.Repos = append(t.Repos, state.TrackRepo{Name: r.Name, Path: dest})
 	if err := s.store.Put(t); err != nil {

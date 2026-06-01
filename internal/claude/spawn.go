@@ -79,8 +79,8 @@ const taskSuffix = "" +
 	"  1. Invoke the dedicated review subagent via the Task tool:\n" +
 	"     `Task({ subagent_type: \"tracks-reviewer\", prompt: " +
 	"\"Review my changes in this worktree before push.\" })`\n" +
-	"     The subagent's definition is installed at " +
-	"`.claude/agents/tracks-reviewer.md` in this worktree.\n" +
+	"     The subagent is auto-discovered from the user's global " +
+	"Claude config — no setup needed inside the worktree.\n" +
 	"  2. Read the findings. The subagent ends its report with one of:\n" +
 	"     `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.\n" +
 	"  3. If blocked, address every `block` finding and re-run the " +

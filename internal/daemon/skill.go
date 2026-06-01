@@ -129,37 +129,52 @@ commit, push, edit files, or run anything that modifies state.
   say so in your report.
 `
 
-// installSkill writes both the tracks-add-repo skill and the
-// tracks-reviewer subagent into the worktree's .claude/ directory.
-// The skill goes under .claude/skills/, the subagent under
-// .claude/agents/ — Claude Code auto-discovers each from its own
-// directory.
+// InstallGlobalHelpers writes the tracks-add-repo skill and the
+// tracks-reviewer subagent into the user's global Claude config
+// (~/.claude/skills/ and ~/.claude/agents/). Claude Code's
+// auto-discovery walks both global and per-project locations, so
+// global install means worktrees stay clean — nothing
+// `tracks`-specific ever shows up in `git status` inside a user
+// repo.
 //
-// Idempotent: existing files are overwritten with the latest
-// templates.
-func (s *Server) installSkill(worktreeRoot string) error {
-	// Compose the repo list bullet section. Backticks don't need
-	// escaping in a regular Go string literal.
+// Called once at daemon startup. Files are overwritten on every
+// call so config changes (e.g. new repos in config.yaml) refresh
+// the add-repo skill's repo list.
+//
+// Errors are returned but treated as non-fatal by the caller: a
+// missing global agent is recoverable (Claude just doesn't have
+// the named subagent and the main agent has to inline the review
+// itself).
+func (s *Server) InstallGlobalHelpers() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("home dir: %w", err)
+	}
+
+	// Skill: tracks-add-repo (per-user content — the configured
+	// repo list — embedded in the body).
 	var b strings.Builder
 	for _, r := range s.cfg.Repos {
 		fmt.Fprintf(&b, "- `%s` — primary at `%s` (base: `%s`)\n", r.Name, r.Path, r.Base)
 	}
 	skillBody := fmt.Sprintf(skillTemplate, b.String())
 
-	skillDir := filepath.Join(worktreeRoot, ".claude", "skills")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir skill dir: %w", err)
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir global skills dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "tracks-add-repo.md"), []byte(skillBody), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "tracks-add-repo.md"), []byte(skillBody), 0o644); err != nil {
 		return fmt.Errorf("write add-repo skill: %w", err)
 	}
 
-	agentsDir := filepath.Join(worktreeRoot, ".claude", "agents")
+	// Subagent: tracks-reviewer (static — same for every user).
+	agentsDir := filepath.Join(home, ".claude", "agents")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir agents dir: %w", err)
+		return fmt.Errorf("mkdir global agents dir: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(agentsDir, "tracks-reviewer.md"), []byte(reviewerAgentTemplate), 0o644); err != nil {
 		return fmt.Errorf("write reviewer agent: %w", err)
 	}
+
 	return nil
 }
