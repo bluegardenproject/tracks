@@ -41,6 +41,15 @@ type ExecRunner struct {
 	// Dir is the working directory to invoke git in. Empty string
 	// means inherit from the parent process.
 	Dir string
+
+	// NoOptionalLocks sets GIT_OPTIONAL_LOCKS=0 on the spawned
+	// process so git skips lock-taking operations that exist only
+	// as optimisations (the implicit index refresh during
+	// `git status` / `git diff`). Use for read-only callers that
+	// run concurrently with Claude (or another git process)
+	// inside the same worktree, where the racing index.lock would
+	// otherwise wedge writes.
+	NoOptionalLocks bool
 }
 
 // command builds the *exec.Cmd that Run executes. Extracted so tests
@@ -57,7 +66,11 @@ func (e ExecRunner) command(ctx context.Context, args ...string) *exec.Cmd {
 	if e.Dir != "" {
 		cmd.Dir = e.Dir
 	}
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:", "EDITOR=:")
+	env := append(os.Environ(), "GIT_EDITOR=:", "EDITOR=:")
+	if e.NoOptionalLocks {
+		env = append(env, "GIT_OPTIONAL_LOCKS=0")
+	}
+	cmd.Env = env
 	return cmd
 }
 
