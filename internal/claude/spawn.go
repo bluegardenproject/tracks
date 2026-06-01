@@ -76,19 +76,18 @@ const taskSuffix = "" +
 	"NOT wrap up the session just to acknowledge completion.\n\n" +
 	"**Mandatory pre-push review.** Before you run `git push` or " +
 	"open a pull request:\n" +
-	"  1. Spawn a Task subagent (general-purpose is fine, or a " +
-	"code-reviewer specialist if installed) and ask it to review " +
-	"every file you changed in this branch.\n" +
-	"  2. Tell the subagent to use the repository's own review " +
-	"conventions — `.github/copilot-instructions.md`, `AGENTS.md`, " +
-	"`CONTRIBUTING.md`, any `/code-review`-style skill, or the " +
-	"recent `git log` style — and to report findings grouped by " +
-	"severity (block / warn / hint).\n" +
-	"  3. Address every block-level finding. Do NOT push with " +
-	"unresolved blocks. Warn-level findings should be acknowledged " +
-	"in the PR description.\n" +
-	"  4. Include a one-line review-outcome summary in the PR " +
-	"description so the reviewer knows what was already vetted.\n\n" +
+	"  1. Invoke the dedicated review subagent via the Task tool:\n" +
+	"     `Task({ subagent_type: \"tracks-reviewer\", prompt: " +
+	"\"Review my changes in this worktree before push.\" })`\n" +
+	"     The subagent's definition is installed at " +
+	"`.claude/agents/tracks-reviewer.md` in this worktree.\n" +
+	"  2. Read the findings. The subagent ends its report with one of:\n" +
+	"     `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.\n" +
+	"  3. If blocked, address every `block` finding and re-run the " +
+	"subagent. Do not push with unresolved blocks.\n" +
+	"  4. Acknowledge `warn` findings in the PR description and " +
+	"include the final `REVIEW OUTCOME` line so the human reviewer " +
+	"knows what was already vetted.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it."
 
