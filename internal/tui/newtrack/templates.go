@@ -21,12 +21,21 @@ const (
 // each repo has installed.
 var templatePrompts = map[Template]string{
 	TemplateCustom: "",
-	TemplateReview: `Review the current branch (or the PR if one already exists) against its base branch.
+	TemplateReview: `Run a code review of the current branch against its base.
 
-- Use any review skills installed in this repository.
-- Surface findings grouped by severity (block / warn / hint).
-- Do NOT push, commit, or open a PR — this is a read-only review.
-- Present the findings and wait for follow-up.`,
+Invoke the dedicated review subagent rather than reviewing yourself:
+
+  Task({
+    subagent_type: "tracks-reviewer",
+    prompt: "Review the current branch against its base and report findings."
+  })
+
+The subagent is installed at .claude/agents/tracks-reviewer.md in this
+worktree. It's read-only by design and will end its report with one of
+` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
+
+Present the subagent's findings verbatim and wait for follow-up. Do
+NOT push, commit, or open a PR — this is a read-only audit.`,
 }
 
 // templateLabels gives the picker its human-readable option text.

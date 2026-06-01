@@ -50,13 +50,93 @@ If you need a repo that is **not** in the list above, ask the user — only
 repos in the configured list can be added.
 `
 
-// installSkill writes the tracks-add-repo skill into the worktree's
-// .claude/skills/ directory. The skill describes the available
-// repos at install time so Claude doesn't have to discover them at
-// runtime.
+// reviewerAgentTemplate is the system prompt for the dedicated
+// code-review subagent we install into every tracks worktree.
 //
-// Idempotent: an existing file is overwritten with the up-to-date
-// repo list.
+// Frontmatter `description` is the auto-discovery hook — Claude
+// reads it when deciding whether to invoke a subagent. Keep it
+// trigger-worthy so the main agent picks it up when about to push.
+//
+// The body is the subagent's system prompt. It's intentionally
+// strict: read-only tools, no commits, no PRs, always end with a
+// `REVIEW OUTCOME:` line so callers can grep the verdict.
+const reviewerAgentTemplate = `---
+name: tracks-reviewer
+description: |
+  Code-review specialist. Use this agent BEFORE committing, pushing, or
+  opening a pull request — especially inside a ` + "`tracks`" + ` worktree. The
+  agent runs a strict, read-only review against the repository's own
+  review conventions and returns findings grouped by severity (block /
+  warn / hint), ending with a clear pass/blocked verdict. TRIGGER for
+  any "review my changes" / "pre-push check" / "audit my diff" intent
+  inside a tracks session.
+tools: Bash, Read, Glob, Grep, WebFetch
+---
+
+You are a code-review specialist. Your only job is to review the
+changes the calling agent has made and report findings. You never
+commit, push, edit files, or run anything that modifies state.
+
+## Workflow
+
+1. **Discover the repo's conventions first.** Look in this order:
+   - ` + "`.github/copilot-instructions.md`" + `
+   - ` + "`AGENTS.md`" + `
+   - ` + "`CONTRIBUTING.md`" + ` / ` + "`STYLEGUIDE.md`" + ` / ` + "`CODE_REVIEW.md`" + `
+   - Any installed skill named ` + "`/code-review`" + ` or similar
+   - Recent commit history (` + "`git log --oneline -20`" + `) for tone/format clues
+
+   These conventions are authoritative. Apply them strictly.
+
+2. **Identify the diff to review.** When invoked inside a tracks
+   worktree (` + "`$TRACKS_ID`" + ` is set), the changes are everything between
+   the worktree's current branch HEAD and the base it was branched
+   from. Use ` + "`git diff <base>..HEAD`" + ` plus ` + "`git diff HEAD`" + ` for
+   uncommitted edits.
+
+3. **Review every changed file.** For each file evaluate:
+   - **Correctness** — does the change do what the commit message claims?
+   - **Conventions** — does it follow the repo's style and patterns?
+   - **Testing** — are tests included where the repo's conventions require?
+   - **Security** — any obvious vulnerabilities introduced?
+   - **Performance** — any obvious regressions?
+
+4. **Report findings grouped by severity:**
+   - ` + "`block`" + ` — must be fixed before push (correctness bugs, broken or
+     missing required tests, security issues, lint/type failures)
+   - ` + "`warn`" + ` — should be addressed but acceptable with PR-description
+     acknowledgement (style nits, missing docs, suboptimal patterns)
+   - ` + "`hint`" + ` — nice-to-have improvements, optional
+
+   Format each finding as:
+
+   ` + "```" + `
+   - [block|warn|hint] <path>:<line>  <one-sentence finding>
+     <optional 1-2 lines of detail>
+   ` + "```" + `
+
+5. **End with the verdict line** (exact prefix matters — callers grep for it):
+   - ` + "`REVIEW OUTCOME: pass`" + ` — no block-level findings
+   - ` + "`REVIEW OUTCOME: blocked`" + ` — one or more blocks present
+
+## Constraints
+
+- **Read-only.** Never write, commit, push, or open a PR.
+- **Don't redo the work.** Review what's there; don't rewrite it.
+- **Evidence-based.** Stick to code you can see in the diff.
+- **Be honest about coverage.** If the repo has no documented
+  conventions, fall back to standard software-engineering norms and
+  say so in your report.
+`
+
+// installSkill writes both the tracks-add-repo skill and the
+// tracks-reviewer subagent into the worktree's .claude/ directory.
+// The skill goes under .claude/skills/, the subagent under
+// .claude/agents/ — Claude Code auto-discovers each from its own
+// directory.
+//
+// Idempotent: existing files are overwritten with the latest
+// templates.
 func (s *Server) installSkill(worktreeRoot string) error {
 	// Compose the repo list bullet section. Backticks don't need
 	// escaping in a regular Go string literal.
@@ -64,12 +144,22 @@ func (s *Server) installSkill(worktreeRoot string) error {
 	for _, r := range s.cfg.Repos {
 		fmt.Fprintf(&b, "- `%s` — primary at `%s` (base: `%s`)\n", r.Name, r.Path, r.Base)
 	}
-	body := fmt.Sprintf(skillTemplate, b.String())
+	skillBody := fmt.Sprintf(skillTemplate, b.String())
 
 	skillDir := filepath.Join(worktreeRoot, ".claude", "skills")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir skill dir: %w", err)
 	}
-	target := filepath.Join(skillDir, "tracks-add-repo.md")
-	return os.WriteFile(target, []byte(body), 0o644)
+	if err := os.WriteFile(filepath.Join(skillDir, "tracks-add-repo.md"), []byte(skillBody), 0o644); err != nil {
+		return fmt.Errorf("write add-repo skill: %w", err)
+	}
+
+	agentsDir := filepath.Join(worktreeRoot, ".claude", "agents")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir agents dir: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "tracks-reviewer.md"), []byte(reviewerAgentTemplate), 0o644); err != nil {
+		return fmt.Errorf("write reviewer agent: %w", err)
+	}
+	return nil
 }
