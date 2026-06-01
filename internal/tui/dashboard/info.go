@@ -98,10 +98,10 @@ func (m *model) renderDetail(d detail, width int) string {
 	return m.styles.panel.Width(width - 2).Render(body)
 }
 
-// renderTaskSection: section header + inline status/branch/idle
-// metadata line + the wrapped task prompt. Spans the full panel
-// width so long prompts read naturally rather than getting jammed
-// into a 1/4-column gutter.
+// renderTaskSection: section header + inline metadata
+// (status / branch / idle / repos) + the wrapped task prompt.
+// Spans the full panel width so long prompts read naturally
+// rather than getting jammed into a 1/3-column gutter.
 func (m *model) renderTaskSection(t state.Track, w int) string {
 	header := m.styles.sectionHdr.Render("TASK")
 
@@ -109,6 +109,9 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 		"  " + m.styles.dim.Render("branch ") + m.styles.branch.Render(t.Branch)
 	if !t.UpdatedAt.IsZero() {
 		meta += "  " + m.styles.dim.Render("idle ") + renderIdle(t)
+	}
+	if repos := joinRepos(t.Repos); repos != "" {
+		meta += "  " + m.styles.dim.Render("repos ") + m.styles.repo.Render(repos)
 	}
 
 	out := []string{header, meta}
