@@ -30,9 +30,9 @@ Invoke the dedicated review subagent rather than reviewing yourself:
     prompt: "Review the current branch against its base and report findings."
   })
 
-The subagent is installed at .claude/agents/tracks-reviewer.md in this
-worktree. It's read-only by design and will end its report with one of
-` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
+The subagent is auto-discovered from the user's global Claude config —
+no setup needed inside the worktree. It's read-only by design and ends
+its report with one of ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
 
 Present the subagent's findings verbatim and wait for follow-up.
 

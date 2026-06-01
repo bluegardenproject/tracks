@@ -138,6 +138,14 @@ func (s *Server) Start(ctx context.Context) error {
 	// a half-stale view of "running" tracks from before the crash.
 	s.reconcileOnStartup(ctx)
 
+	// Make sure the global ~/.claude/skills/tracks-add-repo.md and
+	// ~/.claude/agents/tracks-reviewer.md are up to date. Non-fatal:
+	// an install failure just means the named subagent won't be
+	// available and the main agent has to inline its work.
+	if err := s.InstallGlobalHelpers(); err != nil {
+		fmt.Fprintf(os.Stderr, "tracks daemon: install global helpers: %v\n", err)
+	}
+
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
 	s.cancelTmuxWatch = cancelTmux
 
