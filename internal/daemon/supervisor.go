@@ -41,7 +41,19 @@ type supervisor struct {
 	// per track, since the pane-snapshot scan can re-detect the
 	// same URL on every poll.
 	prWatcherStarted bool
+
+	// lastWaitingNotifyAt rate-limits EventWaiting per track. The
+	// status flicks Running↔Waiting whenever Claude's TUI ticks a
+	// spinner; without throttling we'd notify the user every few
+	// seconds on the same outstanding question.
+	lastWaitingNotifyAt time.Time
 }
+
+// waitingNotifyMinInterval is the shortest gap between two
+// EventWaiting notifications for the same track. The user will
+// notice the dashboard's pink "waiting" highlight; an OS-level
+// notification at this cadence is enough without spamming.
+const waitingNotifyMinInterval = 2 * time.Minute
 
 // windowNameFor returns the tmux window name for a track. Kept here
 // (also duplicated in cmd/attach.go for the CLI side) because both
@@ -194,10 +206,15 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	_ = s.store.Put(t)
 
 	// Fire notifications on the transitions that matter to a user
-	// who isn't looking at the dashboard right now.
+	// who isn't looking at the dashboard right now. EventWaiting
+	// gets a per-track cooldown so the Running↔Waiting flicker
+	// caused by Claude's TUI spinners doesn't spam the user.
 	if target == state.StatusWaiting && prevStatus != state.StatusWaiting {
-		s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
-			labelFor(t)+" is waiting for input")
+		if time.Since(sup.lastWaitingNotifyAt) >= waitingNotifyMinInterval {
+			s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
+				labelFor(t)+" is waiting for input")
+			sup.lastWaitingNotifyAt = time.Now()
+		}
 	}
 	if t.PRURL != "" && prevPRURL == "" {
 		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",

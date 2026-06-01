@@ -54,13 +54,13 @@ type SpawnOptions struct {
 // Claude. Hardcoded here so we can update the wording with the
 // binary instead of asking every user to edit YAML.
 //
-// Two concerns only:
+// Three concerns:
 //
-//  1. Make sure Claude knows it's running interactively. The
-//     previous "When you finish, emit TRACKS_PR_URL" wording made
-//     it treat every task as one-shot and exit after a single
-//     response.
-//  2. Surface the TRACKS_PR_URL marker contract so the dashboard
+//  1. Make sure Claude knows it's running interactively (don't
+//     treat every task as one-shot).
+//  2. Mandate a code-review gate before any push / PR — the
+//     review uses whatever conventions the repo documents.
+//  3. Surface the TRACKS_PR_URL marker contract so the dashboard
 //     can detect PR creation — phrased as a side-channel, not a
 //     finish signal.
 //
@@ -74,6 +74,21 @@ const taskSuffix = "" +
 	"pane at any time to reply. Stay engaged: if the task naturally " +
 	"ends with a question or a confirmation, ask it and wait — do " +
 	"NOT wrap up the session just to acknowledge completion.\n\n" +
+	"**Mandatory pre-push review.** Before you run `git push` or " +
+	"open a pull request:\n" +
+	"  1. Spawn a Task subagent (general-purpose is fine, or a " +
+	"code-reviewer specialist if installed) and ask it to review " +
+	"every file you changed in this branch.\n" +
+	"  2. Tell the subagent to use the repository's own review " +
+	"conventions — `.github/copilot-instructions.md`, `AGENTS.md`, " +
+	"`CONTRIBUTING.md`, any `/code-review`-style skill, or the " +
+	"recent `git log` style — and to report findings grouped by " +
+	"severity (block / warn / hint).\n" +
+	"  3. Address every block-level finding. Do NOT push with " +
+	"unresolved blocks. Warn-level findings should be acknowledged " +
+	"in the PR description.\n" +
+	"  4. Include a one-line review-outcome summary in the PR " +
+	"description so the reviewer knows what was already vetted.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it."
 
