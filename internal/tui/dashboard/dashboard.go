@@ -33,22 +33,34 @@ const pollInterval = 1 * time.Second
 // styles holds all lipgloss styles. Centralized so a future theme
 // switch is a single edit.
 type styles struct {
-	header        lipgloss.Style
-	row           lipgloss.Style
-	rowActive     lipgloss.Style
-	status        map[state.Status]lipgloss.Style
-	prompt        lipgloss.Style
-	dim           lipgloss.Style
-	pr            lipgloss.Style
-	snippetText   lipgloss.Style
-	snippetBorder lipgloss.Style
+	header     lipgloss.Style
+	panelTitle lipgloss.Style
+	sectionHdr lipgloss.Style
+	row        lipgloss.Style
+	rowActive  lipgloss.Style
+	status     map[state.Status]lipgloss.Style
+	prompt     lipgloss.Style
+	dim        lipgloss.Style
+	pr         lipgloss.Style
+	branch     lipgloss.Style
+	slug       lipgloss.Style
+	repo       lipgloss.Style
+	insertions lipgloss.Style
+	deletions  lipgloss.Style
+	count      lipgloss.Style
+	ok         lipgloss.Style
+	warn       lipgloss.Style
+	fail       lipgloss.Style
+	panel      lipgloss.Style
 }
 
 func defaultStyles() styles {
 	return styles{
-		header:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
-		row:       lipgloss.NewStyle(),
-		rowActive: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236")),
+		header:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
+		panelTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")),
+		sectionHdr: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")),
+		row:        lipgloss.NewStyle(),
+		rowActive:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236")),
 		status: map[state.Status]lipgloss.Style{
 			state.StatusPending: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 			state.StatusRunning: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
@@ -58,11 +70,22 @@ func defaultStyles() styles {
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		},
-		prompt:        lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
-		dim:           lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		pr:            lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
-		snippetText:   lipgloss.NewStyle().Foreground(lipgloss.Color("250")),
-		snippetBorder: lipgloss.NewStyle().Foreground(lipgloss.Color("207")),
+		prompt:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
+		dim:        lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		pr:         lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
+		branch:     lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		slug:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+		repo:       lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
+		insertions: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		deletions:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		count:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		ok:         lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		warn:       lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		fail:       lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		panel: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("14")).
+			Padding(0, 1),
 	}
 }
 
@@ -88,10 +111,10 @@ type model struct {
 	err      error
 	lastPoll time.Time
 
-	// info is non-nil while the per-track info modal is open. The
-	// modal hides the rest of the table view. Set by `i`, cleared
-	// by `esc`.
-	info *info
+	// detail is the lazily-refreshed extra info shown below the
+	// table for whatever row the cursor's on. Refreshed every
+	// poll; cleared when there are no tracks.
+	detail *detail
 }
 
 func newModel(cfg config.Config) *model {
@@ -133,6 +156,18 @@ func windowNameFor(trackID string) string {
 	return "t-" + trackID
 }
 
+// refreshDetail re-runs gatherDetail for the currently-highlighted
+// track, or clears m.detail when there's nothing selected. Called
+// after every cursor move and on each daemon-state poll.
+func (m *model) refreshDetail() {
+	if len(m.tracks) == 0 || m.cursor >= len(m.tracks) {
+		m.detail = nil
+		return
+	}
+	d := gatherDetail(m.cfg, m.tracks[m.cursor])
+	m.detail = &d
+}
+
 func tickEvery() tea.Cmd {
 	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -163,43 +198,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
-		// The info modal swallows keystrokes so navigation in the
-		// table doesn't happen while the popup is open.
-		if m.info != nil {
-			switch msg.String() {
-			case "esc", "i", "q", "ctrl+c":
-				m.info = nil
-				return m, nil
-			case "enter":
-				t := m.info.track
-				m.info = nil
-				_ = m.attachTrack(t.ID)
-				return m, nil
-			case "r":
-				m.info = openInfo(m.cfg, m.info.track)
-				return m, nil
-			}
-			return m, nil
-		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.refreshDetail()
 			}
 		case "down", "j":
 			if m.cursor < len(m.tracks)-1 {
 				m.cursor++
+				m.refreshDetail()
 			}
 		case "enter":
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				_ = m.attachTrack(t.ID)
-			}
-		case "i":
-			if len(m.tracks) > 0 {
-				m.info = openInfo(m.cfg, m.tracks[m.cursor])
 			}
 		case "y", "Y":
 			if len(m.prompts) > 0 {
@@ -262,6 +277,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor >= len(m.tracks) {
 				m.cursor = max(0, len(m.tracks)-1)
 			}
+			m.refreshDetail()
 		}
 	}
 	return m, nil
@@ -304,10 +320,11 @@ func min(a, b int) int {
 }
 
 func (m *model) View() string {
-	if m.info != nil {
-		return m.renderInfo(m.info)
+	table := m.renderTable(m.width)
+	if m.detail == nil {
+		return table
 	}
-	return m.renderTable(m.width)
+	return table + "\n" + m.renderDetail(*m.detail, m.width)
 }
 
 // renderTable draws the dashboard's table + footer. The claude
@@ -340,14 +357,14 @@ func (m *model) renderTable(width int) string {
 			"ID", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE", "REPOS", "PR")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
-			line := fmt.Sprintf("  %-15s  %-22s  %-16s  %s  %-14s  %-6s  %-16s  %s",
+			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
 				shortID(t.ID),
-				truncate(t.Branch, 22),
-				truncate(t.Slug, 16),
+				padRendered(m.styles.branch.Render(truncate(t.Branch, 22)), 22),
+				padRendered(m.styles.slug.Render(truncate(t.Slug, 16)), 16),
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-				renderChanges(t.Changes),
-				renderIdle(t),
-				truncate(joinRepos(t.Repos), 16),
+				padRendered(m.renderChangesColored(t.Changes), 14),
+				padRendered(m.styles.dim.Render(renderIdle(t)), 6),
+				padRendered(m.styles.repo.Render(truncate(joinRepos(t.Repos), 16)), 16),
 				m.renderPRCell(t),
 			)
 			if i == m.cursor {
@@ -360,7 +377,7 @@ func (m *model) renderTable(width int) string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   i info   d end   K kill   x forget   X clear completed   y/n approve"))
+	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"))
 	b.WriteString("\n")
 	b.WriteString(m.styles.dim.Render("r refresh   q quit   (open menu from any window with <prefix>+t)"))
 	return lipgloss.NewStyle().Width(width).Render(b.String())
@@ -374,12 +391,33 @@ func shortID(id string) string {
 }
 
 // renderChanges turns a state.Changes into the dashboard's compact
-// `+ins -del (N)` form. Empty when there's nothing to show.
+// `+ins -del (N)` form (plain text). Empty when there's nothing
+// to show. Kept around for non-coloured contexts (the daemon doesn't
+// know our styles).
 func renderChanges(c state.Changes) string {
 	if c.IsZero() {
 		return ""
 	}
 	return fmt.Sprintf("+%d -%d (%d)", c.Insertions, c.Deletions, c.Files)
+}
+
+// renderChangesColored is the dashboard-styled variant: green
+// insertions, red deletions, yellow file count. Empty when zero.
+func (m *model) renderChangesColored(c state.Changes) string {
+	if c.IsZero() {
+		return ""
+	}
+	return m.styles.insertions.Render(fmt.Sprintf("+%d", c.Insertions)) +
+		" " + m.styles.deletions.Render(fmt.Sprintf("-%d", c.Deletions)) +
+		" " + m.styles.dim.Render(fmt.Sprintf("(%d)", c.Files))
+}
+
+// padRendered pads a (possibly already-styled) string to width
+// display columns. lipgloss.NewStyle().Width handles ANSI escape
+// sequences correctly, where Sprintf("%-Ns", ...) would count
+// escape bytes and underpad.
+func padRendered(s string, width int) string {
+	return lipgloss.NewStyle().Width(width).Render(s)
 }
 
 // renderPRCell builds the right-hand PR column: URL + a state
