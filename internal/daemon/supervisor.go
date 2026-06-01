@@ -185,6 +185,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	snippet, awaiting := paneSnippet(snapshot)
 	prURL := scanForPRURL(snapshot)
 	changes := s.aggregateChanges(t)
+	updatedRepos, rolledUpBranch := s.refreshBranches(t)
 
 	prevStatus := t.Status
 	prevPRURL := t.PRURL
@@ -193,13 +194,17 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		snippet == t.LastOutput &&
 		awaiting == t.AwaitingInput &&
 		(prURL == "" || prURL == t.PRURL) &&
-		changes == t.Changes {
+		changes == t.Changes &&
+		rolledUpBranch == t.Branch &&
+		reposBranchesEqual(updatedRepos, t.Repos) {
 		return
 	}
 	t.Status = target
 	t.LastOutput = snippet
 	t.AwaitingInput = awaiting
 	t.Changes = changes
+	t.Repos = updatedRepos
+	t.Branch = rolledUpBranch
 	if prURL != "" && prURL != t.PRURL {
 		t.PRURL = prURL
 	}
@@ -249,6 +254,53 @@ func (s *Server) notifyEvent(event, title, body string) {
 // Used by refreshRunningStatus to surface a PR URL into state.Track
 // without log-parsing.
 var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(\S+)`)
+
+// refreshBranches re-reads each worktree's current branch via
+// `git branch --show-current` and returns an updated copy of
+// t.Repos together with a roll-up branch name for the top-level
+// Track.Branch field.
+//
+// Roll-up rule: prefer the first worktree branch that isn't the
+// daemon's `tracks/<id-tail>` placeholder — that's the one Claude
+// renamed for the actual commit. If every worktree is still on
+// the placeholder we keep the placeholder so the dashboard's
+// branch column never goes blank.
+func (s *Server) refreshBranches(t state.Track) ([]state.TrackRepo, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out := make([]state.TrackRepo, len(t.Repos))
+	rolled := t.Branch
+	rolledIsPlaceholder := strings.HasPrefix(rolled, "tracks/")
+	for i, tr := range t.Repos {
+		out[i] = tr
+		current, err := git.NewWorktreeClient(tr.Path).CurrentBranch(ctx)
+		if err != nil || current == "" {
+			continue
+		}
+		out[i].Branch = current
+		// First non-placeholder we find wins the roll-up.
+		if !strings.HasPrefix(current, "tracks/") && rolledIsPlaceholder {
+			rolled = current
+			rolledIsPlaceholder = false
+		}
+	}
+	return out, rolled
+}
+
+// reposBranchesEqual reports whether two TrackRepo slices carry
+// identical Branch fields in order. Used to short-circuit
+// state.json writes when nothing actually changed.
+func reposBranchesEqual(a, b []state.TrackRepo) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Branch != b[i].Branch {
+			return false
+		}
+	}
+	return true
+}
 
 // aggregateChanges sums ShortStat results across every worktree
 // the track owns. Cross-repo tracks then read as a single row in

@@ -59,6 +59,12 @@ const (
 type TrackRepo struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+	// Branch is the worktree's current branch as observed by the
+	// supervisor. Starts as the daemon's placeholder
+	// (`tracks/<id-tail>`); Claude is asked to rename to a
+	// conventional `<type>/<slug>` before its first commit, and
+	// the next poll picks the new name up.
+	Branch string `json:"branch,omitempty"`
 }
 
 // Changes is the diff summary the dashboard shows in the CHANGES
