@@ -9,6 +9,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tui/menu"
 	"github.com/bluegardenproject/tracks/internal/tui/newtrack"
@@ -116,6 +117,24 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		}
 		closeTrackWindow(cfg, t.ID)
 		fmt.Printf("killed: %s\n", t.ID)
+		waitForKey()
+		return nil
+
+	case menu.ActionReleaseBranch:
+		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.ActiveOnly)
+		if err != nil {
+			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			return err
+		}
+		if err := cl.Done(t.ID); err != nil {
+			return err
+		}
+		closeTrackWindow(cfg, t.ID)
+		fmt.Printf("released %s — track %s ended, worktree removed.\n", t.Branch, t.ID)
+		fmt.Println()
+		printCheckoutHints(cfg, t)
 		waitForKey()
 		return nil
 
@@ -234,6 +253,29 @@ func ensureWindowAndSelect(cfg config.Config, tm *tmux.Client, window, command s
 		}
 	}
 	return tm.SelectWindow(cfg.Tmux.SessionName, window)
+}
+
+// printCheckoutHints prints a one-line `git checkout` command per
+// participating repo, using the actual branch the worktree was on
+// at the time of release. So a multi-repo track gets one line per
+// repo, each pointing at the right path + branch.
+func printCheckoutHints(cfg config.Config, t state.Track) {
+	if t.Branch == "" && len(t.Repos) == 0 {
+		return
+	}
+	fmt.Println("To check the branch out in your primary checkout:")
+	for _, tr := range t.Repos {
+		repo, ok := cfg.RepoByName(tr.Name)
+		if !ok {
+			continue
+		}
+		path, _ := repo.ResolveRepoPath()
+		branch := tr.Branch
+		if branch == "" {
+			branch = t.Branch
+		}
+		fmt.Printf("  git -C %s checkout %s\n", path, branch)
+	}
 }
 
 // waitForKey blocks until the user presses any key. Used after a
