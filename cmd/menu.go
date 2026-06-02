@@ -75,6 +75,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
 			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println(err)
+				waitForKey()
+				return nil
+			}
 			return err
 		}
 		window := windowNameFor(t.ID)
@@ -94,6 +99,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
 			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println(err)
+				waitForKey()
+				return nil
+			}
 			return err
 		}
 		if err := cl.Done(t.ID); err != nil {
@@ -108,6 +118,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		t, err := menu.PickTrack(cl, "Kill which track?", menu.ActiveOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println(err)
+				waitForKey()
 				return nil
 			}
 			return err
@@ -126,6 +141,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
 			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println(err)
+				waitForKey()
+				return nil
+			}
 			return err
 		}
 		if err := cl.Done(t.ID); err != nil {
@@ -142,6 +162,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		t, err := menu.PickTrack(cl, "Forget which completed track?", menu.CompletedOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println(err)
+				waitForKey()
 				return nil
 			}
 			return err

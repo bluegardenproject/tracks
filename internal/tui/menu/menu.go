@@ -23,6 +23,11 @@ import (
 // with no action.
 var ErrCancelled = errors.New("cancelled")
 
+// ErrNoTracks is returned by PickTrack when the filter rules out
+// every track. Callers should print a helpful message and pause
+// rather than just closing the popup.
+var ErrNoTracks = errors.New("no tracks match the filter")
+
 // Action identifies one top-level menu choice.
 type Action string
 
@@ -91,7 +96,7 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 		byID[t.ID] = t
 	}
 	if len(options) == 0 {
-		return state.Track{}, errors.New("no tracks match")
+		return state.Track{}, ErrNoTracks
 	}
 	var pick string
 	form := huh.NewForm(
