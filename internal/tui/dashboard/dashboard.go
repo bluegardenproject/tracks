@@ -357,16 +357,16 @@ func (m *model) renderTable(width int) string {
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-32s  %-20s  %-10s  %-14s  %-6s",
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-36s  %-26s  %-10s  %-22s  %-6s",
 			"ID", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
 			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s",
 				shortID(t.ID),
-				padRendered(m.styles.branch.Render(truncate(t.Branch, 32)), 32),
-				padRendered(m.styles.slug.Render(truncate(t.Slug, 20)), 20),
+				padRendered(m.styles.branch.Render(truncate(t.Branch, 36)), 36),
+				padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-				padRendered(m.renderChangesColored(t.Changes), 14),
+				padRendered(m.renderChangesColored(t.Changes), 22),
 				padRendered(m.styles.dim.Render(renderIdle(t)), 6),
 			)
 			if i == m.cursor {
