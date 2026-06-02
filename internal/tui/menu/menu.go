@@ -27,18 +27,19 @@ var ErrCancelled = errors.New("cancelled")
 type Action string
 
 const (
-	ActionNewTrack    Action = "new"
-	ActionDashboard   Action = "dashboard"
-	ActionList        Action = "list"
-	ActionAttach      Action = "attach"
-	ActionDone        Action = "done"
-	ActionKill        Action = "kill"
-	ActionForget      Action = "forget"
-	ActionPrune       Action = "prune"
-	ActionSettings    Action = "settings"
-	ActionGC          Action = "gc"
-	ActionQuitSession Action = "quit"
-	ActionClose       Action = "close"
+	ActionNewTrack       Action = "new"
+	ActionDashboard      Action = "dashboard"
+	ActionList           Action = "list"
+	ActionAttach         Action = "attach"
+	ActionDone           Action = "done"
+	ActionKill           Action = "kill"
+	ActionReleaseBranch  Action = "release"
+	ActionForget         Action = "forget"
+	ActionPrune          Action = "prune"
+	ActionSettings       Action = "settings"
+	ActionGC             Action = "gc"
+	ActionQuitSession    Action = "quit"
+	ActionClose          Action = "close"
 )
 
 // PickAction shows the top-level menu and returns the user's choice.
@@ -52,6 +53,7 @@ func PickAction() (Action, error) {
 				Options(
 					huh.NewOption("New track", ActionNewTrack),
 					huh.NewOption("Dashboard", ActionDashboard),
+					huh.NewOption("Release a track's branch...", ActionReleaseBranch),
 					huh.NewOption("Settings", ActionSettings),
 					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Quit session", ActionQuitSession),
