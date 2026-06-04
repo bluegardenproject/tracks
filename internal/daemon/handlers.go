@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/git"
+	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -132,6 +133,9 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		return fail("spawn claude: " + err.Error())
 	}
 	emit("claude running")
+
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: new track started",
+		fmt.Sprintf("%s on %s", labelFor(t), t.Branch))
 
 	return ok(NewResult{TrackID: trackID, Branch: resolvedBranch})
 }

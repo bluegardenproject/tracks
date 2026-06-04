@@ -21,6 +21,7 @@ import (
 type Event string
 
 const (
+	EventTrackCreated   Event = "track_created"
 	EventWaiting        Event = "waiting"
 	EventDone           Event = "done"
 	EventErrored        Event = "errored"
@@ -30,7 +31,14 @@ const (
 
 // AllEvents is the canonical ordering used when defaulting a
 // missing config.notify.events list.
-var AllEvents = []Event{EventWaiting, EventDone, EventErrored, EventPROpened, EventPRStateChanged}
+var AllEvents = []Event{
+	EventTrackCreated,
+	EventWaiting,
+	EventDone,
+	EventErrored,
+	EventPROpened,
+	EventPRStateChanged,
+}
 
 // Channel describes which delivery surfaces are enabled. Independent
 // of which events trigger them — events gate "should we notify at
