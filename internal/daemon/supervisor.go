@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -26,11 +28,12 @@ import (
 // with Claude in the track window. A daemon-owned child process
 // would have no TTY and no way for the user to type into it.
 type supervisor struct {
-	trackID    string
-	windowName string
-	pid        int
-	cancel     context.CancelFunc
-	done       chan struct{}
+	trackID      string
+	windowName   string
+	pid          int
+	sentinelPath string
+	cancel       context.CancelFunc
+	done         chan struct{}
 
 	// lastPane is the most recent capture-pane snapshot. Used to
 	// detect a stalled pane (= Claude waiting for user input).
@@ -68,7 +71,15 @@ func windowNameFor(trackID string) string {
 // startSupervisor opens a tmux window for the track with claude
 // running inside it and starts the watcher goroutines.
 func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*supervisor, error) {
-	opts, err := claude.BuildOptions(s.cfg, t, s.socketDir)
+	sentinelPath, err := s.sentinelPathFor(t.ID)
+	if err != nil {
+		return nil, err
+	}
+	// A stale sentinel from a previous run (e.g. crash + restart)
+	// would make the supervisor finalize instantly. Remove it.
+	_ = os.Remove(sentinelPath)
+
+	opts, err := claude.BuildOptions(s.cfg, t, s.socketDir, sentinelPath)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +95,7 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 		trackID:          t.ID,
 		windowName:       window,
 		pid:              pid,
+		sentinelPath:     sentinelPath,
 		cancel:           cancel,
 		done:             make(chan struct{}),
 		lastPaneChangeAt: time.Now(),
@@ -111,20 +123,17 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	return sup, nil
 }
 
-// watchTrackProcess polls the pane pid until it stops being a live
-// process, and watches the pane's rendered contents to detect when
-// Claude is sitting at its prompt waiting for user input.
+// watchTrackProcess polls the pane pid + the sentinel file to
+// decide when Claude has finished, and watches the pane's
+// rendered contents to detect when Claude is sitting at its
+// prompt waiting for user input.
 //
-// We deliberately do NOT use `has-window` as a liveness signal —
-// the dashboard's embed flow physically moves the pane out of its
-// `t-<id>` window into the Dashboard window (and back again), so
-// the window briefly disappears even though Claude is alive and
-// well. Process liveness is sufficient: when the user kills the
-// window via tmux, the SIGHUP propagates and the pid dies anyway.
+// Liveness rules:
 //
-//   - pid dead → Done (or Errored — tmux doesn't surface exit code).
-//   - pane content unchanged for paneIdleThreshold → Waiting.
-//   - pane content changed within paneIdleThreshold → Running.
+//   - sentinel exists → Claude exited; finalize (pane stays alive
+//     as a regular shell so the user can poke around the worktree).
+//   - pid dead → backstop for when the wrapper itself died; finalize.
+//   - otherwise → pane content drives running/waiting state.
 func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 	defer close(sup.done)
 	ticker := time.NewTicker(2 * time.Second)
@@ -135,6 +144,15 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if sup.sentinelPath != "" {
+				if _, err := os.Stat(sup.sentinelPath); err == nil {
+					s.finalizeTrack(sup.trackID)
+					s.mu.Lock()
+					delete(s.supervisors, sup.trackID)
+					s.mu.Unlock()
+					return
+				}
+			}
 			if !processAlive(sup.pid) {
 				s.finalizeTrack(sup.trackID)
 				s.mu.Lock()
@@ -145,6 +163,21 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 			s.refreshRunningStatus(tm, sup)
 		}
 	}
+}
+
+// sentinelPathFor returns the file the shell wrapper touches when
+// Claude exits. Lives under <state_dir>/sentinels/<track-id>.done
+// so the daemon can find them across restarts.
+func (s *Server) sentinelPathFor(trackID string) (string, error) {
+	dir, err := s.cfg.ResolveStateDir()
+	if err != nil {
+		return "", err
+	}
+	sentinelDir := filepath.Join(dir, "sentinels")
+	if err := os.MkdirAll(sentinelDir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(sentinelDir, trackID+".done"), nil
 }
 
 // paneIdleThreshold is how long the pane must be unchanged before

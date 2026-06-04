@@ -136,7 +136,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionReleaseBranch:
-		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.ActiveOnly)
+		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.HasLiveWorktree)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil

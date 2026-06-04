@@ -262,6 +262,12 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) 
 			return fail(fmt.Sprintf("remove worktree %s: %v", tr.Path, err))
 		}
 	}
+	// Clean up the supervisor's sentinel so a future track with
+	// the same id (unlikely but possible after Forget+New) doesn't
+	// pick up a stale "claude already exited" signal.
+	if path, err := s.sentinelPathFor(t.ID); err == nil {
+		_ = os.Remove(path)
+	}
 	if !t.Status.IsTerminal() {
 		t.Status = state.StatusDone
 		now := time.Now().UTC()
