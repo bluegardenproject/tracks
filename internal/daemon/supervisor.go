@@ -251,9 +251,14 @@ func (s *Server) notifyEvent(event, title, body string) {
 
 // prURLPattern matches the TRACKS_PR_URL=<url> marker Claude is
 // asked to emit in the prompt suffix (see internal/claude/spawn.go).
-// Used by refreshRunningStatus to surface a PR URL into state.Track
-// without log-parsing.
-var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(\S+)`)
+//
+// We deliberately require either an http(s) URL or the literal
+// `none` sentinel. The instruction text in the suffix uses the
+// placeholder `<url>` to teach Claude the format, and a permissive
+// `\S+` capture would (incorrectly) grab that placeholder on the
+// very first poll — before Claude has produced anything — and
+// fire a fake "PR opened" notification.
+var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(https?://\S+|none)`)
 
 // refreshBranches re-reads each worktree's current branch via
 // `git branch --show-current` and returns an updated copy of
