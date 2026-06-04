@@ -48,6 +48,12 @@ type SpawnOptions struct {
 	// SocketDir is exported as TRACKS_SOCKET_DIR so the same helper
 	// scripts can find the daemon.
 	SocketDir string
+
+	// SentinelPath is the path to a file the shell wrapper touches
+	// the instant Claude exits, so the supervisor can finalize the
+	// track without depending on pid death. Empty means no shell
+	// wrapper / no sentinel handling.
+	SentinelPath string
 }
 
 // taskSuffix is appended to every task prompt the daemon sends to
@@ -108,7 +114,7 @@ const taskSuffix = "" +
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
-func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOptions, error) {
+func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath string) (SpawnOptions, error) {
 	if len(t.Repos) == 0 {
 		return SpawnOptions{}, errors.New("track has no repos")
 	}
@@ -128,6 +134,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOpti
 		CWD:            t.Repos[0].Path,
 		TrackID:        t.ID,
 		SocketDir:      socketDir,
+		SentinelPath:   sentinelPath,
 	}, nil
 }
 
@@ -136,27 +143,46 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir string) (SpawnOpti
 // passes its argument to /bin/sh -c so we must produce a string
 // (not argv).
 //
-// Env vars (TRACKS_ID, TRACKS_SOCKET_DIR) are exported inline so
-// they reach claude regardless of the parent shell's behavior.
+// Layout:
+//
+//	TRACKS_ID=… TRACKS_SOCKET_DIR=… exec sh -c '
+//	    claude <args>
+//	    touch SENTINEL    # if SentinelPath is set
+//	    exec ${SHELL:-bash} -l    # leave the user a usable prompt
+//	'
+//
+// The shell-fallback piece is what keeps the pane alive after
+// Claude exits — without it, tmux would render a "[exited]" dead
+// pane and the user couldn't poke around the worktree.
 func (o SpawnOptions) ShellCommand() string {
-	parts := []string{}
-	parts = append(parts,
-		"TRACKS_ID="+shellQuote(o.TrackID),
-		"TRACKS_SOCKET_DIR="+shellQuote(o.SocketDir),
-	)
-	parts = append(parts, shellQuote(o.CLIBinary))
+	claudeArgv := []string{shellQuote(o.CLIBinary)}
 	if o.TaskPrompt != "" {
 		// Claude takes the prompt as a positional arg: it opens
 		// the TUI pre-filled with that prompt.
-		parts = append(parts, shellQuote(o.TaskPrompt))
+		claudeArgv = append(claudeArgv, shellQuote(o.TaskPrompt))
 	}
 	if o.PermissionMode != "" {
-		parts = append(parts, "--permission-mode", shellQuote(o.PermissionMode))
+		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
 	}
 	for _, d := range o.AddDirs {
-		parts = append(parts, "--add-dir", shellQuote(d))
+		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))
 	}
-	return strings.Join(parts, " ")
+	claudeLine := strings.Join(claudeArgv, " ")
+
+	// Build the inner shell script.
+	inner := claudeLine
+	if o.SentinelPath != "" {
+		inner += "\ntouch " + shellQuote(o.SentinelPath)
+	}
+	inner += "\nexec ${SHELL:-bash} -l"
+
+	envPrefix := "TRACKS_ID=" + shellQuote(o.TrackID) +
+		" TRACKS_SOCKET_DIR=" + shellQuote(o.SocketDir)
+
+	// Outer sh -c "..." wrapper. We deliberately use sh (not bash)
+	// for the outer because /bin/sh is the only shell tmux relies
+	// on; the user's $SHELL is invoked only at the fallback step.
+	return envPrefix + " sh -c " + shellQuote(inner)
 }
 
 // shellQuote returns s wrapped in single quotes with embedded
