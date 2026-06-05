@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/git"
+	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -133,6 +134,9 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	}
 	emit("claude running")
 
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: new track started",
+		fmt.Sprintf("%s on %s", labelFor(t), t.Branch))
+
 	return ok(NewResult{TrackID: trackID, Branch: resolvedBranch})
 }
 
@@ -216,17 +220,21 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 // development can proceed against the live daemon without surprise
 // crashes.
 
-func (s *Server) handleDone(ctx context.Context, raw json.RawMessage) Response {
-	return s.endTrack(ctx, raw, false)
+func (s *Server) handleDone(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	return s.endTrack(ctx, raw, false, emit)
 }
 
-func (s *Server) handleKill(ctx context.Context, raw json.RawMessage) Response {
-	return s.endTrack(ctx, raw, true)
+func (s *Server) handleKill(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	return s.endTrack(ctx, raw, true, emit)
 }
 
-// endTrack is the shared body of done/kill. force=false sends SIGTERM
-// and waits up to 5s; force=true SIGKILLs immediately.
-func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) Response {
+// endTrack is the shared body of done/kill. force=false sends
+// SIGTERM and waits up to 5s; force=true SIGKILLs immediately.
+//
+// emit streams human-readable progress lines back to the caller
+// so the popup can show a live console rather than freezing on a
+// blank screen while we wait for git to remove worktrees.
+func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, emit Emit) Response {
 	var p DoneParams
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fail("bad params: " + err.Error())
@@ -242,8 +250,10 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) 
 	s.mu.Unlock()
 	if ok2 {
 		if force {
+			emit("SIGKILL claude...")
 			sup.Kill(s.cfg.Tmux.SessionName)
 		} else {
+			emit("SIGTERM claude (5s grace)...")
 			sup.Stop(s.cfg.Tmux.SessionName)
 		}
 	}
@@ -253,10 +263,17 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) 
 
 	// Remove worktrees, keep branches.
 	for _, tr := range t.Repos {
+		emit(fmt.Sprintf("removing worktree for %s...", tr.Name))
 		c := git.NewPrimaryRepoClient(s.primaryPathFor(tr.Name))
 		if err := c.RemoveWorktree(ctx, tr.Path); err != nil {
 			return fail(fmt.Sprintf("remove worktree %s: %v", tr.Path, err))
 		}
+	}
+	// Clean up the supervisor's sentinel so a future track with
+	// the same id (unlikely but possible after Forget+New) doesn't
+	// pick up a stale "claude already exited" signal.
+	if path, err := s.sentinelPathFor(t.ID); err == nil {
+		_ = os.Remove(path)
 	}
 	if !t.Status.IsTerminal() {
 		t.Status = state.StatusDone
@@ -266,6 +283,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool) 
 	if err := s.store.Put(t); err != nil {
 		return fail("persist state: " + err.Error())
 	}
+	emit("done")
 	return ok(nil)
 }
 

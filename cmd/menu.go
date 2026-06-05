@@ -136,7 +136,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionReleaseBranch:
-		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.ActiveOnly)
+		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.HasLiveWorktree)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -148,10 +148,17 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			}
 			return err
 		}
-		if err := cl.Done(t.ID); err != nil {
-			return err
+		fmt.Printf("releasing %s...\n\n", t.Branch)
+		if err := cl.DoneWithProgress(t.ID, func(msg string) {
+			fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+		}); err != nil {
+			fmt.Println()
+			fmt.Println("daemon: ", err)
+			waitForKey()
+			return nil
 		}
 		closeTrackWindow(cfg, t.ID)
+		fmt.Println()
 		fmt.Printf("released %s — track %s ended, worktree removed.\n", t.Branch, t.ID)
 		fmt.Println()
 		printCheckoutHints(cfg, t)

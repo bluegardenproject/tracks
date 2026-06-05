@@ -11,6 +11,7 @@ package menu
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
@@ -182,3 +183,20 @@ func ActiveOnly(t state.Track) bool { return !t.Status.IsTerminal() }
 // CompletedOnly is a PickTrack filter that excludes still-running
 // tracks. Use for Forget / Clean flows.
 func CompletedOnly(t state.Track) bool { return t.Status.IsTerminal() }
+
+// HasLiveWorktree is a PickTrack filter that includes any track —
+// regardless of status — that still owns at least one worktree
+// directory on disk. Use for the Release flow: a Done track whose
+// worktree is still around still locks the branch, and the user
+// must be able to find it in the picker to clean it up.
+func HasLiveWorktree(t state.Track) bool {
+	for _, r := range t.Repos {
+		if r.Path == "" {
+			continue
+		}
+		if _, err := os.Stat(r.Path); err == nil {
+			return true
+		}
+	}
+	return false
+}

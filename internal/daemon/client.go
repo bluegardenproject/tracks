@@ -29,51 +29,17 @@ func NewClient(cfg config.Config) *Client {
 	return &Client{cfg: cfg, DialTimeout: 2 * time.Second}
 }
 
-// roundtrip dials, sends one request, decodes one response.
-func (c *Client) roundtrip(req Request) (Response, error) {
-	socketPath, err := SocketPath(c.cfg)
-	if err != nil {
-		return Response{}, err
-	}
-	conn, err := net.DialTimeout("unix", socketPath, c.DialTimeout)
-	if err != nil {
-		return Response{}, fmt.Errorf("dial daemon socket %s: %w", socketPath, err)
-	}
-	defer conn.Close()
-	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		return Response{}, fmt.Errorf("encode request: %w", err)
-	}
-	var resp Response
-	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&resp); err != nil {
-		return Response{}, fmt.Errorf("decode response: %w", err)
-	}
-	return resp, nil
-}
-
 // callMethod marshals params and unmarshals result.Result into out.
 // out may be nil for methods with no return value.
+//
+// Implemented on top of callStreaming with a nil progress callback
+// so any Progress frames the server emits along the way are
+// silently dropped. Without this delegation, methods like Done /
+// Kill that grew streaming on the server side would surface the
+// first Progress frame to the caller as a Response with Ok=false
+// and an empty error message.
 func (c *Client) callMethod(method Method, params, out any) error {
-	var paramsRaw json.RawMessage
-	if params != nil {
-		data, err := json.Marshal(params)
-		if err != nil {
-			return fmt.Errorf("marshal params: %w", err)
-		}
-		paramsRaw = data
-	}
-	resp, err := c.roundtrip(Request{Method: method, Params: paramsRaw})
-	if err != nil {
-		return err
-	}
-	if !resp.Ok {
-		return errors.New(resp.Error)
-	}
-	if out != nil {
-		if err := json.Unmarshal(resp.Result, out); err != nil {
-			return fmt.Errorf("decode result: %w", err)
-		}
-	}
-	return nil
+	return c.callStreaming(method, params, out, nil)
 }
 
 // callStreaming is callMethod's variant that reads zero or more
@@ -187,9 +153,22 @@ func (c *Client) Done(id string) error {
 	return c.callMethod(MethodDone, DoneParams{ID: id}, nil)
 }
 
+// DoneWithProgress is Done that forwards Progress frames to
+// onProgress while the daemon stops claude and removes
+// worktrees. Use when the caller is a popup or other context
+// that benefits from a live trace.
+func (c *Client) DoneWithProgress(id string, onProgress func(string)) error {
+	return c.callStreaming(MethodDone, DoneParams{ID: id}, nil, onProgress)
+}
+
 // Kill is Done with prejudice.
 func (c *Client) Kill(id string) error {
 	return c.callMethod(MethodKill, DoneParams{ID: id}, nil)
+}
+
+// KillWithProgress is Kill with progress streaming, see DoneWithProgress.
+func (c *Client) KillWithProgress(id string, onProgress func(string)) error {
+	return c.callStreaming(MethodKill, DoneParams{ID: id}, nil, onProgress)
 }
 
 // AddRepo adds another configured repo to a running track as a new
