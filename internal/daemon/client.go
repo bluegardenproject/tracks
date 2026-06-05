@@ -187,9 +187,22 @@ func (c *Client) Done(id string) error {
 	return c.callMethod(MethodDone, DoneParams{ID: id}, nil)
 }
 
+// DoneWithProgress is Done that forwards Progress frames to
+// onProgress while the daemon stops claude and removes
+// worktrees. Use when the caller is a popup or other context
+// that benefits from a live trace.
+func (c *Client) DoneWithProgress(id string, onProgress func(string)) error {
+	return c.callStreaming(MethodDone, DoneParams{ID: id}, nil, onProgress)
+}
+
 // Kill is Done with prejudice.
 func (c *Client) Kill(id string) error {
 	return c.callMethod(MethodKill, DoneParams{ID: id}, nil)
+}
+
+// KillWithProgress is Kill with progress streaming, see DoneWithProgress.
+func (c *Client) KillWithProgress(id string, onProgress func(string)) error {
+	return c.callStreaming(MethodKill, DoneParams{ID: id}, nil, onProgress)
 }
 
 // AddRepo adds another configured repo to a running track as a new
