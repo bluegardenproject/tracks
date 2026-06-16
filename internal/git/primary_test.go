@@ -100,6 +100,38 @@ func TestPrimaryAddRemoveWorktreeKeepsBranch(t *testing.T) {
 	}
 }
 
+func TestPrimaryAddWorktreeDetached(t *testing.T) {
+	primary := setupRepo(t)
+	c := NewPrimaryRepoClient(primary)
+	ctx := context.Background()
+
+	// FETCH_HEAD points at origin/develop after setupRepo's fetch.
+	worktree := filepath.Join(t.TempDir(), "review-wt")
+	if err := c.AddWorktreeDetached(ctx, worktree, "FETCH_HEAD"); err != nil {
+		t.Fatalf("AddWorktreeDetached: %v", err)
+	}
+
+	// A detached worktree reports no current branch.
+	wt := NewWorktreeClient(worktree)
+	branch, err := wt.CurrentBranch(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "" {
+		t.Errorf("detached worktree on branch %q, want empty", branch)
+	}
+
+	// It still has the base commit checked out.
+	if _, err := os.Stat(filepath.Join(worktree, "README.md")); err != nil {
+		t.Errorf("expected checked-out file: %v", err)
+	}
+
+	// Missing args are rejected.
+	if err := c.AddWorktreeDetached(ctx, "", "FETCH_HEAD"); err == nil {
+		t.Error("AddWorktreeDetached(\"\", ...) should error")
+	}
+}
+
 func TestPrimaryListWorktrees(t *testing.T) {
 	primary := setupRepo(t)
 	c := NewPrimaryRepoClient(primary)

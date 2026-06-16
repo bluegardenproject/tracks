@@ -21,7 +21,11 @@ const (
 // each repo has installed.
 var templatePrompts = map[Template]string{
 	TemplateCustom: "",
-	TemplateReview: `Run a code review of the current branch against its base.
+	TemplateReview: `Run a code review of the checked-out PR / branch against its base.
+
+The worktree is already on the target you picked (detached at the PR
+head or branch tip), so "the current branch against its base" is the
+diff you want to review.
 
 Invoke the dedicated review subagent rather than reviewing yourself:
 

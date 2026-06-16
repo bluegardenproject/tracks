@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,6 +63,41 @@ func placeholderBranch(trackID string) string {
 	return "tracks/" + tail
 }
 
+// reviewCheckout describes how to materialize a review worktree: the
+// refspec to fetch from origin and a human-readable label to show in
+// the dashboard. The worktree is always added detached at FETCH_HEAD
+// right after the fetch.
+type reviewCheckout struct {
+	fetchRef string // arg to `git fetch origin <fetchRef>`
+	label    string // display label for the track's branch column
+}
+
+// prURLNumber pulls the PR number out of a GitHub pull-request URL,
+// e.g. https://github.com/owner/repo/pull/123 (with optional trailing
+// /files, #discussion, query string, etc.).
+var prURLNumber = regexp.MustCompile(`github\.com/[^/]+/[^/]+/pull/(\d+)`)
+
+// parseReviewRef turns the user's review target into a reviewCheckout.
+// A GitHub PR URL resolves to that PR's head ref (works for forks too,
+// since `pull/<n>/head` lives on the base repo's origin); anything
+// else is treated as a branch name fetched from origin.
+func parseReviewRef(ref string) (reviewCheckout, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return reviewCheckout{}, fmt.Errorf("empty review target")
+	}
+	if m := prURLNumber.FindStringSubmatch(ref); m != nil {
+		return reviewCheckout{
+			fetchRef: fmt.Sprintf("pull/%s/head", m[1]),
+			label:    "pr/" + m[1],
+		}, nil
+	}
+	if strings.Contains(ref, "://") || strings.Contains(ref, "github.com") {
+		return reviewCheckout{}, fmt.Errorf("not a recognizable GitHub PR URL or branch name: %q", ref)
+	}
+	return reviewCheckout{fetchRef: ref, label: ref}, nil
+}
+
 func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p NewParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -85,6 +121,23 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules})
 	}
 
+	// A review target turns this into a detached-HEAD checkout of an
+	// existing PR/branch rather than a fresh branch off base. It only
+	// makes sense against a single repo: a PR number or branch name is
+	// repo-specific, and fetching e.g. `pull/123/head` against the
+	// wrong repo would silently pull an unrelated PR.
+	var checkout *reviewCheckout
+	if ref := strings.TrimSpace(p.ReviewRef); ref != "" {
+		if len(repos) != 1 {
+			return fail("a review target (PR URL or branch) supports exactly one repo; pick a single repo")
+		}
+		c, err := parseReviewRef(ref)
+		if err != nil {
+			return fail(err.Error())
+		}
+		checkout = &c
+	}
+
 	trackID, err := generateTrackID()
 	if err != nil {
 		return fail("generate id: " + err.Error())
@@ -100,12 +153,20 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 
 	emit(fmt.Sprintf("track id %s", trackID))
 
-	resolvedBranch, err := s.resolveBranchCollision(ctx, repos, branch)
-	if err != nil {
-		return fail(err.Error())
+	// Review worktrees are detached at the target ref — no branch is
+	// created, so there's no collision to resolve. We still store a
+	// readable label so the dashboard's branch column isn't blank.
+	resolvedBranch := branch
+	if checkout == nil {
+		resolvedBranch, err = s.resolveBranchCollision(ctx, repos, branch)
+		if err != nil {
+			return fail(err.Error())
+		}
+	} else {
+		resolvedBranch = checkout.label
 	}
 
-	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, emit)
+	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit)
 	if err != nil {
 		rollback()
 		return fail(err.Error())
@@ -183,7 +244,9 @@ func (s *Server) resolveBranchCollision(ctx context.Context, repos []repoSpec, w
 //
 // emit is called before each slow step (fetch, worktree add,
 // submodule init) so callers can stream progress to a user.
-func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string, emit Emit) ([]state.TrackRepo, func(), error) {
+// When checkout is non-nil, the worktree is detached at the target
+// PR/branch instead of branched fresh off base (used by review tracks).
+func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string, checkout *reviewCheckout, emit Emit) ([]state.TrackRepo, func(), error) {
 	created := make([]state.TrackRepo, 0, len(repos))
 	rollback := func() {
 		for _, tr := range created {
@@ -194,13 +257,26 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 	for _, r := range repos {
 		dest := filepath.Join(root, r.Name)
 		primary := git.NewPrimaryRepoClient(r.Path)
+		// Always fetch base too: review tracks diff the target against
+		// origin/<base>, so the base ref must be present locally.
 		emit(fmt.Sprintf("fetching origin/%s in %s...", r.Base, r.Name))
 		if err := primary.Fetch(ctx, "origin", r.Base); err != nil {
 			return nil, rollback, fmt.Errorf("fetch %s/%s: %w", r.Name, r.Base, err)
 		}
-		emit(fmt.Sprintf("creating worktree for %s on %s...", r.Name, branch))
-		if err := primary.AddWorktreeWithRetry(ctx, dest, branch, "origin/"+r.Base); err != nil {
-			return nil, rollback, fmt.Errorf("create worktree for %s: %w", r.Name, err)
+		if checkout != nil {
+			emit(fmt.Sprintf("fetching %s in %s...", checkout.fetchRef, r.Name))
+			if err := primary.Fetch(ctx, "origin", checkout.fetchRef); err != nil {
+				return nil, rollback, fmt.Errorf("fetch %s in %s: %w", checkout.fetchRef, r.Name, err)
+			}
+			emit(fmt.Sprintf("checking out %s in %s for review...", checkout.label, r.Name))
+			if err := primary.AddWorktreeDetached(ctx, dest, "FETCH_HEAD"); err != nil {
+				return nil, rollback, fmt.Errorf("checkout %s for %s: %w", checkout.label, r.Name, err)
+			}
+		} else {
+			emit(fmt.Sprintf("creating worktree for %s on %s...", r.Name, branch))
+			if err := primary.AddWorktreeWithRetry(ctx, dest, branch, "origin/"+r.Base); err != nil {
+				return nil, rollback, fmt.Errorf("create worktree for %s: %w", r.Name, err)
+			}
 		}
 		created = append(created, state.TrackRepo{Name: r.Name, Path: dest})
 		if r.InitSubmodules {

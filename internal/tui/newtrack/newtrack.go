@@ -49,6 +49,10 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		repoOptions = append(repoOptions, huh.NewOption(r.Name, r.Name))
 	}
 
+	if template == TemplateReview {
+		return runReview(repoOptions)
+	}
+
 	var (
 		repos []string
 		slug  string
@@ -98,6 +102,70 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		Repos:      repos,
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
+	}, nil
+}
+
+// runReview is the second form for the Review template. A review
+// targets one repo and one PR/branch, so we use a single-select repo
+// and a required target field — unlike the free-form flow, where the
+// fresh placeholder branch makes the target implicit.
+func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
+	var (
+		repo      string
+		reviewRef string
+		slug      string
+		task      = templatePrompts[TemplateReview]
+	)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Repo").
+				Description("The repo the PR / branch lives in. A review targets a single repo.").
+				Options(repoOptions...).
+				Value(&repo),
+			huh.NewInput().
+				Title("PR URL or branch to review").
+				Description("Paste a GitHub PR link (…/pull/123) or a branch name on origin (e.g. feat/foo). It's checked out detached so there's something to diff against base.").
+				Placeholder("https://github.com/org/repo/pull/123  —or—  feat/foo").
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("a PR URL or branch name is required for a review")
+					}
+					return nil
+				}).
+				Value(&reviewRef),
+			huh.NewInput().
+				Title("Slug (optional)").
+				Description("Short human label shown in the dashboard. Leave empty if you don't need it.").
+				Placeholder("e.g. rate-bug-review").
+				Value(&slug),
+			huh.NewText().
+				Title("Task prompt").
+				Description("What should Claude do? Pre-filled with the review prompt — tweak as needed.").
+				CharLimit(8192).
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("task prompt is required")
+					}
+					return nil
+				}).
+				Value(&task),
+		),
+	)
+
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return daemon.NewParams{}, ErrCancelled
+		}
+		return daemon.NewParams{}, err
+	}
+
+	return daemon.NewParams{
+		Repos:      []string{repo},
+		Slug:       strings.TrimSpace(slug),
+		TaskPrompt: strings.TrimSpace(task),
+		ReviewRef:  strings.TrimSpace(reviewRef),
 	}, nil
 }
 
