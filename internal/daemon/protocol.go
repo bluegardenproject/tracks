@@ -123,6 +123,12 @@ type NewParams struct {
 	// Slug is an optional human label for the track. Independent
 	// of the branch name. Shown in the dashboard. Empty allowed.
 	Slug string `json:"slug,omitempty"`
+	// ReviewRef, when set, makes this a review track: instead of
+	// branching a fresh placeholder off base, the daemon checks the
+	// given target out on a detached HEAD so there's something to
+	// review. Accepts a GitHub PR URL (…/pull/123) or a branch name
+	// (local or on origin). Only meaningful with a single repo.
+	ReviewRef string `json:"review_ref,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.

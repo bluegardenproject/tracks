@@ -60,6 +60,22 @@ func (c *PrimaryRepoClient) AddWorktree(ctx context.Context, path, branchName, s
 	return err
 }
 
+// AddWorktreeDetached creates a worktree at path on a detached HEAD
+// pointing at start (a ref like "FETCH_HEAD" or "origin/feat/x"). No
+// branch is created, so the same commit can be checked out here while
+// living in another worktree — exactly what a read-only review wants.
+//
+// It runs:
+//
+//	git worktree add --detach <path> <start>
+func (c *PrimaryRepoClient) AddWorktreeDetached(ctx context.Context, path, start string) error {
+	if path == "" || start == "" {
+		return errors.New("AddWorktreeDetached: path/start required")
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "add", "--detach", path, start)
+	return err
+}
+
 // RemoveWorktree removes the worktree at path. --force is used so a
 // worktree with uncommitted changes can still be cleaned up at track
 // end. The associated branch is NOT deleted (see plan §"Branch
