@@ -12,8 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
+	"github.com/bluegardenproject/tracks/internal/provision"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 )
@@ -119,7 +121,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		if err != nil {
 			return fail(fmt.Sprintf("resolve repo %s: %v", name, err))
 		}
-		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules})
+		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules, Provision: r.Provision})
 	}
 
 	// A review target turns this into a detached-HEAD checkout of an
@@ -209,6 +211,7 @@ type repoSpec struct {
 	Path           string
 	Base           string
 	InitSubmodules bool
+	Provision      *config.Provision
 }
 
 // resolveBranchCollision picks a branch name guaranteed not to exist
@@ -287,8 +290,26 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 				return nil, rollback, fmt.Errorf("init submodules in %s: %w", r.Name, err)
 			}
 		}
+		if r.Provision != nil {
+			emit(fmt.Sprintf("provisioning %s (copying env + installing deps)...", r.Name))
+			if err := provision.Run(ctx, provisionOptions(r.Path, dest, r.Provision), emit); err != nil {
+				return nil, rollback, fmt.Errorf("provision %s: %w", r.Name, err)
+			}
+		}
 	}
 	return created, rollback, nil
+}
+
+// provisionOptions builds provision.Options from a repo's primary path,
+// its new worktree path, and its config block.
+func provisionOptions(primaryPath, worktreePath string, p *config.Provision) provision.Options {
+	return provision.Options{
+		PrimaryPath:  primaryPath,
+		WorktreePath: worktreePath,
+		CopyIgnored:  p.CopyIgnored,
+		CopyMode:     p.CopyMode,
+		DepsCmd:      p.DepsCmd,
+	}
 }
 
 // handleDone, handleKill, handleAddRepo, prompts: stubs in step 5.
@@ -419,6 +440,15 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 			return fail(err.Error())
 		}
 	}
+	if r.Provision != nil {
+		// add-repo is a non-streaming call, so progress is discarded here.
+		if err := provision.Run(ctx, provisionOptions(primaryPath, dest, r.Provision), func(string) {}); err != nil {
+			// Roll back the worktree so a failed provision doesn't leave
+			// a half-set-up repo attached to the track.
+			_ = primary.RemoveWorktree(ctx, dest)
+			return fail(fmt.Sprintf("provision %s: %v", r.Name, err))
+		}
+	}
 	t.Repos = append(t.Repos, state.TrackRepo{Name: r.Name, Path: dest})
 	if err := s.store.Put(t); err != nil {
 		return fail(err.Error())
@@ -540,4 +570,3 @@ func randomID(n int) (string, error) {
 	}
 	return hex.EncodeToString(buf), nil
 }
-
