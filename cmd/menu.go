@@ -133,6 +133,79 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		waitForKey()
 		return nil
 
+	case menu.ActionAddRepo:
+		t, err := menu.PickTrack(cl, "Add a repo to which track?", menu.WorktreeTrack)
+		if err != nil {
+			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println("no active worktree tracks — ask/plan tracks must be promoted first")
+				waitForKey()
+				return nil
+			}
+			return err
+		}
+		exclude := map[string]bool{}
+		for _, r := range t.Repos {
+			exclude[r.Name] = true
+		}
+		repoName, err := menu.PickConfigRepo(cfg, exclude, "Add which repo?")
+		if err != nil {
+			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			if errors.Is(err, menu.ErrNoRepos) {
+				fmt.Println("every configured repo is already in this track")
+				waitForKey()
+				return nil
+			}
+			return err
+		}
+		fmt.Printf("adding %s to %s...\n\n", repoName, lastN(t.ID, 15))
+		res, err := cl.AddRepoWithProgress(daemon.AddRepoParams{TrackID: t.ID, RepoName: repoName}, func(msg string) {
+			fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+		})
+		if err != nil {
+			fmt.Println()
+			fmt.Println("daemon:", err)
+			waitForKey()
+			return nil
+		}
+		fmt.Printf("\nadded worktree at %s\n", res.WorktreePath)
+		waitForKey()
+		return nil
+
+	case menu.ActionPromote:
+		t, err := menu.PickTrack(cl, "Promote which read-only track?", menu.PromotableOnly)
+		if err != nil {
+			if errors.Is(err, menu.ErrCancelled) {
+				return nil
+			}
+			if errors.Is(err, menu.ErrNoTracks) {
+				fmt.Println("no read-only ask/plan tracks to promote")
+				waitForKey()
+				return nil
+			}
+			return err
+		}
+		fmt.Printf("promoting %s...\n\n", lastN(t.ID, 15))
+		res, err := cl.PromoteWithProgress(t.ID, func(msg string) {
+			fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+		})
+		if err != nil {
+			fmt.Println()
+			fmt.Println("daemon:", err)
+			waitForKey()
+			return nil
+		}
+		if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+			_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
+		}
+		fmt.Printf("\npromoted to a work track on branch %s\n", res.Branch)
+		waitForKey()
+		return nil
+
 	case menu.ActionReleaseBranch:
 		t, err := menu.PickTrack(cl, "Release which branch back to your repo?", menu.HasLiveWorktree)
 		if err != nil {

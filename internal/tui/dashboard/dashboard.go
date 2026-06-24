@@ -337,13 +337,18 @@ func (m *model) renderTable(width int) string {
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-36s  %-26s  %-10s  %-22s  %-6s",
-			"ID", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE")))
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-36s  %-26s  %-10s  %-22s  %-6s",
+			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
-			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s",
+			branch := t.Branch
+			if branch == "" {
+				branch = "—"
+			}
+			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s",
 				shortID(t.ID),
-				padRendered(m.styles.branch.Render(truncate(t.Branch, 36)), 36),
+				padRendered(m.renderKind(t), 7),
+				padRendered(m.styles.branch.Render(truncate(branch, 36)), 36),
 				padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
 				padRendered(m.renderChangesColored(t.Changes), 22),
@@ -381,6 +386,27 @@ func renderChanges(c state.Changes) string {
 		return ""
 	}
 	return fmt.Sprintf("+%d -%d (%d)", c.Insertions, c.Deletions, c.Files)
+}
+
+// renderKind renders a track's kind as a short colored badge.
+// Read-only kinds (ask/plan) get a distinct color so they're easy to
+// pick out from editable work/review tracks. Empty kind (pre-migration)
+// reads as work.
+func (m *model) renderKind(t state.Track) string {
+	k := t.Kind
+	if k == "" {
+		k = state.KindWork
+	}
+	var color lipgloss.Color
+	switch k {
+	case state.KindAsk, state.KindPlan:
+		color = lipgloss.Color("13") // magenta — read-only
+	case state.KindReview:
+		color = lipgloss.Color("11") // yellow
+	default:
+		color = lipgloss.Color("8") // dim — work
+	}
+	return lipgloss.NewStyle().Foreground(color).Render(string(k))
 }
 
 // renderChangesColored is the dashboard-styled variant: green

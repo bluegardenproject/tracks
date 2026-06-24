@@ -269,7 +269,9 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 	case MethodKill:
 		return s.handleKill(ctx, req.Params, emit)
 	case MethodAddRepo:
-		return s.handleAddRepo(ctx, req.Params)
+		return s.handleAddRepo(ctx, req.Params, emit)
+	case MethodPromote:
+		return s.handlePromote(ctx, req.Params, emit)
 	case MethodPendingPrompts:
 		return s.handlePendingPrompts()
 	case MethodAnswerPrompt:

@@ -29,6 +29,11 @@ func gatherDetail(cfg config.Config, t state.Track) detail {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	d := detail{track: t}
+	// Worktree-less tracks point at the primary checkout — its diff/log
+	// aren't this track's work, so don't surface them.
+	if t.Kind.Worktreeless() {
+		return d
+	}
 	for _, tr := range t.Repos {
 		repo, ok := cfg.RepoByName(tr.Name)
 		if !ok {

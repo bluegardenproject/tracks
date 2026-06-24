@@ -111,6 +111,19 @@ const taskSuffix = "" +
 	"  4. Any Atlassian-tool error is non-fatal — note it in your " +
 	"reply and carry on with the actual work."
 
+// readOnlySuffix is appended for worktree-less (ask/plan) tracks. They
+// point at the user's PRIMARY checkout (the one their editor watches),
+// so the prompt makes the read-only contract explicit as a second line
+// of defence behind plan permission mode (which is a default, not a
+// hard sandbox — see BuildOptions).
+const readOnlySuffix = "" +
+	"\n\n**This is a read-only track.** You are pointed at the user's " +
+	"primary checkout — the working copy their editor uses — NOT a " +
+	"throwaway worktree. Do not modify any files, create branches, or " +
+	"run mutating commands; investigate and answer (or produce a plan) " +
+	"only. When the user is ready to implement, the track can be " +
+	"promoted to its own worktree with `tracks promote <id>`."
+
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
@@ -126,9 +139,23 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	// config) so we can iterate on the wording without users
 	// having to edit YAML.
 	prompt := strings.TrimRight(t.TaskPrompt, " \t\n\r") + "\n\n" + taskSuffix
+
+	// Worktree-less tracks point at the primary checkout, so we default
+	// them to plan permission mode (read/analyse, no edits) and spell
+	// out the read-only contract in the prompt. Note this is a strong
+	// default, not a hard sandbox: plan mode is interactively
+	// switchable, so an accepted plan or a manual mode change could
+	// still write to the primary checkout. Promotion is the supported
+	// path to start editing.
+	permMode := cfg.Claude.PermissionMode
+	if t.Kind.Worktreeless() {
+		permMode = "plan"
+		prompt += readOnlySuffix
+	}
+
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
-		PermissionMode: cfg.Claude.PermissionMode,
+		PermissionMode: permMode,
 		TaskPrompt:     prompt,
 		AddDirs:        addDirs,
 		CWD:            t.Repos[0].Path,

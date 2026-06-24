@@ -141,6 +141,22 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		checkout = &c
 	}
 
+	// Determine the track kind. Empty defaults to work; unknown values
+	// are rejected rather than stored verbatim; a review ref always
+	// means a review track regardless of what the client sent.
+	kind := state.Kind(strings.TrimSpace(p.Kind))
+	switch kind {
+	case state.KindWork, state.KindReview, state.KindAsk, state.KindPlan:
+		// recognized
+	case "":
+		kind = state.KindWork
+	default:
+		return fail(fmt.Sprintf("unknown track kind %q", p.Kind))
+	}
+	if checkout != nil {
+		kind = state.KindReview
+	}
+
 	trackID, err := generateTrackID()
 	if err != nil {
 		return fail("generate id: " + err.Error())
@@ -156,29 +172,42 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 
 	emit(fmt.Sprintf("track id %s", trackID))
 
-	// Review worktrees are detached at the target ref — no branch is
-	// created, so there's no collision to resolve. We still store a
-	// readable label so the dashboard's branch column isn't blank.
-	resolvedBranch := branch
-	if checkout == nil {
-		resolvedBranch, err = s.resolveBranchCollision(ctx, repos, branch)
-		if err != nil {
-			return fail(err.Error())
+	var (
+		trackRepos     []state.TrackRepo
+		rollback       = func() {}
+		resolvedBranch = branch
+	)
+	if kind.Worktreeless() {
+		// Read-only ask/plan track: no worktree, no branch. Point Claude
+		// at the primary checkouts directly.
+		resolvedBranch = ""
+		for _, r := range repos {
+			trackRepos = append(trackRepos, state.TrackRepo{Name: r.Name, Path: r.Path})
 		}
 	} else {
-		resolvedBranch = checkout.label
-	}
-
-	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit)
-	if err != nil {
-		rollback()
-		return fail(err.Error())
+		// Review worktrees are detached at the target ref — no branch is
+		// created, so there's no collision to resolve. We still store a
+		// readable label so the dashboard's branch column isn't blank.
+		if checkout == nil {
+			resolvedBranch, err = s.resolveBranchCollision(ctx, repos, branch)
+			if err != nil {
+				return fail(err.Error())
+			}
+		} else {
+			resolvedBranch = checkout.label
+		}
+		trackRepos, rollback, err = s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit)
+		if err != nil {
+			rollback()
+			return fail(err.Error())
+		}
 	}
 
 	t := state.Track{
 		ID:         trackID,
 		Branch:     resolvedBranch,
 		Slug:       strings.TrimSpace(p.Slug),
+		Kind:       kind,
 		Repos:      trackRepos,
 		Status:     state.StatusPending,
 		LogPath:    logPath,
@@ -197,9 +226,15 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		return fail("spawn claude: " + err.Error())
 	}
 	emit("claude running")
+	if kind.Worktreeless() {
+		emit(fmt.Sprintf("read-only %s track — run `tracks promote %s` (or menu → Promote) when ready to implement", kind, trackID))
+	}
 
-	s.notifyEvent(string(notify.EventTrackCreated), "tracks: new track started",
-		fmt.Sprintf("%s on %s", labelFor(t), t.Branch))
+	detail := labelFor(t)
+	if t.Branch != "" {
+		detail += " on " + t.Branch
+	}
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: new track started", detail)
 
 	return ok(NewResult{TrackID: trackID, Branch: resolvedBranch, WindowName: t.WindowName()})
 }
@@ -371,7 +406,13 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	// already gone so ending a track is idempotent — a track that
 	// finished on its own, or was ended once already, may have no
 	// worktree left, and that must not turn into an error.
+	//
+	// Worktree-less (ask/plan) tracks hold the PRIMARY checkout paths in
+	// Repos, not tracks-owned worktrees — never try to remove those.
 	for _, tr := range t.Repos {
+		if t.Kind.Worktreeless() {
+			break
+		}
 		if _, statErr := os.Stat(tr.Path); os.IsNotExist(statErr) {
 			continue
 		}
@@ -399,7 +440,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	return ok(nil)
 }
 
-func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Response {
+func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p AddRepoParams
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fail("bad params: " + err.Error())
@@ -407,6 +448,9 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 	t, found := s.store.Get(p.TrackID)
 	if !found {
 		return fail("track not found: " + p.TrackID)
+	}
+	if t.Kind.Worktreeless() {
+		return fail("track is read-only (ask/plan); promote it to a worktree first")
 	}
 	r, ok2 := s.cfg.RepoByName(p.RepoName)
 	if !ok2 {
@@ -428,21 +472,24 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 	}
 	dest := filepath.Join(stateDir, "worktrees", t.ID, r.Name)
 	primary := git.NewPrimaryRepoClient(primaryPath)
+	emit(fmt.Sprintf("fetching origin/%s in %s...", r.Base, r.Name))
 	if err := primary.Fetch(ctx, "origin", r.Base); err != nil {
 		return fail(err.Error())
 	}
+	emit(fmt.Sprintf("creating worktree for %s on %s...", r.Name, t.Branch))
 	if err := primary.AddWorktreeWithRetry(ctx, dest, t.Branch, "origin/"+r.Base); err != nil {
 		return fail(err.Error())
 	}
 	if r.InitSubmodules {
+		emit(fmt.Sprintf("initializing submodules in %s...", r.Name))
 		wt := git.NewWorktreeClient(dest)
 		if err := wt.InitSubmodules(ctx); err != nil {
 			return fail(err.Error())
 		}
 	}
 	if r.Provision != nil {
-		// add-repo is a non-streaming call, so progress is discarded here.
-		if err := provision.Run(ctx, provisionOptions(primaryPath, dest, r.Provision), func(string) {}); err != nil {
+		emit(fmt.Sprintf("provisioning %s...", r.Name))
+		if err := provision.Run(ctx, provisionOptions(primaryPath, dest, r.Provision), emit); err != nil {
 			// Roll back the worktree so a failed provision doesn't leave
 			// a half-set-up repo attached to the track.
 			_ = primary.RemoveWorktree(ctx, dest)
@@ -454,6 +501,111 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage) Respons
 		return fail(err.Error())
 	}
 	return ok(AddRepoResult{WorktreePath: dest})
+}
+
+// handlePromote turns a worktree-less ask/plan track into a work track:
+// it creates a branch + worktree off base for each repo, tears down the
+// read-only session, and re-spawns Claude in the worktree with edit
+// permissions. A running plan-mode session can't be switched to
+// edit-in-place, so promotion is a re-spawn rather than an in-place flip.
+func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	var p PromoteParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fail("bad params: " + err.Error())
+	}
+	t, found := s.store.Get(p.ID)
+	if !found {
+		return fail("track not found: " + p.ID)
+	}
+	if !t.Kind.Worktreeless() {
+		return fail("only ask/plan tracks can be promoted; this is already a working track")
+	}
+	if len(t.Repos) == 0 {
+		return fail("track has no repos to promote")
+	}
+
+	// Rebuild repoSpecs from the track's repos via config.
+	repos := make([]repoSpec, 0, len(t.Repos))
+	for _, tr := range t.Repos {
+		r, ok := s.cfg.RepoByName(tr.Name)
+		if !ok {
+			return fail("unknown repo: " + tr.Name)
+		}
+		path, err := r.ResolveRepoPath()
+		if err != nil {
+			return fail(err.Error())
+		}
+		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules, Provision: r.Provision})
+	}
+
+	stateDir, err := s.cfg.ResolveStateDir()
+	if err != nil {
+		return fail("resolve state dir: " + err.Error())
+	}
+	worktreeRoot := filepath.Join(stateDir, "worktrees", t.ID)
+	resolvedBranch, err := s.resolveBranchCollision(ctx, repos, placeholderBranch(t.ID))
+	if err != nil {
+		return fail(err.Error())
+	}
+
+	// Create the real worktrees BEFORE tearing down the read-only
+	// session, so a failure here leaves the existing track untouched.
+	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, nil, emit)
+	if err != nil {
+		rollback()
+		return fail(err.Error())
+	}
+
+	// Stop the read-only session and close its window before re-spawning.
+	// Capture the window name BEFORE promotePrompt rewrites TaskPrompt:
+	// the re-spawn must reuse the same window, which holds as long as
+	// WindowName() stays stable across the prompt change (it prefers
+	// Slug, and promotePrompt keeps the original text first).
+	oldWindow := t.WindowName()
+	s.mu.Lock()
+	sup, alive := s.supervisors[t.ID]
+	s.mu.Unlock()
+	if alive {
+		emit("stopping read-only session...")
+		sup.Stop(s.cfg.Tmux.SessionName)
+	}
+	_ = tmux.New().KillWindow(s.cfg.Tmux.SessionName, oldWindow)
+
+	// Re-read (Stop's watcher may have written a terminal status), then
+	// flip to a work track and re-spawn with edit permissions.
+	t, _ = s.store.Get(p.ID)
+	t.Kind = state.KindWork
+	t.Repos = trackRepos
+	t.Branch = resolvedBranch
+	t.Status = state.StatusPending
+	t.ExitedAt = nil
+	t.ExitCode = nil
+	t.TaskPrompt = promotePrompt(t.TaskPrompt, resolvedBranch)
+	if err := s.store.Put(t); err != nil {
+		rollback()
+		return fail("persist state: " + err.Error())
+	}
+
+	emit("spawning claude in worktree...")
+	if _, err := s.startSupervisor(ctx, t); err != nil {
+		t.Status = state.StatusErrored
+		_ = s.store.Put(t)
+		return fail("spawn claude: " + err.Error())
+	}
+	emit("claude running")
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track promoted",
+		fmt.Sprintf("%s on %s", labelFor(t), resolvedBranch))
+	return ok(PromoteResult{Branch: resolvedBranch, WindowName: t.WindowName()})
+}
+
+// promotePrompt seeds the re-spawned work session with the original
+// task plus a note that the investigation/plan phase is over and a
+// worktree is ready. The original text stays first so the dashboard's
+// derived window label remains recognizable.
+func promotePrompt(original, branch string) string {
+	return strings.TrimRight(original, " \t\n\r") +
+		"\n\n---\nThe read-only investigation/plan phase is complete. A worktree " +
+		"has been created on branch `" + branch + "` — implement the change here."
 }
 
 func (s *Server) handleForget(raw json.RawMessage) Response {

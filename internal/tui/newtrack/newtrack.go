@@ -102,6 +102,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		Repos:      repos,
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
+		Kind:       kindFor(template),
 	}, nil
 }
 
@@ -177,14 +178,17 @@ func pickTemplate() (Template, error) {
 	choice := TemplateCustom
 	options := []huh.Option[Template]{
 		huh.NewOption(templateLabels[TemplateCustom], TemplateCustom),
+		huh.NewOption(templateLabels[TemplateAsk], TemplateAsk),
+		huh.NewOption(templateLabels[TemplatePlan], TemplatePlan),
 		huh.NewOption(templateLabels[TemplateReview], TemplateReview),
 	}
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[Template]().
-				Title("Template").
-				Description("Pick a starting point for the task prompt. Custom leaves it blank; Review prefills a generic code-review prompt the agent's review skills can take from there.").
+				Title("Track type").
+				Description("Work edits on a branch. Ask/Plan are read-only against your primary checkout (no worktree) and can be promoted later. Review checks out a PR/branch.").
 				Options(options...).
+				DescriptionFunc(func() string { return templateDescriptions[choice] }, &choice).
 				Value(&choice),
 		),
 	)

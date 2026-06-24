@@ -178,6 +178,21 @@ func (c *Client) AddRepo(p AddRepoParams) (AddRepoResult, error) {
 	return r, c.callMethod(MethodAddRepo, p, &r)
 }
 
+// AddRepoWithProgress is AddRepo that streams Progress frames (fetch /
+// worktree / provisioning can be slow). Use from interactive callers.
+func (c *Client) AddRepoWithProgress(p AddRepoParams, onProgress func(string)) (AddRepoResult, error) {
+	var r AddRepoResult
+	return r, c.callStreaming(MethodAddRepo, p, &r, onProgress)
+}
+
+// PromoteWithProgress turns a worktree-less ask/plan track into a work
+// track (creates a worktree + branch and re-spawns Claude), streaming
+// progress to the caller.
+func (c *Client) PromoteWithProgress(id string, onProgress func(string)) (PromoteResult, error) {
+	var r PromoteResult
+	return r, c.callStreaming(MethodPromote, PromoteParams{ID: id}, &r, onProgress)
+}
+
 // PendingPrompts returns the daemon's outstanding permission prompts.
 func (c *Client) PendingPrompts() ([]PendingPrompt, error) {
 	var r PendingPromptsResult
