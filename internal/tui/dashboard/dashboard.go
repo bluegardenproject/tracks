@@ -244,26 +244,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_, _ = m.client.PruneCompleted()
 			return m, m.poll()
 		case "d":
-			// Graceful end of the highlighted track (must be active).
+			// Graceful end of the highlighted track. Valid whether
+			// it's still active or already finished: a finished track
+			// keeps its pane alive as a shell (see ShellCommand), and
+			// "d" is how the user tears that down — remove the
+			// worktree and close the tmux window.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				if !t.Status.IsTerminal() {
-					_ = m.client.Done(t.ID)
-					m.closeTrackWindow(t.ID)
-					return m, m.poll()
-				}
+				_ = m.client.Done(t.ID)
+				m.closeTrackWindow(t.ID)
+				return m, m.poll()
 			}
 		case "K":
-			// Force kill the highlighted track (must be active).
+			// Force kill the highlighted track. Like "d" but SIGKILL.
 			// Capital K to distinguish from lowercase k (cursor-up
 			// vim convention) and to make accidental kills harder.
+			// Also valid on a finished track to close its lingering
+			// shell window.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				if !t.Status.IsTerminal() {
-					_ = m.client.Kill(t.ID)
-					m.closeTrackWindow(t.ID)
-					return m, m.poll()
-				}
+				_ = m.client.Kill(t.ID)
+				m.closeTrackWindow(t.ID)
+				return m, m.poll()
 			}
 		case "r":
 			return m, m.poll()
