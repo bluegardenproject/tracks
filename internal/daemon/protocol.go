@@ -135,6 +135,10 @@ type NewParams struct {
 type NewResult struct {
 	TrackID string `json:"track_id"`
 	Branch  string `json:"branch"`
+	// WindowName is the tmux window the daemon opened for the track.
+	// Returned so the CLI can switch to it without re-deriving the
+	// name (the caller only has the track ID, not the full Track).
+	WindowName string `json:"window_name"`
 }
 
 // DoneParams / KillParams.

@@ -162,3 +162,59 @@ func TestStatusIsTerminal(t *testing.T) {
 		}
 	}
 }
+
+func TestTrackWindowName(t *testing.T) {
+	cases := []struct {
+		name string
+		trk  Track
+		want string
+	}{
+		{
+			name: "slug drives the label",
+			trk:  Track{ID: "20260624-101500-a1b2c3", Slug: "rate-bug", TaskPrompt: "investigate the rate spike"},
+			want: "rate-bug-a1b2c3",
+		},
+		{
+			name: "slug is sanitised to a tmux-safe token",
+			trk:  Track{ID: "20260624-101500-a1b2c3", Slug: "Rate Bug: swap.v2!"},
+			want: "rate-bug-swap-v2-a1b2c3",
+		},
+		{
+			name: "falls back to the prompt when slug is empty",
+			trk:  Track{ID: "20260624-101500-a1b2c3", TaskPrompt: "Investigate the rate spike on swap"},
+			want: "investigate-the-rate-spi-a1b2c3",
+		},
+		{
+			name: "falls back to t- form when slug and prompt are empty",
+			trk:  Track{ID: "20260624-101500-a1b2c3"},
+			want: "t-a1b2c3",
+		},
+		{
+			name: "short id is used whole",
+			trk:  Track{ID: "abc", Slug: "tiny"},
+			want: "tiny-abc",
+		},
+		{
+			name: "slug of only punctuation falls through to the prompt",
+			trk:  Track{ID: "20260624-101500-a1b2c3", Slug: "!!!", TaskPrompt: "fix it"},
+			want: "fix-it-a1b2c3",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.trk.WindowName(); got != c.want {
+				t.Fatalf("WindowName() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// Two tracks that share a slug must still get distinct window names,
+// or the daemon could select/kill the wrong tmux window.
+func TestTrackWindowNameUniquePerID(t *testing.T) {
+	a := Track{ID: "20260624-101500-a1b2c3", Slug: "rate-bug"}
+	b := Track{ID: "20260624-101501-d4e5f6", Slug: "rate-bug"}
+	if a.WindowName() == b.WindowName() {
+		t.Fatalf("expected distinct window names, both were %q", a.WindowName())
+	}
+}

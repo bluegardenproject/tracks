@@ -55,8 +55,8 @@ func init() {
 			// The daemon has already opened the per-track tmux
 			// window with claude inside. Just switch to it.
 			tm := tmux.New()
-			if tm.HasSession(cfg.Tmux.SessionName) {
-				_ = tm.SelectWindow(cfg.Tmux.SessionName, windowNameFor(res.TrackID))
+			if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+				_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 			}
 			return nil
 		},

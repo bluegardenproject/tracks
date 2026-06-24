@@ -74,7 +74,7 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 				Value(&repos),
 			huh.NewInput().
 				Title("Slug (optional)").
-				Description("Short human label shown in the dashboard. Independent of the branch name (Claude picks that). Leave empty if you don't need it.").
+				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (Claude picks that). Leave empty to derive a tab name from the prompt.").
 				Placeholder("e.g. rate-bug-investigation").
 				Value(&slug),
 			huh.NewText().
@@ -137,7 +137,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 				Value(&reviewRef),
 			huh.NewInput().
 				Title("Slug (optional)").
-				Description("Short human label shown in the dashboard. Leave empty if you don't need it.").
+				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
 				Placeholder("e.g. rate-bug-review").
 				Value(&slug),
 			huh.NewText().

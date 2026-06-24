@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -168,6 +169,70 @@ type Track struct {
 // IsTerminal reports whether s is one of the end-state statuses.
 func (s Status) IsTerminal() bool {
 	return s == StatusDone || s == StatusErrored
+}
+
+// windowLabelMaxLen caps the human part of a tmux window name so the
+// status bar tab stays readable. The unique ID suffix is appended on
+// top of this.
+const windowLabelMaxLen = 24
+
+// WindowName is the tmux window name for this track. It's the single
+// source of truth: the daemon opens the window under this name and
+// every selector/killer (CLI, dashboard, supervisor) targets it by
+// the same name, so they must all agree.
+//
+// The name reads as <label>-<id-tail>:
+//
+//   - <label> is a slugified human hint — the user's Slug if they set
+//     one, otherwise the opening words of the task prompt — so the tab
+//     in tmux's status bar means something at a glance.
+//   - <id-tail> is the trailing 6 characters of the track ID, always
+//     appended so two tracks sharing a slug never collide on a name
+//     (which would make the daemon kill or select the wrong window).
+//
+// When there's no usable label (no slug, empty prompt) it falls back
+// to the historical "t-<id-tail>" form.
+func (t Track) WindowName() string {
+	suffix := t.ID
+	if len(t.ID) > 6 {
+		suffix = t.ID[len(t.ID)-6:]
+	}
+	label := windowLabel(t.Slug)
+	if label == "" {
+		label = windowLabel(t.TaskPrompt)
+	}
+	if label == "" {
+		return "t-" + suffix
+	}
+	return label + "-" + suffix
+}
+
+// windowLabel slugifies s into a tmux-safe token: lowercase ASCII
+// alphanumerics, with every other run collapsed to a single hyphen.
+// This deliberately strips ":" and "." (tmux target separators) and
+// whitespace (which would break the status-bar tab). The result is
+// capped at windowLabelMaxLen on a hyphen boundary so a long prompt
+// doesn't produce a giant tab. Returns "" when s carries no usable
+// characters.
+func windowLabel(s string) string {
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range strings.ToLower(s) {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		switch {
+		case isAlnum:
+			if b.Len() >= windowLabelMaxLen {
+				// Already at the cap; stop at this word boundary.
+				return strings.TrimRight(b.String(), "-")
+			}
+			b.WriteRune(r)
+			prevHyphen = false
+		case !prevHyphen && b.Len() > 0:
+			b.WriteByte('-')
+			prevHyphen = true
+		}
+	}
+	return strings.TrimRight(b.String(), "-")
 }
 
 // State is the entire on-disk payload.
