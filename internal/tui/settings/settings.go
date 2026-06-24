@@ -258,6 +258,24 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	}
 	initSubs := r.InitSubmodules
 
+	// Provisioning fields. Empty when the repo has no provision block.
+	var (
+		depsCmd       string
+		copyIgnored   string
+		copyMode      = "symlink"
+		cacheStrategy = "none"
+	)
+	if r.Provision != nil {
+		depsCmd = r.Provision.DepsCmd
+		copyIgnored = strings.Join(r.Provision.CopyIgnored, "\n")
+		if r.Provision.CopyMode != "" {
+			copyMode = r.Provision.CopyMode
+		}
+		if r.Provision.CacheStrategy != "" {
+			cacheStrategy = r.Provision.CacheStrategy
+		}
+	}
+
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -296,6 +314,37 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 				Negative("No").
 				Value(&initSubs),
 		),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Provisioning (optional)").
+				Description("Make a fresh worktree runnable: copy gitignored files (like .env) from the primary, then install deps. Leave the command and file list empty to disable."),
+			huh.NewInput().
+				Title("Dependency install command").
+				Description("Run in the new worktree after checkout. Empty skips it.").
+				Placeholder("pnpm install --frozen-lockfile").
+				Value(&depsCmd),
+			huh.NewText().
+				Title("Gitignored files to copy (one per line)").
+				Description("Paths or globs relative to the primary checkout, e.g. .env or apps/*/.env.local.").
+				Placeholder(".env\n.env.local").
+				Value(&copyIgnored),
+			huh.NewSelect[string]().
+				Title("Copy mode").
+				Description("How those files are reproduced in the worktree.").
+				Options(
+					huh.NewOption("symlink (link back to primary)", "symlink"),
+					huh.NewOption("copy (independent copy)", "copy"),
+				).
+				Value(&copyMode),
+			huh.NewSelect[string]().
+				Title("Cache strategy").
+				Description("How deps are cached. Both options just run the command for now (pnpm reuses its store automatically).").
+				Options(
+					huh.NewOption("none", "none"),
+					huh.NewOption("pnpm-store", "pnpm-store"),
+				).
+				Value(&cacheStrategy),
+		),
 	).WithShowHelp(true)
 
 	// Best-effort: as soon as the user finishes editing the path,
@@ -323,7 +372,33 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	r.Path = path
 	r.Base = base
 	r.InitSubmodules = initSubs
+
+	// Build the provision block only if something was configured.
+	depsCmd = strings.TrimSpace(depsCmd)
+	copyList := splitLines(copyIgnored)
+	if depsCmd == "" && len(copyList) == 0 {
+		r.Provision = nil
+	} else {
+		r.Provision = &config.Provision{
+			DepsCmd:       depsCmd,
+			CacheStrategy: cacheStrategy,
+			CopyIgnored:   copyList,
+			CopyMode:      copyMode,
+		}
+	}
 	return nil
+}
+
+// splitLines turns a multiline text field into a trimmed, non-empty
+// slice of entries.
+func splitLines(s string) []string {
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // validatePath accepts an absolute path or a "~/..." path. We

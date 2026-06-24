@@ -144,6 +144,38 @@ type Repo struct {
 	// creation. Off by default because submodules can add minutes per
 	// worktree.
 	InitSubmodules bool `yaml:"init_submodules,omitempty"`
+
+	// Provision, when set, makes a freshly created worktree runnable:
+	// it copies gitignored files (e.g. .env) from the primary checkout
+	// and runs a dependency-install command. nil means no provisioning.
+	Provision *Provision `yaml:"provision,omitempty"`
+}
+
+// Provision configures how a worktree is made runnable after creation:
+// gitignored files are brought in from the primary checkout, then a
+// dependency-install command is run. All fields are optional; a nil
+// *Provision (the zero value on Repo) disables provisioning entirely.
+type Provision struct {
+	// DepsCmd is a shell command run in the new worktree to install
+	// dependencies (e.g. "pnpm install --frozen-lockfile"). Empty skips
+	// the install step.
+	DepsCmd string `yaml:"deps_cmd,omitempty"`
+
+	// CacheStrategy hints how dependencies are cached. In this version
+	// "none" and "pnpm-store" both just run DepsCmd (pnpm hardlinks from
+	// its store natively); "apfs-clone" is reserved for a later version.
+	// Empty defaults to "none".
+	CacheStrategy string `yaml:"cache_strategy,omitempty"`
+
+	// CopyIgnored lists gitignored files to bring from the primary
+	// checkout into the worktree. Entries are paths (or globs) relative
+	// to the primary checkout root, e.g. ".env", "apps/*/.env.local".
+	CopyIgnored []string `yaml:"copy_ignored,omitempty"`
+
+	// CopyMode is how CopyIgnored entries are reproduced: "symlink"
+	// (default) links back to the primary, "copy" makes an independent
+	// copy. Empty defaults to "symlink".
+	CopyMode string `yaml:"copy_mode,omitempty"`
 }
 
 // (The previous defaultPromptSuffix const lived here. The suffix
@@ -227,6 +259,22 @@ func (c Config) Validate() error {
 		}
 		if r.Base == "" {
 			return fmt.Errorf("repos[%s].base is required", r.Name)
+		}
+		if p := r.Provision; p != nil {
+			switch p.CacheStrategy {
+			case "", "none", "pnpm-store":
+				// ok
+			case "apfs-clone":
+				return fmt.Errorf("repos[%s].provision.cache_strategy %q is not yet implemented", r.Name, p.CacheStrategy)
+			default:
+				return fmt.Errorf("repos[%s].provision.cache_strategy %q is invalid (want none or pnpm-store)", r.Name, p.CacheStrategy)
+			}
+			switch p.CopyMode {
+			case "", "symlink", "copy":
+				// ok
+			default:
+				return fmt.Errorf("repos[%s].provision.copy_mode %q is invalid (want symlink or copy)", r.Name, p.CopyMode)
+			}
 		}
 	}
 

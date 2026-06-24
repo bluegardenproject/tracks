@@ -55,6 +55,70 @@ func TestSaveThenLoadRoundtrip(t *testing.T) {
 	}
 }
 
+func TestProvisionRoundtrip(t *testing.T) {
+	withXDGConfig(t)
+	in := Default()
+	in.Repos = []Repo{
+		{
+			Name: "repo-a", Path: "/Users/x/code/repo-a", Base: "develop",
+			Provision: &Provision{
+				DepsCmd:       "pnpm install --frozen-lockfile",
+				CacheStrategy: "pnpm-store",
+				CopyIgnored:   []string{".env", ".env.local"},
+				CopyMode:      "copy",
+			},
+		},
+		// A repo without provisioning must round-trip back to nil.
+		{Name: "repo-b", Path: "/Users/x/code/repo-b", Base: "develop"},
+	}
+	if _, err := Save(in); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	out, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := out.Repos[0].Provision
+	if a == nil {
+		t.Fatal("repo-a provision lost on roundtrip")
+	}
+	if a.DepsCmd != "pnpm install --frozen-lockfile" || a.CacheStrategy != "pnpm-store" ||
+		a.CopyMode != "copy" || len(a.CopyIgnored) != 2 || a.CopyIgnored[1] != ".env.local" {
+		t.Errorf("provision roundtrip mismatch: %+v", a)
+	}
+	if out.Repos[1].Provision != nil {
+		t.Errorf("repo-b provision should be nil, got %+v", out.Repos[1].Provision)
+	}
+}
+
+func TestValidateRejectsBadProvision(t *testing.T) {
+	cases := map[string]*Provision{
+		"bad cache strategy":       {CacheStrategy: "bogus"},
+		"unimplemented apfs-clone": {CacheStrategy: "apfs-clone"},
+		"bad copy mode":            {CopyMode: "hardlink"},
+	}
+	for name, p := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			c.Repos = []Repo{{Name: "r", Path: "/a", Base: "main", Provision: p}}
+			if err := c.Validate(); err == nil {
+				t.Fatalf("expected validation error for %s", name)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsMinimalProvision(t *testing.T) {
+	c := Default()
+	c.Repos = []Repo{{
+		Name: "r", Path: "/a", Base: "main",
+		Provision: &Provision{DepsCmd: "yarn"},
+	}}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("minimal provision should validate: %v", err)
+	}
+}
+
 func TestLoadPartialMergesDefaults(t *testing.T) {
 	dir := withXDGConfig(t)
 	// User writes only `repos:` and leaves everything else missing.
