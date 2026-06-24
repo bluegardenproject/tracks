@@ -15,6 +15,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 // ok wraps a result payload in a successful Response. result may be
@@ -337,14 +338,26 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	// Done/Errored.
 	t, _ = s.store.Get(p.ID)
 
-	// Remove worktrees, keep branches.
+	// Remove worktrees, keep branches. Skip any whose checkout is
+	// already gone so ending a track is idempotent — a track that
+	// finished on its own, or was ended once already, may have no
+	// worktree left, and that must not turn into an error.
 	for _, tr := range t.Repos {
+		if _, statErr := os.Stat(tr.Path); os.IsNotExist(statErr) {
+			continue
+		}
 		emit(fmt.Sprintf("removing worktree for %s...", tr.Name))
 		c := git.NewPrimaryRepoClient(s.primaryPathFor(tr.Name))
 		if err := c.RemoveWorktree(ctx, tr.Path); err != nil {
 			return fail(fmt.Sprintf("remove worktree %s: %v", tr.Path, err))
 		}
 	}
+	// Close the track's tmux window. When a supervisor was alive the
+	// Stop/Kill above already did this, but a track that finished on
+	// its own keeps its pane alive as a shell with no supervisor left
+	// to tear it down. Killing here makes the window close on every
+	// end path. Idempotent — KillWindow is a no-op when it's gone.
+	_ = tmux.New().KillWindow(s.cfg.Tmux.SessionName, windowNameFor(t.ID))
 	// Clean up the supervisor's sentinel so a future track with
 	// the same id (unlikely but possible after Forget+New) doesn't
 	// pick up a stale "claude already exited" signal.
