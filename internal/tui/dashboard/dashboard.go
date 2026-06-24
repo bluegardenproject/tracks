@@ -150,16 +150,6 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.poll(), tickEvery())
 }
 
-// windowNameFor returns the tmux window name a track's claude
-// pane lives in. Kept in sync with the daemon-side helper of the
-// same name.
-func windowNameFor(trackID string) string {
-	if len(trackID) >= 6 {
-		return "t-" + trackID[len(trackID)-6:]
-	}
-	return "t-" + trackID
-}
-
 // refreshDetail re-runs gatherDetail for the currently-highlighted
 // track, or clears m.detail when there's nothing selected. Called
 // after every cursor move and on each daemon-state poll.
@@ -218,7 +208,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				_ = m.attachTrack(t.ID)
+				_ = m.attachTrack(t)
 			}
 		case "y", "Y":
 			if len(m.prompts) > 0 {
@@ -247,12 +237,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Graceful end of the highlighted track. Valid whether
 			// it's still active or already finished: a finished track
 			// keeps its pane alive as a shell (see ShellCommand), and
-			// "d" is how the user tears that down — remove the
-			// worktree and close the tmux window.
+			// "d" is how the user tears that down. The daemon removes
+			// the worktree and closes the tmux window as part of Done.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				_ = m.client.Done(t.ID)
-				m.closeTrackWindow(t.ID)
 				return m, m.poll()
 			}
 		case "K":
@@ -264,7 +253,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				_ = m.client.Kill(t.ID)
-				m.closeTrackWindow(t.ID)
 				return m, m.poll()
 			}
 		case "r":
@@ -296,21 +284,10 @@ func max(a, b int) int {
 	return b
 }
 
-// closeTrackWindow removes the per-track tmux window after the
-// track has been ended. Best-effort — failure is silent because
-// the daemon side has already mutated state.
-func (m *model) closeTrackWindow(trackID string) {
-	window := windowNameFor(trackID)
-	if exists, _ := m.tmux.HasWindow(m.cfg.Tmux.SessionName, window); !exists {
-		return
-	}
-	_ = m.tmux.KillWindow(m.cfg.Tmux.SessionName, window)
-}
-
 // attachTrack switches focus to the track's tmux window.
-func (m *model) attachTrack(trackID string) error {
+func (m *model) attachTrack(t state.Track) error {
 	session := m.cfg.Tmux.SessionName
-	window := windowNameFor(trackID)
+	window := t.WindowName()
 	exists, _ := m.tmux.HasWindow(session, window)
 	if !exists {
 		return fmt.Errorf("window %s missing — claude likely exited", window)

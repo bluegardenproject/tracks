@@ -58,16 +58,6 @@ type supervisor struct {
 // notification at this cadence is enough without spamming.
 const waitingNotifyMinInterval = 2 * time.Minute
 
-// windowNameFor returns the tmux window name for a track. Kept here
-// (also duplicated in cmd/attach.go for the CLI side) because both
-// daemon and CLI need to agree on it.
-func windowNameFor(trackID string) string {
-	if len(trackID) >= 6 {
-		return "t-" + trackID[len(trackID)-6:]
-	}
-	return "t-" + trackID
-}
-
 // startSupervisor opens a tmux window for the track with claude
 // running inside it and starts the watcher goroutines.
 func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*supervisor, error) {
@@ -84,7 +74,7 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 		return nil, err
 	}
 	tm := tmux.New()
-	window := windowNameFor(t.ID)
+	window := t.WindowName()
 	pid, err := tm.NewWindowReturningPaneID(s.cfg.Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux window: %w", err)

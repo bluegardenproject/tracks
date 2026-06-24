@@ -82,7 +82,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			}
 			return err
 		}
-		window := windowNameFor(t.ID)
+		window := t.WindowName()
 		exists, _ := tm.HasWindow(cfg.Tmux.SessionName, window)
 		if !exists {
 			self, _ := selfBinary()
@@ -109,7 +109,6 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		if err := cl.Done(t.ID); err != nil {
 			return err
 		}
-		closeTrackWindow(cfg, t.ID)
 		fmt.Printf("done: %s\n", t.ID)
 		waitForKey()
 		return nil
@@ -130,7 +129,6 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		if err := cl.Kill(t.ID); err != nil {
 			return err
 		}
-		closeTrackWindow(cfg, t.ID)
 		fmt.Printf("killed: %s\n", t.ID)
 		waitForKey()
 		return nil
@@ -157,7 +155,6 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			waitForKey()
 			return nil
 		}
-		closeTrackWindow(cfg, t.ID)
 		fmt.Println()
 		fmt.Printf("released %s — track %s ended, worktree removed.\n", t.Branch, t.ID)
 		fmt.Println()
@@ -263,8 +260,8 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		return nil
 	}
 	tm := tmux.New()
-	if tm.HasSession(cfg.Tmux.SessionName) {
-		_ = tm.SelectWindow(cfg.Tmux.SessionName, windowNameFor(res.TrackID))
+	if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+		_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 	}
 	fmt.Printf("created %s on %s\n", res.TrackID, res.Branch)
 	return nil

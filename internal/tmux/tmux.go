@@ -130,8 +130,15 @@ func (Client) NewWindowReturningPaneID(session, name, command, startDir string) 
 	if _, scanErr := fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &pid); scanErr != nil || pid <= 0 {
 		return 0, fmt.Errorf("tmux new-window: could not parse pid from %q", string(out))
 	}
-	setOpt := exec.Command("tmux", "set-window-option", "-t", session+":"+name, "remain-on-exit", "on")
-	_ = setOpt.Run()
+	target := session + ":" + name
+	// Pin the name: tmux's automatic-rename (on by default) would
+	// otherwise replace our slug-derived name with the foreground
+	// process name ("node", "sh", …) and the status-bar tab would
+	// stop being meaningful — and name-based targeting would break.
+	// Set this first, while the window still carries the -n name we
+	// just gave it, so the target resolves.
+	_ = exec.Command("tmux", "set-window-option", "-t", target, "automatic-rename", "off").Run()
+	_ = exec.Command("tmux", "set-window-option", "-t", target, "remain-on-exit", "on").Run()
 	return pid, nil
 }
 

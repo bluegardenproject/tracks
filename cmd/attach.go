@@ -25,7 +25,7 @@ func init() {
 				return fmt.Errorf("track %s not found", args[0])
 			}
 			tm := tmux.New()
-			window := windowNameFor(t.ID)
+			window := t.WindowName()
 			session := cfg.Tmux.SessionName
 			exists, err := tm.HasWindow(session, window)
 			if err != nil {
@@ -37,14 +37,4 @@ func init() {
 			return tm.SelectWindow(session, window)
 		},
 	})
-}
-
-// windowNameFor returns the tmux window name we use per track. We
-// keep it short by taking the trailing 6 hex characters of the ID,
-// prefixed with "t-".
-func windowNameFor(trackID string) string {
-	if len(trackID) >= 6 {
-		return "t-" + trackID[len(trackID)-6:]
-	}
-	return "t-" + trackID
 }
