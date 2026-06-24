@@ -9,6 +9,8 @@ type Template string
 const (
 	TemplateCustom Template = "custom"
 	TemplateReview Template = "review"
+	TemplateAsk    Template = "ask"
+	TemplatePlan   Template = "plan"
 )
 
 // templatePrompts maps a Template to the body that pre-fills the
@@ -21,6 +23,17 @@ const (
 // each repo has installed.
 var templatePrompts = map[Template]string{
 	TemplateCustom: "",
+	TemplateAsk: `Answer the following question about the codebase. This is a
+read-only investigation — explore, read, and explain; do not modify
+anything.
+
+`,
+	TemplatePlan: `Produce a detailed implementation plan for the following. This is a
+read-only planning task — investigate the codebase and design an
+approach; do not modify anything. When the user is ready to build it,
+the track can be promoted to a worktree.
+
+`,
 	TemplateReview: `Run a code review of the checked-out PR / branch against its base.
 
 The worktree is already on the target you picked (detached at the PR
@@ -48,6 +61,31 @@ This is a **read-only audit**:
 
 // templateLabels gives the picker its human-readable option text.
 var templateLabels = map[Template]string{
-	TemplateCustom: "Custom (free-form task prompt)",
-	TemplateReview: "Review the current branch / PR",
+	TemplateCustom: "Work — branch + worktree to implement a change",
+	TemplateAsk:    "Ask — read-only question about the code (no worktree)",
+	TemplatePlan:   "Plan — read-only implementation plan (no worktree)",
+	TemplateReview: "Review — a PR or branch",
+}
+
+// templateDescriptions give the picker a one-line hint under each
+// option so the read-only / worktree-less behaviour is discoverable.
+var templateDescriptions = map[Template]string{
+	TemplateCustom: "Creates a branch + worktree you edit on. The usual track.",
+	TemplateAsk:    "Points Claude at your primary checkout read-only. Promote later to start editing.",
+	TemplatePlan:   "Read-only planning against your primary checkout. Promote later to implement.",
+	TemplateReview: "Checks out a PR/branch detached so the reviewer agent can diff it.",
+}
+
+// kindFor maps a Template to the daemon track Kind string.
+func kindFor(t Template) string {
+	switch t {
+	case TemplateAsk:
+		return "ask"
+	case TemplatePlan:
+		return "plan"
+	case TemplateReview:
+		return "review"
+	default:
+		return "work"
+	}
 }

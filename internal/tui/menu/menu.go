@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tui"
@@ -33,20 +34,36 @@ var ErrNoTracks = errors.New("no tracks match the filter")
 type Action string
 
 const (
-	ActionNewTrack       Action = "new"
-	ActionDashboard      Action = "dashboard"
-	ActionList           Action = "list"
-	ActionAttach         Action = "attach"
-	ActionDone           Action = "done"
-	ActionKill           Action = "kill"
-	ActionReleaseBranch  Action = "release"
-	ActionForget         Action = "forget"
-	ActionPrune          Action = "prune"
-	ActionSettings       Action = "settings"
-	ActionGC             Action = "gc"
-	ActionQuitSession    Action = "quit"
-	ActionClose          Action = "close"
+	ActionNewTrack      Action = "new"
+	ActionDashboard     Action = "dashboard"
+	ActionList          Action = "list"
+	ActionAttach        Action = "attach"
+	ActionDone          Action = "done"
+	ActionKill          Action = "kill"
+	ActionAddRepo       Action = "add_repo"
+	ActionPromote       Action = "promote"
+	ActionReleaseBranch Action = "release"
+	ActionForget        Action = "forget"
+	ActionPrune         Action = "prune"
+	ActionSettings      Action = "settings"
+	ActionGC            Action = "gc"
+	ActionQuitSession   Action = "quit"
+	ActionClose         Action = "close"
 )
+
+// actionHints give the menu a one-line description under the focused
+// option so capabilities like add-repo / promote are discoverable.
+var actionHints = map[Action]string{
+	ActionNewTrack:      "Pick a type (work / ask / plan / review), then create it.",
+	ActionDashboard:     "Live list of all tracks, their status and PRs.",
+	ActionAddRepo:       "Realised the change spans another repo? Mount it onto a running track.",
+	ActionPromote:       "Done investigating? Turn a read-only ask/plan track into a worktree to implement.",
+	ActionReleaseBranch: "Remove a finished track's worktree (keeps the branch locally).",
+	ActionSettings:      "Add, edit, or remove repos.",
+	ActionGC:            "Clean up orphaned worktree directories.",
+	ActionQuitSession:   "Kill the tmux session and stop the daemon.",
+	ActionClose:         "Close this menu.",
+}
 
 // PickAction shows the top-level menu and returns the user's choice.
 func PickAction() (Action, error) {
@@ -59,12 +76,15 @@ func PickAction() (Action, error) {
 				Options(
 					huh.NewOption("New track", ActionNewTrack),
 					huh.NewOption("Dashboard", ActionDashboard),
+					huh.NewOption("Add repo to a track…", ActionAddRepo),
+					huh.NewOption("Promote a read-only track…", ActionPromote),
 					huh.NewOption("Release a track's branch...", ActionReleaseBranch),
 					huh.NewOption("Settings", ActionSettings),
 					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Quit session", ActionQuitSession),
 					huh.NewOption("Close menu", ActionClose),
 				).
+				DescriptionFunc(func() string { return actionHints[pick] }, &pick).
 				Value(&pick),
 		),
 	)
@@ -92,7 +112,11 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 		if filter != nil && !filter(t) {
 			continue
 		}
-		label := fmt.Sprintf("%s  %s  [%s]  %s", shortID(t.ID), t.Branch, t.Status, reposLabel(t))
+		branch := t.Branch
+		if branch == "" {
+			branch = "—"
+		}
+		label := fmt.Sprintf("%s  [%s]  %s  [%s]  %s", shortID(t.ID), kindOf(t), branch, t.Status, reposLabel(t))
 		options = append(options, huh.NewOption(label, t.ID))
 		byID[t.ID] = t
 	}
@@ -116,6 +140,42 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 		return state.Track{}, err
 	}
 	return byID[pick], nil
+}
+
+// ErrNoRepos is returned by PickConfigRepo when every configured repo
+// is excluded (already in the track).
+var ErrNoRepos = errors.New("no repos available to add")
+
+// PickConfigRepo shows a single-select over configured repos, skipping
+// any whose name is in exclude. Use for the Add-repo flow.
+func PickConfigRepo(cfg config.Config, exclude map[string]bool, title string) (string, error) {
+	options := []huh.Option[string]{}
+	for _, r := range cfg.Repos {
+		if exclude[r.Name] {
+			continue
+		}
+		options = append(options, huh.NewOption(fmt.Sprintf("%s  (base: %s)", r.Name, r.Base), r.Name))
+	}
+	if len(options) == 0 {
+		return "", ErrNoRepos
+	}
+	var pick string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(title).
+				Description("Up/Down to navigate, Enter to select, Esc to cancel.").
+				Options(options...).
+				Value(&pick),
+		),
+	)
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return "", ErrCancelled
+		}
+		return "", err
+	}
+	return pick, nil
 }
 
 // ConfirmQuit is a small yes/no for the destructive quit action.
@@ -176,9 +236,30 @@ func joinShort(items []string, max int) string {
 	return out
 }
 
+// kindOf returns a track's kind for display, defaulting to work for
+// pre-migration entries with an empty kind.
+func kindOf(t state.Track) state.Kind {
+	if t.Kind == "" {
+		return state.KindWork
+	}
+	return t.Kind
+}
+
 // ActiveOnly is a PickTrack filter that excludes terminal-state
 // tracks. Use for Attach / End / Kill flows.
 func ActiveOnly(t state.Track) bool { return !t.Status.IsTerminal() }
+
+// PromotableOnly filters to active worktree-less (ask/plan) tracks —
+// the only ones that can be promoted.
+func PromotableOnly(t state.Track) bool {
+	return !t.Status.IsTerminal() && t.Kind.Worktreeless()
+}
+
+// WorktreeTrack filters to active tracks that own worktrees (work /
+// review) — the only ones a repo can be added to.
+func WorktreeTrack(t state.Track) bool {
+	return !t.Status.IsTerminal() && !t.Kind.Worktreeless()
+}
 
 // CompletedOnly is a PickTrack filter that excludes still-running
 // tracks. Use for Forget / Clean flows.
@@ -190,6 +271,11 @@ func CompletedOnly(t state.Track) bool { return t.Status.IsTerminal() }
 // worktree is still around still locks the branch, and the user
 // must be able to find it in the picker to clean it up.
 func HasLiveWorktree(t state.Track) bool {
+	// Worktree-less tracks hold the primary checkout paths (which always
+	// exist) — they own no tracks worktree to release.
+	if t.Kind.Worktreeless() {
+		return false
+	}
 	for _, r := range t.Repos {
 		if r.Path == "" {
 			continue

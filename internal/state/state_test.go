@@ -19,6 +19,63 @@ func makeTrack(id string) Track {
 	}
 }
 
+func TestKindWorktreeless(t *testing.T) {
+	for _, k := range []Kind{KindAsk, KindPlan} {
+		if !k.Worktreeless() {
+			t.Errorf("%q should be worktreeless", k)
+		}
+	}
+	for _, k := range []Kind{KindWork, KindReview, Kind("")} {
+		if k.Worktreeless() {
+			t.Errorf("%q should not be worktreeless", k)
+		}
+	}
+}
+
+func TestKindRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := makeTrack("a")
+	tr.Kind = KindPlan
+	if err := fs.Put(tr); err != nil {
+		t.Fatal(err)
+	}
+	fs2, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := fs2.Get("a")
+	if got.Kind != KindPlan {
+		t.Errorf("kind = %q, want plan", got.Kind)
+	}
+}
+
+func TestMigrateV1TracksGetKind(t *testing.T) {
+	dir := t.TempDir()
+	// A schema-v1 file: tracks have no `kind`. The plain branch should
+	// migrate to work; a pr/ branch (left by a review track) to review.
+	raw := `{"schema_version":1,"tracks":[` +
+		`{"id":"w","branch":"fix/x","repos":[],"status":"done","log_path":"","task_prompt":""},` +
+		`{"id":"r","branch":"pr/123","repos":[],"status":"done","log_path":"","task_prompt":""}` +
+		`]}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, _ := fs.Get("w"); w.Kind != KindWork {
+		t.Errorf("plain v1 track kind = %q, want work", w.Kind)
+	}
+	if r, _ := fs.Get("r"); r.Kind != KindReview {
+		t.Errorf("pr/ v1 track kind = %q, want review", r.Kind)
+	}
+}
+
 func TestFileStoreRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	fs, err := OpenFileStore(dir)

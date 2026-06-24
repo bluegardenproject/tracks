@@ -28,7 +28,38 @@ import (
 // CurrentSchemaVersion is the SchemaVersion this binary writes. Older
 // files on disk are migrated when loaded; newer files are refused so
 // a forward-compatible field doesn't get silently dropped.
-const CurrentSchemaVersion = 1
+//
+// v2 adds Track.Kind. v1 tracks are migrated on load (see load()).
+const CurrentSchemaVersion = 2
+
+// Kind is the type of a track. It decides whether the track owns
+// worktrees and how Claude is launched.
+type Kind string
+
+const (
+	// KindWork is the default: a worktree + branch the user edits on.
+	KindWork Kind = "work"
+
+	// KindReview is a detached worktree on an existing PR/branch.
+	KindReview Kind = "review"
+
+	// KindAsk is a worktree-less, read-only track: Claude points at the
+	// primary checkout (in plan permission mode) to answer a question or
+	// explore. No branch, no worktree.
+	KindAsk Kind = "ask"
+
+	// KindPlan is like KindAsk but framed to produce an implementation
+	// plan. Also worktree-less and read-only.
+	KindPlan Kind = "plan"
+)
+
+// Worktreeless reports whether tracks of this kind run without their
+// own worktree (pointing at the primary checkout read-only). Such
+// tracks skip worktree creation, branch tracking, diff aggregation,
+// and worktree removal.
+func (k Kind) Worktreeless() bool {
+	return k == KindAsk || k == KindPlan
+}
 
 // Status is the lifecycle phase of a track.
 type Status string
@@ -100,6 +131,11 @@ type Track struct {
 	// the field blank.
 	Slug string `json:"slug,omitempty"`
 
+	// Kind is the track type (work/review/ask/plan). Empty in v1 files;
+	// migrated to KindWork on load. Drives worktree handling and how
+	// Claude is launched.
+	Kind Kind `json:"kind,omitempty"`
+
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
 	// appended).
@@ -127,7 +163,7 @@ type Track struct {
 	// PRState / PRDraft / PRReviewState / PRComments are filled by
 	// the supervisor's gh-poll goroutine once a PRURL is known.
 	// Empty until that first poll lands.
-	PRState       string `json:"pr_state,omitempty"`        // OPEN / CLOSED / MERGED
+	PRState       string `json:"pr_state,omitempty"` // OPEN / CLOSED / MERGED
 	PRDraft       bool   `json:"pr_draft,omitempty"`
 	PRReviewState string `json:"pr_review_state,omitempty"` // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED
 	PRComments    int    `json:"pr_comments,omitempty"`
@@ -312,9 +348,23 @@ func (fs *FileStore) load() error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	for _, t := range s.Tracks {
+		migrateTrack(&t)
 		fs.tracks[t.ID] = t
 	}
 	return nil
+}
+
+// migrateTrack upgrades a track loaded from an older schema in place.
+// v1 had no Kind; infer it from the branch (pr/* came from review
+// tracks) and default everything else to work.
+func migrateTrack(t *Track) {
+	if t.Kind == "" {
+		if strings.HasPrefix(t.Branch, "pr/") {
+			t.Kind = KindReview
+		} else {
+			t.Kind = KindWork
+		}
+	}
 }
 
 // Path returns the absolute path of the state file (useful for

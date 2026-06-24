@@ -42,6 +42,11 @@ const (
 	// add another repo's worktree to a running track.
 	MethodAddRepo Method = "add_repo"
 
+	// MethodPromote turns a worktree-less ask/plan track into a work
+	// track: it creates a branch + worktree off base and re-spawns
+	// Claude in it with edit permissions.
+	MethodPromote Method = "promote"
+
 	// MethodPendingPrompts lists outstanding permission prompts the
 	// daemon is holding open on behalf of Claude.
 	MethodPendingPrompts Method = "pending_prompts"
@@ -129,6 +134,10 @@ type NewParams struct {
 	// review. Accepts a GitHub PR URL (…/pull/123) or a branch name
 	// (local or on origin). Only meaningful with a single repo.
 	ReviewRef string `json:"review_ref,omitempty"`
+	// Kind is the track type (work/review/ask/plan). Empty defaults to
+	// work. ask/plan are worktree-less: the daemon points Claude at the
+	// primary checkout read-only instead of creating a worktree.
+	Kind string `json:"kind,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.
@@ -159,6 +168,19 @@ type AddRepoParams struct {
 // AddRepoResult tells the caller where the new worktree lives.
 type AddRepoResult struct {
 	WorktreePath string `json:"worktree_path"`
+}
+
+// PromoteParams is the payload for MethodPromote.
+type PromoteParams struct {
+	// ID is the worktree-less (ask/plan) track to promote to a work track.
+	ID string `json:"id"`
+}
+
+// PromoteResult reports the branch and tmux window of the re-spawned
+// work track.
+type PromoteResult struct {
+	Branch     string `json:"branch"`
+	WindowName string `json:"window_name"`
 }
 
 // PendingPrompt describes one outstanding permission request.

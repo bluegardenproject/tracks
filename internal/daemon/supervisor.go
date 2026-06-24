@@ -136,22 +136,34 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 		case <-ticker.C:
 			if sup.sentinelPath != "" {
 				if _, err := os.Stat(sup.sentinelPath); err == nil {
-					s.finalizeTrack(sup.trackID)
-					s.mu.Lock()
-					delete(s.supervisors, sup.trackID)
-					s.mu.Unlock()
+					s.retire(sup)
 					return
 				}
 			}
 			if !processAlive(sup.pid) {
-				s.finalizeTrack(sup.trackID)
-				s.mu.Lock()
-				delete(s.supervisors, sup.trackID)
-				s.mu.Unlock()
+				s.retire(sup)
 				return
 			}
 			s.refreshRunningStatus(tm, sup)
 		}
+	}
+}
+
+// retire finalizes the track and drops this supervisor from the map —
+// but only if it's still the registered supervisor for the track. After
+// a promote re-spawns the same track ID, a stale watcher (whose Stop
+// timed out before it observed the window dying) must NOT finalize and
+// delete its replacement, which would mark the freshly promoted track
+// Done and clobber the live map entry.
+func (s *Server) retire(sup *supervisor) {
+	s.mu.Lock()
+	current := s.supervisors[sup.trackID] == sup
+	if current {
+		delete(s.supervisors, sup.trackID)
+	}
+	s.mu.Unlock()
+	if current {
+		s.finalizeTrack(sup.trackID)
 	}
 }
 
@@ -294,6 +306,11 @@ var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(https?://\S+|none)`)
 // the placeholder we keep the placeholder so the dashboard's
 // branch column never goes blank.
 func (s *Server) refreshBranches(t state.Track) ([]state.TrackRepo, string) {
+	// Worktree-less tracks hold the primary checkout paths, not tracks
+	// worktrees — don't read their branch (it's the user's, not ours).
+	if t.Kind.Worktreeless() {
+		return t.Repos, t.Branch
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	out := make([]state.TrackRepo, len(t.Repos))
@@ -337,6 +354,10 @@ func reposBranchesEqual(a, b []state.TrackRepo) bool {
 // Uses its own short-deadline context so a stuck git invocation
 // can't wedge the supervisor's 2-second poll loop.
 func (s *Server) aggregateChanges(t state.Track) state.Changes {
+	// Worktree-less tracks don't own worktrees — nothing to diff.
+	if t.Kind.Worktreeless() {
+		return state.Changes{}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var agg state.Changes
@@ -548,4 +569,3 @@ func (s *Server) stopAllSupervisors() {
 	}
 	wg.Wait()
 }
-
