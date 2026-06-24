@@ -75,7 +75,7 @@ func defaultStyles() styles {
 		// light terminals (where ANSI 8 turns nearly invisible)
 		// and a lighter gray on dark terminals. Same code path
 		// for both, no theme-specific configuration.
-		dim: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "245"}),
+		dim:        lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "245"}),
 		pr:         lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
 		branch:     lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		slug:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
@@ -303,11 +303,12 @@ func min(a, b int) int {
 }
 
 func (m *model) View() string {
+	header := bigBanner("TRACKS") + "\n\n"
 	table := m.renderTable(m.width)
 	if m.detail == nil {
-		return table
+		return header + table
 	}
-	return table + "\n" + m.renderDetail(*m.detail, m.width)
+	return header + table + "\n" + m.renderDetail(*m.detail, m.width)
 }
 
 // renderTable draws the dashboard's table + footer. The claude
@@ -317,9 +318,9 @@ func (m *model) View() string {
 func (m *model) renderTable(width int) string {
 	var b strings.Builder
 
-	b.WriteString(m.styles.header.Render("tracks — dashboard"))
-	b.WriteString("  ")
-	b.WriteString(m.styles.dim.Render(fmt.Sprintf("(%d tracks, %d pending prompts)", len(m.tracks), len(m.prompts))))
+	// The big "TRACKS" banner above the table is the title now, so
+	// here we only need the live counts as a dim subtitle.
+	b.WriteString(m.styles.dim.Render(fmt.Sprintf("%d tracks · %d pending prompts", len(m.tracks), len(m.prompts))))
 	b.WriteString("\n\n")
 
 	for _, p := range m.prompts {
