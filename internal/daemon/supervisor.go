@@ -16,6 +16,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
+	"github.com/bluegardenproject/tracks/internal/usage"
 )
 
 // supervisor wraps one running Claude session for one track.
@@ -50,6 +51,11 @@ type supervisor struct {
 	// spinner; without throttling we'd notify the user every few
 	// seconds on the same outstanding question.
 	lastWaitingNotifyAt time.Time
+
+	// lastUsageSig is a cheap signature (path+size+mtime) of the
+	// track's transcript file(s) at the last usage refresh. We skip
+	// re-parsing when it's unchanged, so an idle track costs nothing.
+	lastUsageSig string
 }
 
 // waitingNotifyMinInterval is the shortest gap between two
@@ -129,6 +135,7 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	tm := tmux.New()
+	tick := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -145,6 +152,14 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 				return
 			}
 			s.refreshRunningStatus(tm, sup)
+			// Token usage changes far slower than the pane, and
+			// parsing the transcript is heavier than a capture-pane,
+			// so refresh it on a coarser cadence (~10s) and skip
+			// entirely when the transcript file is unchanged.
+			tick++
+			if tick%usageRefreshEveryTicks == 0 {
+				s.refreshUsage(sup)
+			}
 		}
 	}
 }
@@ -165,6 +180,51 @@ func (s *Server) retire(sup *supervisor) {
 	if current {
 		s.finalizeTrack(sup.trackID)
 	}
+}
+
+// usageRefreshEveryTicks is how many 2s poll ticks pass between token
+// usage refreshes (~10s).
+const usageRefreshEveryTicks = 5
+
+// refreshUsage re-totals the track's token usage from Claude's session
+// transcript and persists it, gated on the transcript's size/mtime so
+// an unchanged file is never re-parsed.
+func (s *Server) refreshUsage(sup *supervisor) {
+	t, ok := s.store.Get(sup.trackID)
+	if !ok || len(t.Repos) == 0 {
+		return
+	}
+	paths := usage.Locate(t.SessionID, t.Repos[0].Path)
+	sig := transcriptSig(paths)
+	if sig == sup.lastUsageSig {
+		return
+	}
+	sup.lastUsageSig = sig
+
+	u, err := usage.ParseFiles(paths)
+	if err != nil {
+		return
+	}
+	// Re-read in case the pane poll mutated the track since Get above;
+	// we only own the Usage field.
+	t, ok = s.store.Get(sup.trackID)
+	if !ok || u == t.Usage {
+		return
+	}
+	t.Usage = u
+	_ = s.store.Put(t)
+}
+
+// transcriptSig is a cheap change-detector: path+size+mtime for each
+// transcript file. Empty when no files exist yet.
+func transcriptSig(paths []string) string {
+	var b strings.Builder
+	for _, p := range paths {
+		if fi, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", p, fi.Size(), fi.ModTime().UnixNano())
+		}
+	}
+	return b.String()
 }
 
 // sentinelPathFor returns the file the shell wrapper touches when
@@ -511,10 +571,31 @@ func (s *Server) finalizeTrack(trackID string) {
 	// process; treat any natural exit as Done. (Future: parse
 	// pane_dead_status via tmux.)
 	t.Status = state.StatusDone
+	// Settle the final token usage before persisting, so the stored
+	// figure and the notification both reflect the whole session.
+	if len(t.Repos) > 0 {
+		if u, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil && !u.IsZero() {
+			t.Usage = u
+		}
+	}
 	_ = s.store.Put(t)
 
 	s.notifyEvent(string(notify.EventDone), "tracks: track finished",
-		labelFor(t)+" is done")
+		labelFor(t)+" is done"+usageSuffix(t))
+}
+
+// usageSuffix renders a compact " — 1.2M tok · $3.45 · 12m" tail for
+// the done notification, or "" when there's no usage to report.
+func usageSuffix(t state.Track) string {
+	if t.Usage.IsZero() {
+		return ""
+	}
+	tokens := t.Usage.InputTokens + t.Usage.OutputTokens +
+		t.Usage.CacheReadTokens + t.Usage.CacheCreationTokens
+	return fmt.Sprintf(" — %s tok · %s · %s",
+		usage.FormatTokens(tokens),
+		usage.FormatCost(t.Usage.CostUSD),
+		usage.FormatDuration(t.Duration()))
 }
 
 // Stop ends a running track gracefully: SIGTERM the pane's whole

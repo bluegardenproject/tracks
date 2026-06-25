@@ -9,6 +9,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/usage"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -120,11 +121,29 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	}
 
 	out := []string{header, meta}
+	if !t.Usage.IsZero() {
+		out = append(out, m.renderUsageMeta(t))
+	}
 	if t.TaskPrompt != "" {
 		out = append(out, "")
 		out = append(out, wrapInfoText(t.TaskPrompt, w)...)
 	}
 	return strings.Join(out, "\n")
+}
+
+// renderUsageMeta is the one-line token/cost/runtime summary shown
+// under the TASK metadata when a track has produced any usage.
+func (m *model) renderUsageMeta(t state.Track) string {
+	u := t.Usage
+	dim := m.styles.dim.Render
+	parts := []string{
+		dim("tokens ") + usage.FormatTokens(u.InputTokens) + dim(" in / ") +
+			usage.FormatTokens(u.OutputTokens) + dim(" out"),
+		dim("cache ") + usage.FormatTokens(u.CacheReadTokens) + dim(" read"),
+		dim("cost ") + m.styles.cost.Render(usage.FormatCost(u.CostUSD)),
+		dim("ran ") + usage.FormatDuration(t.Duration()),
+	}
+	return strings.Join(parts, "  ")
 }
 
 // renderCommitsSection: short list of commits beyond base.

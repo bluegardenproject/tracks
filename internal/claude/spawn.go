@@ -49,6 +49,11 @@ type SpawnOptions struct {
 	// scripts can find the daemon.
 	SocketDir string
 
+	// SessionID pins Claude's session UUID via --session-id, so the
+	// daemon can find this track's transcript (and thus its token
+	// usage) at a known path. Empty means don't pin one.
+	SessionID string
+
 	// SentinelPath is the path to a file the shell wrapper touches
 	// the instant Claude exits, so the supervisor can finalize the
 	// track without depending on pid death. Empty means no shell
@@ -162,6 +167,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		TrackID:        t.ID,
 		SocketDir:      socketDir,
 		SentinelPath:   sentinelPath,
+		SessionID:      t.SessionID,
 	}, nil
 }
 
@@ -190,6 +196,9 @@ func (o SpawnOptions) ShellCommand() string {
 	}
 	if o.PermissionMode != "" {
 		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
+	}
+	if o.SessionID != "" {
+		claudeArgv = append(claudeArgv, "--session-id", shellQuote(o.SessionID))
 	}
 	for _, d := range o.AddDirs {
 		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))
