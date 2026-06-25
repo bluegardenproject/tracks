@@ -191,10 +191,16 @@ const usageRefreshEveryTicks = 5
 // an unchanged file is never re-parsed.
 func (s *Server) refreshUsage(sup *supervisor) {
 	t, ok := s.store.Get(sup.trackID)
-	if !ok || len(t.Repos) == 0 {
+	if !ok {
 		return
 	}
-	paths := usage.Locate(t.SessionID, t.Repos[0].Path)
+	// A worktree-less ask may have no repo; the transcript is still
+	// located by session id, so an empty cwd is fine here.
+	cwd := ""
+	if len(t.Repos) > 0 {
+		cwd = t.Repos[0].Path
+	}
+	paths := usage.Locate(t.SessionID, cwd)
 	sig := transcriptSig(paths)
 	if sig == sup.lastUsageSig {
 		return

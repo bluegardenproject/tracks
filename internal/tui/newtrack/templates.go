@@ -23,11 +23,11 @@ const (
 // each repo has installed.
 var templatePrompts = map[Template]string{
 	TemplateCustom: "",
-	TemplateAsk: `Answer the following question about the codebase. This is a
-read-only investigation — explore, read, and explain; do not modify
-anything.
-
-`,
+	// Ask is sent verbatim — no preamble. The read-only contract is
+	// enforced by plan permission mode (and a short suffix when repos
+	// are attached), so wrapping the question in framing here only
+	// risks steering the answer. See claude.BuildOptions.
+	TemplateAsk: "",
 	TemplatePlan: `Produce a detailed implementation plan for the following. This is a
 read-only planning task — investigate the codebase and design an
 approach; do not modify anything. When the user is ready to build it,

@@ -106,9 +106,6 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fail("bad params: " + err.Error())
 	}
-	if len(p.Repos) == 0 {
-		return fail("at least one repo required")
-	}
 
 	// Resolve and validate each requested repo against config.
 	repos := make([]repoSpec, 0, len(p.Repos))
@@ -155,6 +152,13 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	}
 	if checkout != nil {
 		kind = state.KindReview
+	}
+
+	// Work and review tracks need a worktree, so they require at least
+	// one repo. Ask/plan are worktree-less and may run with none — a
+	// general question needn't be tied to any repo.
+	if !kind.Worktreeless() && len(repos) == 0 {
+		return fail("at least one repo required")
 	}
 
 	trackID, err := generateTrackID()
