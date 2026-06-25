@@ -53,6 +53,29 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		return runReview(repoOptions)
 	}
 
+	// Ask/Plan are worktree-less: they run read-only against your
+	// primary checkout, or against nothing at all. So repos are
+	// optional — you can ask a general Ledger question unrelated to any
+	// repo, or attach repos just to give Claude read context.
+	worktreeless := template == TemplateAsk || template == TemplatePlan
+
+	repoDesc := "Space to toggle, enter to confirm. Pick the repos this track should start with. Claude can request more later via the `tracks-add-repo` skill."
+	repoValidate := func(v []string) error {
+		if len(v) == 0 {
+			return errors.New("pick at least one repo")
+		}
+		return nil
+	}
+	if worktreeless {
+		repoDesc = "Optional. Space to toggle, enter to confirm. Attach repos for read-only context, or leave empty for a general question not tied to a repo."
+		repoValidate = func([]string) error { return nil }
+	}
+
+	taskTitle, taskDesc := "Task prompt", "What should Claude do? Free-form. Mention a Jira-style ticket (e.g. ABC-123) and Claude will use it in the branch name and commit message."
+	if template == TemplateAsk {
+		taskTitle, taskDesc = "Question", "What do you want to ask? Sent to Claude as-is — no extra framing."
+	}
+
 	var (
 		repos []string
 		slug  string
@@ -63,14 +86,9 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Repos").
-				Description("Space to toggle, enter to confirm. Pick the repos this track should start with. Claude can request more later via the `tracks-add-repo` skill.").
+				Description(repoDesc).
 				Options(repoOptions...).
-				Validate(func(v []string) error {
-					if len(v) == 0 {
-						return errors.New("pick at least one repo")
-					}
-					return nil
-				}).
+				Validate(repoValidate).
 				Value(&repos),
 			huh.NewInput().
 				Title("Slug (optional)").
@@ -78,8 +96,8 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 				Placeholder("e.g. rate-bug-investigation").
 				Value(&slug),
 			huh.NewText().
-				Title("Task prompt").
-				Description("What should Claude do? Free-form. Mention a Jira-style ticket (e.g. ABC-123) and Claude will use it in the branch name and commit message.").
+				Title(taskTitle).
+				Description(taskDesc).
 				CharLimit(8192).
 				Validate(func(v string) error {
 					if strings.TrimSpace(v) == "" {

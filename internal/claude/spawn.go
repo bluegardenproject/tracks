@@ -10,6 +10,7 @@ package claude
 
 import (
 	"errors"
+	"os"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -133,29 +134,45 @@ const readOnlySuffix = "" +
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
 func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath string) (SpawnOptions, error) {
-	if len(t.Repos) == 0 {
+	// Worktree-less ask/plan tracks may carry no repos at all (a
+	// general question not tied to a repo). Work/review always have at
+	// least one — the daemon enforces that before spawning.
+	if len(t.Repos) == 0 && !t.Kind.Worktreeless() {
 		return SpawnOptions{}, errors.New("track has no repos")
 	}
 	addDirs := make([]string, 0, len(t.Repos))
 	for _, r := range t.Repos {
 		addDirs = append(addDirs, r.Path)
 	}
-	// Always-injected suffix below. Lives in code (not user
-	// config) so we can iterate on the wording without users
-	// having to edit YAML.
-	prompt := strings.TrimRight(t.TaskPrompt, " \t\n\r") + "\n\n" + taskSuffix
 
-	// Worktree-less tracks point at the primary checkout, so we default
-	// them to plan permission mode (read/analyse, no edits) and spell
-	// out the read-only contract in the prompt. Note this is a strong
-	// default, not a hard sandbox: plan mode is interactively
-	// switchable, so an accepted plan or a manual mode change could
-	// still write to the primary checkout. Promotion is the supported
-	// path to start editing.
+	prompt := strings.TrimRight(t.TaskPrompt, " \t\n\r")
+
+	// Work/review tracks get the work suffix (review gate, PR marker,
+	// Jira sync). Worktree-less ask/plan tracks deliberately don't:
+	// that framing is wrong for a read-only question and only risks
+	// degrading the answer. They run in plan permission mode instead,
+	// and get a short read-only contract *only* when repos are
+	// attached — i.e. Claude can see the user's primary checkout and
+	// must be told not to edit it. A repo-less question is sent
+	// verbatim. (Plan mode is a strong default, not a hard sandbox —
+	// it's interactively switchable; promotion is the path to editing.)
 	permMode := cfg.Claude.PermissionMode
 	if t.Kind.Worktreeless() {
 		permMode = "plan"
-		prompt += readOnlySuffix
+		if len(t.Repos) > 0 {
+			prompt += readOnlySuffix
+		}
+	} else {
+		prompt += "\n\n" + taskSuffix
+	}
+
+	// CWD is the first worktree; for a repo-less ask, fall back to the
+	// user's home dir so tmux has a valid directory to open the pane in.
+	cwd := ""
+	if len(t.Repos) > 0 {
+		cwd = t.Repos[0].Path
+	} else if home, err := os.UserHomeDir(); err == nil {
+		cwd = home
 	}
 
 	return SpawnOptions{
@@ -163,7 +180,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		PermissionMode: permMode,
 		TaskPrompt:     prompt,
 		AddDirs:        addDirs,
-		CWD:            t.Repos[0].Path,
+		CWD:            cwd,
 		TrackID:        t.ID,
 		SocketDir:      socketDir,
 		SentinelPath:   sentinelPath,
