@@ -115,6 +115,25 @@ func (c Changes) IsZero() bool {
 	return c.Files == 0 && c.Insertions == 0 && c.Deletions == 0
 }
 
+// Usage is the token spend + USD cost of a track, summed from Claude
+// Code's session transcript by internal/usage. Token counts are the
+// *billed* sums across every API call — InputTokens re-counts the
+// growing context each turn, which is correct for cost but is not a
+// measure of context size.
+type Usage struct {
+	InputTokens         int64   `json:"input_tokens,omitempty"`
+	OutputTokens        int64   `json:"output_tokens,omitempty"`
+	CacheReadTokens     int64   `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens,omitempty"`
+	CostUSD             float64 `json:"cost_usd,omitempty"`
+}
+
+// IsZero reports whether no usage has been recorded yet.
+func (u Usage) IsZero() bool {
+	return u.InputTokens == 0 && u.OutputTokens == 0 &&
+		u.CacheReadTokens == 0 && u.CacheCreationTokens == 0 && u.CostUSD == 0
+}
+
 // Track is the persistent record of one Claude session.
 type Track struct {
 	// ID is opaque to the user: <YYYYMMDD-HHMMSS>-<6char-rand>.
@@ -189,6 +208,16 @@ type Track struct {
 	// is gone.
 	Changes Changes `json:"changes,omitempty"`
 
+	// SessionID is the UUID passed to `claude --session-id` at spawn.
+	// Lets the daemon find this track's transcript under
+	// ~/.claude/projects/*/<SessionID>.jsonl to total token usage.
+	SessionID string `json:"session_id,omitempty"`
+
+	// Usage is the token spend + cost, refreshed by the supervisor
+	// from the session transcript. Zero until the first assistant
+	// turn lands.
+	Usage Usage `json:"usage,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 
@@ -205,6 +234,20 @@ type Track struct {
 // IsTerminal reports whether s is one of the end-state statuses.
 func (s Status) IsTerminal() bool {
 	return s == StatusDone || s == StatusErrored
+}
+
+// Duration is the track's wall-clock runtime: from CreatedAt to
+// ExitedAt for a finished track, or to now for a live one. Zero when
+// CreatedAt isn't set.
+func (t Track) Duration() time.Duration {
+	if t.CreatedAt.IsZero() {
+		return 0
+	}
+	end := time.Now().UTC()
+	if t.ExitedAt != nil {
+		end = *t.ExitedAt
+	}
+	return end.Sub(t.CreatedAt)
 }
 
 // windowLabelMaxLen caps the human part of a tmux window name so the

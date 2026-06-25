@@ -21,6 +21,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
+	"github.com/bluegardenproject/tracks/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -48,6 +49,7 @@ type styles struct {
 	insertions lipgloss.Style
 	deletions  lipgloss.Style
 	count      lipgloss.Style
+	cost       lipgloss.Style
 	ok         lipgloss.Style
 	warn       lipgloss.Style
 	fail       lipgloss.Style
@@ -83,6 +85,7 @@ func defaultStyles() styles {
 		insertions: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		deletions:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		count:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		cost:       lipgloss.NewStyle().Foreground(lipgloss.Color("78")),
 		ok:         lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		warn:       lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 		fail:       lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
@@ -337,15 +340,15 @@ func (m *model) renderTable(width int) string {
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-36s  %-26s  %-10s  %-22s  %-6s",
-			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE")))
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-36s  %-26s  %-10s  %-22s  %-6s  %-8s",
+			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE", "COST")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
 			branch := t.Branch
 			if branch == "" {
 				branch = "—"
 			}
-			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s",
+			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
 				shortID(t.ID),
 				padRendered(m.renderKind(t), 7),
 				padRendered(m.styles.branch.Render(truncate(branch, 36)), 36),
@@ -353,6 +356,7 @@ func (m *model) renderTable(width int) string {
 				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
 				padRendered(m.renderChangesColored(t.Changes), 22),
 				padRendered(m.styles.dim.Render(renderIdle(t)), 6),
+				padRendered(m.renderCost(t.Usage), 8),
 			)
 			if i == m.cursor {
 				b.WriteString(m.styles.rowActive.Render(line))
@@ -418,6 +422,15 @@ func (m *model) renderChangesColored(c state.Changes) string {
 	return m.styles.insertions.Render(fmt.Sprintf("+%d", c.Insertions)) +
 		" " + m.styles.deletions.Render(fmt.Sprintf("-%d", c.Deletions)) +
 		" " + m.styles.dim.Render(fmt.Sprintf("(%d)", c.Files))
+}
+
+// renderCost renders a track's USD cost for the COST column. Dim
+// placeholder until the first assistant turn produces usage.
+func (m *model) renderCost(u state.Usage) string {
+	if u.IsZero() {
+		return m.styles.dim.Render("—")
+	}
+	return m.styles.cost.Render(usage.FormatCost(u.CostUSD))
 }
 
 // padRendered pads a (possibly already-styled) string to width
