@@ -517,35 +517,79 @@ func (s *Server) finalizeTrack(trackID string) {
 		labelFor(t)+" is done")
 }
 
-// Stop signals the supervisor to wind down by killing the tmux
-// window (which SIGHUPs claude). Waits for the watcher to see the
-// disappearance and finalize.
+// Stop ends a running track gracefully: SIGTERM the pane's whole
+// process group so Claude (and any shutdown hook it spawns) runs to
+// completion while the worktree still exists, wait for the group to
+// exit, SIGKILL anything left as a backstop, then close the window.
+//
+// Signalling the *group* (kill(-pid)) rather than just sup.pid is the
+// crux: sup.pid is the wrapper shell (`sh -c 'claude …; exec
+// $SHELL'`) and Claude is its child. Killing only the shell orphans
+// Claude, which then races the caller's worktree removal and fails
+// its Stop hook with `ENOENT '/bin/sh'` (a deleted cwd). The caller
+// removes the worktree only after this returns, so by then the group
+// — Claude and its hooks included — is gone.
 func (sup *supervisor) Stop(sessionName string) {
 	if sup == nil {
 		return
 	}
-	tm := tmux.New()
-	_ = tm.KillWindow(sessionName, sup.windowName)
-	select {
-	case <-sup.done:
-	case <-time.After(5 * time.Second):
-	}
+	sup.terminateGroup(5 * time.Second)
+	_ = tmux.New().KillWindow(sessionName, sup.windowName)
 }
 
-// Kill is harsher: SIGKILL the pid directly, then kill the window
-// for good measure.
+// Kill ends a track with prejudice: SIGKILL the whole process group
+// at once (Claude dies before it can spawn any shutdown hook), wait
+// briefly for it to be reaped, then close the window.
 func (sup *supervisor) Kill(sessionName string) {
 	if sup == nil {
 		return
 	}
-	if sup.pid > 0 {
-		_ = syscall.Kill(sup.pid, syscall.SIGKILL)
+	signalGroup(sup.pid, syscall.SIGKILL)
+	waitGroupGone(sup.pid, 2*time.Second)
+	_ = tmux.New().KillWindow(sessionName, sup.windowName)
+}
+
+// terminateGroup SIGTERMs the pane's process group, waits up to grace
+// for every process in it to exit, then SIGKILLs whatever remains.
+func (sup *supervisor) terminateGroup(grace time.Duration) {
+	signalGroup(sup.pid, syscall.SIGTERM)
+	if waitGroupGone(sup.pid, grace) {
+		return
 	}
-	tm := tmux.New()
-	_ = tm.KillWindow(sessionName, sup.windowName)
-	select {
-	case <-sup.done:
-	case <-time.After(2 * time.Second):
+	signalGroup(sup.pid, syscall.SIGKILL)
+	waitGroupGone(sup.pid, 2*time.Second)
+}
+
+// signalGroup sends sig to the process group led by pid
+// (kill(-pid, sig)). tmux launches each pane in its own session, so
+// the pane_pid is the group leader and the negative-pid send reaches
+// Claude and any children. Falls back to the bare pid if the group
+// send fails (e.g. pid isn't a group leader).
+func signalGroup(pid int, sig syscall.Signal) {
+	if pid <= 0 {
+		return
+	}
+	if err := syscall.Kill(-pid, sig); err != nil {
+		_ = syscall.Kill(pid, sig)
+	}
+}
+
+// waitGroupGone polls until the process group led by pid has no
+// remaining members (kill(-pid, 0) → ESRCH) or timeout elapses.
+// Returns true once the group is gone.
+func waitGroupGone(pid int, timeout time.Duration) bool {
+	if pid <= 0 {
+		return true
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		if syscall.Kill(-pid, 0) == syscall.ESRCH {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return syscall.Kill(-pid, 0) == syscall.ESRCH
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
