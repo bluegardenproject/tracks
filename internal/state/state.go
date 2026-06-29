@@ -134,6 +134,34 @@ func (u Usage) IsZero() bool {
 		u.CacheReadTokens == 0 && u.CacheCreationTokens == 0 && u.CostUSD == 0
 }
 
+// ServiceStatus is a dev server's lifecycle phase within a track.
+type ServiceStatus string
+
+const (
+	// ServiceRunning means the process has been started. Readiness
+	// (a finer "ready" state) is layered on later.
+	ServiceRunning ServiceStatus = "running"
+	// ServiceFailed means the process exited non-zero or never started.
+	ServiceFailed ServiceStatus = "failed"
+	// ServiceStopped means the process was torn down (by us or the track).
+	ServiceStopped ServiceStatus = "stopped"
+)
+
+// ServiceState records one running (or finished) dev server for a track.
+// PGID is the process-group id used to tear the whole tree down with a
+// single signal — it's the authoritative handle, persisted so teardown
+// works even after a daemon restart.
+type ServiceState struct {
+	Name      string        `json:"name"`
+	Status    ServiceStatus `json:"status"`
+	PID       int           `json:"pid,omitempty"`
+	PGID      int           `json:"pgid,omitempty"`
+	Port      int           `json:"port,omitempty"`
+	LogPath   string        `json:"log_path,omitempty"`
+	StartedAt *time.Time    `json:"started_at,omitempty"`
+	ExitedAt  *time.Time    `json:"exited_at,omitempty"`
+}
+
 // Track is the persistent record of one Claude session.
 type Track struct {
 	// ID is opaque to the user: <YYYYMMDD-HHMMSS>-<6char-rand>.
@@ -165,6 +193,11 @@ type Track struct {
 	// nothing is bound) and kept clear of other live tracks' ports. Empty
 	// when the track's repos declare no services.
 	Ports map[string]int `json:"ports,omitempty"`
+
+	// Services records the dev servers started for this track (lazy, via
+	// `tracks up`). Each entry carries the process-group id used to tear
+	// it down. Empty until a service is started.
+	Services []ServiceState `json:"services,omitempty"`
 
 	// Status is the most recently observed lifecycle phase.
 	Status Status `json:"status"`

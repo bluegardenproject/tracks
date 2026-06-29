@@ -32,6 +32,14 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 			continue
 		}
 		alive := t.PID > 0 && processAlive(t.PID)
+		// Kill any dev servers orphaned by the previous daemon. They run
+		// in their own process groups (not the daemon's), so a daemon
+		// crash leaves them bound to their ports; SIGKILL by the stored
+		// PGID frees them. Done before marking errored so the persisted
+		// Services reflect the teardown.
+		if len(t.Services) > 0 {
+			t.Services = stopPersistedServices(t.Services, true)
+		}
 		t.Status = state.StatusErrored
 		now := time.Now().UTC()
 		t.ExitedAt = &now
