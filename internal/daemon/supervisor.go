@@ -14,6 +14,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/claude"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
+	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/usage"
@@ -56,6 +57,13 @@ type supervisor struct {
 	// track's transcript file(s) at the last usage refresh. We skip
 	// re-parsing when it's unchanged, so an idle track costs nothing.
 	lastUsageSig string
+
+	// services holds the dev-server processes started for this track
+	// (lazy, via `tracks up`), keyed by service name. The in-memory
+	// handle gives a clean Stop on shutdown; the authoritative teardown
+	// is always by the persisted process-group id. Guarded by svcMu.
+	svcMu    sync.Mutex
+	services map[string]*services.Process
 }
 
 // waitingNotifyMinInterval is the shortest gap between two
@@ -620,31 +628,68 @@ func (sup *supervisor) Stop(sessionName string) {
 	if sup == nil {
 		return
 	}
+	sup.stopAllServices(5 * time.Second)
 	sup.terminateGroup(5 * time.Second)
 	_ = tmux.New().KillWindow(sessionName, sup.windowName)
 }
 
 // Kill ends a track with prejudice: SIGKILL the whole process group
 // at once (Claude dies before it can spawn any shutdown hook), wait
-// briefly for it to be reaped, then close the window.
+// briefly for it to be reaped, then close the window. Dev servers are
+// killed immediately too.
 func (sup *supervisor) Kill(sessionName string) {
 	if sup == nil {
 		return
 	}
-	signalGroup(sup.pid, syscall.SIGKILL)
-	waitGroupGone(sup.pid, 2*time.Second)
+	sup.stopAllServices(0)
+	killPGID(sup.pid)
 	_ = tmux.New().KillWindow(sessionName, sup.windowName)
+}
+
+// stopAllServices tears down every dev server this supervisor started,
+// in parallel, and clears the registry. A zero grace kills immediately.
+func (sup *supervisor) stopAllServices(grace time.Duration) {
+	sup.svcMu.Lock()
+	procs := make([]*services.Process, 0, len(sup.services))
+	for _, p := range sup.services {
+		procs = append(procs, p)
+	}
+	sup.services = nil
+	sup.svcMu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, p := range procs {
+		wg.Add(1)
+		go func(pr *services.Process) {
+			defer wg.Done()
+			pr.Stop(grace)
+		}(p)
+	}
+	wg.Wait()
 }
 
 // terminateGroup SIGTERMs the pane's process group, waits up to grace
 // for every process in it to exit, then SIGKILLs whatever remains.
 func (sup *supervisor) terminateGroup(grace time.Duration) {
-	signalGroup(sup.pid, syscall.SIGTERM)
-	if waitGroupGone(sup.pid, grace) {
+	terminatePGID(sup.pid, grace)
+}
+
+// terminatePGID SIGTERMs the process group led by pid, waits up to grace
+// for it to exit, then SIGKILLs whatever remains.
+func terminatePGID(pid int, grace time.Duration) {
+	signalGroup(pid, syscall.SIGTERM)
+	if waitGroupGone(pid, grace) {
 		return
 	}
-	signalGroup(sup.pid, syscall.SIGKILL)
-	waitGroupGone(sup.pid, 2*time.Second)
+	signalGroup(pid, syscall.SIGKILL)
+	waitGroupGone(pid, 2*time.Second)
+}
+
+// killPGID SIGKILLs the process group led by pid and waits briefly for
+// it to be reaped.
+func killPGID(pid int) {
+	signalGroup(pid, syscall.SIGKILL)
+	waitGroupGone(pid, 2*time.Second)
 }
 
 // signalGroup sends sig to the process group led by pid

@@ -453,6 +453,18 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	// Done/Errored.
 	t, _ = s.store.Get(p.ID)
 
+	// Tear down any dev servers before the worktree is removed so they
+	// release files and ports first. When a supervisor was alive the
+	// Stop/Kill above already stopped them via the in-memory handles;
+	// this is the authoritative, state-driven backstop (it also covers a
+	// track that finished on its own, leaving services with no live
+	// supervisor handle). Idempotent: already-dead groups just ESRCH.
+	if len(t.Services) > 0 {
+		emit("stopping dev servers...")
+		t.Services = stopPersistedServices(t.Services, force)
+		_ = s.store.Put(t)
+	}
+
 	// Close the track's tmux window. When a supervisor was alive the
 	// Stop/Kill above already did this, but a track that finished on
 	// its own keeps its pane alive as a shell with no supervisor left
