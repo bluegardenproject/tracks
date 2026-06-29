@@ -149,7 +149,60 @@ type Repo struct {
 	// it copies gitignored files (e.g. .env) from the primary checkout
 	// and runs a dependency-install command. nil means no provisioning.
 	Provision *Provision `yaml:"provision,omitempty"`
+
+	// Services declares the dev servers a track for this repo can run,
+	// lazy-started on demand via `tracks up <name>`. The binary stays
+	// generic: anything repo-specific lives in the cmd/env/hooks here,
+	// never hardcoded. Empty means no services.
+	Services []Service `yaml:"services,omitempty"`
 }
+
+// Service is one named dev server a track can run. Cmd, Env values, and
+// the hook commands are templated before launch (e.g. {{.Port "name"}}
+// resolves to the port allocated to the service called "name"). The
+// service runs as a supervised background process in the worktree.
+type Service struct {
+	// Name identifies the service within its repo (unique per repo). Used
+	// by `tracks up <name>`, the tmux pane title, and port lookup.
+	Name string `yaml:"name"`
+
+	// Cmd is the shell command that starts the server. Templated.
+	Cmd string `yaml:"cmd"`
+
+	// Env are extra environment variables for Cmd, values templated and
+	// merged onto the daemon's environment.
+	Env map[string]string `yaml:"env,omitempty"`
+
+	// Ready describes how to detect the service is up. At most one field
+	// may be set; an empty probe means "ready as soon as it starts".
+	Ready ReadyProbe `yaml:"ready,omitempty"`
+
+	// PreStart, PostStart, and PreStop are shell commands run around the
+	// service lifecycle (templated, in the worktree). Repo-specific wiring
+	// — e.g. patching a live-app manifest URL with the allocated port —
+	// lives here, not in the binary.
+	PreStart  []string `yaml:"pre_start,omitempty"`
+	PostStart []string `yaml:"post_start,omitempty"`
+	PreStop   []string `yaml:"pre_stop,omitempty"`
+
+	// DependsOn lists other services (same repo) that must be ready
+	// before this one starts. A simple ordered wait, not a DAG.
+	DependsOn []string `yaml:"depends_on,omitempty"`
+}
+
+// ReadyProbe is how a service signals readiness. At most one field set.
+type ReadyProbe struct {
+	// Port is satisfied when something is listening on this (templated)
+	// TCP port, e.g. `{{.Port "live-app"}}` or a literal number.
+	Port string `yaml:"port,omitempty"`
+
+	// LogRegex is satisfied when the service's log output matches this
+	// RE2 pattern, e.g. "compiled successfully".
+	LogRegex string `yaml:"log_regex,omitempty"`
+}
+
+// IsZero reports whether the probe declares no readiness condition.
+func (p ReadyProbe) IsZero() bool { return p.Port == "" && p.LogRegex == "" }
 
 // Provision configures how a worktree is made runnable after creation:
 // gitignored files are brought in from the primary checkout, then a
@@ -276,8 +329,85 @@ func (c Config) Validate() error {
 				return fmt.Errorf("repos[%s].provision.copy_mode %q is invalid (want symlink or copy)", r.Name, p.CopyMode)
 			}
 		}
+		if err := validateServices(r.Name, r.Services); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+// validateServices checks a repo's service definitions: unique non-empty
+// names, a command, at most one readiness kind, and depends_on edges that
+// reference real sibling services without cycles.
+func validateServices(repoName string, services []Service) error {
+	if len(services) == 0 {
+		return nil
+	}
+	names := make(map[string]struct{}, len(services))
+	for _, svc := range services {
+		if svc.Name == "" {
+			return fmt.Errorf("repos[%s].services: a service is missing a name", repoName)
+		}
+		if _, dup := names[svc.Name]; dup {
+			return fmt.Errorf("repos[%s].services: duplicate name %q", repoName, svc.Name)
+		}
+		names[svc.Name] = struct{}{}
+	}
+	for _, svc := range services {
+		if strings.TrimSpace(svc.Cmd) == "" {
+			return fmt.Errorf("repos[%s].services[%s].cmd is required", repoName, svc.Name)
+		}
+		if svc.Ready.Port != "" && svc.Ready.LogRegex != "" {
+			return fmt.Errorf("repos[%s].services[%s].ready: set at most one of port or log_regex", repoName, svc.Name)
+		}
+		for _, dep := range svc.DependsOn {
+			if dep == svc.Name {
+				return fmt.Errorf("repos[%s].services[%s] depends on itself", repoName, svc.Name)
+			}
+			if _, ok := names[dep]; !ok {
+				return fmt.Errorf("repos[%s].services[%s].depends_on references unknown service %q", repoName, svc.Name, dep)
+			}
+		}
+	}
+	return dependencyCycle(repoName, services)
+}
+
+// dependencyCycle reports an error if the depends_on edges form a cycle,
+// which would deadlock the ordered wait-for-ready at start time.
+func dependencyCycle(repoName string, services []Service) error {
+	deps := make(map[string][]string, len(services))
+	for _, svc := range services {
+		deps[svc.Name] = svc.DependsOn
+	}
+	const (
+		unvisited = 0
+		visiting  = 1
+		done      = 2
+	)
+	state := make(map[string]int, len(services))
+	var visit func(name string) bool
+	visit = func(name string) bool {
+		switch state[name] {
+		case visiting:
+			return true
+		case done:
+			return false
+		}
+		state[name] = visiting
+		for _, dep := range deps[name] {
+			if visit(dep) {
+				return true
+			}
+		}
+		state[name] = done
+		return false
+	}
+	for _, svc := range services {
+		if visit(svc.Name) {
+			return fmt.Errorf("repos[%s].services: depends_on cycle involving %q", repoName, svc.Name)
+		}
+	}
 	return nil
 }
 

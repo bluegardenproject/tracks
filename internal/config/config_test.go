@@ -129,6 +129,41 @@ func TestValidateAcceptsApfsClone(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBadServices(t *testing.T) {
+	cases := map[string][]Service{
+		"missing name":     {{Cmd: "run"}},
+		"duplicate name":   {{Name: "a", Cmd: "x"}, {Name: "a", Cmd: "y"}},
+		"missing cmd":      {{Name: "a"}},
+		"two ready kinds":  {{Name: "a", Cmd: "x", Ready: ReadyProbe{Port: "1", LogRegex: "up"}}},
+		"unknown dep":      {{Name: "a", Cmd: "x", DependsOn: []string{"ghost"}}},
+		"self dep":         {{Name: "a", Cmd: "x", DependsOn: []string{"a"}}},
+		"dependency cycle": {{Name: "a", Cmd: "x", DependsOn: []string{"b"}}, {Name: "b", Cmd: "y", DependsOn: []string{"a"}}},
+	}
+	for name, svcs := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			c.Repos = []Repo{{Name: "r", Path: "/a", Base: "main", Services: svcs}}
+			if err := c.Validate(); err == nil {
+				t.Fatalf("expected validation error for %s", name)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsServices(t *testing.T) {
+	c := Default()
+	c.Repos = []Repo{{
+		Name: "r", Path: "/a", Base: "main",
+		Services: []Service{
+			{Name: "lld", Cmd: "pnpm dev:lld", Ready: ReadyProbe{LogRegex: "compiled"}},
+			{Name: "live-app", Cmd: `pnpm dev --port {{.Port "live-app"}}`, Ready: ReadyProbe{Port: `{{.Port "live-app"}}`}, DependsOn: []string{"lld"}},
+		},
+	}}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid services should pass: %v", err)
+	}
+}
+
 func TestLoadPartialMergesDefaults(t *testing.T) {
 	dir := withXDGConfig(t)
 	// User writes only `repos:` and leaves everything else missing.
