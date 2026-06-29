@@ -32,10 +32,21 @@ import (
 //     exits.
 //  4. Stop is safe to call concurrently with Start.
 type Server struct {
-	cfg      config.Config
+	// cfg is swapped atomically by maybeReloadConfig when the on-disk
+	// config file changes, so callers always observe a consistent
+	// snapshot. Read it via s.config(), never directly.
+	cfg      atomic.Pointer[config.Config]
 	store    state.Store
 	version  string
 	notifier *notify.Notifier
+
+	// Config-reload bookkeeping. cfgReloadMu serializes stat+load+swap
+	// so concurrent requests don't reload redundantly; the watched
+	// mtime/size are the last values we successfully (or unsuccessfully)
+	// observed, used to skip reloads when the file is unchanged.
+	cfgReloadMu sync.Mutex
+	cfgModTime  time.Time
+	cfgSize     int64
 
 	// NoTmuxWatch disables the tmux-has-session polling loop. Set to
 	// true in tests where there is no tmux session to gate on.
@@ -63,8 +74,7 @@ type promptCh struct {
 // until Start. The version string is included in ping responses and
 // in the daemon log line.
 func NewServer(cfg config.Config, store state.Store, version string) *Server {
-	return &Server{
-		cfg:     cfg,
+	s := &Server{
 		store:   store,
 		version: version,
 		notifier: notify.New(notify.Channel{
@@ -73,6 +83,92 @@ func NewServer(cfg config.Config, store state.Store, version string) *Server {
 		}),
 		pendingPrompts: make(map[string]promptCh),
 	}
+	s.cfg.Store(&cfg)
+	return s
+}
+
+// config returns the current config snapshot. The returned value is a
+// copy of an immutable Config; maybeReloadConfig only ever swaps in a
+// fresh pointer, never mutates one in place, so the snapshot stays
+// stable for the duration of a caller's use.
+func (s *Server) config() config.Config {
+	return *s.cfg.Load()
+}
+
+// initConfigWatch records the config file's current mtime and size as
+// the reload baseline. Called once at startup so that only subsequent
+// edits are treated as changes. A missing or unreadable file leaves the
+// baseline zeroed, so its later creation registers as a change.
+func (s *Server) initConfigWatch() {
+	p, err := config.Path()
+	if err != nil {
+		return
+	}
+	s.cfgReloadMu.Lock()
+	defer s.cfgReloadMu.Unlock()
+	if fi, err := os.Stat(p); err == nil {
+		s.cfgModTime = fi.ModTime()
+		s.cfgSize = fi.Size()
+	}
+}
+
+// maybeReloadConfig reloads the config file if its mtime or size has
+// changed since the last observation, swapping in the new snapshot.
+// It is safe to call on every request: when nothing changed it does a
+// single stat and returns.
+//
+// Failure handling is deliberately forgiving — a daemon serving live
+// tracks must not break because of a transient stat error or a
+// half-saved/malformed edit:
+//
+//   - A stat error (e.g. the file was momentarily renamed away) leaves
+//     the current config untouched and is retried next request.
+//   - A parse/validation error logs once and advances the baseline to
+//     the bad file's mtime, so we don't re-read and re-log it every
+//     request; the user's next edit changes the mtime and we retry.
+//
+// Infrastructure fields bound at startup (socket/state dirs, tmux
+// session name) are preserved from the live config rather than taken
+// from disk: the socket and store are already open against the old
+// values, so honoring a mid-flight change would diverge the daemon
+// from what it actually bound. Those require a real restart.
+func (s *Server) maybeReloadConfig() {
+	p, err := config.Path()
+	if err != nil {
+		return
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		return
+	}
+
+	s.cfgReloadMu.Lock()
+	defer s.cfgReloadMu.Unlock()
+
+	if fi.ModTime().Equal(s.cfgModTime) && fi.Size() == s.cfgSize {
+		return // unchanged
+	}
+
+	newCfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tracks daemon: config reload failed, keeping previous config: %v\n", err)
+		// Advance the baseline so we don't re-read and re-log the same
+		// broken file every request; the next edit will retry.
+		s.cfgModTime = fi.ModTime()
+		s.cfgSize = fi.Size()
+		return
+	}
+
+	// Preserve startup-bound infrastructure. These cannot change without
+	// a restart, so a live edit to them is ignored (not honored).
+	cur := s.config()
+	newCfg.Paths = cur.Paths
+	newCfg.Tmux.SessionName = cur.Tmux.SessionName
+
+	s.cfg.Store(&newCfg)
+	s.cfgModTime = fi.ModTime()
+	s.cfgSize = fi.Size()
+	fmt.Fprintf(os.Stderr, "tracks daemon: reloaded config (%d repos)\n", len(newCfg.Repos))
 }
 
 // SocketPath returns the absolute path to the Unix socket. Useful for
@@ -98,7 +194,11 @@ func LockPath(cfg config.Config) (string, error) {
 // Returns nil on a clean tmux-driven shutdown; an error if startup
 // failed or another daemon is already running.
 func (s *Server) Start(ctx context.Context) error {
-	dir, err := s.cfg.ResolveSocketDir()
+	// Record the config file's current mtime/size as the reload
+	// baseline, so only edits made *after* startup trigger a reload.
+	s.initConfigWatch()
+
+	dir, err := s.config().ResolveSocketDir()
 	if err != nil {
 		return fmt.Errorf("resolve socket dir: %w", err)
 	}
@@ -147,7 +247,9 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
+	s.mu.Lock()
 	s.cancelTmuxWatch = cancelTmux
+	s.mu.Unlock()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -173,8 +275,13 @@ func (s *Server) Stop() {
 	if s.stopped.Swap(true) {
 		return
 	}
-	if s.cancelTmuxWatch != nil {
-		s.cancelTmuxWatch()
+	// Read the cancel func under the lock (it's set under the same lock
+	// in Start), but invoke it without holding the lock.
+	s.mu.Lock()
+	cancel := s.cancelTmuxWatch
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 	// Tear down active Claude processes before closing the listener
 	// so they get a chance to finalize their logs.
@@ -255,6 +362,10 @@ type Emit func(msg string)
 // dispatch routes one request to its handler. Handlers live in
 // handlers.go so this file stays focused on plumbing.
 func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response {
+	// Pick up edits to the config file (e.g. a newly added repo) before
+	// handling the request, so users don't have to restart the daemon.
+	s.maybeReloadConfig()
+
 	switch req.Method {
 	case MethodPing:
 		return s.handlePing()
@@ -296,7 +407,7 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 // simple. 2 seconds is well below human reaction time and 1800
 // polls/hour is negligible.
 func (s *Server) tmuxWatchLoop(ctx context.Context) {
-	name := s.cfg.Tmux.SessionName
+	name := s.config().Tmux.SessionName
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {

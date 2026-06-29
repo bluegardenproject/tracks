@@ -154,7 +154,7 @@ func (s *Server) InstallGlobalHelpers() error {
 	// Skill: tracks-add-repo (per-user content — the configured
 	// repo list — embedded in the body).
 	var b strings.Builder
-	for _, r := range s.cfg.Repos {
+	for _, r := range s.config().Repos {
 		fmt.Fprintf(&b, "- `%s` — primary at `%s` (base: `%s`)\n", r.Name, r.Path, r.Base)
 	}
 	skillBody := fmt.Sprintf(skillTemplate, b.String())

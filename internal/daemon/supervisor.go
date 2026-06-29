@@ -75,13 +75,13 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	// would make the supervisor finalize instantly. Remove it.
 	_ = os.Remove(sentinelPath)
 
-	opts, err := claude.BuildOptions(s.cfg, t, s.socketDir, sentinelPath)
+	opts, err := claude.BuildOptions(s.config(), t, s.socketDir, sentinelPath)
 	if err != nil {
 		return nil, err
 	}
 	tm := tmux.New()
 	window := t.WindowName()
-	pid, err := tm.NewWindowReturningPaneID(s.cfg.Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
+	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux window: %w", err)
 	}
@@ -103,7 +103,7 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	if err := s.store.Put(t); err != nil {
 		// We've already opened the window. Close it and bail —
 		// otherwise the daemon would be orphaned from the truth.
-		_ = tm.KillWindow(s.cfg.Tmux.SessionName, window)
+		_ = tm.KillWindow(s.config().Tmux.SessionName, window)
 		cancel()
 		return nil, fmt.Errorf("persist running state: %w", err)
 	}
@@ -237,7 +237,7 @@ func transcriptSig(paths []string) string {
 // Claude exits. Lives under <state_dir>/sentinels/<track-id>.done
 // so the daemon can find them across restarts.
 func (s *Server) sentinelPathFor(trackID string) (string, error) {
-	dir, err := s.cfg.ResolveStateDir()
+	dir, err := s.config().ResolveStateDir()
 	if err != nil {
 		return "", err
 	}
@@ -263,7 +263,7 @@ const paneIdleThreshold = 6 * time.Second
 // Errors from capture-pane are swallowed — they shouldn't bring
 // down the supervisor.
 func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
-	snapshot, err := tm.CapturePane(s.cfg.Tmux.SessionName, sup.windowName)
+	snapshot, err := tm.CapturePane(s.config().Tmux.SessionName, sup.windowName)
 	if err != nil {
 		return
 	}
@@ -344,7 +344,7 @@ func labelFor(t state.Track) string {
 // config has the event enabled. Centralised here so every call
 // site stays a one-liner.
 func (s *Server) notifyEvent(event, title, body string) {
-	if !s.cfg.Notify.EventEnabled(event) {
+	if !s.config().Notify.EventEnabled(event) {
 		return
 	}
 	s.notifier.Send(title, body)
@@ -428,7 +428,7 @@ func (s *Server) aggregateChanges(t state.Track) state.Changes {
 	defer cancel()
 	var agg state.Changes
 	for _, tr := range t.Repos {
-		repo, ok := s.cfg.RepoByName(tr.Name)
+		repo, ok := s.config().RepoByName(tr.Name)
 		if !ok {
 			continue
 		}
@@ -695,7 +695,7 @@ func (s *Server) stopAllSupervisors() {
 		wg.Add(1)
 		go func(sp *supervisor) {
 			defer wg.Done()
-			sp.Stop(s.cfg.Tmux.SessionName)
+			sp.Stop(s.config().Tmux.SessionName)
 		}(sup)
 	}
 	wg.Wait()

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -105,7 +106,7 @@ func TestSecondDaemonRefused(t *testing.T) {
 	defer cleanup()
 
 	// A second server with the same socket dir must refuse to start.
-	srv2 := NewServer(srv1.cfg, state.NewMemoryStore(), "v2")
+	srv2 := NewServer(srv1.config(), state.NewMemoryStore(), "v2")
 	srv2.NoTmuxWatch = true
 	err := srv2.Start(context.Background())
 	if err == nil {
@@ -128,6 +129,99 @@ func TestShutdownExitsCleanly(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("daemon did not stop after shutdown")
+}
+
+// newServerWithConfigFile points config.Path() at a temp XDG dir,
+// writes cfg there, and returns a Server loaded from it with its
+// reload baseline initialized — the same state a freshly started
+// daemon is in. No socket is opened.
+func newServerWithConfigFile(t *testing.T, cfg config.Config) *Server {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatalf("save initial config: %v", err)
+	}
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("load initial config: %v", err)
+	}
+	srv := NewServer(loaded, state.NewMemoryStore(), "test-version")
+	srv.initConfigWatch()
+	return srv
+}
+
+func TestMaybeReloadConfigPicksUpNewRepo(t *testing.T) {
+	cfg := config.Default()
+	cfg.Repos = []config.Repo{{Name: "demo", Path: "/x/demo", Base: "main"}}
+	srv := newServerWithConfigFile(t, cfg)
+
+	if _, ok := srv.config().RepoByName("added"); ok {
+		t.Fatal("repo 'added' present before it was configured")
+	}
+
+	// Edit the file: add a repo. Size changes, so the reload triggers
+	// even if the mtime resolution can't distinguish the two writes.
+	cfg.Repos = append(cfg.Repos, config.Repo{Name: "added", Path: "/x/added", Base: "main"})
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatalf("save edited config: %v", err)
+	}
+
+	srv.maybeReloadConfig()
+
+	if _, ok := srv.config().RepoByName("added"); !ok {
+		t.Fatal("repo 'added' not visible after reload")
+	}
+}
+
+func TestMaybeReloadConfigPreservesInfra(t *testing.T) {
+	cfg := config.Default()
+	cfg.Tmux.SessionName = "orig-session"
+	cfg.Paths.StateDir = "/orig/state"
+	srv := newServerWithConfigFile(t, cfg)
+
+	// A live edit to startup-bound infra must be ignored, not honored.
+	cfg.Tmux.SessionName = "changed-session"
+	cfg.Paths.StateDir = "/changed/state"
+	cfg.Repos = append(cfg.Repos, config.Repo{Name: "added", Path: "/x/added", Base: "main"})
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatalf("save edited config: %v", err)
+	}
+
+	srv.maybeReloadConfig()
+
+	got := srv.config()
+	if got.Tmux.SessionName != "orig-session" {
+		t.Errorf("session name = %q, want preserved 'orig-session'", got.Tmux.SessionName)
+	}
+	if got.Paths.StateDir != "/orig/state" {
+		t.Errorf("state dir = %q, want preserved '/orig/state'", got.Paths.StateDir)
+	}
+	// But non-infra edits in the same write still land.
+	if _, ok := got.RepoByName("added"); !ok {
+		t.Error("repo 'added' not visible after reload")
+	}
+}
+
+func TestMaybeReloadConfigKeepsPreviousOnParseError(t *testing.T) {
+	cfg := config.Default()
+	cfg.Repos = []config.Repo{{Name: "demo", Path: "/x/demo", Base: "main"}}
+	srv := newServerWithConfigFile(t, cfg)
+
+	// Clobber the file with invalid YAML.
+	p, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("repos: [this is not: valid"), 0o600); err != nil {
+		t.Fatalf("write bad config: %v", err)
+	}
+
+	srv.maybeReloadConfig()
+
+	// The good previous config must survive a malformed edit.
+	if _, ok := srv.config().RepoByName("demo"); !ok {
+		t.Fatal("previous config lost after a malformed edit")
+	}
 }
 
 func TestParallelRequests(t *testing.T) {
