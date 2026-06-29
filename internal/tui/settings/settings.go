@@ -338,10 +338,11 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 				Value(&copyMode),
 			huh.NewSelect[string]().
 				Title("Cache strategy").
-				Description("How deps are cached. Both options just run the command for now (pnpm reuses its store automatically).").
+				Description("How deps are seeded before the install. none/pnpm-store just run the command (pnpm reuses its store automatically); apfs-clone copy-on-write clones the primary's node_modules first so the install is an incremental reconcile (best for yarn/npm repos).").
 				Options(
 					huh.NewOption("none", "none"),
 					huh.NewOption("pnpm-store", "pnpm-store"),
+					huh.NewOption("apfs-clone", "apfs-clone"),
 				).
 				Value(&cacheStrategy),
 		),

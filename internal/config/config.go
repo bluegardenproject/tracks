@@ -161,10 +161,12 @@ type Provision struct {
 	// the install step.
 	DepsCmd string `yaml:"deps_cmd,omitempty"`
 
-	// CacheStrategy hints how dependencies are cached. In this version
-	// "none" and "pnpm-store" both just run DepsCmd (pnpm hardlinks from
-	// its store natively); "apfs-clone" is reserved for a later version.
-	// Empty defaults to "none".
+	// CacheStrategy hints how dependencies are cached. "none" and
+	// "pnpm-store" both just run DepsCmd (pnpm hardlinks from its store
+	// natively); "apfs-clone" copy-on-write clones the primary's
+	// node_modules into the worktree before DepsCmd so the install is an
+	// incremental reconcile (best for yarn/npm repos without a global
+	// store). Empty defaults to "none".
 	CacheStrategy string `yaml:"cache_strategy,omitempty"`
 
 	// CopyIgnored lists gitignored files to bring from the primary
@@ -262,12 +264,10 @@ func (c Config) Validate() error {
 		}
 		if p := r.Provision; p != nil {
 			switch p.CacheStrategy {
-			case "", "none", "pnpm-store":
+			case "", "none", "pnpm-store", "apfs-clone":
 				// ok
-			case "apfs-clone":
-				return fmt.Errorf("repos[%s].provision.cache_strategy %q is not yet implemented", r.Name, p.CacheStrategy)
 			default:
-				return fmt.Errorf("repos[%s].provision.cache_strategy %q is invalid (want none or pnpm-store)", r.Name, p.CacheStrategy)
+				return fmt.Errorf("repos[%s].provision.cache_strategy %q is invalid (want none, pnpm-store, or apfs-clone)", r.Name, p.CacheStrategy)
 			}
 			switch p.CopyMode {
 			case "", "symlink", "copy":

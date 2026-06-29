@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -35,6 +36,12 @@ type Options struct {
 	CopyMode string
 	// DepsCmd is the shell command to install dependencies. Empty skips it.
 	DepsCmd string
+	// CacheStrategy hints how dependencies are seeded before DepsCmd runs.
+	// "apfs-clone" copy-on-write clones the primary's node_modules into the
+	// worktree first, so the install step becomes a cheap incremental
+	// reconcile. Other values ("", "none", "pnpm-store") seed nothing here —
+	// they just run DepsCmd cold (pnpm hardlinks from its own store).
+	CacheStrategy string
 }
 
 // Run provisions the worktree. emit receives human-readable progress
@@ -43,11 +50,63 @@ func Run(ctx context.Context, o Options, emit func(string)) error {
 	if err := copyIgnored(o, emit); err != nil {
 		return err
 	}
+	if o.CacheStrategy == "apfs-clone" {
+		if err := cloneDeps(ctx, o, emit); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(o.DepsCmd) != "" {
 		if err := runDeps(ctx, o, emit); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// cloneDeps copy-on-write clones the primary's node_modules into the
+// worktree before the install step, turning a cold install into a cheap
+// incremental reconcile. On APFS this is near-instant and low-disk via
+// clonefile(2) (`cp -c`); off APFS or across volumes it falls back to a
+// plain recursive copy. A missing primary node_modules or a worktree that
+// already has one is a no-op — the subsequent DepsCmd handles those.
+func cloneDeps(ctx context.Context, o Options, emit func(string)) error {
+	src := filepath.Join(o.PrimaryPath, "node_modules")
+	dst := filepath.Join(o.WorktreePath, "node_modules")
+	if fi, err := os.Stat(src); err != nil || !fi.IsDir() {
+		emit("provision: apfs-clone skipped (primary has no node_modules)")
+		return nil
+	}
+	if _, err := os.Stat(dst); err == nil {
+		emit("provision: apfs-clone skipped (worktree already has node_modules)")
+		return nil
+	}
+	if err := cloneTree(ctx, src, dst, emit); err != nil {
+		return fmt.Errorf("apfs-clone node_modules: %w", err)
+	}
+	return nil
+}
+
+// cloneTree reproduces src at dst, preferring a copy-on-write clone on
+// macOS and falling back to a plain recursive copy. A partial dst from a
+// failed clone is removed before the fallback so the copy starts clean.
+func cloneTree(ctx context.Context, src, dst string, emit func(string)) error {
+	if runtime.GOOS == "darwin" {
+		// cp -c requests a clonefile(2) copy-on-write clone; on APFS this is
+		// near-instant and low-disk. On non-APFS / cross-volume targets cp
+		// transparently falls back to a normal copy and still exits 0, so a
+		// non-nil error here is a genuine failure (e.g. permissions).
+		if err := exec.CommandContext(ctx, "cp", "-c", "-R", src, dst).Run(); err == nil {
+			emit("provision: seeded node_modules from primary (apfs-clone)")
+			return nil
+		}
+		_ = os.RemoveAll(dst)
+		emit("provision: apfs-clone failed; retrying with a plain copy")
+	}
+	if err := exec.CommandContext(ctx, "cp", "-R", src, dst).Run(); err != nil {
+		_ = os.RemoveAll(dst)
+		return err
+	}
+	emit("provision: copied node_modules")
 	return nil
 }
 

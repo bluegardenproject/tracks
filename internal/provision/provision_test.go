@@ -125,6 +125,80 @@ func TestMissingGlobIsWarnedNotFatal(t *testing.T) {
 	}
 }
 
+func TestApfsCloneSeedsNodeModules(t *testing.T) {
+	primary, worktree := setup(t)
+	// Give the primary a node_modules with a sentinel file.
+	if err := os.MkdirAll(filepath.Join(primary, "node_modules", "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(primary, "node_modules", "pkg", "index.js"), []byte("//\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	emit, _ := collect()
+	// DepsCmd reconciles after the seed; assert it runs in the worktree too.
+	if err := Run(context.Background(), Options{
+		PrimaryPath:   primary,
+		WorktreePath:  worktree,
+		CacheStrategy: "apfs-clone",
+		DepsCmd:       "touch reconciled.marker",
+	}, emit); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// node_modules was seeded (clone on APFS, plain copy elsewhere).
+	if _, err := os.Stat(filepath.Join(worktree, "node_modules", "pkg", "index.js")); err != nil {
+		t.Errorf("node_modules not seeded into worktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "reconciled.marker")); err != nil {
+		t.Errorf("deps reconcile did not run after clone: %v", err)
+	}
+}
+
+func TestApfsCloneNoPrimaryNodeModulesIsNoop(t *testing.T) {
+	primary, worktree := setup(t) // setup creates no node_modules
+	emit, lines := collect()
+	if err := Run(context.Background(), Options{
+		PrimaryPath:   primary,
+		WorktreePath:  worktree,
+		CacheStrategy: "apfs-clone",
+	}, emit); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "node_modules")); !os.IsNotExist(err) {
+		t.Errorf("worktree node_modules should not exist when primary has none")
+	}
+	if !strings.Contains(strings.Join(*lines, "\n"), "skipped") {
+		t.Errorf("expected an apfs-clone skip notice, got: %v", *lines)
+	}
+}
+
+func TestApfsCloneSkipsWhenWorktreeHasNodeModules(t *testing.T) {
+	primary, worktree := setup(t)
+	if err := os.MkdirAll(filepath.Join(primary, "node_modules", "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Worktree already has its own node_modules — the clone must not clobber it.
+	if err := os.MkdirAll(filepath.Join(worktree, "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "node_modules", "OWN"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	emit, lines := collect()
+	if err := Run(context.Background(), Options{
+		PrimaryPath:   primary,
+		WorktreePath:  worktree,
+		CacheStrategy: "apfs-clone",
+	}, emit); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "node_modules", "OWN")); err != nil {
+		t.Errorf("existing worktree node_modules was clobbered: %v", err)
+	}
+	if !strings.Contains(strings.Join(*lines, "\n"), "skipped") {
+		t.Errorf("expected an apfs-clone skip notice, got: %v", *lines)
+	}
+}
+
 func TestDepsCmdFailurePropagates(t *testing.T) {
 	primary, worktree := setup(t)
 	emit, _ := collect()
