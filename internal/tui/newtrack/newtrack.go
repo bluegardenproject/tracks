@@ -82,37 +82,36 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		task  = templatePrompts[template]
 	)
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Repos").
-				Description(repoDesc).
-				Options(repoOptions...).
-				Validate(repoValidate).
-				Value(&repos),
-			huh.NewInput().
-				Title("Slug (optional)").
-				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (Claude picks that). Leave empty to derive a tab name from the prompt.").
-				Placeholder("e.g. rate-bug-investigation").
-				Value(&slug),
-			huh.NewText().
-				Title(taskTitle).
-				Description(taskDesc).
-				CharLimit(8192).
-				Validate(func(v string) error {
-					if strings.TrimSpace(v) == "" {
-						return errors.New("task prompt is required")
-					}
-					return nil
-				}).
-				Value(&task),
-		),
-	)
+	build := func() *huh.Form {
+		return huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("Repos").
+					Description(repoDesc).
+					Options(repoOptions...).
+					Validate(repoValidate).
+					Value(&repos),
+				huh.NewInput().
+					Title("Slug (optional)").
+					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (Claude picks that). Leave empty to derive a tab name from the prompt.").
+					Placeholder("e.g. rate-bug-investigation").
+					Value(&slug),
+				huh.NewText().
+					Title(taskTitle).
+					Description(taskDesc).
+					CharLimit(8192).
+					Validate(func(v string) error {
+						if strings.TrimSpace(v) == "" {
+							return errors.New("task prompt is required")
+						}
+						return nil
+					}).
+					Value(&task),
+			),
+		)
+	}
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return daemon.NewParams{}, ErrCancelled
-		}
+	if err := runFormWithDiscardConfirm(build); err != nil {
 		return daemon.NewParams{}, err
 	}
 
@@ -122,6 +121,58 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 		TaskPrompt: strings.TrimSpace(task),
 		Kind:       kindFor(template),
 	}, nil
+}
+
+// runFormWithDiscardConfirm runs the form produced by build and, when the
+// user backs out (Esc / Ctrl-C), asks whether to discard their input. On
+// "keep editing" it rebuilds the form — the bound Value pointers still hold
+// what was typed (huh writes each field back to its pointer on every
+// keystroke, and reconstructing a field re-seeds it from that pointer), so
+// every field repopulates — and loops. Returns nil on a successful submit and
+// ErrCancelled once the user confirms the discard.
+func runFormWithDiscardConfirm(build func() *huh.Form) error {
+	for {
+		err := build().WithKeyMap(tui.EscQuitKeyMap()).Run()
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, huh.ErrUserAborted) {
+			return err
+		}
+		discard, cerr := confirmDiscard()
+		if cerr != nil {
+			return cerr
+		}
+		if discard {
+			return ErrCancelled
+		}
+	}
+}
+
+// confirmDiscard asks whether to throw away a partially-filled new-track
+// form. It returns true to discard (cancel the flow) and false to keep
+// editing; "Keep editing" is the focused default so an accidental Esc can't
+// silently lose work. Aborting the prompt itself (a second Esc / Ctrl-C)
+// counts as a discard, keeping Esc-Esc a fast way out.
+func confirmDiscard() (bool, error) {
+	discard := false
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Discard this track?").
+				Description("The repos, slug, and prompt you entered will be lost.").
+				Affirmative("Discard").
+				Negative("Keep editing").
+				Value(&discard),
+		),
+	)
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return true, nil
+		}
+		return false, err
+	}
+	return discard, nil
 }
 
 // runReview is the second form for the Review template. A review
@@ -136,47 +187,46 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		task      = templatePrompts[TemplateReview]
 	)
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Repo").
-				Description("The repo the PR / branch lives in. A review targets a single repo.").
-				Options(repoOptions...).
-				Value(&repo),
-			huh.NewInput().
-				Title("PR URL or branch to review").
-				Description("Paste a GitHub PR link (…/pull/123) or a branch name on origin (e.g. feat/foo). It's checked out detached so there's something to diff against base.").
-				Placeholder("https://github.com/org/repo/pull/123  —or—  feat/foo").
-				Validate(func(v string) error {
-					if strings.TrimSpace(v) == "" {
-						return errors.New("a PR URL or branch name is required for a review")
-					}
-					return nil
-				}).
-				Value(&reviewRef),
-			huh.NewInput().
-				Title("Slug (optional)").
-				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
-				Placeholder("e.g. rate-bug-review").
-				Value(&slug),
-			huh.NewText().
-				Title("Task prompt").
-				Description("What should Claude do? Pre-filled with the review prompt — tweak as needed.").
-				CharLimit(8192).
-				Validate(func(v string) error {
-					if strings.TrimSpace(v) == "" {
-						return errors.New("task prompt is required")
-					}
-					return nil
-				}).
-				Value(&task),
-		),
-	)
+	build := func() *huh.Form {
+		return huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Repo").
+					Description("The repo the PR / branch lives in. A review targets a single repo.").
+					Options(repoOptions...).
+					Value(&repo),
+				huh.NewInput().
+					Title("PR URL or branch to review").
+					Description("Paste a GitHub PR link (…/pull/123) or a branch name on origin (e.g. feat/foo). It's checked out detached so there's something to diff against base.").
+					Placeholder("https://github.com/org/repo/pull/123  —or—  feat/foo").
+					Validate(func(v string) error {
+						if strings.TrimSpace(v) == "" {
+							return errors.New("a PR URL or branch name is required for a review")
+						}
+						return nil
+					}).
+					Value(&reviewRef),
+				huh.NewInput().
+					Title("Slug (optional)").
+					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
+					Placeholder("e.g. rate-bug-review").
+					Value(&slug),
+				huh.NewText().
+					Title("Task prompt").
+					Description("What should Claude do? Pre-filled with the review prompt — tweak as needed.").
+					CharLimit(8192).
+					Validate(func(v string) error {
+						if strings.TrimSpace(v) == "" {
+							return errors.New("task prompt is required")
+						}
+						return nil
+					}).
+					Value(&task),
+			),
+		)
+	}
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return daemon.NewParams{}, ErrCancelled
-		}
+	if err := runFormWithDiscardConfirm(build); err != nil {
 		return daemon.NewParams{}, err
 	}
 
