@@ -15,6 +15,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
+	"github.com/bluegardenproject/tracks/internal/ports"
 	"github.com/bluegardenproject/tracks/internal/provision"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -211,12 +212,25 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		}
 	}
 
+	// Reserve a private port block for any dev servers the track's repos
+	// declare. Worktreeless ask/plan tracks don't run services, so they
+	// skip allocation. This is pure arithmetic — nothing is bound here.
+	var allocatedPorts map[string]int
+	if !kind.Worktreeless() {
+		allocatedPorts, err = s.allocatePorts(trackID, repos)
+		if err != nil {
+			rollback()
+			return fail("allocate ports: " + err.Error())
+		}
+	}
+
 	t := state.Track{
 		ID:         trackID,
 		Branch:     resolvedBranch,
 		Slug:       strings.TrimSpace(p.Slug),
 		Kind:       kind,
 		Repos:      trackRepos,
+		Ports:      allocatedPorts,
 		Status:     state.StatusPending,
 		LogPath:    logPath,
 		TaskPrompt: p.TaskPrompt,
@@ -346,6 +360,41 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 
 // provisionOptions builds provision.Options from a repo's primary path,
 // its new worktree path, and its config block.
+// allocatePorts reserves a port for every service declared by the track's
+// repos, avoiding ports already handed to other live tracks. Returns nil
+// when no repo declares a service.
+func (s *Server) allocatePorts(trackID string, repos []repoSpec) (map[string]int, error) {
+	// Ports are keyed by service name, so names must be unique across the
+	// whole track — config validation only enforces uniqueness within a
+	// single repo. Two repos declaring the same service name would
+	// otherwise share (and waste) a port silently, so reject it loudly.
+	declaredBy := map[string]string{}
+	var names []string
+	for _, r := range repos {
+		cr, ok := s.config().RepoByName(r.Name)
+		if !ok {
+			continue
+		}
+		for _, svc := range cr.Services {
+			if prev, dup := declaredBy[svc.Name]; dup {
+				return nil, fmt.Errorf("service name %q is declared by both %q and %q; names must be unique across a track", svc.Name, prev, r.Name)
+			}
+			declaredBy[svc.Name] = r.Name
+			names = append(names, svc.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	taken := map[int]bool{}
+	for _, t := range s.store.All() {
+		for _, p := range t.Ports {
+			taken[p] = true
+		}
+	}
+	return ports.Allocate(trackID, names, taken)
+}
+
 func provisionOptions(primaryPath, worktreePath string, p *config.Provision) provision.Options {
 	return provision.Options{
 		PrimaryPath:   primaryPath,

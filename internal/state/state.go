@@ -160,6 +160,12 @@ type Track struct {
 	// appended).
 	Repos []TrackRepo `json:"repos"`
 
+	// Ports maps a declared service name to the TCP port reserved for it
+	// in this track. Allocated once at track creation (arithmetic only —
+	// nothing is bound) and kept clear of other live tracks' ports. Empty
+	// when the track's repos declare no services.
+	Ports map[string]int `json:"ports,omitempty"`
+
 	// Status is the most recently observed lifecycle phase.
 	Status Status `json:"status"`
 
