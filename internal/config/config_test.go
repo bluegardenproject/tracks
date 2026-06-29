@@ -93,9 +93,8 @@ func TestProvisionRoundtrip(t *testing.T) {
 
 func TestValidateRejectsBadProvision(t *testing.T) {
 	cases := map[string]*Provision{
-		"bad cache strategy":       {CacheStrategy: "bogus"},
-		"unimplemented apfs-clone": {CacheStrategy: "apfs-clone"},
-		"bad copy mode":            {CopyMode: "hardlink"},
+		"bad cache strategy": {CacheStrategy: "bogus"},
+		"bad copy mode":      {CopyMode: "hardlink"},
 	}
 	for name, p := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -116,6 +115,17 @@ func TestValidateAcceptsMinimalProvision(t *testing.T) {
 	}}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("minimal provision should validate: %v", err)
+	}
+}
+
+func TestValidateAcceptsApfsClone(t *testing.T) {
+	c := Default()
+	c.Repos = []Repo{{
+		Name: "r", Path: "/a", Base: "main",
+		Provision: &Provision{DepsCmd: "yarn", CacheStrategy: "apfs-clone"},
+	}}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("apfs-clone should validate: %v", err)
 	}
 }
 

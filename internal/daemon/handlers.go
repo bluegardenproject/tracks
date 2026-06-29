@@ -348,11 +348,12 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 // its new worktree path, and its config block.
 func provisionOptions(primaryPath, worktreePath string, p *config.Provision) provision.Options {
 	return provision.Options{
-		PrimaryPath:  primaryPath,
-		WorktreePath: worktreePath,
-		CopyIgnored:  p.CopyIgnored,
-		CopyMode:     p.CopyMode,
-		DepsCmd:      p.DepsCmd,
+		PrimaryPath:   primaryPath,
+		WorktreePath:  worktreePath,
+		CopyIgnored:   p.CopyIgnored,
+		CopyMode:      p.CopyMode,
+		DepsCmd:       p.DepsCmd,
+		CacheStrategy: p.CacheStrategy,
 	}
 }
 
