@@ -110,7 +110,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	// Resolve and validate each requested repo against config.
 	repos := make([]repoSpec, 0, len(p.Repos))
 	for _, name := range p.Repos {
-		r, ok := s.cfg.RepoByName(name)
+		r, ok := s.config().RepoByName(name)
 		if !ok {
 			return fail(fmt.Sprintf("unknown repo %q (configure it in ~/.config/tracks/config.yaml)", name))
 		}
@@ -171,7 +171,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	}
 	branch := placeholderBranch(trackID)
 
-	stateDir, err := s.cfg.ResolveStateDir()
+	stateDir, err := s.config().ResolveStateDir()
 	if err != nil {
 		return fail("resolve state dir: " + err.Error())
 	}
@@ -393,10 +393,10 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	if ok2 {
 		if force {
 			emit("SIGKILL claude...")
-			sup.Kill(s.cfg.Tmux.SessionName)
+			sup.Kill(s.config().Tmux.SessionName)
 		} else {
 			emit("SIGTERM claude (5s grace)...")
-			sup.Stop(s.cfg.Tmux.SessionName)
+			sup.Stop(s.config().Tmux.SessionName)
 		}
 	}
 	// Re-read state — the wait-goroutine may have already written
@@ -409,7 +409,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	// to tear it down. Done before worktree removal so the window
 	// still closes even if that later fails. Idempotent — KillWindow
 	// is a no-op when the window is already gone.
-	_ = tmux.New().KillWindow(s.cfg.Tmux.SessionName, t.WindowName())
+	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, t.WindowName())
 
 	// Remove worktrees, keep branches. Skip any whose checkout is
 	// already gone so ending a track is idempotent — a track that
@@ -461,7 +461,7 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage, emit Em
 	if t.Kind.Worktreeless() {
 		return fail("track is read-only (ask/plan); promote it to a worktree first")
 	}
-	r, ok2 := s.cfg.RepoByName(p.RepoName)
+	r, ok2 := s.config().RepoByName(p.RepoName)
 	if !ok2 {
 		return fail("unknown repo: " + p.RepoName)
 	}
@@ -475,7 +475,7 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage, emit Em
 	if err != nil {
 		return fail(err.Error())
 	}
-	stateDir, err := s.cfg.ResolveStateDir()
+	stateDir, err := s.config().ResolveStateDir()
 	if err != nil {
 		return fail(err.Error())
 	}
@@ -536,7 +536,7 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	// Rebuild repoSpecs from the track's repos via config.
 	repos := make([]repoSpec, 0, len(t.Repos))
 	for _, tr := range t.Repos {
-		r, ok := s.cfg.RepoByName(tr.Name)
+		r, ok := s.config().RepoByName(tr.Name)
 		if !ok {
 			return fail("unknown repo: " + tr.Name)
 		}
@@ -547,7 +547,7 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 		repos = append(repos, repoSpec{Name: r.Name, Path: path, Base: r.Base, InitSubmodules: r.InitSubmodules, Provision: r.Provision})
 	}
 
-	stateDir, err := s.cfg.ResolveStateDir()
+	stateDir, err := s.config().ResolveStateDir()
 	if err != nil {
 		return fail("resolve state dir: " + err.Error())
 	}
@@ -576,9 +576,9 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	s.mu.Unlock()
 	if alive {
 		emit("stopping read-only session...")
-		sup.Stop(s.cfg.Tmux.SessionName)
+		sup.Stop(s.config().Tmux.SessionName)
 	}
-	_ = tmux.New().KillWindow(s.cfg.Tmux.SessionName, oldWindow)
+	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, oldWindow)
 
 	// Re-read (Stop's watcher may have written a terminal status), then
 	// flip to a work track and re-spawn with edit permissions.
@@ -705,7 +705,7 @@ func (s *Server) RegisterPrompt(trackID, tool, detail string) bool {
 // primaryPathFor looks up a configured repo's primary checkout path
 // by name. Returns "" for unknown repos.
 func (s *Server) primaryPathFor(name string) string {
-	r, ok := s.cfg.RepoByName(name)
+	r, ok := s.config().RepoByName(name)
 	if !ok {
 		return ""
 	}

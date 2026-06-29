@@ -76,7 +76,7 @@ func processAlive(pid int) bool {
 // internal admin (`.git/worktrees/<id>`) is also cleaned up; if
 // that fails, we fall back to rm + `git worktree prune`.
 func (s *Server) gcOrphanedWorktrees(ctx context.Context) error {
-	stateDir, err := s.cfg.ResolveStateDir()
+	stateDir, err := s.config().ResolveStateDir()
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func (s *Server) gcOrphanedWorktrees(ctx context.Context) error {
 
 	// Run prune on every configured primary to clean up git's
 	// internal admin entries.
-	for _, r := range s.cfg.Repos {
+	for _, r := range s.config().Repos {
 		path, err := r.ResolveRepoPath()
 		if err != nil {
 			continue
