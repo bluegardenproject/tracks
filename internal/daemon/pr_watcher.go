@@ -35,6 +35,7 @@ func (s *Server) runPRWatcher(sup *supervisor, url string) {
 	// First poll fires immediately so the dashboard reflects PR
 	// state within a second of the URL appearing.
 	if s.refreshPR(sup, url) {
+		s.onPRTerminal(sup)
 		return
 	}
 	ticker := time.NewTicker(prPollInterval)
@@ -44,10 +45,25 @@ func (s *Server) runPRWatcher(sup *supervisor, url string) {
 		case <-sup.done:
 			return
 		case <-ticker.C:
-			if s.refreshPR(sup, url) {
+			terminal := s.refreshPR(sup, url)
+			// A track in review keeps accruing usage if the user resumes
+			// Claude to address comments — keep the stored figure current.
+			s.refreshUsage(sup)
+			if terminal {
+				s.onPRTerminal(sup)
 				return
 			}
 		}
+	}
+}
+
+// onPRTerminal finalizes a review track once its PR is merged/closed.
+// Only a track that's actually in review (Claude has already exited) is
+// finalized here; if the PR closes while Claude is still running, the
+// normal exit path handles the Done transition instead.
+func (s *Server) onPRTerminal(sup *supervisor) {
+	if t, ok := s.store.Get(sup.trackID); ok && t.Status == state.StatusPR {
+		s.retire(sup)
 	}
 }
 

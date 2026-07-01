@@ -36,6 +36,11 @@ type supervisor struct {
 	sentinelPath string
 	cancel       context.CancelFunc
 	done         chan struct{}
+	// finishOnce guards the single close of done. done signals "this
+	// supervisor is finished" to the PR watcher; it's closed when the
+	// track finalizes (Done/Errored), when a review track's PR closes,
+	// or when the track is ended — whichever happens first.
+	finishOnce sync.Once
 
 	// lastPane is the most recent capture-pane snapshot. Used to
 	// detect a stalled pane (= Claude waiting for user input).
@@ -139,7 +144,6 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 //   - pid dead → backstop for when the wrapper itself died; finalize.
 //   - otherwise → pane content drives running/waiting state.
 func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
-	defer close(sup.done)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	tm := tmux.New()
@@ -147,16 +151,20 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Daemon shutdown: release the PR watcher but don't finalize
+			// — the track stays in the store for the next start to
+			// reconcile.
+			sup.finish()
 			return
 		case <-ticker.C:
 			if sup.sentinelPath != "" {
 				if _, err := os.Stat(sup.sentinelPath); err == nil {
-					s.retire(sup)
+					s.retireOrReview(sup)
 					return
 				}
 			}
 			if !processAlive(sup.pid) {
-				s.retire(sup)
+				s.retireOrReview(sup)
 				return
 			}
 			s.refreshRunningStatus(tm, sup)
@@ -187,6 +195,66 @@ func (s *Server) retire(sup *supervisor) {
 	s.mu.Unlock()
 	if current {
 		s.finalizeTrack(sup.trackID)
+	}
+	// Release the PR watcher (if any). Idempotent via finishOnce.
+	sup.finish()
+}
+
+// finish closes sup.done exactly once, signalling the PR watcher to
+// stop. Safe to call from any goroutine and more than once.
+func (sup *supervisor) finish() {
+	sup.finishOnce.Do(func() { close(sup.done) })
+}
+
+// retireOrReview is the Claude-exited handler. A track that opened a PR
+// which isn't merged/closed goes into StatusPR ("in review") and is
+// kept alive — its supervisor stays registered and its PR watcher keeps
+// polling PR state and refreshing token usage until the PR closes or
+// the user ends the track. Everything else finalizes to Done as usual.
+func (s *Server) retireOrReview(sup *supervisor) {
+	s.mu.Lock()
+	current := s.supervisors[sup.trackID] == sup
+	s.mu.Unlock()
+	if !current {
+		// endTrack (or a promote) already took the track over; just make
+		// sure the PR watcher is released.
+		sup.finish()
+		return
+	}
+	if t, ok := s.store.Get(sup.trackID); ok && !t.Status.IsTerminal() && hasOpenPR(t) {
+		s.enterPRReview(sup)
+		return
+	}
+	s.retire(sup)
+}
+
+// hasOpenPR reports whether a track has a pull request that is still
+// open. A known URL whose state we haven't polled yet (empty PRState)
+// counts as open — the watcher will correct it on its first poll.
+func hasOpenPR(t state.Track) bool {
+	return t.PRURL != "" && t.PRState != "MERGED" && t.PRState != "CLOSED"
+}
+
+// enterPRReview transitions a Claude-exited track to StatusPR without
+// retiring its supervisor, so sup.done stays open and the PR watcher
+// keeps polling PR state + refreshing usage. Ownership of the eventual
+// Done transition passes to the PR watcher (on merge/close) or to
+// endTrack (on an explicit End/Kill).
+func (s *Server) enterPRReview(sup *supervisor) {
+	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
+		if t.Status.IsTerminal() || t.Status == state.StatusPR {
+			return false
+		}
+		t.Status = state.StatusPR
+		return true
+	})
+	// Settle usage now (so the figure covers everything up to the PR),
+	// then keep it current on the watcher's ticks for any follow-up work.
+	s.refreshUsage(sup)
+	// The watcher was started when the URL first appeared; this is a
+	// no-op then, and starts it for a reconcile-spawned review supervisor.
+	if updated.PRURL != "" {
+		s.startPRWatcher(sup, updated.PRURL)
 	}
 }
 
@@ -771,6 +839,9 @@ func (s *Server) stopAllSupervisors() {
 		wg.Add(1)
 		go func(sp *supervisor) {
 			defer wg.Done()
+			// Release any PR watcher (review tracks have one but no watch
+			// goroutine), keeping shutdown symmetric with endTrack.
+			sp.finish()
 			sp.Stop(s.config().Tmux.SessionName)
 			// The tracks stay in the store for the next daemon start to
 			// reconcile, so their service rows must not read "running"

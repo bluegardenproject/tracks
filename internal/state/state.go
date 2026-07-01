@@ -80,6 +80,14 @@ const (
 	// StatusDone means the Claude process exited cleanly.
 	StatusDone Status = "done"
 
+	// StatusPR means Claude exited after opening a pull request, but the
+	// track is deliberately kept open: review comments, discussion, and
+	// follow-up commits are still likely. It is *non-terminal* (see
+	// IsTerminal) so the worktree is preserved and token usage keeps
+	// accruing. The PR watcher drives it to Done once the PR is
+	// merged/closed; an explicit End/Kill also finalizes it.
+	StatusPR Status = "pr"
+
 	// StatusErrored means the Claude process exited non-zero, or
 	// `tracks` was unable to spawn it / set up the worktrees.
 	StatusErrored Status = "errored"
