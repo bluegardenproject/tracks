@@ -143,6 +143,45 @@ func TestStopPersistedServicesKillsGroup(t *testing.T) {
 	}
 }
 
+func TestMarkServicesStopped(t *testing.T) {
+	srv := newServiceTestServer(t)
+	tr := state.Track{
+		ID:     "trk-shutdown",
+		Status: state.StatusRunning,
+		Services: []state.ServiceState{
+			{Name: "ready", Status: state.ServiceReady, PGID: 100},
+			{Name: "starting", Status: state.ServiceStarting, PGID: 101},
+			{Name: "running", Status: state.ServiceRunning, PGID: 102},
+			{Name: "already-failed", Status: state.ServiceFailed},
+			{Name: "already-stopped", Status: state.ServiceStopped},
+		},
+	}
+	_ = srv.store.Put(tr)
+
+	srv.markServicesStopped(tr.ID)
+
+	got, _ := srv.store.Get(tr.ID)
+	byName := map[string]state.ServiceState{}
+	for _, sv := range got.Services {
+		byName[sv.Name] = sv
+	}
+	for _, name := range []string{"ready", "starting", "running"} {
+		sv := byName[name]
+		if sv.Status != state.ServiceStopped {
+			t.Errorf("%s: expected stopped, got %q", name, sv.Status)
+		}
+		if sv.ExitedAt == nil {
+			t.Errorf("%s: ExitedAt not set", name)
+		}
+	}
+	if byName["already-failed"].Status != state.ServiceFailed {
+		t.Errorf("failed service should be untouched, got %q", byName["already-failed"].Status)
+	}
+	if byName["already-stopped"].ExitedAt != nil {
+		t.Error("already-stopped service should not get a fresh ExitedAt")
+	}
+}
+
 func TestUpsertService(t *testing.T) {
 	list := []state.ServiceState{{Name: "a", Port: 1}}
 	list = upsertService(list, state.ServiceState{Name: "b", Port: 2})

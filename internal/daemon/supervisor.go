@@ -219,14 +219,16 @@ func (s *Server) refreshUsage(sup *supervisor) {
 	if err != nil {
 		return
 	}
-	// Re-read in case the pane poll mutated the track since Get above;
-	// we only own the Usage field.
-	t, ok = s.store.Get(sup.trackID)
-	if !ok || u == t.Usage {
-		return
-	}
-	t.Usage = u
-	_ = s.store.Put(t)
+	// Persist via an atomic update so we only ever touch the Usage field
+	// and never clobber a concurrent write from the pane poll or a
+	// service start.
+	_, _, _ = s.store.Update(sup.trackID, func(t *state.Track) bool {
+		if u == t.Usage {
+			return false
+		}
+		t.Usage = u
+		return true
+	})
 }
 
 // transcriptSig is a cheap change-detector: path+size+mtime for each
@@ -284,57 +286,69 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		return
 	}
 	idle := time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
-	target := t.Status
-	switch {
-	case idle && t.Status != state.StatusWaiting:
-		target = state.StatusWaiting
-	case !idle && t.Status != state.StatusRunning:
-		target = state.StatusRunning
-	}
 	snippet, awaiting := paneSnippet(snapshot)
 	prURL := scanForPRURL(snapshot)
 	changes := s.aggregateChanges(t)
 	updatedRepos, rolledUpBranch := s.refreshBranches(t)
 
-	prevStatus := t.Status
-	prevPRURL := t.PRURL
-
-	if target == t.Status &&
-		snippet == t.LastOutput &&
-		awaiting == t.AwaitingInput &&
-		(prURL == "" || prURL == t.PRURL) &&
-		changes == t.Changes &&
-		rolledUpBranch == t.Branch &&
-		reposBranchesEqual(updatedRepos, t.Repos) {
-		return
-	}
-	t.Status = target
-	t.LastOutput = snippet
-	t.AwaitingInput = awaiting
-	t.Changes = changes
-	t.Repos = updatedRepos
-	t.Branch = rolledUpBranch
-	if prURL != "" && prURL != t.PRURL {
-		t.PRURL = prURL
-	}
-	_ = s.store.Put(t)
+	// Apply the observed state atomically so we never clobber a field we
+	// don't own (e.g. Services written by a concurrent service start).
+	// The transition bookkeeping the notifications need is captured out
+	// of the closure.
+	var prevStatus, newStatus state.Status
+	var prevPRURL, newPRURL string
+	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
+		if t.Status.IsTerminal() {
+			return false
+		}
+		prevStatus, prevPRURL = t.Status, t.PRURL
+		target := t.Status
+		switch {
+		case idle && t.Status != state.StatusWaiting:
+			target = state.StatusWaiting
+		case !idle && t.Status != state.StatusRunning:
+			target = state.StatusRunning
+		}
+		if target == t.Status &&
+			snippet == t.LastOutput &&
+			awaiting == t.AwaitingInput &&
+			(prURL == "" || prURL == t.PRURL) &&
+			changes == t.Changes &&
+			rolledUpBranch == t.Branch &&
+			reposBranchesEqual(updatedRepos, t.Repos) {
+			newStatus, newPRURL = t.Status, t.PRURL
+			return false
+		}
+		t.Status = target
+		t.LastOutput = snippet
+		t.AwaitingInput = awaiting
+		t.Changes = changes
+		t.Repos = updatedRepos
+		t.Branch = rolledUpBranch
+		if prURL != "" && prURL != t.PRURL {
+			t.PRURL = prURL
+		}
+		newStatus, newPRURL = t.Status, t.PRURL
+		return true
+	})
+	label := labelFor(updated)
 
 	// Fire notifications on the transitions that matter to a user
 	// who isn't looking at the dashboard right now. EventWaiting
 	// gets a per-track cooldown so the Running↔Waiting flicker
 	// caused by Claude's TUI spinners doesn't spam the user.
-	if target == state.StatusWaiting && prevStatus != state.StatusWaiting {
+	if newStatus == state.StatusWaiting && prevStatus != state.StatusWaiting {
 		if time.Since(sup.lastWaitingNotifyAt) >= waitingNotifyMinInterval {
 			s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
-				labelFor(t)+" is waiting for input")
+				label+" is waiting for input")
 			sup.lastWaitingNotifyAt = time.Now()
 		}
 	}
-	if t.PRURL != "" && prevPRURL == "" {
+	if newPRURL != "" && prevPRURL == "" {
 		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",
-			labelFor(t)+" → "+t.PRURL)
+			label+" → "+newPRURL)
 		// Kick off the gh-poll loop for this PR.
-		s.startPRWatcher(sup, t.PRURL)
+		s.startPRWatcher(sup, newPRURL)
 	}
 }
 
@@ -579,23 +593,40 @@ func (s *Server) finalizeTrack(trackID string) {
 	if !ok || t.Status.IsTerminal() {
 		return
 	}
-	now := time.Now().UTC()
-	t.ExitedAt = &now
-	// We don't have a reliable exit code from the tmux-hosted
-	// process; treat any natural exit as Done. (Future: parse
-	// pane_dead_status via tmux.)
-	t.Status = state.StatusDone
 	// Settle the final token usage before persisting, so the stored
-	// figure and the notification both reflect the whole session.
+	// figure and the notification both reflect the whole session. This
+	// read is done outside the atomic update to keep the store lock held
+	// only for the write.
+	var settled state.Usage
+	var haveSettled bool
 	if len(t.Repos) > 0 {
 		if u, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil && !u.IsZero() {
-			t.Usage = u
+			settled, haveSettled = u, true
 		}
 	}
-	_ = s.store.Put(t)
+	now := time.Now().UTC()
+	var finalized bool
+	updated, _, _ := s.store.Update(trackID, func(t *state.Track) bool {
+		if t.Status.IsTerminal() {
+			return false
+		}
+		t.ExitedAt = &now
+		// We don't have a reliable exit code from the tmux-hosted
+		// process; treat any natural exit as Done. (Future: parse
+		// pane_dead_status via tmux.)
+		t.Status = state.StatusDone
+		if haveSettled {
+			t.Usage = settled
+		}
+		finalized = true
+		return true
+	})
+	if !finalized {
+		return
+	}
 
 	s.notifyEvent(string(notify.EventDone), "tracks: track finished",
-		labelFor(t)+" is done"+usageSuffix(t))
+		labelFor(updated)+" is done"+usageSuffix(updated))
 }
 
 // usageSuffix renders a compact " — 1.2M tok · $3.45 · 12m" tail for
@@ -741,7 +772,31 @@ func (s *Server) stopAllSupervisors() {
 		go func(sp *supervisor) {
 			defer wg.Done()
 			sp.Stop(s.config().Tmux.SessionName)
+			// The tracks stay in the store for the next daemon start to
+			// reconcile, so their service rows must not read "running"
+			// once their processes are gone.
+			s.markServicesStopped(sp.trackID)
 		}(sup)
 	}
 	wg.Wait()
+}
+
+// markServicesStopped records every still-live service on the track as
+// stopped. Used on clean daemon shutdown, where sup.Stop's stopAllServices
+// kills the processes via their in-memory handles but leaves the persisted
+// status untouched — without this the state file would keep claiming a
+// killed service is running/ready.
+func (s *Server) markServicesStopped(trackID string) {
+	now := time.Now().UTC()
+	_, _, _ = s.store.Update(trackID, func(t *state.Track) bool {
+		changed := false
+		for i := range t.Services {
+			if t.Services[i].Status.Live() {
+				t.Services[i].Status = state.ServiceStopped
+				t.Services[i].ExitedAt = &now
+				changed = true
+			}
+		}
+		return changed
+	})
 }

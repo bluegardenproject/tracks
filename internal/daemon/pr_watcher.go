@@ -64,21 +64,28 @@ func (s *Server) refreshPR(sup *supervisor, url string) bool {
 		return false
 	}
 
-	t, ok := s.store.Get(sup.trackID)
-	if !ok {
+	var prev state.Track
+	updated, found, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
+		prev = state.Track{
+			PRState:       t.PRState,
+			PRDraft:       t.PRDraft,
+			PRReviewState: t.PRReviewState,
+			PRComments:    t.PRComments,
+		}
+		if t.PRState == status.State && t.PRDraft == status.Draft &&
+			t.PRReviewState == status.ReviewState && t.PRComments == status.CommentCount {
+			return false // nothing changed; skip the write + flush.
+		}
+		t.PRState = status.State
+		t.PRDraft = status.Draft
+		t.PRReviewState = status.ReviewState
+		t.PRComments = status.CommentCount
+		return true
+	})
+	if !found {
 		return true // track is gone; stop polling.
 	}
-	prev := state.Track{
-		PRState:       t.PRState,
-		PRDraft:       t.PRDraft,
-		PRReviewState: t.PRReviewState,
-		PRComments:    t.PRComments,
-	}
-	t.PRState = status.State
-	t.PRDraft = status.Draft
-	t.PRReviewState = status.ReviewState
-	t.PRComments = status.CommentCount
-	_ = s.store.Put(t)
+	t := updated
 
 	// Notify only on review-decision changes — the user wants to
 	// know "the PR needs me again" without being woken up by
