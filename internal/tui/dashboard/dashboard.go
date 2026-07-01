@@ -69,7 +69,12 @@ func defaultStyles() styles {
 			// Hot pink — a waiting track is blocking the developer
 			// and should jump out of the table.
 			state.StatusWaiting: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")),
-			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+			// Blue — Claude is done and the PR is open for review. Not
+			// blocking the dev like Waiting, but still an active track.
+			state.StatusPR: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+			// Amber — a finished track, readable on both light and dark
+			// terminals and clearly distinct from the other statuses.
+			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "215"}),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		},
 		prompt: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
@@ -401,14 +406,16 @@ func (m *model) renderKind(t state.Track) string {
 	if k == "" {
 		k = state.KindWork
 	}
-	var color lipgloss.Color
+	var color lipgloss.TerminalColor
 	switch k {
 	case state.KindAsk, state.KindPlan:
 		color = lipgloss.Color("13") // magenta — read-only
 	case state.KindReview:
 		color = lipgloss.Color("11") // yellow
 	default:
-		color = lipgloss.Color("8") // dim — work
+		// Teal — readable on both themes and distinct from the magenta
+		// (ask/plan) and yellow (review) kinds.
+		color = lipgloss.AdaptiveColor{Light: "30", Dark: "51"} // work
 	}
 	return lipgloss.NewStyle().Foreground(color).Render(string(k))
 }

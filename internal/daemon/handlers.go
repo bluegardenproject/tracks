@@ -448,6 +448,16 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 			emit("SIGTERM claude (5s grace)...")
 			sup.Stop(s.config().Tmux.SessionName)
 		}
+		// Drop the supervisor and release its PR watcher. For a running
+		// track the watch goroutine would also do this on the next poll,
+		// but a track in review (StatusPR) has no live watch goroutine —
+		// only the PR watcher — so we must release it here.
+		s.mu.Lock()
+		if s.supervisors[t.ID] == sup {
+			delete(s.supervisors, t.ID)
+		}
+		s.mu.Unlock()
+		sup.finish()
 	}
 	// Re-read state — the wait-goroutine may have already written
 	// Done/Errored.

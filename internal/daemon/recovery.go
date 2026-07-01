@@ -31,6 +31,27 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		if t.Status.IsTerminal() {
 			continue
 		}
+		// A track left in review (Claude already exited) has no Claude
+		// process to re-supervise, so it must never be marked Errored.
+		// Its dev servers were orphaned by the dead daemon, so free them
+		// first either way.
+		if t.Status == state.StatusPR {
+			if len(t.Services) > 0 {
+				t.Services = stopPersistedServices(t.Services, true)
+			}
+			if hasOpenPR(t) {
+				// Still open — keep it in review and re-arm its PR watcher.
+				_ = s.store.Put(t)
+				s.resumePRReview(t)
+			} else {
+				// PR merged/closed during the downtime — finalize to Done.
+				t.Status = state.StatusDone
+				now := time.Now().UTC()
+				t.ExitedAt = &now
+				_ = s.store.Put(t)
+			}
+			continue
+		}
 		alive := t.PID > 0 && processAlive(t.PID)
 		// Kill any dev servers orphaned by the previous daemon. They run
 		// in their own process groups (not the daemon's), so a daemon
@@ -57,6 +78,32 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 	if err := s.gcOrphanedWorktrees(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "tracks daemon: gc orphans: %v\n", err)
 	}
+}
+
+// resumePRReview re-attaches a PR watcher to a track the previous daemon
+// left in review. There is no Claude process to supervise (it exited
+// before the restart), so this registers a minimal review-only
+// supervisor whose only job is to keep polling the PR and refreshing
+// usage until it merges/closes (or the user ends the track).
+func (s *Server) resumePRReview(t state.Track) {
+	if t.PRURL == "" {
+		return
+	}
+	sup := &supervisor{
+		trackID:    t.ID,
+		windowName: t.WindowName(),
+		done:       make(chan struct{}),
+		cancel:     func() {},
+	}
+	s.mu.Lock()
+	if s.supervisors == nil {
+		s.supervisors = make(map[string]*supervisor)
+	}
+	s.supervisors[t.ID] = sup
+	s.mu.Unlock()
+	s.startPRWatcher(sup, t.PRURL)
+	fmt.Fprintf(os.Stderr,
+		"tracks daemon: track %s left in review; resumed PR watch on %s\n", t.ID, t.PRURL)
 }
 
 // processAlive reports whether the given PID is still a valid

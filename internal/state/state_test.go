@@ -325,6 +325,7 @@ func TestStatusIsTerminal(t *testing.T) {
 		StatusPending: false,
 		StatusRunning: false,
 		StatusWaiting: false,
+		StatusPR:      false,
 		StatusDone:    true,
 		StatusErrored: true,
 	}
