@@ -251,6 +251,19 @@ func (s *Server) Start(ctx context.Context) error {
 	s.cancelTmuxWatch = cancelTmux
 	s.mu.Unlock()
 
+	// Tear the daemon down when the root context is cancelled. main's
+	// signal.NotifyContext cancels ctx on SIGINT/SIGTERM, but the accept
+	// loop blocks in listener.Accept() and never observes ctx on its own,
+	// and nothing else closes the listener. Without this, a single stray
+	// signal — e.g. one delivered to the process group we inherit from the
+	// `tmux run-shell -b` launcher — leaves the daemon wedged: it keeps
+	// accepting connections and answering ctx-free requests (ping/ls) while
+	// every git-backed one (new/done/promote/…) fails instantly with
+	// "context canceled". Stop() closes the listener so acceptLoop returns
+	// and Start unblocks; it's idempotent, so racing tmuxWatchLoop's own
+	// Stop() is harmless.
+	context.AfterFunc(ctx, s.Stop)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

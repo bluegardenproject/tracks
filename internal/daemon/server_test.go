@@ -65,6 +65,62 @@ func fileExists(p string) bool {
 	return cmd.Run() == nil
 }
 
+// TestCancelRootContextShutsDownDaemon guards the regression where a
+// cancelled root context (SIGINT/SIGTERM via main's signal.NotifyContext,
+// or a stray signal to the inherited process group) left the daemon
+// wedged: acceptLoop kept blocking in Accept() so Start never returned,
+// and every request handled with the dead ctx failed with "context
+// canceled". Start must return promptly once ctx is cancelled.
+func TestCancelRootContextShutsDownDaemon(t *testing.T) {
+	// A short temp dir, not t.TempDir(): this test's long name would push
+	// the "<dir>/sock" unix-socket path past macOS's ~104-byte sun_path
+	// limit, making Listen fail with "bind: invalid argument".
+	dir, err := os.MkdirTemp("", "trkd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	cfg := config.Default()
+	cfg.Paths.SocketDir = dir
+	st := state.NewMemoryStore()
+	srv := NewServer(cfg, st, "test-version")
+	srv.NoTmuxWatch = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		_ = srv.Start(ctx)
+		close(done)
+	}()
+
+	// Wait until the listener is bound and the accept loop is running,
+	// so cancel() exercises the running-daemon path rather than a race
+	// during early startup.
+	deadline := time.Now().Add(2 * time.Second)
+	ready := false
+	for time.Now().Before(deadline) {
+		srv.mu.Lock()
+		bound := srv.listener != nil
+		srv.mu.Unlock()
+		if bound {
+			ready = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatal("daemon listener never came up")
+	}
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after root context was cancelled — daemon wedged")
+	}
+}
+
 func TestPing(t *testing.T) {
 	_, cl, cleanup := makeServer(t)
 	defer cleanup()
