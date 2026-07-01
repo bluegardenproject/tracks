@@ -138,14 +138,33 @@ func (u Usage) IsZero() bool {
 type ServiceStatus string
 
 const (
-	// ServiceRunning means the process has been started. Readiness
-	// (a finer "ready" state) is layered on later.
+	// ServiceStarting means the process has been started and we're
+	// waiting for its readiness probe to pass.
+	ServiceStarting ServiceStatus = "starting"
+	// ServiceReady means the readiness probe passed (or there was none
+	// and post-start hooks have run) — the service is usable.
+	ServiceReady ServiceStatus = "ready"
+	// ServiceRunning means the process is up but has no readiness probe,
+	// so we can't assert it's serving yet.
 	ServiceRunning ServiceStatus = "running"
-	// ServiceFailed means the process exited non-zero or never started.
+	// ServiceFailed means the process exited non-zero, never started, or
+	// failed a hook / readiness wait.
 	ServiceFailed ServiceStatus = "failed"
 	// ServiceStopped means the process was torn down (by us or the track).
 	ServiceStopped ServiceStatus = "stopped"
 )
+
+// Live reports whether a service in this status still has a running
+// process group that teardown must signal. Every pre-terminal status
+// (starting, running, ready) counts; failed/stopped do not.
+func (s ServiceStatus) Live() bool {
+	switch s {
+	case ServiceStarting, ServiceRunning, ServiceReady:
+		return true
+	default:
+		return false
+	}
+}
 
 // ServiceState records one running (or finished) dev server for a track.
 // PGID is the process-group id used to tear the whole tree down with a

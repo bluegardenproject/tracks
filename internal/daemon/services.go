@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -10,15 +11,17 @@ import (
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
-// startService launches one declared service for the track as a
-// supervised background process and records it on the track. It renders
-// the command and env templates (so {{.Port "name"}} resolves), starts
-// the process in its own group, registers the in-memory handle on the
-// supervisor, and persists a ServiceState. Readiness waiting and
-// lifecycle hooks are layered on separately — this is the raw start plus
-// state bookkeeping. worktree is the directory the command runs in (the
-// service's repo worktree).
-func (s *Server) startService(sup *supervisor, t state.Track, svc config.Service, worktree string) (state.ServiceState, error) {
+// startService brings one declared service up for the track: it runs the
+// pre_start hooks, launches the process in its own group, waits for the
+// readiness probe, then runs the post_start hooks — persisting the
+// service's status at each step. The command, env, hooks, and probe port
+// are all templated (so {{.Port "name"}} resolves). worktree is the
+// directory everything runs in (the service's repo worktree).
+//
+// It blocks until the service is ready (or the readiness timeout fires).
+// On any failure the process group is torn down and the service is marked
+// failed, so a half-started service never lingers.
+func (s *Server) startService(ctx context.Context, sup *supervisor, t state.Track, svc config.Service, worktree string) (state.ServiceState, error) {
 	data := services.NewTemplateData(t.ID, worktree, t.Ports)
 	cmd, err := services.Render(svc.Cmd, data)
 	if err != nil {
@@ -28,9 +31,20 @@ func (s *Server) startService(sup *supervisor, t state.Track, svc config.Service
 	if err != nil {
 		return state.ServiceState{}, fmt.Errorf("service %s: render env: %w", svc.Name, err)
 	}
+	probePort, err := services.Render(svc.Ready.Port, data)
+	if err != nil {
+		return state.ServiceState{}, fmt.Errorf("service %s: render ready.port: %w", svc.Name, err)
+	}
 	logPath, err := s.serviceLogPath(t.ID, svc.Name)
 	if err != nil {
 		return state.ServiceState{}, err
+	}
+
+	// pre_start runs before the process exists, so it can't reach the
+	// service log used for hook output yet — but the log file is fine to
+	// append to. A failing pre_start aborts the start entirely.
+	if err := services.RunHooks(ctx, svc.PreStart, data, worktree, logPath); err != nil {
+		return state.ServiceState{}, fmt.Errorf("service %s: pre_start: %w", svc.Name, err)
 	}
 
 	proc, err := services.Start(services.Spec{
@@ -51,32 +65,92 @@ func (s *Server) startService(sup *supervisor, t state.Track, svc config.Service
 	sup.services[svc.Name] = proc
 	sup.svcMu.Unlock()
 
+	probe := services.Probe{Port: probePort, LogRegex: svc.Ready.LogRegex}
 	now := time.Now().UTC()
 	st := state.ServiceState{
 		Name:      svc.Name,
-		Status:    state.ServiceRunning,
+		Status:    state.ServiceStarting,
 		PID:       proc.PID,
 		PGID:      proc.PGID,
 		Port:      t.Ports[svc.Name],
 		LogPath:   logPath,
 		StartedAt: &now,
 	}
+	if probe.IsZero() {
+		// No probe: we can't assert it's serving, only that it launched.
+		st.Status = state.ServiceRunning
+	}
+	if err := s.persistService(t.ID, t, st); err != nil {
+		s.failService(sup, svc.Name)
+		return state.ServiceState{}, err
+	}
 
-	// Persist on a fresh read so we don't clobber concurrent updates
-	// from the supervisor's poll loop; we only own the Services field.
-	cur, ok := s.store.Get(t.ID)
+	// Wait for readiness, then run post_start. Any failure tears the
+	// process down and records the service as failed.
+	if err := services.WaitReady(ctx, probe, logPath, services.DefaultReadyTimeout); err != nil {
+		s.markServiceFailed(sup, t.ID, svc.Name)
+		return state.ServiceState{}, fmt.Errorf("service %s: %w", svc.Name, err)
+	}
+	if err := services.RunHooks(ctx, svc.PostStart, data, worktree, logPath); err != nil {
+		s.markServiceFailed(sup, t.ID, svc.Name)
+		return state.ServiceState{}, fmt.Errorf("service %s: post_start: %w", svc.Name, err)
+	}
+
+	if !probe.IsZero() {
+		st.Status = state.ServiceReady
+		if err := s.persistService(t.ID, t, st); err != nil {
+			s.failService(sup, svc.Name)
+			return state.ServiceState{}, err
+		}
+	}
+	return st, nil
+}
+
+// persistService upserts a ServiceState onto the track, reading fresh so
+// it doesn't clobber concurrent field updates from the supervisor poll
+// loop (we only own the Services field). fallback is used when the track
+// has somehow gone from the store.
+func (s *Server) persistService(trackID string, fallback state.Track, st state.ServiceState) error {
+	cur, ok := s.store.Get(trackID)
 	if !ok {
-		cur = t
+		cur = fallback
 	}
 	cur.Services = upsertService(cur.Services, st)
 	if err := s.store.Put(cur); err != nil {
-		proc.Stop(0)
-		sup.svcMu.Lock()
-		delete(sup.services, svc.Name)
-		sup.svcMu.Unlock()
-		return state.ServiceState{}, fmt.Errorf("persist service state: %w", err)
+		return fmt.Errorf("persist service state: %w", err)
 	}
-	return st, nil
+	return nil
+}
+
+// failService tears down a service's process group and drops its handle,
+// without touching persisted state (used when persistence itself failed).
+func (s *Server) failService(sup *supervisor, name string) {
+	sup.svcMu.Lock()
+	proc := sup.services[name]
+	delete(sup.services, name)
+	sup.svcMu.Unlock()
+	if proc != nil {
+		proc.Stop(0)
+	}
+}
+
+// markServiceFailed tears the process down and records the service as
+// failed on the track.
+func (s *Server) markServiceFailed(sup *supervisor, trackID, name string) {
+	s.failService(sup, name)
+	cur, ok := s.store.Get(trackID)
+	if !ok {
+		return
+	}
+	now := time.Now().UTC()
+	for i := range cur.Services {
+		if cur.Services[i].Name == name {
+			cur.Services[i].Status = state.ServiceFailed
+			cur.Services[i].ExitedAt = &now
+			break
+		}
+	}
+	_ = s.store.Put(cur)
 }
 
 // serviceLogPath is where a service's stdout+stderr are streamed, under
@@ -114,7 +188,7 @@ func stopPersistedServices(svcs []state.ServiceState, force bool) []state.Servic
 	out := make([]state.ServiceState, len(svcs))
 	copy(out, svcs)
 	for i := range out {
-		if out[i].Status != state.ServiceRunning || out[i].PGID <= 0 {
+		if !out[i].Status.Live() || out[i].PGID <= 0 {
 			continue
 		}
 		if force {
