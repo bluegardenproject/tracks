@@ -106,18 +106,23 @@ func (s *Server) startService(ctx context.Context, sup *supervisor, t state.Trac
 	return st, nil
 }
 
-// persistService upserts a ServiceState onto the track, reading fresh so
-// it doesn't clobber concurrent field updates from the supervisor poll
-// loop (we only own the Services field). fallback is used when the track
-// has somehow gone from the store.
+// persistService upserts a ServiceState onto the track via an atomic
+// store update, so it can't clobber concurrent field updates from the
+// supervisor poll loop (we only own the Services field). fallback is used
+// when the track has somehow gone from the store.
 func (s *Server) persistService(trackID string, fallback state.Track, st state.ServiceState) error {
-	cur, ok := s.store.Get(trackID)
-	if !ok {
-		cur = fallback
-	}
-	cur.Services = upsertService(cur.Services, st)
-	if err := s.store.Put(cur); err != nil {
+	_, found, err := s.store.Update(trackID, func(t *state.Track) bool {
+		t.Services = upsertService(t.Services, st)
+		return true
+	})
+	if err != nil {
 		return fmt.Errorf("persist service state: %w", err)
+	}
+	if !found {
+		fallback.Services = upsertService(fallback.Services, st)
+		if err := s.store.Put(fallback); err != nil {
+			return fmt.Errorf("persist service state: %w", err)
+		}
 	}
 	return nil
 }
@@ -135,22 +140,21 @@ func (s *Server) failService(sup *supervisor, name string) {
 }
 
 // markServiceFailed tears the process down and records the service as
-// failed on the track.
+// failed on the track, via an atomic update so it doesn't clobber the
+// poll loop's concurrent writes.
 func (s *Server) markServiceFailed(sup *supervisor, trackID, name string) {
 	s.failService(sup, name)
-	cur, ok := s.store.Get(trackID)
-	if !ok {
-		return
-	}
 	now := time.Now().UTC()
-	for i := range cur.Services {
-		if cur.Services[i].Name == name {
-			cur.Services[i].Status = state.ServiceFailed
-			cur.Services[i].ExitedAt = &now
-			break
+	_, _, _ = s.store.Update(trackID, func(t *state.Track) bool {
+		for i := range t.Services {
+			if t.Services[i].Name == name {
+				t.Services[i].Status = state.ServiceFailed
+				t.Services[i].ExitedAt = &now
+				return true
+			}
 		}
-	}
-	_ = s.store.Put(cur)
+		return false
+	})
 }
 
 // serviceLogPath is where a service's stdout+stderr are streamed, under

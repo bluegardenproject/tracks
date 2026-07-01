@@ -205,6 +205,121 @@ func TestMemoryStoreImplementsStoreContract(t *testing.T) {
 	}
 }
 
+// updateStores runs a Store.Update assertion against both implementations
+// so the two stay behaviourally identical.
+func updateStores(t *testing.T) map[string]Store {
+	t.Helper()
+	fs, err := OpenFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]Store{"memory": NewMemoryStore(), "file": fs}
+}
+
+func TestUpdateMutatesAndPersists(t *testing.T) {
+	for name, s := range updateStores(t) {
+		t.Run(name, func(t *testing.T) {
+			_ = s.Put(makeTrack("a"))
+			got, found, err := s.Update("a", func(tr *Track) bool {
+				tr.Status = StatusWaiting
+				return true
+			})
+			if err != nil || !found {
+				t.Fatalf("Update: found=%v err=%v", found, err)
+			}
+			if got.Status != StatusWaiting {
+				t.Errorf("returned track not updated: %v", got.Status)
+			}
+			if reread, _ := s.Get("a"); reread.Status != StatusWaiting {
+				t.Errorf("persisted track not updated: %v", reread.Status)
+			}
+		})
+	}
+}
+
+func TestUpdateOnlyTouchesClosureFields(t *testing.T) {
+	// The point of Update: a writer that only sets Status must not drop a
+	// field (Services) another writer set — the lost-update Get+Put risks.
+	for name, s := range updateStores(t) {
+		t.Run(name, func(t *testing.T) {
+			base := makeTrack("a")
+			base.Services = []ServiceState{{Name: "web", Status: ServiceReady, PGID: 4242}}
+			_ = s.Put(base)
+
+			if _, _, err := s.Update("a", func(tr *Track) bool {
+				tr.Status = StatusWaiting
+				return true
+			}); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := s.Get("a")
+			if len(got.Services) != 1 || got.Services[0].PGID != 4242 {
+				t.Errorf("Services clobbered by a Status-only update: %+v", got.Services)
+			}
+		})
+	}
+}
+
+func TestUpdateNoChangeDoesNotBumpUpdatedAt(t *testing.T) {
+	for name, s := range updateStores(t) {
+		t.Run(name, func(t *testing.T) {
+			_ = s.Put(makeTrack("a"))
+			before, _ := s.Get("a")
+			time.Sleep(2 * time.Millisecond)
+			got, found, err := s.Update("a", func(tr *Track) bool { return false })
+			if err != nil || !found {
+				t.Fatalf("Update: found=%v err=%v", found, err)
+			}
+			if !got.UpdatedAt.Equal(before.UpdatedAt) {
+				t.Errorf("UpdatedAt bumped despite no change: %v -> %v", before.UpdatedAt, got.UpdatedAt)
+			}
+		})
+	}
+}
+
+func TestUpdateUnknownIDReturnsFalse(t *testing.T) {
+	for name, s := range updateStores(t) {
+		t.Run(name, func(t *testing.T) {
+			called := false
+			_, found, err := s.Update("ghost", func(tr *Track) bool {
+				called = true
+				return true
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if found {
+				t.Error("expected found=false for unknown id")
+			}
+			if called {
+				t.Error("mutate must not be called for unknown id")
+			}
+		})
+	}
+}
+
+func TestUpdatePersistsToDisk(t *testing.T) {
+	dir := t.TempDir()
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = fs.Put(makeTrack("a"))
+	if _, _, err := fs.Update("a", func(tr *Track) bool {
+		tr.Status = StatusDone
+		return true
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fs2, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := fs2.Get("a"); got.Status != StatusDone {
+		t.Errorf("update not flushed to disk: %v", got.Status)
+	}
+}
+
 func TestStatusIsTerminal(t *testing.T) {
 	cases := map[Status]bool{
 		StatusPending: false,

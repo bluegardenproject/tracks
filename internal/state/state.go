@@ -393,6 +393,16 @@ type Store interface {
 	// to time.Now().UTC().
 	Put(t Track) error
 
+	// Update atomically read-modify-writes a single track under the
+	// store's own lock, so a concurrent writer can't land between the
+	// read and the write and clobber a field the caller didn't touch
+	// (the lost-update a separate Get+Put pair is prone to). mutate
+	// receives a pointer to the stored track and reports whether it
+	// changed anything worth persisting. Returns the resulting track and
+	// whether the track existed; an unknown id is (zero, false, nil) and
+	// mutate is not called.
+	Update(id string, mutate func(*Track) bool) (Track, bool, error)
+
 	// Delete removes a track. Returns false if it didn't exist.
 	Delete(id string) (bool, error)
 }
@@ -510,6 +520,28 @@ func (fs *FileStore) Put(t Track) error {
 	return err
 }
 
+// Update read-modify-writes a track atomically under fs.mu and flushes
+// to disk when mutate reports a change. See Store.Update.
+func (fs *FileStore) Update(id string, mutate func(*Track) bool) (Track, bool, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	t, ok := fs.tracks[id]
+	if !ok {
+		return Track{}, false, nil
+	}
+	if mutate(&t) {
+		t.UpdatedAt = time.Now().UTC()
+		if t.CreatedAt.IsZero() {
+			t.CreatedAt = t.UpdatedAt
+		}
+		fs.tracks[id] = t
+		if err := fs.flushLocked(); err != nil {
+			return t, true, err
+		}
+	}
+	return t, true, nil
+}
+
 // Delete removes a track and flushes to disk. Returns whether the
 // track existed.
 func (fs *FileStore) Delete(id string) (bool, error) {
@@ -608,6 +640,24 @@ func (m *MemoryStore) Put(t Track) error {
 	defer m.mu.Unlock()
 	m.tracks[t.ID] = t
 	return nil
+}
+
+// Update read-modify-writes a track atomically under m.mu. See Store.Update.
+func (m *MemoryStore) Update(id string, mutate func(*Track) bool) (Track, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, ok := m.tracks[id]
+	if !ok {
+		return Track{}, false, nil
+	}
+	if mutate(&t) {
+		t.UpdatedAt = time.Now().UTC()
+		if t.CreatedAt.IsZero() {
+			t.CreatedAt = t.UpdatedAt
+		}
+		m.tracks[id] = t
+	}
+	return t, true, nil
 }
 
 func (m *MemoryStore) Delete(id string) (bool, error) {
