@@ -27,6 +27,7 @@ const (
 	EventErrored        Event = "errored"
 	EventPROpened       Event = "pr_opened"
 	EventPRStateChanged Event = "pr_state_changed"
+	EventServiceReady   Event = "service_ready"
 )
 
 // AllEvents is the canonical ordering used when defaulting a
@@ -38,6 +39,7 @@ var AllEvents = []Event{
 	EventErrored,
 	EventPROpened,
 	EventPRStateChanged,
+	EventServiceReady,
 }
 
 // Channel describes which delivery surfaces are enabled. Independent

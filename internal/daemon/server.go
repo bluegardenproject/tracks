@@ -422,6 +422,12 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleForget(req.Params)
 	case MethodPruneCompleted:
 		return s.handlePruneCompleted()
+	case MethodServiceUp:
+		return s.handleServiceUp(ctx, req.Params, emit)
+	case MethodServiceDown:
+		return s.handleServiceDown(ctx, req.Params, emit)
+	case MethodServices:
+		return s.handleServices(req.Params)
 	default:
 		return fail(fmt.Sprintf("unknown method: %s", req.Method))
 	}

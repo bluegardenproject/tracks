@@ -67,6 +67,20 @@ const (
 	// MethodPruneCompleted removes every track entry with a
 	// terminal status. Returns the count removed.
 	MethodPruneCompleted Method = "prune_completed"
+
+	// MethodServiceUp starts a named dev-server service for a track (and
+	// any of its declared dependencies), waits for readiness, opens a
+	// log-viewer pane in the track's tmux window, and fires a
+	// ready-for-testing notification.
+	MethodServiceUp Method = "service_up"
+
+	// MethodServiceDown stops a single running service for a track,
+	// running its pre_stop hooks first, and closes the viewer pane.
+	MethodServiceDown Method = "service_down"
+
+	// MethodServices returns the current service states and allocated
+	// ports for a track.
+	MethodServices Method = "services"
 )
 
 // Request is the wire payload from CLI → daemon.
@@ -220,4 +234,33 @@ type ForgetParams struct {
 // MethodPruneCompleted.
 type PruneCompletedResult struct {
 	Removed int `json:"removed"`
+}
+
+// ServiceUpParams is the payload for MethodServiceUp.
+type ServiceUpParams struct {
+	TrackID     string `json:"track_id"`
+	ServiceName string `json:"service_name"`
+}
+
+// ServiceUpResult is returned by MethodServiceUp.
+type ServiceUpResult struct {
+	Port    int    `json:"port"`
+	LogPath string `json:"log_path"`
+}
+
+// ServiceDownParams is the payload for MethodServiceDown.
+type ServiceDownParams struct {
+	TrackID     string `json:"track_id"`
+	ServiceName string `json:"service_name"`
+}
+
+// ServicesParams is the payload for MethodServices.
+type ServicesParams struct {
+	TrackID string `json:"track_id"`
+}
+
+// ServicesResult is returned by MethodServices.
+type ServicesResult struct {
+	Services []state.ServiceState `json:"services"`
+	Ports    map[string]int       `json:"ports"`
 }

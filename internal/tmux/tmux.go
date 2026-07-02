@@ -227,6 +227,70 @@ func (Client) CapturePane(session, window string) (string, error) {
 	return buf.String(), nil
 }
 
+// SplitWindowRight opens a right-hand vertical split in the named window,
+// running command in it, and returns the new pane's ID (e.g. "%42"). The
+// pane occupies percent% of the window width. The right-column log viewer
+// for dev-server services is built on top of this.
+func (Client) SplitWindowRight(session, window, command string, percent int) (string, error) {
+	target := session + ":" + window
+	args := []string{
+		"split-window", "-h",
+		"-p", fmt.Sprintf("%d", percent),
+		"-t", target,
+		"-P", "-F", "#{pane_id}",
+		command,
+	}
+	cmd := exec.Command("tmux", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux split-window -h: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SplitPaneDown opens a horizontal split below the pane identified by
+// paneID (a string like "%42"), running command in the new pane, and
+// returns the new pane's ID. Used to stack additional service log
+// viewers below the first one in the right column.
+func (Client) SplitPaneDown(paneID, command string) (string, error) {
+	args := []string{
+		"split-window", "-v",
+		"-t", paneID,
+		"-P", "-F", "#{pane_id}",
+		command,
+	}
+	cmd := exec.Command("tmux", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux split-window -v: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// KillPane closes a single pane by ID. No-op when the pane doesn't exist.
+func (Client) KillPane(paneID string) error {
+	cmd := exec.Command("tmux", "kill-pane", "-t", paneID)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// Ignore "no such pane" — treat it as already gone.
+		msg := strings.TrimSpace(string(out))
+		if strings.Contains(msg, "no such pane") || strings.Contains(msg, "can't find pane") {
+			return nil
+		}
+		return fmt.Errorf("tmux kill-pane %s: %w: %s", paneID, err, msg)
+	}
+	return nil
+}
+
+// SetPaneTitle sets the title displayed in the pane border for the pane
+// identified by paneID. Used to label log-viewer panes with the service
+// name and port so they're identifiable at a glance.
+func (Client) SetPaneTitle(paneID, title string) error {
+	cmd := exec.Command("tmux", "select-pane", "-t", paneID, "-T", title)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux select-pane -T: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
 
 // Available reports whether the tmux binary is on PATH.
 func Available() error {

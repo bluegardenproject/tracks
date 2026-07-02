@@ -69,6 +69,10 @@ type supervisor struct {
 	// is always by the persisted process-group id. Guarded by svcMu.
 	svcMu    sync.Mutex
 	services map[string]*services.Process
+
+	// viewerPanes maps service name to the tmux pane ID of its log-viewer
+	// pane in the right column of the track window. Guarded by svcMu.
+	viewerPanes map[string]string
 }
 
 // waitingNotifyMinInterval is the shortest gap between two
