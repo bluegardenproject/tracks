@@ -340,6 +340,23 @@ func (s *Server) sentinelPathFor(trackID string) (string, error) {
 // that a brief thinking pause doesn't flicker.
 const paneIdleThreshold = 6 * time.Second
 
+// nextLiveStatus maps the current status, pane-idle flag, and whether a
+// new PR URL just appeared to the desired target status for a live track.
+// The PR case takes priority: once a PR URL is detected the status becomes
+// PR and is not overridden by the idle heuristic. The idle heuristic only
+// flips between Running and Waiting.
+func nextLiveStatus(current state.Status, idle, newPR bool) state.Status {
+	switch {
+	case newPR:
+		return state.StatusPR
+	case idle && current == state.StatusRunning:
+		return state.StatusWaiting
+	case !idle && current == state.StatusWaiting:
+		return state.StatusRunning
+	}
+	return current
+}
+
 // refreshRunningStatus captures the pane content and updates the
 // stored track to Running or Waiting based on whether the snapshot
 // changed since the last poll. Also persists a short
@@ -379,15 +396,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		}
 		prevStatus, prevPRURL = t.Status, t.PRURL
 		newPR := prURL != "" && prURL != t.PRURL
-		target := t.Status
-		switch {
-		case newPR:
-			target = state.StatusPR
-		case idle && t.Status == state.StatusRunning:
-			target = state.StatusWaiting
-		case !idle && t.Status == state.StatusWaiting:
-			target = state.StatusRunning
-		}
+		target := nextLiveStatus(t.Status, idle, newPR)
 		if target == t.Status &&
 			snippet == t.LastOutput &&
 			awaiting == t.AwaitingInput &&
@@ -404,7 +413,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		t.Changes = changes
 		t.Repos = updatedRepos
 		t.Branch = rolledUpBranch
-		if prURL != "" && prURL != t.PRURL {
+		if newPR {
 			t.PRURL = prURL
 		}
 		newStatus, newPRURL = t.Status, t.PRURL
