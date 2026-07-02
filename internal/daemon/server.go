@@ -17,6 +17,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/notify"
+	"github.com/bluegardenproject/tracks/internal/proxy"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -65,6 +66,7 @@ type Server struct {
 	mu              sync.Mutex
 	pendingPrompts  map[string]promptCh
 	supervisors     map[string]*supervisor
+	proxyMgr        *proxy.Manager
 	listener        net.Listener
 	lockFile        *os.File
 	stopped         atomic.Bool
@@ -262,6 +264,28 @@ func (s *Server) Start(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, "tracks daemon: install global helpers: %v\n", err)
 	}
 
+	// Initialize and start the stable-port proxy manager. Register all
+	// services with a proxy_port from the current config, then bind.
+	// Failures are non-fatal: the proxy is a convenience layer and a bind
+	// error (e.g. port in use) should not prevent the daemon from serving.
+	if stateDir, err := s.config().ResolveStateDir(); err == nil {
+		mgr := proxy.NewManager(stateDir)
+		for _, repo := range s.config().Repos {
+			for _, svc := range repo.Services {
+				if svc.ProxyPort > 0 {
+					mgr.Register(svc.Name, svc.ProxyPort)
+				}
+			}
+		}
+		if startErr := mgr.Start(); startErr != nil {
+			fmt.Fprintf(os.Stderr, "tracks daemon: proxy start: %v\n", startErr)
+		} else {
+			s.mu.Lock()
+			s.proxyMgr = mgr
+			s.mu.Unlock()
+		}
+	}
+
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.cancelTmuxWatch = cancelTmux
@@ -315,6 +339,12 @@ func (s *Server) Stop() {
 	// Tear down active Claude processes before closing the listener
 	// so they get a chance to finalize their logs.
 	s.stopAllSupervisors()
+	s.mu.Lock()
+	mgr := s.proxyMgr
+	s.mu.Unlock()
+	if mgr != nil {
+		mgr.Stop()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.listener != nil {
@@ -428,6 +458,10 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleServiceDown(ctx, req.Params, emit)
 	case MethodServices:
 		return s.handleServices(req.Params)
+	case MethodProxySwitch:
+		return s.handleProxySwitch(req.Params)
+	case MethodProxyStatus:
+		return s.handleProxyStatus()
 	default:
 		return fail(fmt.Sprintf("unknown method: %s", req.Method))
 	}

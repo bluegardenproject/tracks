@@ -120,11 +120,26 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 	port := t.Ports[p.ServiceName]
 	logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
 
-	s.notifyEvent(
-		string(notify.EventServiceReady),
-		"tracks: service ready",
-		fmt.Sprintf("%s — http://localhost:%d", p.ServiceName, port),
-	)
+	// Auto-switch the stable-port proxy to this track's service if configured.
+	s.mu.Lock()
+	mgr := s.proxyMgr
+	s.mu.Unlock()
+	proxyPort := 0
+	if mgr != nil {
+		if entry := mgr.Entry(p.ServiceName); entry != nil {
+			if err := mgr.Switch(p.ServiceName, port); err == nil {
+				proxyPort = entry.PublicPort
+				emit(fmt.Sprintf("proxy :%d → localhost:%d", proxyPort, port))
+			}
+		}
+	}
+
+	body := fmt.Sprintf("%s — http://localhost:%d", p.ServiceName, port)
+	if proxyPort > 0 {
+		body = fmt.Sprintf("%s — stable: http://localhost:%d  track: http://localhost:%d",
+			p.ServiceName, proxyPort, port)
+	}
+	s.notifyEvent(string(notify.EventServiceReady), "tracks: service ready", body)
 
 	return ok(ServiceUpResult{Port: port, LogPath: logPath})
 }
@@ -208,6 +223,14 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 
 	if sup != nil {
 		s.closeViewerPane(sup, p.ServiceName)
+	}
+
+	// Clear the stable-port proxy upstream for this service.
+	s.mu.Lock()
+	mgr := s.proxyMgr
+	s.mu.Unlock()
+	if mgr != nil {
+		mgr.Clear(p.ServiceName)
 	}
 
 	emit(p.ServiceName + " stopped")
