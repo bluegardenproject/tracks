@@ -98,6 +98,15 @@ type Progress struct {
 type PingResult struct {
 	Version string `json:"version"`
 	PID     int    `json:"pid"`
+	// ExePath and ExeModUnixNano describe the on-disk binary the
+	// daemon is running, captured at startup. The CLI uses them to
+	// detect a stale daemon after a local rebuild: plain `go build`
+	// (and `make build` on an unchanged commit) leave Version at its
+	// hardcoded default, so a version match can't tell a fresh binary
+	// from an old one — but the file's mtime always changes on
+	// rebuild. Empty/zero when os.Executable() couldn't be resolved.
+	ExePath        string `json:"exe_path,omitempty"`
+	ExeModUnixNano int64  `json:"exe_mod_unix_nano,omitempty"`
 }
 
 // LsResult is returned by MethodLs.

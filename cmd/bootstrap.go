@@ -102,23 +102,26 @@ func setStatusHint(cfg config.Config) error {
 
 // ensureDaemonUp pings the daemon; if unreachable, spawns it as a
 // background child of the tmux server and waits briefly for it to
-// come up. If the daemon is reachable but its version doesn't
-// match the CLI's, automatically restart it — otherwise stale
-// daemons silently reject new protocol fields and the user can't
-// tell what's wrong.
+// come up. If the daemon is reachable but stale relative to this CLI
+// binary, automatically restart it — otherwise a stale daemon keeps
+// running old code (silently rejecting new protocol fields, missing
+// bug fixes) and the user can't tell what's wrong.
 func ensureDaemonUp(cfg config.Config) error {
 	cl := daemon.NewClient(cfg)
 	cl.DialTimeout = 200 * time.Millisecond
 	if r, err := cl.Ping(); err == nil {
-		if r.Version == Version {
+		reason := daemonStaleReason(r)
+		if reason == "" {
 			return nil
 		}
-		fmt.Fprintf(os.Stderr,
-			"tracks: daemon is %s, CLI is %s — restarting daemon to match.\n",
-			r.Version, Version)
+		fmt.Fprintf(os.Stderr, "tracks: %s — restarting daemon.\n", reason)
 		_ = cl.Shutdown()
-		// Wait briefly for the socket to actually go away.
-		deadline := time.Now().Add(3 * time.Second)
+		// Wait for the socket to actually go away before spawning a
+		// replacement: the old daemon holds an exclusive flock until it
+		// exits, so spawning too early makes the new one fail to acquire
+		// it. Shutdown tears down live tracks first, which can take a few
+		// seconds, so wait generously.
+		deadline := time.Now().Add(10 * time.Second)
 		for time.Now().Before(deadline) {
 			if _, err := cl.Ping(); err != nil {
 				break
@@ -127,6 +130,38 @@ func ensureDaemonUp(cfg config.Config) error {
 		}
 	}
 	return spawnDaemon(cl)
+}
+
+// daemonStaleReason returns a human-readable reason the running daemon
+// should be restarted to match this CLI binary, or "" if it's current.
+//
+// Two signals, because neither alone is sufficient:
+//   - Version: catches installed/release builds (stamped via ldflags),
+//     but plain `go build` and `make build` on an unchanged commit both
+//     leave it at the hardcoded default, so it can't distinguish rebuilds.
+//   - Binary mtime: the file is overwritten on every rebuild, so a
+//     daemon whose captured mtime differs from the on-disk binary at the
+//     same path is running an older build. This is what makes the local
+//     "rebuild and run ./tracks" loop pick up changes without a manual
+//     daemon kill. Only trusted when the CLI and daemon resolve to the
+//     same executable path, so a PATH-installed CLI talking to a daemon
+//     spawned from a different path doesn't thrash.
+func daemonStaleReason(r daemon.PingResult) string {
+	if r.Version != Version {
+		return fmt.Sprintf("daemon is %s, CLI is %s", r.Version, Version)
+	}
+	self, err := os.Executable()
+	if err != nil || r.ExePath == "" || self != r.ExePath || r.ExeModUnixNano == 0 {
+		return ""
+	}
+	fi, err := os.Stat(self)
+	if err != nil {
+		return ""
+	}
+	if fi.ModTime().UnixNano() != r.ExeModUnixNano {
+		return "daemon is running an older build of this binary"
+	}
+	return ""
 }
 
 // spawnDaemon launches the daemon as a tmux-server background child
