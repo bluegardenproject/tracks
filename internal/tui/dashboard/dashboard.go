@@ -353,21 +353,76 @@ func (m *model) renderTable(width int) string {
 			if branch == "" {
 				branch = "—"
 			}
-			line := fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
-				shortID(t.ID),
-				padRendered(m.renderKind(t), 7),
-				padRendered(m.styles.branch.Render(truncate(branch, 36)), 36),
-				padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
-				m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-				padRendered(m.renderChangesColored(t.Changes), 22),
-				padRendered(m.styles.dim.Render(renderIdle(t)), 6),
-				padRendered(m.renderCost(t.Usage), 8),
-			)
-			if i == m.cursor {
-				b.WriteString(m.styles.rowActive.Render(line))
+			var line string
+			if i != m.cursor {
+				line = fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
+					shortID(t.ID),
+					padRendered(m.renderKind(t), 7),
+					padRendered(m.styles.branch.Render(truncate(branch, 36)), 36),
+					padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
+					m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
+					padRendered(m.renderChangesColored(t.Changes), 22),
+					padRendered(m.styles.dim.Render(renderIdle(t)), 6),
+					padRendered(m.renderCost(t.Usage), 8),
+				)
 			} else {
-				b.WriteString(line)
+				// Thread the highlight background into every cell individually.
+				// Without this, each cell's own Render() appends a hard ANSI
+				// reset that cancels the outer rowActive background before the
+				// next cell starts, leaving all but the first column unlit.
+				activeBg := lipgloss.Color("236")
+				addBg := func(s lipgloss.Style) lipgloss.Style {
+					return s.Background(activeBg)
+				}
+				pad := func(s string, width int) string {
+					return lipgloss.NewStyle().Width(width).Background(activeBg).Render(s)
+				}
+				sep := lipgloss.NewStyle().Background(activeBg).Render("  ")
+
+				// KIND: inline to apply bg to the text, not just the outer container.
+				k := t.Kind
+				if k == "" {
+					k = state.KindWork
+				}
+				var kColor lipgloss.TerminalColor
+				switch k {
+				case state.KindAsk, state.KindPlan:
+					kColor = lipgloss.Color("13")
+				case state.KindReview:
+					kColor = lipgloss.Color("11")
+				default:
+					kColor = lipgloss.AdaptiveColor{Light: "30", Dark: "51"}
+				}
+				kindStr := lipgloss.NewStyle().Foreground(kColor).Background(activeBg).Render(string(k))
+
+				// CHANGES: each sub-segment needs bg so inter-segment spaces stay lit.
+				var changesStr string
+				if !t.Changes.IsZero() {
+					changesStr = addBg(m.styles.insertions).Render(fmt.Sprintf("+%d", t.Changes.Insertions)) +
+						addBg(lipgloss.NewStyle()).Render(" ") +
+						addBg(m.styles.deletions).Render(fmt.Sprintf("-%d", t.Changes.Deletions)) +
+						addBg(lipgloss.NewStyle()).Render(" ") +
+						addBg(m.styles.dim).Render(fmt.Sprintf("(%d)", t.Changes.Files))
+				}
+
+				// COST: apply bg to the inner style so the value text is highlighted.
+				var costStr string
+				if t.Usage.IsZero() {
+					costStr = addBg(m.styles.dim).Render("—")
+				} else {
+					costStr = addBg(m.styles.cost).Render(usage.FormatCost(t.Usage.CostUSD))
+				}
+
+				line = m.styles.rowActive.Render(fmt.Sprintf("  %-15s", shortID(t.ID))) +
+					sep + pad(kindStr, 7) +
+					sep + pad(addBg(m.styles.branch).Render(truncate(branch, 36)), 36) +
+					sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
+					sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), 10)) +
+					sep + pad(changesStr, 22) +
+					sep + pad(addBg(m.styles.dim).Render(renderIdle(t)), 6) +
+					sep + pad(costStr, 8)
 			}
+			b.WriteString(line)
 			b.WriteString("\n")
 		}
 	}
