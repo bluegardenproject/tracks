@@ -188,6 +188,14 @@ type Service struct {
 	// DependsOn lists other services (same repo) that must be ready
 	// before this one starts. A simple ordered wait, not a DAG.
 	DependsOn []string `yaml:"depends_on,omitempty"`
+
+	// ProxyPort, when non-zero, tells the daemon to run a stable-port
+	// reverse proxy on this fixed port. The proxy forwards to whichever
+	// track's service is currently "active" (set via `tracks proxy switch`).
+	// This sidesteps the per-track port-wiring problem: the Wallet app
+	// always points at the fixed ProxyPort, and you flip the upstream
+	// instead of patching manifests.
+	ProxyPort int `yaml:"proxy_port,omitempty"`
 }
 
 // ReadyProbe is how a service signals readiness. At most one field set.

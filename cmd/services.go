@@ -156,4 +156,78 @@ func init() {
 	}
 	urlCmd.Flags().String("track", "", "track ID (defaults to $TRACKS_ID)")
 	register(urlCmd)
+
+	// tracks proxy [switch <service> [track-id]]
+	//
+	// tracks proxy          — show status of all stable-port proxies
+	// tracks proxy switch <service> [track-id|off]
+	//                       — flip a proxy's upstream to a track (or clear it)
+	proxyCmd := &cobra.Command{
+		Use:   "proxy",
+		Short: "manage stable-port reverse proxies for dev-server services",
+		Long: "Show and control the stable-port proxy that always listens on a fixed port " +
+			"(e.g. :3000) and forwards to whichever track's service is currently active. " +
+			"Your Wallet app stays pointed at the fixed port; you flip the upstream instead of patching manifests.",
+		RunE: func(c *cobra.Command, args []string) error {
+			cfg, _ := config.Load()
+			cl := daemon.NewClient(cfg)
+			result, err := cl.ProxyStatus()
+			if err != nil {
+				return fmt.Errorf("daemon: %w", err)
+			}
+			if len(result.Proxies) == 0 {
+				fmt.Println("no proxy_port configured in any service (add proxy_port: <N> to a service in config.yaml)")
+				return nil
+			}
+			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "SERVICE\tFIXED PORT\tUPSTREAM\tACTIVE TRACK")
+			for _, p := range result.Proxies {
+				upstream := p.Upstream
+				if upstream == "" {
+					upstream = "(none — returns 503)"
+				}
+				trackID := p.ActiveTrackID
+				if trackID == "" && p.Upstream != "" {
+					trackID = "(unknown track)"
+				}
+				fmt.Fprintf(tw, "%s\t:%d\t%s\t%s\n", p.ServiceName, p.PublicPort, upstream, trackID)
+			}
+			return tw.Flush()
+		},
+	}
+
+	proxySwitchCmd := &cobra.Command{
+		Use:   "switch <service> [track-id|off]",
+		Short: "switch a proxy's upstream to a track's service, or clear it",
+		Long: "Set the active upstream for a service's stable-port proxy. " +
+			"Passing a track ID routes the fixed port to that track's allocated service port. " +
+			"Passing 'off' (or no argument) clears the upstream so the proxy returns 503.",
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(c *cobra.Command, args []string) error {
+			svcName := args[0]
+			trackID := ""
+			if len(args) == 2 {
+				trackID = args[1]
+			} else {
+				// Default to current track if inside one.
+				if id := os.Getenv("TRACKS_ID"); id != "" {
+					trackID = id
+				}
+			}
+			cfg, _ := config.Load()
+			cl := daemon.NewClient(cfg)
+			if err := cl.ProxySwitch(svcName, trackID); err != nil {
+				return fmt.Errorf("daemon: %w", err)
+			}
+			if trackID == "" || trackID == "off" {
+				fmt.Printf("proxy for %s cleared (returning 503)\n", svcName)
+			} else {
+				fmt.Printf("proxy for %s → track %s\n", svcName, trackID)
+			}
+			return nil
+		},
+	}
+
+	proxyCmd.AddCommand(proxySwitchCmd)
+	register(proxyCmd)
 }

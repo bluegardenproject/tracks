@@ -249,3 +249,18 @@ func (c *Client) Services(trackID string) (ServicesResult, error) {
 	var r ServicesResult
 	return r, c.callMethod(MethodServices, ServicesParams{TrackID: trackID}, &r)
 }
+
+// ProxySwitch sets the active upstream for a service's stable-port proxy to
+// the given track's service port. Pass trackID="" or "off" to clear.
+func (c *Client) ProxySwitch(serviceName, trackID string) error {
+	return c.callMethod(MethodProxySwitch, ProxySwitchParams{
+		ServiceName: serviceName,
+		TrackID:     trackID,
+	}, nil)
+}
+
+// ProxyStatus returns a snapshot of all registered stable-port proxies.
+func (c *Client) ProxyStatus() (ProxyStatusResult, error) {
+	var r ProxyStatusResult
+	return r, c.callMethod(MethodProxyStatus, nil, &r)
+}

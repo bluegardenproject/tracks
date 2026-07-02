@@ -81,6 +81,13 @@ const (
 	// MethodServices returns the current service states and allocated
 	// ports for a track.
 	MethodServices Method = "services"
+
+	// MethodProxySwitch sets the active upstream for a service's stable-port
+	// proxy to a specific track's service, or clears it.
+	MethodProxySwitch Method = "proxy_switch"
+
+	// MethodProxyStatus returns the current state of all registered proxies.
+	MethodProxyStatus Method = "proxy_status"
 )
 
 // Request is the wire payload from CLI → daemon.
@@ -263,4 +270,28 @@ type ServicesParams struct {
 type ServicesResult struct {
 	Services []state.ServiceState `json:"services"`
 	Ports    map[string]int       `json:"ports"`
+}
+
+// ProxySwitchParams is the payload for MethodProxySwitch.
+// Set TrackID to activate that track's service as the upstream; leave it
+// empty (or set it to "off") to clear the proxy (returns 503).
+type ProxySwitchParams struct {
+	ServiceName string `json:"service_name"`
+	TrackID     string `json:"track_id"` // "" or "off" to clear
+}
+
+// ProxyStatusResult is returned by MethodProxyStatus.
+type ProxyStatusResult struct {
+	Proxies []ProxyEntryStatus `json:"proxies"`
+}
+
+// ProxyEntryStatus describes one proxy entry.
+type ProxyEntryStatus struct {
+	ServiceName string `json:"service_name"`
+	PublicPort  int    `json:"public_port"`
+	// Upstream is "host:port" when active, "" when inactive (503).
+	Upstream    string `json:"upstream"`
+	// ActiveTrackID is the track whose service port is the current upstream,
+	// derived by reverse-lookup against live track service ports.
+	ActiveTrackID string `json:"active_track_id,omitempty"`
 }
