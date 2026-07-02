@@ -345,8 +345,8 @@ func (m *model) renderTable(width int) string {
 	} else if len(m.tracks) == 0 {
 		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
 	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-36s  %-26s  %-10s  %-22s  %-6s  %-8s",
-			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "IDLE", "COST")))
+		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-10s  %-22s  %-5s  %-8s",
+			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "SVC", "COST")))
 		b.WriteString("\n")
 		for i, t := range m.tracks {
 			branch := t.Branch
@@ -358,11 +358,11 @@ func (m *model) renderTable(width int) string {
 				line = fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
 					shortID(t.ID),
 					padRendered(m.renderKind(t), 7),
-					padRendered(m.styles.branch.Render(truncate(branch, 36)), 36),
+					padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
 					padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
 					m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
 					padRendered(m.renderChangesColored(t.Changes), 22),
-					padRendered(m.styles.dim.Render(renderIdle(t)), 6),
+					padRendered(m.renderServices(t), 5),
 					padRendered(m.renderCost(t.Usage), 8),
 				)
 			} else {
@@ -413,13 +413,24 @@ func (m *model) renderTable(width int) string {
 					costStr = addBg(m.styles.cost).Render(usage.FormatCost(t.Usage.CostUSD))
 				}
 
+				// SVC: apply bg to preserve selection highlight.
+				var svcStr string
+				if live, total := svcCounts(t); total > 0 {
+					sv := fmt.Sprintf("%d/%d", live, total)
+					if live > 0 {
+						svcStr = addBg(m.styles.insertions).Render(sv)
+					} else {
+						svcStr = addBg(m.styles.dim).Render(sv)
+					}
+				}
+
 				line = m.styles.rowActive.Render(fmt.Sprintf("  %-15s", shortID(t.ID))) +
 					sep + pad(kindStr, 7) +
-					sep + pad(addBg(m.styles.branch).Render(truncate(branch, 36)), 36) +
+					sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
 					sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
 					sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), 10)) +
 					sep + pad(changesStr, 22) +
-					sep + pad(addBg(m.styles.dim).Render(renderIdle(t)), 6) +
+					sep + pad(svcStr, 5) +
 					sep + pad(costStr, 8)
 			}
 			b.WriteString(line)
@@ -588,6 +599,36 @@ func renderIdle(t state.Track) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// svcCounts returns (live, total) service counts for a track.
+// total is len(t.Ports) — ports are allocated at creation for every configured
+// service, so this is the authoritative total even before any service is started.
+// Width assumption: realistic values are at most two digits each ("99/99" = 5
+// chars), matching the SVC column width of 5.
+func svcCounts(t state.Track) (live, total int) {
+	total = len(t.Ports)
+	for _, s := range t.Services {
+		if s.Status.Live() {
+			live++
+		}
+	}
+	return
+}
+
+// renderServices returns a styled "live/total" port count for the SVC column.
+// Returns "" when no ports are configured for the track.
+// Live services are highlighted green; none running is dim.
+func (m *model) renderServices(t state.Track) string {
+	live, total := svcCounts(t)
+	if total == 0 {
+		return ""
+	}
+	s := fmt.Sprintf("%d/%d", live, total)
+	if live > 0 {
+		return m.styles.insertions.Render(s)
+	}
+	return m.styles.dim.Render(s)
 }
 
 func joinRepos(rs []state.TrackRepo) string {
