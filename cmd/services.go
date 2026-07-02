@@ -34,7 +34,10 @@ func init() {
 			if err != nil {
 				return err
 			}
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			result, err := cl.Services(id)
 			if err != nil {
@@ -81,7 +84,10 @@ func init() {
 				return err
 			}
 			svcName := args[0]
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			result, err := cl.ServiceUpWithProgress(id, svcName, func(msg string) {
 				fmt.Println(msg)
@@ -109,7 +115,10 @@ func init() {
 				return err
 			}
 			svcName := args[0]
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			err = cl.ServiceDownWithProgress(id, svcName, func(msg string) {
 				fmt.Println(msg)
@@ -135,14 +144,17 @@ func init() {
 				return err
 			}
 			svcName := args[0]
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			result, err := cl.Services(id)
 			if err != nil {
 				return fmt.Errorf("daemon: %w", err)
 			}
-			port, ok := result.Ports[svcName]
-			if !ok {
+			port, portOK := result.Ports[svcName]
+			if !portOK {
 				return fmt.Errorf("service %q not found in track %s", svcName, id)
 			}
 			for _, ss := range result.Services {
@@ -150,7 +162,15 @@ func init() {
 					fmt.Fprintf(os.Stderr, "warning: service %s is not running (status: %s)\n", svcName, ss.Status)
 				}
 			}
-			fmt.Printf("http://localhost:%d\n", port)
+			// Also show the stable proxy URL if this service has one active.
+			if proxyStatus, err := cl.ProxyStatus(); err == nil {
+				for _, p := range proxyStatus.Proxies {
+					if p.ServiceName == svcName && p.Upstream != "" {
+						fmt.Printf("stable:  http://localhost:%d\n", p.PublicPort)
+					}
+				}
+			}
+			fmt.Printf("track:   http://localhost:%d\n", port)
 			return nil
 		},
 	}
@@ -169,7 +189,10 @@ func init() {
 			"(e.g. :3000) and forwards to whichever track's service is currently active. " +
 			"Your Wallet app stays pointed at the fixed port; you flip the upstream instead of patching manifests.",
 		RunE: func(c *cobra.Command, args []string) error {
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			result, err := cl.ProxyStatus()
 			if err != nil {
@@ -214,7 +237,10 @@ func init() {
 					trackID = id
 				}
 			}
-			cfg, _ := config.Load()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
 			cl := daemon.NewClient(cfg)
 			if err := cl.ProxySwitch(svcName, trackID); err != nil {
 				return fmt.Errorf("daemon: %w", err)
