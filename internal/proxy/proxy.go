@@ -27,7 +27,8 @@ type Entry struct {
 	PublicPort  int
 
 	mu       sync.RWMutex
-	upstream string // "host:port" or "" for inactive
+	upstream string                  // "host:port" or "" for inactive
+	rp       *httputil.ReverseProxy  // cached proxy for the current upstream; nil when inactive
 	server   *http.Server
 	ln       net.Listener
 }
@@ -39,32 +40,40 @@ func (e *Entry) Upstream() string {
 	return e.upstream
 }
 
-// SetUpstream replaces the active upstream atomically. An empty string
-// disables forwarding (new requests get 503 until a new upstream is set).
+// SetUpstream replaces the active upstream atomically and rebuilds the cached
+// reverse proxy. An empty string disables forwarding (new requests get 503
+// until a new upstream is set).
 func (e *Entry) SetUpstream(upstream string) {
 	e.mu.Lock()
 	e.upstream = upstream
+	if upstream == "" {
+		e.rp = nil
+	} else {
+		target := &url.URL{Scheme: "http", Host: upstream}
+		rp := httputil.NewSingleHostReverseProxy(target)
+		// FlushInterval -1 disables response buffering; required for
+		// Server-Sent Events and streaming responses like Metro's bundle
+		// delivery.
+		rp.FlushInterval = -1
+		rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+		}
+		e.rp = rp
+	}
 	e.mu.Unlock()
 }
 
 func (e *Entry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.mu.RLock()
 	upstream := e.upstream
+	rp := e.rp
 	e.mu.RUnlock()
 
-	if upstream == "" {
+	if rp == nil || upstream == "" {
 		http.Error(w, "no active upstream — run `tracks proxy switch` to activate one", http.StatusServiceUnavailable)
 		return
 	}
 
-	target := &url.URL{Scheme: "http", Host: upstream}
-	rp := httputil.NewSingleHostReverseProxy(target)
-	// FlushInterval -1 disables response buffering; required for Server-Sent
-	// Events and streaming responses like Metro's bundle delivery.
-	rp.FlushInterval = -1
-	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
-	}
 	// Rewrite the Host header so the upstream server accepts the request.
 	r.Host = upstream
 	rp.ServeHTTP(w, r)
@@ -92,9 +101,8 @@ func NewManager(stateDir string) *Manager {
 }
 
 // Register declares a proxy entry for the named service on publicPort.
-// Must be called before Start. Idempotent if called again with the same
-// arguments (re-registers without re-binding). Panics if a different
-// publicPort is supplied for the same serviceName.
+// Must be called before Start. Idempotent: a second call for the same
+// serviceName is silently ignored (the first registration wins).
 func (m *Manager) Register(serviceName string, publicPort int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -135,7 +143,10 @@ func (m *Manager) Start() error {
 			Handler:      e,
 			ReadTimeout:  0, // no timeout — streaming responses like Metro bundles can take long
 			WriteTimeout: 0,
-			IdleTimeout:  60 * time.Second,
+			// IdleTimeout closes truly idle keep-alive connections; 60 s is
+			// conservative enough that HMR WebSockets stay open between saves
+			// while still releasing abandoned connections.
+			IdleTimeout: 60 * time.Second,
 		}
 		e.mu.Unlock()
 

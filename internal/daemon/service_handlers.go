@@ -282,12 +282,10 @@ func (s *Server) openViewerPane(session string, sup *supervisor, svcName string,
 		// First service — split the track window horizontally.
 		paneID, err = tm.SplitWindowRight(session, sup.windowName, cmd, 35)
 	} else {
-		// Subsequent services — stack below the last right-column pane.
-		var lastPane string
-		for _, id := range sup.viewerPanes {
-			lastPane = id
-		}
-		paneID, err = tm.SplitPaneDown(lastPane, cmd)
+		// Subsequent services — stack below the most recently created pane.
+		// lastViewerPane tracks this explicitly so we don't rely on
+		// non-deterministic map iteration order.
+		paneID, err = tm.SplitPaneDown(sup.lastViewerPane, cmd)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tracks: open viewer pane for %s: %v\n", svcName, err)
@@ -296,6 +294,7 @@ func (s *Server) openViewerPane(session string, sup *supervisor, svcName string,
 
 	_ = tm.SetPaneTitle(paneID, title)
 	sup.viewerPanes[svcName] = paneID
+	sup.lastViewerPane = paneID
 }
 
 // closeViewerPane kills the log-viewer pane for the named service.

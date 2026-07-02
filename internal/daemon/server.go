@@ -279,6 +279,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 		if startErr := mgr.Start(); startErr != nil {
 			fmt.Fprintf(os.Stderr, "tracks daemon: proxy start: %v\n", startErr)
+			mgr.Stop() // clean up any entries that did bind before the failure
 		} else {
 			s.mu.Lock()
 			s.proxyMgr = mgr
