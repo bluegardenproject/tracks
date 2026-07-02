@@ -129,7 +129,8 @@ const taskSuffix = "" +
 	"If the task is a read-only audit, SKIP the status change.\n" +
 	"  3. When you open a PR, transition the ticket to the closest " +
 	"match for \"In Review\" (or \"Code Review\" / \"Awaiting Review\"). " +
-	"Add a comment with the PR URL via `addCommentToJiraIssue`.\n" +
+	"Do NOT add a comment with the PR URL — the PR is already linked " +
+	"automatically and a comment would be duplicate noise.\n" +
 	"  4. Any Atlassian-tool error is non-fatal — note it in your " +
 	"reply and carry on with the actual work."
 
