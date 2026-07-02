@@ -378,11 +378,14 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 			return false
 		}
 		prevStatus, prevPRURL = t.Status, t.PRURL
+		newPR := prURL != "" && prURL != t.PRURL
 		target := t.Status
 		switch {
-		case idle && t.Status != state.StatusWaiting:
+		case newPR:
+			target = state.StatusPR
+		case idle && t.Status == state.StatusRunning:
 			target = state.StatusWaiting
-		case !idle && t.Status != state.StatusRunning:
+		case !idle && t.Status == state.StatusWaiting:
 			target = state.StatusRunning
 		}
 		if target == t.Status &&
