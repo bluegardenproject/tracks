@@ -38,7 +38,11 @@ func ok(result any) Response {
 func fail(msg string) Response { return Response{Ok: false, Error: msg} }
 
 func (s *Server) handlePing() Response {
-	return ok(PingResult{Version: s.version, PID: os.Getpid()})
+	r := PingResult{Version: s.version, PID: os.Getpid(), ExePath: s.exePath}
+	if !s.exeMod.IsZero() {
+		r.ExeModUnixNano = s.exeMod.UnixNano()
+	}
+	return ok(r)
 }
 
 func (s *Server) handleLs() Response {

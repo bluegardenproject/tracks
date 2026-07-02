@@ -40,6 +40,12 @@ type Server struct {
 	version  string
 	notifier *notify.Notifier
 
+	// exePath and exeMod describe the daemon's own binary as it was
+	// when the daemon started. Reported in ping so the CLI can detect
+	// a stale daemon after a local rebuild (see PingResult).
+	exePath string
+	exeMod  time.Time
+
 	// Config-reload bookkeeping. cfgReloadMu serializes stat+load+swap
 	// so concurrent requests don't reload redundantly; the watched
 	// mtime/size are the last values we successfully (or unsuccessfully)
@@ -82,6 +88,16 @@ func NewServer(cfg config.Config, store state.Store, version string) *Server {
 			Bell:  cfg.Notify.Bell,
 		}),
 		pendingPrompts: make(map[string]promptCh),
+	}
+	// Snapshot the running binary's path + mtime once, at startup, so a
+	// later rebuild (which overwrites the file in place) doesn't change
+	// what we report — we want the identity of the build we're actually
+	// running, not whatever is on disk now.
+	if exe, err := os.Executable(); err == nil {
+		s.exePath = exe
+		if fi, err := os.Stat(exe); err == nil {
+			s.exeMod = fi.ModTime()
+		}
 	}
 	s.cfg.Store(&cfg)
 	return s
