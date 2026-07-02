@@ -227,3 +227,25 @@ func (c *Client) PruneCompleted() (int, error) {
 	}
 	return r.Removed, nil
 }
+
+// ServiceUpWithProgress starts a named service (and any depends_on deps) for
+// a track, streaming progress to onProgress as each service starts and
+// becomes ready. Returns the port and log path once the target service is up.
+func (c *Client) ServiceUpWithProgress(trackID, serviceName string, onProgress func(string)) (ServiceUpResult, error) {
+	var r ServiceUpResult
+	err := c.callStreaming(MethodServiceUp, ServiceUpParams{TrackID: trackID, ServiceName: serviceName}, &r, onProgress)
+	return r, err
+}
+
+// ServiceDown stops a named service for a track, running its pre_stop hooks
+// first. Streams progress to onProgress.
+func (c *Client) ServiceDownWithProgress(trackID, serviceName string, onProgress func(string)) error {
+	return c.callStreaming(MethodServiceDown, ServiceDownParams{TrackID: trackID, ServiceName: serviceName}, nil, onProgress)
+}
+
+// Services returns the current service states and allocated port map for
+// a track.
+func (c *Client) Services(trackID string) (ServicesResult, error) {
+	var r ServicesResult
+	return r, c.callMethod(MethodServices, ServicesParams{TrackID: trackID}, &r)
+}
