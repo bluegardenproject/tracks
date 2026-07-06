@@ -147,6 +147,32 @@ const readOnlySuffix = "" +
 	"only. When the user is ready to implement, the track can be " +
 	"promoted to its own worktree with `tracks promote <id>`."
 
+// draftPRRepos returns the names of the track's repos configured to
+// open pull requests as drafts by default.
+func draftPRRepos(cfg config.Config, repos []state.TrackRepo) []string {
+	var out []string
+	for _, r := range repos {
+		if cr, ok := cfg.RepoByName(r.Name); ok && cr.DraftPRs {
+			out = append(out, r.Name)
+		}
+	}
+	return out
+}
+
+// draftPRSuffix builds the prompt fragment instructing Claude to open
+// PRs as drafts. When every repo on the track wants drafts (the common
+// single-repo case) it stays generic; otherwise it names the repos so a
+// mixed-repo track only drafts the ones that opted in.
+func draftPRSuffix(draftRepos []string, totalRepos int) string {
+	if len(draftRepos) == totalRepos {
+		return "\n\nWhen you open a pull request, open it as a **draft** " +
+			"(`gh pr create --draft`) unless the user asks otherwise."
+	}
+	return "\n\nWhen you open a pull request for any of these repos, open it " +
+		"as a **draft** (`gh pr create --draft`) unless the user asks " +
+		"otherwise: " + strings.Join(draftRepos, ", ") + "."
+}
+
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
@@ -181,6 +207,9 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		}
 	} else {
 		prompt += "\n\n" + taskSuffix
+		if draft := draftPRRepos(cfg, t.Repos); len(draft) > 0 {
+			prompt += draftPRSuffix(draft, len(t.Repos))
+		}
 	}
 
 	// CWD is the first worktree; for a repo-less ask, fall back to the

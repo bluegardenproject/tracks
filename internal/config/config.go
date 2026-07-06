@@ -145,6 +145,12 @@ type Repo struct {
 	// worktree.
 	InitSubmodules bool `yaml:"init_submodules,omitempty"`
 
+	// DraftPRs makes tracks for this repo open pull requests as drafts
+	// by default. Surfaced to Claude as an instruction in the spawn
+	// prompt (Claude opens PRs via `gh pr create`, so tracks can't force
+	// the flag itself). Off by default.
+	DraftPRs bool `yaml:"draft_prs,omitempty"`
+
 	// Provision, when set, makes a freshly created worktree runnable:
 	// it copies gitignored files (e.g. .env) from the primary checkout
 	// and runs a dependency-install command. nil means no provisioning.
