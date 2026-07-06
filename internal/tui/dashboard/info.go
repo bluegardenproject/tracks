@@ -128,6 +128,15 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 		out = append(out, "")
 		out = append(out, wrapInfoText(t.TaskPrompt, w)...)
 	}
+	// For an errored track, show why underneath the prompt — the prompt
+	// stays copy/paste-able for a retry, the reason is there for debugging.
+	if t.Status == state.StatusErrored && t.ErrorMsg != "" {
+		errStyle := m.styles.status[state.StatusErrored]
+		out = append(out, "", m.styles.sectionHdr.Render("ERROR"))
+		for _, line := range wrapInfoText(t.ErrorMsg, w) {
+			out = append(out, errStyle.Render(line))
+		}
+	}
 	return strings.Join(out, "\n")
 }
 

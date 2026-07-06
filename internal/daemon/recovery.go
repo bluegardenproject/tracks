@@ -64,6 +64,11 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		t.Status = state.StatusErrored
 		now := time.Now().UTC()
 		t.ExitedAt = &now
+		if alive {
+			t.ErrorMsg = fmt.Sprintf("orphaned by a daemon restart while still running (PID %d) — the daemon can't re-supervise a process across restarts", t.PID)
+		} else {
+			t.ErrorMsg = "process was gone after a daemon restart (crash, machine sleep, or killed)"
+		}
 		_ = s.store.Put(t)
 		if alive {
 			fmt.Fprintf(os.Stderr,

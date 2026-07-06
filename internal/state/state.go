@@ -295,6 +295,13 @@ type Track struct {
 
 	// ExitCode is the Claude process's exit code if available.
 	ExitCode *int `json:"exit_code,omitempty"`
+
+	// ErrorMsg is a human-readable reason the track is in
+	// StatusErrored — a failed git fetch, a spawn error, or an
+	// orphaned-by-restart note. Empty for tracks that never errored.
+	// Surfaced in the dashboard so a failed track explains itself
+	// without digging through the daemon log.
+	ErrorMsg string `json:"error_msg,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses.
