@@ -110,10 +110,14 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 // "interactive TTY inside tmux" property that lets the user type
 // to Claude directly.
 //
+// The window is NOT created detached: tmux selects it immediately so
+// it becomes the session's active window. When this is called from
+// inside a display-popup, the popup overlay remains visible on top;
+// when the popup closes the user lands on the new track window.
 // Always uses remain-on-exit=on so the user can read Claude's final
 // output even after the agent itself terminates.
 func (Client) NewWindowReturningPaneID(session, name, command, startDir string) (int, error) {
-	args := []string{"new-window", "-d", "-t", session, "-n", name,
+	args := []string{"new-window", "-t", session, "-n", name,
 		"-P", "-F", "#{pane_pid}"}
 	if startDir != "" {
 		args = append(args, "-c", startDir)

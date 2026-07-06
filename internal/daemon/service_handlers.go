@@ -10,6 +10,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/notify"
+	"github.com/bluegardenproject/tracks/internal/provision"
 	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -46,6 +47,11 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 	type svcEntry struct {
 		svc      config.Service
 		worktree string
+		// provision fields for lazy dep installation (deferred from
+		// worktree creation). Empty when no provision config is set.
+		depsCmd       string
+		primaryPath   string
+		cacheStrategy string
 	}
 	allSvcs := make(map[string]svcEntry)
 	deps := make(map[string][]string)
@@ -55,10 +61,21 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		if !ok {
 			continue
 		}
+		depsCmd := ""
+		primaryPath := ""
+		cacheStrategy := ""
+		if cfgRepo.Provision != nil {
+			depsCmd = cfgRepo.Provision.DepsCmd
+			cacheStrategy = cfgRepo.Provision.CacheStrategy
+			primaryPath, _ = cfgRepo.ResolveRepoPath()
+		}
 		for _, svc := range cfgRepo.Services {
 			allSvcs[svc.Name] = svcEntry{
-				svc:      svc,
-				worktree: trackRepo.Path,
+				svc:           svc,
+				worktree:      trackRepo.Path,
+				depsCmd:       depsCmd,
+				primaryPath:   primaryPath,
+				cacheStrategy: cacheStrategy,
 			}
 			deps[svc.Name] = svc.DependsOn
 		}
@@ -106,6 +123,37 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 			emit("starting " + name + "…")
 		} else {
 			emit("starting dependency " + name + "…")
+		}
+
+		// Deps were deferred at worktree creation (SkipDepsCmd=true).
+		// Run them now, once per worktree, on the first service start.
+		// Mark before running to prevent a concurrent `tracks up` for
+		// another service in the same repo from double-installing;
+		// unmark on failure so a retry can try again.
+		if entry.depsCmd != "" {
+			sup.svcMu.Lock()
+			if sup.depsInstalled == nil {
+				sup.depsInstalled = make(map[string]bool)
+			}
+			alreadyInstalled := sup.depsInstalled[entry.worktree]
+			if !alreadyInstalled {
+				sup.depsInstalled[entry.worktree] = true
+			}
+			sup.svcMu.Unlock()
+			if !alreadyInstalled {
+				emit("installing deps (deferred from track creation)…")
+				if err := provision.RunDepsOnly(ctx, provision.Options{
+					WorktreePath:  entry.worktree,
+					DepsCmd:       entry.depsCmd,
+					PrimaryPath:   entry.primaryPath,
+					CacheStrategy: entry.cacheStrategy,
+				}, emit); err != nil {
+					sup.svcMu.Lock()
+					delete(sup.depsInstalled, entry.worktree)
+					sup.svcMu.Unlock()
+					return fail(fmt.Sprintf("deps for %s: %v", name, err))
+				}
+			}
 		}
 
 		st, err := s.startService(ctx, sup, fresh, entry.svc, entry.worktree)
@@ -266,7 +314,7 @@ func (s *Server) openViewerPane(session string, sup *supervisor, svcName string,
 	// tail -n 100: show the last 100 lines first so there's context when
 	// the pane opens, then follow new output.
 	quotedPath := "'" + strings.ReplaceAll(logPath, "'", "'\\''") + "'"
-	cmd := "tail -n 100 -f " + quotedPath
+	cmd := "tail -n 100 -F " + quotedPath
 
 	sup.svcMu.Lock()
 	defer sup.svcMu.Unlock()

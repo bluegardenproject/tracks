@@ -45,6 +45,7 @@ const (
 	ActionReleaseBranch Action = "release"
 	ActionForget        Action = "forget"
 	ActionPrune         Action = "prune"
+	ActionProxy         Action = "proxy"
 	ActionSettings      Action = "settings"
 	ActionGC            Action = "gc"
 	ActionQuitSession   Action = "quit"
@@ -59,6 +60,7 @@ var actionHints = map[Action]string{
 	ActionAddRepo:       "Realised the change spans another repo? Mount it onto a running track.",
 	ActionPromote:       "Done investigating? Turn a read-only ask/plan track into a worktree to implement.",
 	ActionReleaseBranch: "Remove a finished track's worktree (keeps the branch locally).",
+	ActionProxy:         "Show stable-port proxy status (fixed port → active track's service).",
 	ActionSettings:      "Add, edit, or remove repos.",
 	ActionGC:            "Clean up orphaned worktree directories.",
 	ActionQuitSession:   "Kill the tmux session and stop the daemon.",
@@ -79,6 +81,7 @@ func PickAction() (Action, error) {
 					huh.NewOption("Add repo to a track…", ActionAddRepo),
 					huh.NewOption("Promote a read-only track…", ActionPromote),
 					huh.NewOption("Release a track's branch...", ActionReleaseBranch),
+					huh.NewOption("Proxy status", ActionProxy),
 					huh.NewOption("Settings", ActionSettings),
 					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
 					huh.NewOption("Quit session", ActionQuitSession),

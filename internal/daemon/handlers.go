@@ -209,7 +209,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		} else {
 			resolvedBranch = checkout.label
 		}
-		trackRepos, rollback, err = s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit)
+		trackRepos, rollback, err = s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit, true)
 		if err != nil {
 			rollback()
 			return fail(err.Error())
@@ -312,7 +312,9 @@ func (s *Server) resolveBranchCollision(ctx context.Context, repos []repoSpec, w
 // submodule init) so callers can stream progress to a user.
 // When checkout is non-nil, the worktree is detached at the target
 // PR/branch instead of branched fresh off base (used by review tracks).
-func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string, checkout *reviewCheckout, emit Emit) ([]state.TrackRepo, func(), error) {
+// skipDeps, when true, skips running DepsCmd so that dependency
+// installation is deferred to the first `tracks up` call.
+func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoSpec, branch string, checkout *reviewCheckout, emit Emit, skipDeps bool) ([]state.TrackRepo, func(), error) {
 	created := make([]state.TrackRepo, 0, len(repos))
 	rollback := func() {
 		for _, tr := range created {
@@ -353,8 +355,22 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 			}
 		}
 		if r.Provision != nil {
-			emit(fmt.Sprintf("provisioning %s (copying env + installing deps)...", r.Name))
-			if err := provision.Run(ctx, provisionOptions(r.Path, dest, r.Provision), emit); err != nil {
+			// Only defer deps when the caller asked AND the repo has at
+			// least one service — repos with no services never trigger
+			// `tracks up`, so they must install deps eagerly here.
+			deferDeps := skipDeps
+			if deferDeps {
+				cfgRepo, ok := s.config().RepoByName(r.Name)
+				if !ok || len(cfgRepo.Services) == 0 {
+					deferDeps = false
+				}
+			}
+			msg := "provisioning %s (copying env files; deps deferred to first `tracks up`)..."
+			if !deferDeps {
+				msg = "provisioning %s (copying env + installing deps)..."
+			}
+			emit(fmt.Sprintf(msg, r.Name))
+			if err := provision.Run(ctx, provisionOptions(r.Path, dest, r.Provision, deferDeps), emit); err != nil {
 				return nil, rollback, fmt.Errorf("provision %s: %w", r.Name, err)
 			}
 		}
@@ -399,7 +415,7 @@ func (s *Server) allocatePorts(trackID string, repos []repoSpec) (map[string]int
 	return ports.Allocate(trackID, names, taken)
 }
 
-func provisionOptions(primaryPath, worktreePath string, p *config.Provision) provision.Options {
+func provisionOptions(primaryPath, worktreePath string, p *config.Provision, skipDeps bool) provision.Options {
 	return provision.Options{
 		PrimaryPath:   primaryPath,
 		WorktreePath:  worktreePath,
@@ -407,6 +423,7 @@ func provisionOptions(primaryPath, worktreePath string, p *config.Provision) pro
 		CopyMode:      p.CopyMode,
 		DepsCmd:       p.DepsCmd,
 		CacheStrategy: p.CacheStrategy,
+		SkipDepsCmd:   skipDeps,
 	}
 }
 
@@ -573,8 +590,14 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage, emit Em
 		}
 	}
 	if r.Provision != nil {
-		emit(fmt.Sprintf("provisioning %s...", r.Name))
-		if err := provision.Run(ctx, provisionOptions(primaryPath, dest, r.Provision), emit); err != nil {
+		// Defer deps only when services exist to trigger `tracks up`.
+		deferDeps := len(r.Services) > 0
+		msg := "provisioning %s (copying env files; deps deferred to first `tracks up`)..."
+		if !deferDeps {
+			msg = "provisioning %s (copying env + installing deps)..."
+		}
+		emit(fmt.Sprintf(msg, r.Name))
+		if err := provision.Run(ctx, provisionOptions(primaryPath, dest, r.Provision, deferDeps), emit); err != nil {
 			// Roll back the worktree so a failed provision doesn't leave
 			// a half-set-up repo attached to the track.
 			_ = primary.RemoveWorktree(ctx, dest)
@@ -635,7 +658,7 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 
 	// Create the real worktrees BEFORE tearing down the read-only
 	// session, so a failure here leaves the existing track untouched.
-	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, nil, emit)
+	trackRepos, rollback, err := s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, nil, emit, true)
 	if err != nil {
 		rollback()
 		return fail(err.Error())
