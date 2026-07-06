@@ -185,6 +185,35 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 
 	emit(fmt.Sprintf("track id %s", trackID))
 
+	// Build the track record up front so any failure during provisioning
+	// can be persisted as an errored track — carrying the prompt and the
+	// reason — instead of vanishing as a transient CLI error. A git fetch
+	// that dies mid-network-drop, a port clash, or a spawn error then
+	// shows up in the dashboard, where the preserved prompt makes it easy
+	// to retry and the message makes it easy to debug.
+	t := state.Track{
+		ID:         trackID,
+		Branch:     branch,
+		Slug:       strings.TrimSpace(p.Slug),
+		Kind:       kind,
+		Status:     state.StatusPending,
+		LogPath:    logPath,
+		TaskPrompt: p.TaskPrompt,
+		SessionID:  sessionID,
+		CreatedAt:  time.Now().UTC(),
+	}
+	// failCreate persists the in-progress track as errored (with the
+	// reason) and returns the wire error, so the failure is visible and
+	// retryable from the dashboard rather than only in the CLI response.
+	failCreate := func(msg string) Response {
+		t.Status = state.StatusErrored
+		t.ErrorMsg = msg
+		now := time.Now().UTC()
+		t.ExitedAt = &now
+		_ = s.store.Put(t)
+		return fail(msg)
+	}
+
 	var (
 		trackRepos     []state.TrackRepo
 		rollback       = func() {}
@@ -204,7 +233,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		if checkout == nil {
 			resolvedBranch, err = s.resolveBranchCollision(ctx, repos, branch)
 			if err != nil {
-				return fail(err.Error())
+				return failCreate(err.Error())
 			}
 		} else {
 			resolvedBranch = checkout.label
@@ -212,7 +241,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		trackRepos, rollback, err = s.createWorktrees(ctx, worktreeRoot, repos, resolvedBranch, checkout, emit)
 		if err != nil {
 			rollback()
-			return fail(err.Error())
+			return failCreate(err.Error())
 		}
 	}
 
@@ -224,23 +253,13 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		allocatedPorts, err = s.allocatePorts(trackID, repos)
 		if err != nil {
 			rollback()
-			return fail("allocate ports: " + err.Error())
+			return failCreate("allocate ports: " + err.Error())
 		}
 	}
 
-	t := state.Track{
-		ID:         trackID,
-		Branch:     resolvedBranch,
-		Slug:       strings.TrimSpace(p.Slug),
-		Kind:       kind,
-		Repos:      trackRepos,
-		Ports:      allocatedPorts,
-		Status:     state.StatusPending,
-		LogPath:    logPath,
-		TaskPrompt: p.TaskPrompt,
-		SessionID:  sessionID,
-		CreatedAt:  time.Now().UTC(),
-	}
+	t.Branch = resolvedBranch
+	t.Repos = trackRepos
+	t.Ports = allocatedPorts
 	if err := s.store.Put(t); err != nil {
 		rollback()
 		return fail("persist state: " + err.Error())
@@ -248,9 +267,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 
 	emit("spawning claude...")
 	if _, err := s.startSupervisor(ctx, t); err != nil {
-		t.Status = state.StatusErrored
-		_ = s.store.Put(t)
-		return fail("spawn claude: " + err.Error())
+		return failCreate("spawn claude: " + err.Error())
 	}
 	emit("claude running")
 	if kind.Worktreeless() {
@@ -326,12 +343,12 @@ func (s *Server) createWorktrees(ctx context.Context, root string, repos []repoS
 		// Always fetch base too: review tracks diff the target against
 		// origin/<base>, so the base ref must be present locally.
 		emit(fmt.Sprintf("fetching origin/%s in %s...", r.Base, r.Name))
-		if err := primary.Fetch(ctx, "origin", r.Base); err != nil {
+		if err := primary.FetchWithRetry(ctx, "origin", r.Base); err != nil {
 			return nil, rollback, fmt.Errorf("fetch %s/%s: %w", r.Name, r.Base, err)
 		}
 		if checkout != nil {
 			emit(fmt.Sprintf("fetching %s in %s...", checkout.fetchRef, r.Name))
-			if err := primary.Fetch(ctx, "origin", checkout.fetchRef); err != nil {
+			if err := primary.FetchWithRetry(ctx, "origin", checkout.fetchRef); err != nil {
 				return nil, rollback, fmt.Errorf("fetch %s in %s: %w", checkout.fetchRef, r.Name, err)
 			}
 			emit(fmt.Sprintf("checking out %s in %s for review...", checkout.label, r.Name))
@@ -665,6 +682,7 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	t.Status = state.StatusPending
 	t.ExitedAt = nil
 	t.ExitCode = nil
+	t.ErrorMsg = ""
 	t.TaskPrompt = promotePrompt(t.TaskPrompt, resolvedBranch)
 	if err := s.store.Put(t); err != nil {
 		rollback()
@@ -674,6 +692,9 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	emit("spawning claude in worktree...")
 	if _, err := s.startSupervisor(ctx, t); err != nil {
 		t.Status = state.StatusErrored
+		t.ErrorMsg = "spawn claude: " + err.Error()
+		now := time.Now().UTC()
+		t.ExitedAt = &now
 		_ = s.store.Put(t)
 		return fail("spawn claude: " + err.Error())
 	}

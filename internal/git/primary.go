@@ -38,6 +38,30 @@ func (c *PrimaryRepoClient) Fetch(ctx context.Context, remote, ref string) error
 	return err
 }
 
+// FetchWithRetry is Fetch with a couple of retries on transient network
+// errors (a connection dropping / DNS not yet back right after the
+// machine reconnects). Non-network errors — a bad ref, auth failure —
+// return immediately so genuine problems stay loud.
+func (c *PrimaryRepoClient) FetchWithRetry(ctx context.Context, remote, ref string) error {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		if err := c.Fetch(ctx, remote, ref); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			if !isTransientNetwork(err) {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * 500 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("fetch %s %s after 3 attempts: %w", remote, ref, lastErr)
+}
+
 // AddWorktree creates a new worktree at path on a new branch
 // branchName, starting from start (a ref like "origin/develop").
 //
@@ -223,4 +247,36 @@ func isTransient(err error) bool {
 	return strings.Contains(msg, "index.lock") ||
 		strings.Contains(msg, "cannot lock ref") ||
 		strings.Contains(msg, "fatal: Unable to create")
+}
+
+// isTransientNetwork identifies fetch/clone errors that are worth
+// retrying because they usually reflect a momentary connectivity gap
+// (e.g. the machine just came back online) rather than a real problem.
+func isTransientNetwork(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"could not resolve host",
+		"temporary failure in name resolution",
+		"could not read from remote repository",
+		"the remote end hung up unexpectedly",
+		"unable to access",
+		"failed to connect",
+		"connection reset",
+		"connection refused",
+		"connection timed out",
+		"operation timed out",
+		"timed out",
+		"network is unreachable",
+		"early eof",
+		"ssl_error",
+		"gnutls_handshake",
+	} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
 }
