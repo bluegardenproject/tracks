@@ -257,6 +257,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 		base = "main"
 	}
 	initSubs := r.InitSubmodules
+	draftPRs := r.DraftPRs
 
 	// Provisioning fields. Empty when the repo has no provision block.
 	var (
@@ -313,6 +314,12 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 				Affirmative("Yes").
 				Negative("No").
 				Value(&initSubs),
+			huh.NewConfirm().
+				Title("Open PRs as draft by default?").
+				Description("When on, tracks for this repo tell Claude to open pull requests as drafts (`gh pr create --draft`). Off by default.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&draftPRs),
 		),
 		huh.NewGroup(
 			huh.NewNote().
@@ -373,6 +380,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	r.Path = path
 	r.Base = base
 	r.InitSubmodules = initSubs
+	r.DraftPRs = draftPRs
 
 	// Build the provision block only if something was configured.
 	depsCmd = strings.TrimSpace(depsCmd)
