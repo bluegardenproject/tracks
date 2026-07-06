@@ -77,6 +77,13 @@ type supervisor struct {
 	// SplitPaneDown targets this ID so new panes stack below it in the right
 	// column rather than splitting a random pane (map iteration is unordered).
 	lastViewerPane string
+
+	// depsInstalled tracks which worktree paths have had their DepsCmd run.
+	// Because `tracks up` can be called before `pnpm install` (deps are
+	// deferred from worktree creation), the first service start for each
+	// repo triggers RunDepsOnly; subsequent starts skip it. Guarded by
+	// svcMu (same lock as services/viewerPanes).
+	depsInstalled map[string]bool
 }
 
 // waitingNotifyMinInterval is the shortest gap between two

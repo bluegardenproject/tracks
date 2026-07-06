@@ -42,6 +42,11 @@ type Options struct {
 	// reconcile. Other values ("", "none", "pnpm-store") seed nothing here —
 	// they just run DepsCmd cold (pnpm hardlinks from its own store).
 	CacheStrategy string
+	// SkipDepsCmd, when true, skips running DepsCmd even if it is set.
+	// Used during worktree creation to defer dependency installation to
+	// the first `tracks up` call, avoiding a slow pnpm install for every
+	// new track regardless of whether a dev server is ever started.
+	SkipDepsCmd bool
 }
 
 // Run provisions the worktree. emit receives human-readable progress
@@ -49,6 +54,9 @@ type Options struct {
 func Run(ctx context.Context, o Options, emit func(string)) error {
 	if err := copyIgnored(o, emit); err != nil {
 		return err
+	}
+	if o.SkipDepsCmd {
+		return nil
 	}
 	if o.CacheStrategy == "apfs-clone" {
 		if err := cloneDeps(ctx, o, emit); err != nil {
@@ -61,6 +69,24 @@ func Run(ctx context.Context, o Options, emit func(string)) error {
 		}
 	}
 	return nil
+}
+
+// RunDepsOnly runs the dependency-install step (and the apfs-clone
+// pre-seed if configured) for an already-provisioned worktree.
+// It is the deferred counterpart to Run with SkipDepsCmd=true.
+// No-op when DepsCmd is empty. PrimaryPath and CacheStrategy are
+// honoured when present so that repos with cache_strategy: apfs-clone
+// still benefit from the copy-on-write pre-seed even on the lazy path.
+func RunDepsOnly(ctx context.Context, o Options, emit func(string)) error {
+	if strings.TrimSpace(o.DepsCmd) == "" {
+		return nil
+	}
+	if o.CacheStrategy == "apfs-clone" && o.PrimaryPath != "" {
+		if err := cloneDeps(ctx, o, emit); err != nil {
+			return err
+		}
+	}
+	return runDeps(ctx, o, emit)
 }
 
 // cloneDeps copy-on-write clones the primary's node_modules into the

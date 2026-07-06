@@ -211,3 +211,52 @@ func TestDepsCmdFailurePropagates(t *testing.T) {
 		t.Fatal("expected error from failing deps command")
 	}
 }
+
+func TestSkipDepsCmd(t *testing.T) {
+	primary, worktree := setup(t)
+	emit, _ := collect()
+	err := Run(context.Background(), Options{
+		PrimaryPath:  primary,
+		WorktreePath: worktree,
+		CopyIgnored:  []string{".env"},
+		DepsCmd:      "touch should-not-exist.marker",
+		SkipDepsCmd:  true,
+	}, emit)
+	if err != nil {
+		t.Fatalf("Run with SkipDepsCmd: %v", err)
+	}
+	// Env files must still be copied.
+	if _, err := os.Stat(filepath.Join(worktree, ".env")); err != nil {
+		t.Errorf("env file not copied despite SkipDepsCmd=true: %v", err)
+	}
+	// DepsCmd must NOT have run.
+	if _, err := os.Stat(filepath.Join(worktree, "should-not-exist.marker")); err == nil {
+		t.Error("DepsCmd ran despite SkipDepsCmd=true")
+	}
+}
+
+func TestRunDepsOnly(t *testing.T) {
+	_, worktree := setup(t)
+	emit, lines := collect()
+	err := RunDepsOnly(context.Background(), Options{
+		WorktreePath: worktree,
+		DepsCmd:      "echo deps-ran && touch deps.marker",
+	}, emit)
+	if err != nil {
+		t.Fatalf("RunDepsOnly: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "deps.marker")); err != nil {
+		t.Errorf("DepsCmd did not run: %v", err)
+	}
+	if !strings.Contains(strings.Join(*lines, "\n"), "deps-ran") {
+		t.Errorf("deps output not streamed: %v", *lines)
+	}
+}
+
+func TestRunDepsOnlyNoopWhenEmpty(t *testing.T) {
+	_, worktree := setup(t)
+	emit, _ := collect()
+	if err := RunDepsOnly(context.Background(), Options{WorktreePath: worktree}, emit); err != nil {
+		t.Fatalf("RunDepsOnly with empty DepsCmd: %v", err)
+	}
+}

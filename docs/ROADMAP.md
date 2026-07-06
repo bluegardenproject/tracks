@@ -110,6 +110,48 @@ problem on every upgrade.
 
 ---
 
+## Bugs  🐛
+
+Active defects to fix before cutting the next release.
+
+### Bug 1 — Dev server / proxy can only be started with `tracks` installed
+
+**Root cause**: No install script and no automated release process. Users must build from source.
+
+**Fix**: Add `install.sh` (detect OS/arch, download from GitHub releases, verify checksum, place in `~/bin`). Create `.github/workflows/release-please.yml` + `release-please-config.json` + `.release-please-manifest.json` to automate semver tagging, changelog, and cross-compiled release assets (`make build-all`). Mirror the stac-man approach; no develop branch needed.
+
+### Bug 2 — Tmux pane in the track doesn't open after creating a new track
+
+**Root cause**: `NewWindowReturningPaneID` passes `-d` (detached) to `tmux new-window`, which creates the window but doesn't select it. When called from inside a `display-popup -E`, the popup's `SelectWindow` call may not survive the popup closing. Result: the new track window exists but the user lands nowhere useful.
+
+**Fix**: Remove the `-d` flag from `NewWindowReturningPaneID`. Window creation itself now selects the new window; when the popup closes the user lands on it automatically.
+
+### Bug 3 — Proxy shortcut `<prefix>+p` conflicts with tmux's built-in `previous-window`
+
+**Root cause**: tmux binds `p` to `previous-window` by default; adding `bind-key p` silently clobbers it, breaking tmux navigation.
+
+**Fix**: Don't add a standalone tmux keybinding. The Proxy status entry added to the overlay menu (Bug 4) is the correct, non-conflicting surface.
+
+### Bug 4 — No "proxy" entry in the overlay menu
+
+**Root cause**: `ActionProxy` and `tracks proxy` exist as a CLI subcommand but were never wired into the overlay menu.
+
+**Fix**: Add `ActionProxy Action = "proxy"` to the menu const block, a hint entry, an `huh.NewOption`, and a `case menu.ActionProxy:` handler in `cmd/menu.go` that calls `cl.ProxyStatus()` and renders the result as a tab-separated table.
+
+### Bug 5 — `pnpm install` runs during track creation instead of only before `tracks up`
+
+**Root cause**: `provision.Run` (including `DepsCmd`) is called unconditionally inside `createWorktrees` for every new track, even when no dev server will ever be started.
+
+**Fix**: Add `SkipDepsCmd bool` to `provision.Options` and set it `true` in `createWorktrees`, `handleAddRepo`, and `handlePromote`. Add `provision.RunDepsOnly` for the lazy path. In `handleServiceUp`, before the first `startService` call for each worktree, check `supervisor.depsInstalled[worktreePath]` and call `RunDepsOnly` if false, then mark it installed.
+
+### Bug 6 — Dashboard SVC column is empty for all tracks
+
+**Root cause**: `svcCounts` uses `len(t.Ports)` for the total, but old tracks (created before the port-allocation feature) have `t.Ports == nil`, so total = 0 and the cell is always blank.
+
+**Fix**: `total = max(len(t.Ports), len(t.Services))` — if services are present without port entries, we still show a count.
+
+---
+
 ## Reliability & robustness  ⭐
 
 > What most erodes trust in Tracks day-to-day: healthy tracks getting errored,

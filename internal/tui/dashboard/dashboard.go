@@ -602,12 +602,14 @@ func renderIdle(t state.Track) string {
 }
 
 // svcCounts returns (live, total) service counts for a track.
-// total is len(t.Ports) — ports are allocated at creation for every configured
-// service, so this is the authoritative total even before any service is started.
+// total prefers len(t.Ports) (authoritative once port allocation runs)
+// but falls back to len(t.Services) for tracks created before the
+// port-allocation feature shipped, so the SVC column is never blank
+// when services are actually running.
 // Width assumption: realistic values are at most two digits each ("99/99" = 5
 // chars), matching the SVC column width of 5.
 func svcCounts(t state.Track) (live, total int) {
-	total = len(t.Ports)
+	total = max(len(t.Ports), len(t.Services))
 	for _, s := range t.Services {
 		if s.Status.Live() {
 			live++
