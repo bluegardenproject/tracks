@@ -100,6 +100,21 @@ func (c *PrimaryRepoClient) AddWorktreeDetached(ctx context.Context, path, start
 	return err
 }
 
+// CheckoutWorktree adds a worktree at path on an existing local branch.
+// Use when re-attaching a branch that already exists (e.g. resuming a
+// finished track whose worktree was removed by Done). Unlike AddWorktree it
+// does NOT pass -b, so git checks out the branch rather than creating it.
+// It runs:
+//
+//	git worktree add <path> <branchName>
+func (c *PrimaryRepoClient) CheckoutWorktree(ctx context.Context, path, branchName string) error {
+	if path == "" || branchName == "" {
+		return errors.New("CheckoutWorktree: path and branchName required")
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "add", path, branchName)
+	return err
+}
+
 // RemoveWorktree removes the worktree at path. --force is used so a
 // worktree with uncommitted changes can still be cleaned up at track
 // end. The associated branch is NOT deleted (see plan §"Branch

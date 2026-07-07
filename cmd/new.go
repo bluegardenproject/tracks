@@ -27,7 +27,8 @@ func init() {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			params, err := newtrack.Run(cfg)
+			cl := daemon.NewClient(cfg)
+			result, err := newtrack.Run(cfg, cl)
 			if err != nil {
 				if errors.Is(err, newtrack.ErrCancelled) {
 					fmt.Println("cancelled.")
@@ -36,10 +37,27 @@ func init() {
 				return err
 			}
 
-			cl := daemon.NewClient(cfg)
+			tm := tmux.New()
+
+			if result.ResumeID != "" {
+				fmt.Println("resuming track...")
+				fmt.Println()
+				res, err := cl.ResumeWithProgress(result.ResumeID, func(msg string) {
+					fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+				})
+				if err != nil {
+					return fmt.Errorf("daemon: %w", err)
+				}
+				fmt.Println()
+				if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+					_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
+				}
+				return nil
+			}
+
 			fmt.Println("creating track...")
 			fmt.Println()
-			res, err := cl.NewWithProgress(params, func(msg string) {
+			res, err := cl.NewWithProgress(result.Params, func(msg string) {
 				fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
 			})
 			if err != nil {
@@ -48,13 +66,12 @@ func init() {
 			fmt.Println()
 			fmt.Println("New track:")
 			fmt.Printf("  id:     %s\n", res.TrackID)
-			fmt.Printf("  repos:  %s\n", strings.Join(params.Repos, ", "))
+			fmt.Printf("  repos:  %s\n", strings.Join(result.Params.Repos, ", "))
 			fmt.Printf("  branch: %s\n", res.Branch)
 			fmt.Println()
 
 			// The daemon has already opened the per-track tmux
 			// window with claude inside. Just switch to it.
-			tm := tmux.New()
 			if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
 				_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 			}

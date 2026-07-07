@@ -193,6 +193,20 @@ func (c *Client) PromoteWithProgress(id string, onProgress func(string)) (Promot
 	return r, c.callStreaming(MethodPromote, PromoteParams{ID: id}, &r, onProgress)
 }
 
+// Resume re-opens a finished track's Claude session by re-creating removed
+// worktrees and spawning claude --resume <sessionID>.
+func (c *Client) Resume(id string) (ResumeResult, error) {
+	var r ResumeResult
+	return r, c.callMethod(MethodResume, ResumeParams{ID: id}, &r)
+}
+
+// ResumeWithProgress is Resume that streams Progress frames (worktree
+// re-creation and spawn steps can take a moment). Use from interactive callers.
+func (c *Client) ResumeWithProgress(id string, onProgress func(string)) (ResumeResult, error) {
+	var r ResumeResult
+	return r, c.callStreaming(MethodResume, ResumeParams{ID: id}, &r, onProgress)
+}
+
 // PendingPrompts returns the daemon's outstanding permission prompts.
 func (c *Client) PendingPrompts() ([]PendingPrompt, error) {
 	var r PendingPromptsResult

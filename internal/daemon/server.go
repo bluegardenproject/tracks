@@ -463,6 +463,8 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleProxySwitch(req.Params)
 	case MethodProxyStatus:
 		return s.handleProxyStatus()
+	case MethodResume:
+		return s.handleResume(ctx, req.Params, emit)
 	default:
 		return fail(fmt.Sprintf("unknown method: %s", req.Method))
 	}

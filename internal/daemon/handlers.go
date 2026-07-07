@@ -737,6 +737,84 @@ func promotePrompt(original, branch string) string {
 		"has been created on branch `" + branch + "` — implement the change here."
 }
 
+// handleResume re-opens a finished track's Claude session. It:
+//   1. Verifies the track is terminal and has a SessionID.
+//   2. Re-creates any worktrees that were removed by Done, on the same branch.
+//   3. Resets the track to a pending state.
+//   4. Spawns claude --resume <sessionID> in a new tmux window.
+func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	var p ResumeParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fail("bad params: " + err.Error())
+	}
+	t, found := s.store.Get(p.ID)
+	if !found {
+		return fail("track not found: " + p.ID)
+	}
+	if !t.Status.IsTerminal() {
+		return fail(fmt.Sprintf("track %s is %s; only done/errored tracks can be resumed", p.ID, t.Status))
+	}
+	if t.SessionID == "" {
+		return fail("track has no session ID; cannot resume")
+	}
+
+	// Re-create any worktrees that were removed when the track was closed.
+	// Worktree-less (ask/plan) tracks have no worktrees to restore.
+	if !t.Kind.Worktreeless() {
+		for _, tr := range t.Repos {
+			if _, err := os.Stat(tr.Path); err == nil {
+				continue // worktree still on disk
+			}
+			r, ok := s.config().RepoByName(tr.Name)
+			if !ok {
+				return fail("unknown repo: " + tr.Name)
+			}
+			primaryPath, err := r.ResolveRepoPath()
+			if err != nil {
+				return fail(err.Error())
+			}
+			branch := tr.Branch
+			if branch == "" {
+				branch = t.Branch
+			}
+			if branch == "" {
+				return fail(fmt.Sprintf("cannot determine branch for repo %s", tr.Name))
+			}
+			emit(fmt.Sprintf("re-creating worktree for %s on %s...", tr.Name, branch))
+			primary := git.NewPrimaryRepoClient(primaryPath)
+			// Prune stale administrative entries first so a previously
+			// force-removed worktree dir doesn't block re-creation.
+			_ = primary.PruneWorktrees(ctx)
+			if err := primary.CheckoutWorktree(ctx, tr.Path, branch); err != nil {
+				return fail(fmt.Sprintf("re-create worktree %s: %v", tr.Name, err))
+			}
+		}
+	}
+
+	// Reset the track to a resumable state, preserving identity fields.
+	t.Status = state.StatusPending
+	t.ExitedAt = nil
+	t.ExitCode = nil
+	t.ErrorMsg = ""
+	if err := s.store.Put(t); err != nil {
+		return fail("persist state: " + err.Error())
+	}
+
+	emit("spawning claude (resume)...")
+	if _, err := s.startSupervisorResume(ctx, t); err != nil {
+		t.Status = state.StatusErrored
+		t.ErrorMsg = "spawn claude: " + err.Error()
+		now := time.Now().UTC()
+		t.ExitedAt = &now
+		_ = s.store.Put(t)
+		return fail("spawn claude: " + err.Error())
+	}
+	emit("claude running")
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track resumed",
+		fmt.Sprintf("%s on %s", labelFor(t), t.Branch))
+	return ok(ResumeResult{WindowName: t.WindowName()})
+}
+
 func (s *Server) handleForget(raw json.RawMessage) Response {
 	var p ForgetParams
 	if err := json.Unmarshal(raw, &p); err != nil {

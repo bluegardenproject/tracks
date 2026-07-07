@@ -121,6 +121,9 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	}
 
 	out := []string{header, meta}
+	if t.SessionID != "" {
+		out = append(out, m.styles.dim.Render("session ")+m.styles.dim.Render(t.SessionID))
+	}
 	if !t.Usage.IsZero() {
 		out = append(out, m.renderUsageMeta(t))
 	}

@@ -265,6 +265,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "r":
 			return m, m.poll()
+		case "R":
+			// Resume the highlighted track (must be terminal with a session ID).
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if t.Status.IsTerminal() && t.SessionID != "" {
+					res, err := m.client.Resume(t.ID)
+					if err == nil && res.WindowName != "" {
+						_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, res.WindowName)
+					}
+					return m, m.poll()
+				}
+			}
 		}
 	case tickMsg:
 		return m, tea.Batch(m.poll(), tickEvery())
@@ -441,7 +453,7 @@ func (m *model) renderTable(width int) string {
 	b.WriteString("\n")
 	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"))
 	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("r refresh   q quit   (open menu from any window with <prefix>+t)"))
+	b.WriteString(m.styles.dim.Render("r refresh   R resume   q quit   (open menu from any window with <prefix>+t)"))
 	return lipgloss.NewStyle().Width(width).Render(b.String())
 }
 
