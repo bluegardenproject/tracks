@@ -107,6 +107,30 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	if err != nil {
 		return nil, err
 	}
+	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
+}
+
+// startSupervisorResume re-opens a finished track's Claude session via
+// --resume. Identical to startSupervisor except it uses BuildResumeOptions
+// so the shell command passes --resume <sessionID> instead of a fresh prompt.
+func (s *Server) startSupervisorResume(ctx context.Context, t state.Track) (*supervisor, error) {
+	sentinelPath, err := s.sentinelPathFor(t.ID)
+	if err != nil {
+		return nil, err
+	}
+	_ = os.Remove(sentinelPath)
+
+	opts, err := claude.BuildResumeOptions(s.config(), t, s.socketDir, sentinelPath)
+	if err != nil {
+		return nil, err
+	}
+	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
+}
+
+// spawnSupervisor opens a tmux window with the given options, registers the
+// supervisor, and starts the watcher goroutine. Called by startSupervisor and
+// startSupervisorResume after they have built their respective SpawnOptions.
+func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPath string, opts claude.SpawnOptions) (*supervisor, error) {
 	tm := tmux.New()
 	window := t.WindowName()
 	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)

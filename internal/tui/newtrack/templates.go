@@ -11,6 +11,7 @@ const (
 	TemplateReview Template = "review"
 	TemplateAsk    Template = "ask"
 	TemplatePlan   Template = "plan"
+	TemplateResume Template = "resume"
 )
 
 // templatePrompts maps a Template to the body that pre-fills the
@@ -65,6 +66,7 @@ var templateLabels = map[Template]string{
 	TemplateAsk:    "Ask — read-only question about the code (no worktree)",
 	TemplatePlan:   "Plan — read-only implementation plan (no worktree)",
 	TemplateReview: "Review — a PR or branch",
+	TemplateResume: "Resume — continue a finished track's Claude session",
 }
 
 // templateDescriptions give the picker a one-line hint under each
@@ -74,6 +76,7 @@ var templateDescriptions = map[Template]string{
 	TemplateAsk:    "Points Claude at your primary checkout read-only. Promote later to start editing.",
 	TemplatePlan:   "Read-only planning against your primary checkout. Promote later to implement.",
 	TemplateReview: "Checks out a PR/branch detached so the reviewer agent can diff it.",
+	TemplateResume: "Picks a done/errored track and reopens its Claude conversation from where it left off.",
 }
 
 // kindFor maps a Template to the daemon track Kind string.

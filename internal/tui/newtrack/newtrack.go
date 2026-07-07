@@ -3,17 +3,19 @@
 // slug → task prompt.
 //
 // Uses charmbracelet/huh for the picker chrome. Keeps the daemon
-// free of any terminal concerns: this package collects a
-// NewParams payload and returns it; the caller is responsible for
-// sending it over the socket.
+// free of any terminal concerns: this package collects the outcome
+// and returns it; the caller is responsible for sending it over the
+// socket.
 package newtrack
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/charmbracelet/huh"
 )
@@ -23,25 +25,42 @@ import (
 // failure.
 var ErrCancelled = errors.New("cancelled by user")
 
-// Run shows the picker flow and returns the validated payload
-// ready to send to the daemon. cfg must already have repos
-// configured — an empty repos list is treated as a hard error.
+// Result holds the outcome of Run. Exactly one of Params (for a new
+// track) or ResumeID (for resuming a finished one) is populated.
+type Result struct {
+	Params   daemon.NewParams
+	ResumeID string
+}
+
+// Run shows the picker flow and returns the outcome. cfg must already have
+// repos configured for new-track flows (the resume path does not need repos).
 //
 // The flow runs as two consecutive huh forms:
 //
-//  1. Template choice — quick select between Custom and any of the
-//     built-in presets.
-//  2. Repos + Slug + Task — the task field is pre-filled with the
-//     template's body when one was picked, so the user can either
-//     accept as-is or tweak before submitting.
-func Run(cfg config.Config) (daemon.NewParams, error) {
-	if len(cfg.Repos) == 0 {
-		return daemon.NewParams{}, errors.New("no repos configured — run `tracks` and open Settings to add some")
+//  1. Template choice — quick select between Custom and the built-in presets,
+//     including "Resume" when client is non-nil.
+//  2. Repos + Slug + Task — the task field is pre-filled with the template's
+//     body when one was picked, so the user can either accept as-is or tweak.
+//
+// When the user picks Resume, the form switches to a track-picker and returns
+// Result{ResumeID: <id>}. For all other templates it returns
+// Result{Params: <newParams>}.
+func Run(cfg config.Config, client *daemon.Client) (Result, error) {
+	template, err := pickTemplate(client != nil)
+	if err != nil {
+		return Result{}, err
 	}
 
-	template, err := pickTemplate()
-	if err != nil {
-		return daemon.NewParams{}, err
+	if template == TemplateResume {
+		id, err := PickResumable(client)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{ResumeID: id}, nil
+	}
+
+	if len(cfg.Repos) == 0 {
+		return Result{}, errors.New("no repos configured — run `tracks` and open Settings to add some")
 	}
 
 	repoOptions := make([]huh.Option[string], 0, len(cfg.Repos))
@@ -50,7 +69,8 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 	}
 
 	if template == TemplateReview {
-		return runReview(repoOptions)
+		params, err := runReview(repoOptions)
+		return Result{Params: params}, err
 	}
 
 	// Ask/Plan are worktree-less: they run read-only against your
@@ -112,15 +132,62 @@ func Run(cfg config.Config) (daemon.NewParams, error) {
 	}
 
 	if err := runFormWithDiscardConfirm(build); err != nil {
-		return daemon.NewParams{}, err
+		return Result{}, err
 	}
 
-	return daemon.NewParams{
+	return Result{Params: daemon.NewParams{
 		Repos:      repos,
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 		Kind:       kindFor(template),
-	}, nil
+	}}, nil
+}
+
+// PickResumable shows a single-select picker over terminal-state tracks that
+// have a session ID and can therefore be resumed. Returns the selected track
+// ID or ErrCancelled when the user backs out.
+func PickResumable(client *daemon.Client) (string, error) {
+	tracks, err := client.Ls()
+	if err != nil {
+		return "", fmt.Errorf("daemon: %w", err)
+	}
+
+	options := []huh.Option[string]{}
+	for _, t := range tracks {
+		if !t.Status.IsTerminal() || t.SessionID == "" {
+			continue
+		}
+		branch := t.Branch
+		if branch == "" {
+			branch = "—"
+		}
+		label := fmt.Sprintf("%s  [%s]  %s", shortID(t.ID), branch, trackStatus(t))
+		if t.Slug != "" {
+			label += "  " + t.Slug
+		}
+		options = append(options, huh.NewOption(label, t.ID))
+	}
+	if len(options) == 0 {
+		return "", errors.New("no finished tracks with a session ID — nothing to resume")
+	}
+
+	var pick string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Resume which track?").
+				Description("Picks up the Claude conversation from where it left off.").
+				Options(options...).
+				Value(&pick),
+		),
+	)
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return "", ErrCancelled
+		}
+		return "", err
+	}
+	return pick, nil
 }
 
 // runFormWithDiscardConfirm runs the form produced by build and, when the
@@ -238,17 +305,19 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	}, nil
 }
 
-// pickTemplate is the first form: a single select between the
-// configured templates. Returns TemplateCustom when the user
-// presses Esc on the picker (treating "no template" the same as
-// "I want a custom prompt").
-func pickTemplate() (Template, error) {
+// pickTemplate is the first form: a single select between the configured
+// templates. When showResume is true, a "Resume" option is appended.
+// Returns ErrCancelled when the user presses Esc.
+func pickTemplate(showResume bool) (Template, error) {
 	choice := TemplateCustom
 	options := []huh.Option[Template]{
 		huh.NewOption(templateLabels[TemplateCustom], TemplateCustom),
 		huh.NewOption(templateLabels[TemplateAsk], TemplateAsk),
 		huh.NewOption(templateLabels[TemplatePlan], TemplatePlan),
 		huh.NewOption(templateLabels[TemplateReview], TemplateReview),
+	}
+	if showResume {
+		options = append(options, huh.NewOption(templateLabels[TemplateResume], TemplateResume))
 	}
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -267,4 +336,15 @@ func pickTemplate() (Template, error) {
 		return "", err
 	}
 	return choice, nil
+}
+
+func shortID(id string) string {
+	if len(id) <= 15 {
+		return id
+	}
+	return id[len(id)-15:]
+}
+
+func trackStatus(t state.Track) string {
+	return string(t.Status)
 }

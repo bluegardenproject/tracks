@@ -48,6 +48,9 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 	case menu.ActionNewTrack:
 		return runNewTrackFromMenu(cfg)
 
+	case menu.ActionResumeTrack:
+		return runResumeTrackFromMenu(cfg)
+
 	case menu.ActionDashboard:
 		// Ensure the dashboard window exists, then switch to it.
 		return ensureWindowAndSelect(cfg, tm, "Dashboard", "dashboard")
@@ -326,17 +329,39 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 	return nil
 }
 
-// runNewTrackFromMenu is a wrapper that runs the same picker as
-// `tracks new` from inside the popup, then asks the daemon and
-// opens the per-track window.
-//
-// We never let an error escape silently here: the popup is `-E`,
-// meaning it closes when this function returns. If we just returned
-// an error to cobra, the popup would vanish and the user would see
-// no feedback. Print + waitForKey on failure so the user can read
-// what happened before the popup closes.
+// runResumeTrackFromMenu shows the resumable-track picker and resumes the
+// chosen track, switching to the new tmux window on success.
+func runResumeTrackFromMenu(cfg config.Config) error {
+	cl := daemon.NewClient(cfg)
+	trackID, err := newtrack.PickResumable(cl)
+	if err != nil {
+		if errors.Is(err, newtrack.ErrCancelled) {
+			return nil
+		}
+		fmt.Println(err)
+		waitForKey()
+		return nil
+	}
+	fmt.Printf("resuming %s...\n\n", lastN(trackID, 15))
+	res, err := cl.ResumeWithProgress(trackID, func(msg string) {
+		fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+	})
+	if err != nil {
+		fmt.Println()
+		fmt.Println("daemon:", err)
+		waitForKey()
+		return nil
+	}
+	tm := tmux.New()
+	if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+		_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
+	}
+	return nil
+}
+
 func runNewTrackFromMenu(cfg config.Config) error {
-	params, err := newtrack.Run(cfg)
+	cl := daemon.NewClient(cfg)
+	result, err := newtrack.Run(cfg, cl)
 	if err != nil {
 		if errors.Is(err, newtrack.ErrCancelled) {
 			return nil
@@ -345,13 +370,33 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		waitForKey()
 		return nil
 	}
-	cl := daemon.NewClient(cfg)
+
+	tm := tmux.New()
+
+	if result.ResumeID != "" {
+		fmt.Println("resuming track...")
+		fmt.Println()
+		res, err := cl.ResumeWithProgress(result.ResumeID, func(msg string) {
+			fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+		})
+		if err != nil {
+			fmt.Println()
+			fmt.Println("daemon:", err)
+			waitForKey()
+			return nil
+		}
+		if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
+			_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
+		}
+		return nil
+	}
+
 	// Long-running step — stream progress so the popup shows the
 	// fetch / worktree-add / spawn steps as they happen instead of
 	// looking frozen.
 	fmt.Println("creating track...")
 	fmt.Println()
-	res, err := cl.NewWithProgress(params, func(msg string) {
+	res, err := cl.NewWithProgress(result.Params, func(msg string) {
 		fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
 	})
 	if err != nil {
@@ -363,7 +408,6 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		waitForKey()
 		return nil
 	}
-	tm := tmux.New()
 	if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
 		_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 	}

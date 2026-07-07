@@ -88,6 +88,11 @@ const (
 
 	// MethodProxyStatus returns the current state of all registered proxies.
 	MethodProxyStatus Method = "proxy_status"
+
+	// MethodResume re-opens a finished (done/errored) track's Claude session
+	// by re-creating any removed worktrees and spawning claude --resume
+	// <session-id>. The track's status moves back to running.
+	MethodResume Method = "resume"
 )
 
 // Request is the wire payload from CLI → daemon.
@@ -283,6 +288,17 @@ type ProxySwitchParams struct {
 // ProxyStatusResult is returned by MethodProxyStatus.
 type ProxyStatusResult struct {
 	Proxies []ProxyEntryStatus `json:"proxies"`
+}
+
+// ResumeParams is the payload for MethodResume.
+type ResumeParams struct {
+	ID string `json:"id"`
+}
+
+// ResumeResult is returned by MethodResume.
+type ResumeResult struct {
+	// WindowName is the tmux window the daemon re-opened for the track.
+	WindowName string `json:"window_name"`
 }
 
 // ProxyEntryStatus describes one proxy entry.

@@ -50,10 +50,16 @@ type SpawnOptions struct {
 	// scripts can find the daemon.
 	SocketDir string
 
-	// SessionID pins Claude's session UUID via --session-id, so the
-	// daemon can find this track's transcript (and thus its token
-	// usage) at a known path. Empty means don't pin one.
+	// SessionID pins Claude's session UUID. In a normal spawn it is
+	// passed as --session-id; when Resume=true it is passed as the
+	// argument to --resume instead (no separate --session-id flag).
+	// Empty means don't pin one.
 	SessionID string
+
+	// Resume, when true, tells ShellCommand to pass --resume <SessionID>
+	// instead of a positional prompt + --session-id, continuing the
+	// existing conversation rather than starting a new one.
+	Resume bool
 
 	// SentinelPath is the path to a file the shell wrapper touches
 	// the instant Claude exits, so the supervisor can finalize the
@@ -252,16 +258,22 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 // pane and the user couldn't poke around the worktree.
 func (o SpawnOptions) ShellCommand() string {
 	claudeArgv := []string{shellQuote(o.CLIBinary)}
-	if o.TaskPrompt != "" {
-		// Claude takes the prompt as a positional arg: it opens
-		// the TUI pre-filled with that prompt.
-		claudeArgv = append(claudeArgv, shellQuote(o.TaskPrompt))
+	if o.Resume {
+		// --resume <sessionID> continues the existing conversation;
+		// no positional prompt and no separate --session-id.
+		claudeArgv = append(claudeArgv, "--resume", shellQuote(o.SessionID))
+	} else {
+		if o.TaskPrompt != "" {
+			// Claude takes the prompt as a positional arg: it opens
+			// the TUI pre-filled with that prompt.
+			claudeArgv = append(claudeArgv, shellQuote(o.TaskPrompt))
+		}
+		if o.SessionID != "" {
+			claudeArgv = append(claudeArgv, "--session-id", shellQuote(o.SessionID))
+		}
 	}
 	if o.PermissionMode != "" {
 		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
-	}
-	if o.SessionID != "" {
-		claudeArgv = append(claudeArgv, "--session-id", shellQuote(o.SessionID))
 	}
 	for _, d := range o.AddDirs {
 		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))
@@ -282,6 +294,37 @@ func (o SpawnOptions) ShellCommand() string {
 	// for the outer because /bin/sh is the only shell tmux relies
 	// on; the user's $SHELL is invoked only at the fallback step.
 	return envPrefix + " sh -c " + shellQuote(inner)
+}
+
+// BuildResumeOptions assembles SpawnOptions for continuing a finished track's
+// Claude conversation via --resume. Unlike BuildOptions, no task prompt is
+// assembled — the session picks up from its existing transcript. The track
+// must have a non-empty SessionID; returns an error otherwise.
+func BuildResumeOptions(cfg config.Config, t state.Track, socketDir, sentinelPath string) (SpawnOptions, error) {
+	if t.SessionID == "" {
+		return SpawnOptions{}, errors.New("track has no session ID; cannot resume")
+	}
+	addDirs := make([]string, 0, len(t.Repos))
+	for _, r := range t.Repos {
+		addDirs = append(addDirs, r.Path)
+	}
+	cwd := ""
+	if len(t.Repos) > 0 {
+		cwd = t.Repos[0].Path
+	} else if home, err := os.UserHomeDir(); err == nil {
+		cwd = home
+	}
+	return SpawnOptions{
+		CLIBinary:      cfg.Claude.Binary,
+		PermissionMode: cfg.Claude.PermissionMode,
+		AddDirs:        addDirs,
+		CWD:            cwd,
+		TrackID:        t.ID,
+		SocketDir:      socketDir,
+		SentinelPath:   sentinelPath,
+		SessionID:      t.SessionID,
+		Resume:         true,
+	}, nil
 }
 
 // shellQuote returns s wrapped in single quotes with embedded
