@@ -74,12 +74,21 @@ func (Client) HasWindow(session, window string) (bool, error) {
 	return false, nil
 }
 
-// NewWindow opens a new window in the session. If command is
-// non-empty, the window runs that command instead of the default
-// shell; when the command exits the window persists if
-// remainOnExit is true.
-func (Client) NewWindow(session, name, command, startDir string, remainOnExit bool) error {
-	args := []string{"new-window", "-t", session, "-n", name}
+// sessionTarget returns the tmux target that unambiguously names the
+// session (a trailing colon: "tracks:"). new-window's -t is a
+// *target-window*, so a bare "tracks" is matched as a WINDOW first —
+// and when the user has other tmux sessions running in parallel, tmux
+// resolves it against whichever session is currently active, landing
+// the new window in the wrong session (or failing with "index N in
+// use" when that session already has a window at the matched index).
+// The trailing colon forces session interpretation and next-free-index
+// selection within our session, so tracks never touches other sessions.
+func sessionTarget(session string) string { return session + ":" }
+
+// newWindowArgs builds the argv for NewWindow. Extracted so the target
+// qualification can be unit-tested without invoking tmux.
+func newWindowArgs(session, name, command, startDir string, remainOnExit bool) []string {
+	args := []string{"new-window", "-t", sessionTarget(session), "-n", name}
 	if startDir != "" {
 		args = append(args, "-c", startDir)
 	}
@@ -89,7 +98,15 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 	if command != "" {
 		args = append(args, command)
 	}
-	cmd := exec.Command("tmux", args...)
+	return args
+}
+
+// NewWindow opens a new window in the session. If command is
+// non-empty, the window runs that command instead of the default
+// shell; when the command exits the window persists if
+// remainOnExit is true.
+func (Client) NewWindow(session, name, command, startDir string, remainOnExit bool) error {
+	cmd := exec.Command("tmux", newWindowArgs(session, name, command, startDir, remainOnExit)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tmux new-window: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -102,6 +119,20 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 		_ = setOpt.Run()
 	}
 	return nil
+}
+
+// newWindowPaneArgs builds the argv for NewWindowReturningPaneID.
+// Extracted for the same testability reason as newWindowArgs.
+func newWindowPaneArgs(session, name, command, startDir string) []string {
+	args := []string{"new-window", "-t", sessionTarget(session), "-n", name,
+		"-P", "-F", "#{pane_pid}"}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	return args
 }
 
 // NewWindowReturningPaneID opens a new window like NewWindow and
@@ -117,15 +148,7 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 // Always uses remain-on-exit=on so the user can read Claude's final
 // output even after the agent itself terminates.
 func (Client) NewWindowReturningPaneID(session, name, command, startDir string) (int, error) {
-	args := []string{"new-window", "-t", session, "-n", name,
-		"-P", "-F", "#{pane_pid}"}
-	if startDir != "" {
-		args = append(args, "-c", startDir)
-	}
-	if command != "" {
-		args = append(args, command)
-	}
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.Command("tmux", newWindowPaneArgs(session, name, command, startDir)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("tmux new-window: %w: %s", err, strings.TrimSpace(string(out)))
