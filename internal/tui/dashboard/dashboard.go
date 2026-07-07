@@ -127,6 +127,11 @@ type model struct {
 	// table for whatever row the cursor's on. Refreshed every
 	// poll; cleared when there are no tracks.
 	detail *detail
+
+	// statusMsg is a transient one-line message for operation
+	// feedback (e.g., a failed resume). Unlike m.err it does not
+	// hide the track table. Cleared on the next successful poll.
+	statusMsg string
 }
 
 func newModel(cfg config.Config) *model {
@@ -146,6 +151,12 @@ type pollResult struct {
 	tracks  []state.Track
 	prompts []daemon.PendingPrompt
 	err     error
+}
+
+// resumeResult is what the resume goroutine returns.
+type resumeResult struct {
+	windowName string
+	err        error
 }
 
 func (m *model) Init() tea.Cmd {
@@ -191,6 +202,18 @@ func (m *model) poll() tea.Cmd {
 			return pollResult{tracks: tracks}
 		}
 		return pollResult{tracks: tracks, prompts: prompts}
+	}
+}
+
+func (m *model) resumeTrack(id string) tea.Cmd {
+	cfg := m.cfg
+	return func() tea.Msg {
+		cl := daemon.NewClient(cfg)
+		res, err := cl.Resume(id)
+		if err != nil {
+			return resumeResult{err: err}
+		}
+		return resumeResult{windowName: res.WindowName}
 	}
 }
 
@@ -270,11 +293,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				if t.Status.IsTerminal() && t.SessionID != "" {
-					res, err := m.client.Resume(t.ID)
-					if err == nil && res.WindowName != "" {
-						_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, res.WindowName)
-					}
-					return m, m.poll()
+					return m, m.resumeTrack(t.ID)
 				}
 			}
 		}
@@ -286,6 +305,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.err = nil
+			m.statusMsg = ""
 			m.tracks = msg.tracks
 			m.prompts = msg.prompts
 			if m.cursor >= len(m.tracks) {
@@ -293,6 +313,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.refreshDetail()
 		}
+	case resumeResult:
+		if msg.err != nil {
+			m.statusMsg = "resume failed: " + msg.err.Error()
+		} else if msg.windowName != "" {
+			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
+		}
+		return m, m.poll()
 	}
 	return m, nil
 }
@@ -352,6 +379,9 @@ func (m *model) renderTable(width int) string {
 		b.WriteString("\n")
 	}
 
+	if m.statusMsg != "" {
+		b.WriteString(m.styles.warn.Render(m.statusMsg) + "\n")
+	}
 	if m.err != nil {
 		b.WriteString(m.styles.dim.Render("daemon unreachable: ") + m.err.Error() + "\n")
 	} else if len(m.tracks) == 0 {
