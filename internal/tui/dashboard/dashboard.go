@@ -293,21 +293,32 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// keeps its pane alive as a shell (see ShellCommand), and
 			// "d" is how the user tears that down. The daemon removes
 			// the worktree and closes the tmux window as part of Done.
+			// A draft has nothing to end — it's launched (L) or
+			// dismissed (x), so End/Kill skip it (the daemon refuses it
+			// too, but guarding here gives a clear hint).
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				_ = m.client.Done(t.ID)
-				return m, m.poll()
+				if t.Status == state.StatusDraft {
+					m.statusMsg = "draft — press L to launch or x to dismiss"
+				} else {
+					_ = m.client.Done(t.ID)
+					return m, m.poll()
+				}
 			}
 		case "K":
 			// Force kill the highlighted track. Like "d" but SIGKILL.
 			// Capital K to distinguish from lowercase k (cursor-up
 			// vim convention) and to make accidental kills harder.
 			// Also valid on a finished track to close its lingering
-			// shell window.
+			// shell window. A draft is launched (L) / dismissed (x).
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				_ = m.client.Kill(t.ID)
-				return m, m.poll()
+				if t.Status == state.StatusDraft {
+					m.statusMsg = "draft — press L to launch or x to dismiss"
+				} else {
+					_ = m.client.Kill(t.ID)
+					return m, m.poll()
+				}
 			}
 		case "r":
 			return m, m.poll()

@@ -251,20 +251,24 @@ func kindOf(t state.Track) state.Kind {
 	return t.Kind
 }
 
-// ActiveOnly is a PickTrack filter that excludes terminal-state
-// tracks. Use for Attach / End / Kill flows.
-func ActiveOnly(t state.Track) bool { return !t.Status.IsTerminal() }
+// ActiveOnly is a PickTrack filter that excludes terminal-state tracks
+// and drafts. Use for Attach / End / Kill flows — a draft has no window,
+// process, or worktree to act on (it's launched with L / dismissed with x).
+func ActiveOnly(t state.Track) bool {
+	return !t.Status.IsTerminal() && t.Status != state.StatusDraft
+}
 
 // PromotableOnly filters to active worktree-less (ask/plan) tracks —
 // the only ones that can be promoted.
 func PromotableOnly(t state.Track) bool {
-	return !t.Status.IsTerminal() && t.Kind.Worktreeless()
+	return !t.Status.IsTerminal() && t.Status != state.StatusDraft && t.Kind.Worktreeless()
 }
 
 // WorktreeTrack filters to active tracks that own worktrees (work /
-// review) — the only ones a repo can be added to.
+// review) — the only ones a repo can be added to. Drafts own no worktree
+// yet, so they're excluded.
 func WorktreeTrack(t state.Track) bool {
-	return !t.Status.IsTerminal() && !t.Kind.Worktreeless()
+	return !t.Status.IsTerminal() && t.Status != state.StatusDraft && !t.Kind.Worktreeless()
 }
 
 // CompletedOnly is a PickTrack filter that excludes still-running
