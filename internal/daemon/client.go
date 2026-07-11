@@ -94,6 +94,13 @@ func (c *Client) callStreaming(method Method, params, out any, onProgress func(s
 			return fmt.Errorf("malformed frame: %+v", msg)
 		}
 		if !*msg.Ok {
+			// A failure may still carry a partial result (e.g. MethodNew
+			// returns the persisted track ID on a creation failure so the
+			// caller can offer to save it as a draft). Decode it
+			// best-effort; existing callers ignore out on error.
+			if out != nil && len(msg.Result) > 0 {
+				_ = json.Unmarshal(msg.Result, out)
+			}
 			return errors.New(msg.Error)
 		}
 		if out != nil && len(msg.Result) > 0 {
@@ -226,10 +233,25 @@ func (c *Client) Shutdown() error {
 	return c.callMethod(MethodShutdown, nil, nil)
 }
 
-// Forget removes a single terminal-state track from persistent
-// state. Errors when the track is still running.
+// Forget removes a single terminal-state track (or a draft) from
+// persistent state. Errors when the track is still running.
 func (c *Client) Forget(id string) error {
 	return c.callMethod(MethodForget, ForgetParams{ID: id}, nil)
+}
+
+// SaveDraft turns a failed-creation (or finished) track that still
+// carries its parameters into a saved draft, so the entered info is kept
+// for a later launch instead of being dismissed.
+func (c *Client) SaveDraft(id string) error {
+	return c.callMethod(MethodSaveDraft, SaveDraftParams{ID: id}, nil)
+}
+
+// LaunchWithProgress (re)creates a track from its saved draft parameters,
+// streaming the fetch / worktree / spawn steps. Returns the new track's
+// ID + window like a fresh creation.
+func (c *Client) LaunchWithProgress(id string, onProgress func(string)) (NewResult, error) {
+	var r NewResult
+	return r, c.callStreaming(MethodLaunch, LaunchParams{ID: id}, &r, onProgress)
 }
 
 // PruneCompleted removes every terminal-state track from

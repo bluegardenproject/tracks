@@ -159,6 +159,22 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 			out = append(out, errStyle.Render(line))
 		}
 	}
+	// A saved draft explains what it will launch with, and why the last
+	// creation attempt failed if it came from one.
+	if t.Status == state.StatusDraft {
+		out = append(out, "", m.styles.sectionHdr.Render("DRAFT"))
+		out = append(out, m.styles.dim.Render("saved, not launched — press L to launch, x to dismiss"))
+		if t.Draft != nil && len(t.Draft.Repos) > 0 {
+			out = append(out, m.styles.dim.Render("repos ")+m.styles.repo.Render(strings.Join(t.Draft.Repos, ",")))
+		}
+		if t.ErrorMsg != "" {
+			errStyle := m.styles.status[state.StatusErrored]
+			out = append(out, m.styles.dim.Render("last attempt failed:"))
+			for _, line := range wrapInfoText(t.ErrorMsg, w) {
+				out = append(out, errStyle.Render(line))
+			}
+		}
+	}
 	return strings.Join(out, "\n")
 }
 

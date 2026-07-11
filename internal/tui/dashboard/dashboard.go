@@ -76,6 +76,9 @@ func defaultStyles() styles {
 			// terminals and clearly distinct from the other statuses.
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "215"}),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+			// Gray — a saved draft, not yet launched. Deliberately muted so
+			// it reads as inert next to the active and end-state colors.
+			state.StatusDraft: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "244"}),
 		},
 		prompt: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
 		// AdaptiveColor picks at render time: a mid-dark gray on
@@ -159,6 +162,12 @@ type resumeResult struct {
 	err        error
 }
 
+// launchResult is what the launch goroutine returns.
+type launchResult struct {
+	windowName string
+	err        error
+}
+
 func (m *model) Init() tea.Cmd {
 	// tmux uses the hostname as the default pane title for any
 	// pane whose program doesn't emit an OSC title sequence.
@@ -217,6 +226,18 @@ func (m *model) resumeTrack(id string) tea.Cmd {
 	}
 }
 
+func (m *model) launchTrack(id string) tea.Cmd {
+	cfg := m.cfg
+	return func() tea.Msg {
+		cl := daemon.NewClient(cfg)
+		res, err := cl.LaunchWithProgress(id, nil)
+		if err != nil {
+			return launchResult{err: err}
+		}
+		return launchResult{windowName: res.WindowName}
+	}
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -252,10 +273,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.poll()
 			}
 		case "x":
-			// Forget the highlighted track (must be terminal).
+			// Forget the highlighted track. Valid for a terminal track or a
+			// saved draft (neither has a live process); a draft dismissed
+			// here is the same as choosing "Dismiss" at creation time.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				if t.Status.IsTerminal() {
+				if t.Status.IsTerminal() || t.Status == state.StatusDraft {
 					_ = m.client.Forget(t.ID)
 					return m, m.poll()
 				}
@@ -294,6 +317,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t := m.tracks[m.cursor]
 				if t.Status.IsTerminal() && t.SessionID != "" {
 					return m, m.resumeTrack(t.ID)
+				}
+			}
+		case "L":
+			// Launch the highlighted draft (or failed-creation) track from
+			// its saved parameters — (re)runs creation.
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if t.CanLaunch() {
+					m.statusMsg = "launching draft…"
+					return m, m.launchTrack(t.ID)
 				}
 			}
 		}
@@ -336,6 +369,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resumeResult:
 		if msg.err != nil {
 			m.statusMsg = "resume failed: " + msg.err.Error()
+		} else if msg.windowName != "" {
+			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
+		}
+		return m, m.poll()
+	case launchResult:
+		if msg.err != nil {
+			m.statusMsg = "launch failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
 		}
@@ -405,7 +445,7 @@ func (m *model) View() string {
 	footerLines := []string{
 		"",
 		m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"),
-		m.styles.dim.Render("r refresh   R resume   q quit   (open menu from any window with <prefix>+t)"),
+		m.styles.dim.Render("r refresh   R resume   L launch draft   q quit   (open menu from any window with <prefix>+t)"),
 	}
 
 	// --- detail panel (below footer), height-capped ---

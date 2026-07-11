@@ -202,16 +202,35 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		SessionID:  sessionID,
 		CreatedAt:  time.Now().UTC(),
 	}
+	// draft captures exactly what the user entered so a failed creation
+	// can be saved and relaunched without re-typing anything. Stored on
+	// the errored track and carried through to a StatusDraft if the user
+	// saves it. Kind is the resolved kind (review refs force review).
+	draft := &state.DraftSpec{
+		Repos:      p.Repos,
+		TaskPrompt: p.TaskPrompt,
+		Slug:       strings.TrimSpace(p.Slug),
+		ReviewRef:  strings.TrimSpace(p.ReviewRef),
+		Kind:       string(kind),
+	}
 	// failCreate persists the in-progress track as errored (with the
-	// reason) and returns the wire error, so the failure is visible and
-	// retryable from the dashboard rather than only in the CLI response.
+	// reason and the draft spec) and returns the wire error, so the
+	// failure is visible and retryable from the dashboard rather than
+	// only in the CLI response. The track ID rides along in the result
+	// even on failure so an interactive caller can offer to save the
+	// attempt as a draft or dismiss it (see MethodSaveDraft / Forget).
 	failCreate := func(msg string) Response {
+		if hint := authHintPrefix(msg); hint != "" {
+			msg = hint + msg
+		}
 		t.Status = state.StatusErrored
 		t.ErrorMsg = msg
+		t.Draft = draft
 		now := time.Now().UTC()
 		t.ExitedAt = &now
 		_ = s.store.Put(t)
-		return fail(msg)
+		resultRaw, _ := json.Marshal(NewResult{TrackID: trackID})
+		return Response{Ok: false, Error: msg, Result: resultRaw}
 	}
 
 	var (
@@ -829,8 +848,9 @@ func (s *Server) handleForget(raw json.RawMessage) Response {
 	}
 	// Refuse to forget a still-running track. Doing so would
 	// orphan the supervisor goroutine and leave Claude with no
-	// state entry to report into.
-	if !t.Status.IsTerminal() {
+	// state entry to report into. A draft has no process, so it can
+	// always be dismissed.
+	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
 		return fail(fmt.Sprintf("track %s is %s; run `tracks done %s` first",
 			p.ID, t.Status, p.ID))
 	}
@@ -838,6 +858,125 @@ func (s *Server) handleForget(raw json.RawMessage) Response {
 		return fail(err.Error())
 	}
 	return ok(nil)
+}
+
+// handleSaveDraft turns a failed-creation (or otherwise finished) track
+// that still carries its Draft parameters into a saved draft, so the
+// user keeps what they entered instead of dismissing the attempt. The
+// draft can be launched later (see handleLaunch). ErrorMsg is preserved
+// so the dashboard can show why it became a draft.
+func (s *Server) handleSaveDraft(raw json.RawMessage) Response {
+	var p SaveDraftParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fail("bad params: " + err.Error())
+	}
+	if p.ID == "" {
+		return fail("id required")
+	}
+	t, found := s.store.Get(p.ID)
+	if !found {
+		return fail("track not found: " + p.ID)
+	}
+	if t.Draft == nil {
+		return fail(fmt.Sprintf("track %s has no saved parameters to draft", p.ID))
+	}
+	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
+		return fail(fmt.Sprintf("track %s is %s; only a finished or failed track can be saved as a draft", p.ID, t.Status))
+	}
+	t.Status = state.StatusDraft
+	t.ExitedAt = nil
+	t.ExitCode = nil
+	if err := s.store.Put(t); err != nil {
+		return fail("persist state: " + err.Error())
+	}
+	return ok(nil)
+}
+
+// handleLaunch (re)creates a track from its saved Draft parameters. It
+// reuses handleNew's full creation path (fresh worktree, fresh ID), then
+// drops the original draft on success. If creation fails again, the
+// throwaway errored record handleNew persisted is removed and the
+// original draft is kept — with its reason refreshed — so nothing is
+// lost and it stays launchable.
+func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	var p LaunchParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fail("bad params: " + err.Error())
+	}
+	if p.ID == "" {
+		return fail("id required")
+	}
+	t, found := s.store.Get(p.ID)
+	if !found {
+		return fail("track not found: " + p.ID)
+	}
+	if t.Draft == nil {
+		return fail(fmt.Sprintf("track %s has no saved parameters to launch", p.ID))
+	}
+	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
+		return fail(fmt.Sprintf("track %s is %s; only a draft or finished/failed track can be launched", p.ID, t.Status))
+	}
+
+	params := NewParams{
+		Repos:      t.Draft.Repos,
+		TaskPrompt: t.Draft.TaskPrompt,
+		Slug:       t.Draft.Slug,
+		ReviewRef:  t.Draft.ReviewRef,
+		Kind:       t.Draft.Kind,
+	}
+	rawNew, err := json.Marshal(params)
+	if err != nil {
+		return fail("marshal params: " + err.Error())
+	}
+
+	resp := s.handleNew(ctx, rawNew, emit)
+	if resp.Ok {
+		// Draft consumed by a successful launch.
+		_, _ = s.store.Delete(p.ID)
+		return resp
+	}
+
+	// Relaunch failed. handleNew persisted a fresh errored+draft record
+	// under a new ID; drop it so we don't leave a duplicate, and keep the
+	// original draft, refreshing its reason to the latest failure.
+	if len(resp.Result) > 0 {
+		var nr NewResult
+		if json.Unmarshal(resp.Result, &nr) == nil && nr.TrackID != "" && nr.TrackID != p.ID {
+			_, _ = s.store.Delete(nr.TrackID)
+		}
+	}
+	if cur, ok := s.store.Get(p.ID); ok {
+		cur.ErrorMsg = resp.Error
+		_ = s.store.Put(cur)
+	}
+	return resp
+}
+
+// authHintPrefix returns a short, actionable prefix when msg looks like a
+// GitHub authentication / authorization failure — an expired token,
+// revoked SSH key, or a repo the user can't access — so a failed creation
+// tells the user to re-authenticate rather than surfacing a raw git
+// error. Returns "" for anything that isn't clearly an auth problem.
+func authHintPrefix(msg string) string {
+	m := strings.ToLower(msg)
+	for _, needle := range []string{
+		"authentication failed",
+		"permission denied",
+		"access denied",
+		"403 forbidden",
+		"invalid username or password",
+		"invalid credentials",
+		"terminal prompts disabled",
+		"could not read username",
+		"support for password authentication was removed",
+		"remote: permission to",
+		"please make sure you have the correct access rights",
+	} {
+		if strings.Contains(m, needle) {
+			return "GitHub access denied — your token or SSH key may be expired or lack access to this repo. Re-authenticate, then launch this draft again.\n\n"
+		}
+	}
+	return ""
 }
 
 func (s *Server) handlePruneCompleted() Response {
