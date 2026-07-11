@@ -87,20 +87,21 @@ proper releases *finish* the "update Tracks without manually bouncing the daemon
 fix for installed users, who will otherwise hit the exact same stale-daemon
 problem on every upgrade.
 
-- [ ] **Install script** — `install.sh` (curl | sh) that detects OS/arch,
-      downloads the matching release asset, verifies a checksum, and installs to
-      a PATH dir (mirror the installer we use for our other CLI tools). The
-      Makefile already cross-compiles all 5 targets to `dist/` (`make build-all`);
-      this just needs published release assets to pull from.
-- [ ] **Versioning** — adopt semver + git tags; ensure tagged builds stamp
-      `main.Version` via the existing `LDFLAGS` (`-X main.Version=…`). The
-      `x-release-please-version` marker is already in `main.go`.
-- [ ] **release-please** — add the GitHub Actions workflow +
-      `release-please-config.json` / `.release-please-manifest.json` (none exist
-      yet — `.github/workflows/` is greenfield, and `main.go`'s comment references
-      a config file that isn't in the repo). Automate: changelog + version-bump
-      PR, tag on merge, then build-and-attach the `make build-all` binaries +
-      checksums to the GitHub release.
+- [x] **Install script** — `scripts/install.sh` (curl | bash) detects OS/arch,
+      downloads the matching release asset, and installs to `~/.tracks` with
+      PATH injection (mirrors the stac-man installer). `scripts/uninstall.sh`
+      does the reverse. *No checksum yet* — stac-man doesn't verify one either;
+      left as a possible follow-up.
+- [x] **Versioning** — semver + git tags via release-please; tagged builds stamp
+      `main.Version`/`BuildTime` through the existing `LDFLAGS`, and the
+      `x-release-please-version` marker in `main.go` is bumped by the config's
+      `extra-files` generic replacer.
+- [x] **release-please** — `.github/workflows/release-please.yml` +
+      `release-please-config.json` / `.release-please-manifest.json` shipped
+      (plus a `ci.yml` lint/build/test workflow). Automates changelog +
+      version-bump PR, tag on merge, and build-and-attach of the cross-compiled
+      binaries to the GitHub release. **Requires a `PAT_TOKEN` repo secret** for
+      the first release to publish assets.
 - [ ] **Update safety (closes the daemon loop)** — on upgrade the daemon must
       actually restart onto the new binary. A real version bump makes
       `ensureDaemonUp` restart it on the next `tracks` run for *installed* users,
@@ -114,11 +115,17 @@ problem on every upgrade.
 
 Active defects to fix before cutting the next release.
 
-### Bug 1 — Dev server / proxy can only be started with `tracks` installed
+### Bug 1 — Dev server / proxy can only be started with `tracks` installed  ✅ FIXED
 
 **Root cause**: No install script and no automated release process. Users must build from source.
 
-**Fix**: Add `install.sh` (detect OS/arch, download from GitHub releases, verify checksum, place in `~/bin`). Create `.github/workflows/release-please.yml` + `release-please-config.json` + `.release-please-manifest.json` to automate semver tagging, changelog, and cross-compiled release assets (`make build-all`). Mirror the stac-man approach; no develop branch needed.
+**Fix (shipped)**: `scripts/install.sh` (detect OS/arch, download from GitHub
+releases, install to `~/.tracks` + PATH) and `scripts/uninstall.sh`.
+`.github/workflows/release-please.yml` + `release-please-config.json` +
+`.release-please-manifest.json` automate semver tagging, changelog, and
+cross-compiled release assets; `.github/workflows/ci.yml` adds lint/build/test.
+Mirrors the stac-man approach; `main`-only, no develop branch. *First release
+needs a `PAT_TOKEN` repo secret to publish assets.*
 
 ### Bug 2 — Tmux pane in the track doesn't open after creating a new track
 
