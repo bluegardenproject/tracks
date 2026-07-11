@@ -27,8 +27,8 @@ type Entry struct {
 	PublicPort  int
 
 	mu       sync.RWMutex
-	upstream string                  // "host:port" or "" for inactive
-	rp       *httputil.ReverseProxy  // cached proxy for the current upstream; nil when inactive
+	upstream string                 // "host:port" or "" for inactive
+	rp       *httputil.ReverseProxy // cached proxy for the current upstream; nil when inactive
 	server   *http.Server
 	ln       net.Listener
 }
@@ -82,8 +82,8 @@ func (e *Entry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Manager supervises multiple proxy entries (one per service with a proxy_port).
 // It is safe to use from multiple goroutines.
 type Manager struct {
-	mu      sync.Mutex
-	entries map[string]*Entry // service name -> entry
+	mu        sync.Mutex
+	entries   map[string]*Entry // service name -> entry
 	statePath string
 }
 

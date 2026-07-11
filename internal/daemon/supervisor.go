@@ -72,7 +72,7 @@ type supervisor struct {
 
 	// viewerPanes maps service name to the tmux pane ID of its log-viewer
 	// pane in the right column of the track window. Guarded by svcMu.
-	viewerPanes    map[string]string
+	viewerPanes map[string]string
 	// lastViewerPane is the pane ID of the most recently created viewer pane.
 	// SplitPaneDown targets this ID so new panes stack below it in the right
 	// column rather than splitting a random pane (map iteration is unordered).

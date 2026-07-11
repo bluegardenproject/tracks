@@ -306,7 +306,7 @@ type ProxyEntryStatus struct {
 	ServiceName string `json:"service_name"`
 	PublicPort  int    `json:"public_port"`
 	// Upstream is "host:port" when active, "" when inactive (503).
-	Upstream    string `json:"upstream"`
+	Upstream string `json:"upstream"`
 	// ActiveTrackID is the track whose service port is the current upstream,
 	// derived by reverse-lookup against live track service ports.
 	ActiveTrackID string `json:"active_track_id,omitempty"`

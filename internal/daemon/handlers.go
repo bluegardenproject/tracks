@@ -738,10 +738,10 @@ func promotePrompt(original, branch string) string {
 }
 
 // handleResume re-opens a finished track's Claude session. It:
-//   1. Verifies the track is terminal and has a SessionID.
-//   2. Re-creates any worktrees that were removed by Done, on the same branch.
-//   3. Resets the track to a pending state.
-//   4. Spawns claude --resume <sessionID> in a new tmux window.
+//  1. Verifies the track is terminal and has a SessionID.
+//  2. Re-creates any worktrees that were removed by Done, on the same branch.
+//  3. Resets the track to a pending state.
+//  4. Spawns claude --resume <sessionID> in a new tmux window.
 func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p ResumeParams
 	if err := json.Unmarshal(raw, &p); err != nil {
