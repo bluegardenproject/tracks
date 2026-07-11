@@ -23,9 +23,10 @@ is essential (huge repos). Generic `provision:` config block; Ledger specifics
 in config.
 **Detail:** [`design/worktree-provisioning.md`](design/worktree-provisioning.md)
 
-- [ ] **v1** — `cache_strategy`: `apfs-clone` (COW) for the non-pnpm case (the
-      `pnpm-store`/`none` no-op behaviour already ships; `apfs-clone` is the
-      remaining speed/disk win).
+- [x] **v1** — `cache_strategy`: `apfs-clone` (COW) for the non-pnpm case.
+      **Shipped** (`7d91e10`): clonefile(2) COW-clone of the primary's
+      `node_modules` before the deps install, with a plain-copy fallback off
+      APFS/across volumes.
 - [ ] **v2** — async provisioning + "provisioning→ready" status; auto-detect
       package manager.
 
@@ -127,35 +128,12 @@ cross-compiled release assets; `.github/workflows/ci.yml` adds lint/build/test.
 Mirrors the stac-man approach; `main`-only, no develop branch. *First release
 needs a `PAT_TOKEN` repo secret to publish assets.*
 
-### Bug 2 — Tmux pane in the track doesn't open after creating a new track
-
-**Root cause**: `NewWindowReturningPaneID` passes `-d` (detached) to `tmux new-window`, which creates the window but doesn't select it. When called from inside a `display-popup -E`, the popup's `SelectWindow` call may not survive the popup closing. Result: the new track window exists but the user lands nowhere useful.
-
-**Fix**: Remove the `-d` flag from `NewWindowReturningPaneID`. Window creation itself now selects the new window; when the popup closes the user lands on it automatically.
-
-### Bug 3 — Proxy shortcut `<prefix>+p` conflicts with tmux's built-in `previous-window`
-
-**Root cause**: tmux binds `p` to `previous-window` by default; adding `bind-key p` silently clobbers it, breaking tmux navigation.
-
-**Fix**: Don't add a standalone tmux keybinding. The Proxy status entry added to the overlay menu (Bug 4) is the correct, non-conflicting surface.
-
-### Bug 4 — No "proxy" entry in the overlay menu
-
-**Root cause**: `ActionProxy` and `tracks proxy` exist as a CLI subcommand but were never wired into the overlay menu.
-
-**Fix**: Add `ActionProxy Action = "proxy"` to the menu const block, a hint entry, an `huh.NewOption`, and a `case menu.ActionProxy:` handler in `cmd/menu.go` that calls `cl.ProxyStatus()` and renders the result as a tab-separated table.
-
-### Bug 5 — `pnpm install` runs during track creation instead of only before `tracks up`
-
-**Root cause**: `provision.Run` (including `DepsCmd`) is called unconditionally inside `createWorktrees` for every new track, even when no dev server will ever be started.
-
-**Fix**: Add `SkipDepsCmd bool` to `provision.Options` and set it `true` in `createWorktrees`, `handleAddRepo`, and `handlePromote`. Add `provision.RunDepsOnly` for the lazy path. In `handleServiceUp`, before the first `startService` call for each worktree, check `supervisor.depsInstalled[worktreePath]` and call `RunDepsOnly` if false, then mark it installed.
-
-### Bug 6 — Dashboard SVC column is empty for all tracks
-
-**Root cause**: `svcCounts` uses `len(t.Ports)` for the total, but old tracks (created before the port-allocation feature) have `t.Ports == nil`, so total = 0 and the cell is always blank.
-
-**Fix**: `total = max(len(t.Ports), len(t.Services))` — if services are present without port entries, we still show a count.
+> **Bugs 2–6 fixed** (`b86548a`) and removed from this list: tmux pane not
+> selected (dropped `-d`), missing proxy overlay-menu entry, eager `pnpm install`
+> at creation (now deferred to first `tracks up`), and the empty dashboard SVC
+> column. Bug 3 (proxy `<prefix>+p` clobbering `previous-window`) was resolved by
+> design — there is no standalone proxy keybinding; the overlay-menu entry is the
+> surface.
 
 ---
 
@@ -185,6 +163,10 @@ needs a `PAT_TOKEN` repo secret to publish assets.*
       if the PID is alive and the pane is live, **re-adopt** the track as running
       (re-attach the supervisor: resume pane polling + process-group tracking);
       only mark Errored when the process is genuinely gone.
+      *Partial:* `pr` tracks are already re-adopted on restart (`07b082d`,
+      `recovery.go`) via a review-only supervisor; drafts are now skipped too.
+      Every other non-terminal track is still marked Errored — this item is the
+      general case: extend the same liveness-based re-adoption to `running` tracks.
 
 - [ ] **C. Tell the truth about status & logs.**
   - `Track.LogPath` points at `<state_dir>/logs/<id>.jsonl`, which
@@ -214,46 +196,15 @@ needs a `PAT_TOKEN` repo secret to publish assets.*
       invocations in a worktree Claude is also using, so tracks and Claude don't
       collide on `.git`.
 
-- [ ] **G. ⭐ Add a "PR" state — don't close a track when the PR opens.** *(A
-      track usually flips to `done` the moment it opens a PR, but the work isn't
-      done: review comments, discussion, and follow-up commits are still likely.)*
-      Today `finalizeTrack` (`internal/daemon/supervisor.go`) marks a track
-      `StatusDone` as soon as Claude *exits* — which is right after it prints
-      `TRACKS_PR_URL=`. Because `done` is terminal (`state.go` `IsTerminal`), the
-      worktree becomes GC-eligible, the supervisor is retired, and the track
-      drops off the active list.
-  - Add a **non-terminal `StatusPR`** ("in review"). When Claude exits *and*
-    `t.PRURL != ""`, enter `pr` instead of `done`; keep the worktree + pane so
-    the track is resumable for comment follow-ups (dovetails with the
-    "resume / retry a finished track" parking-lot idea). Reserve `done` for
-    PR **merged/closed** or an explicit End.
-  - Drive it from the existing `pr_watcher.go` (already polls MERGED/CLOSED):
-    open → stay `pr`; merged/closed → `done`. `IsTerminal` must **not** include
-    `pr`, and startup reconciliation (see B) must keep `pr` tracks, not error
-    them. Dashboard: a distinct `PR` / in-review badge.
-  - **Fixes the usage/cost bug this creates:** `finalizeTrack` currently takes a
-    single **frozen** usage snapshot (`usage.ForTrack`, ~`supervisor.go:591`) and
-    fires the cost-tail notification at that instant — so any post-PR follow-up
-    work is never counted and the cost is finalized prematurely. Keep refreshing
-    usage while `pr` (and across resumes — usage is transcript-based per
-    `SessionID`, so it keeps totalling as long as the track isn't retired), and
-    fire the final cost tail when the PR merges/closes or the track is ended.
-
 Self-contained improvements/fixes. Add new ones here; tick + delete when done.
 
-- [ ] **Confirm before discarding a new-track form on Esc.** Today Esc quits the
-      new-track form immediately and all entered info is lost
-      (`internal/tui/newtrack/newtrack.go` treats `huh.ErrUserAborted` as
-      `ErrCancelled`; Esc is bound to Quit in `internal/tui/keymap.go`).
-      Add a confirm step: "Discard this track? Yes / No". On *No*, re-show the
-      form with the previously entered values preserved (the bound `&repos` /
-      `&slug` / `&task` pointers still hold input — rebuild the form with the
-      same `Value(...)` pointers to repopulate). On *Yes*, cancel as today.
-      Apply to both the default flow and `runReview`.
-  - Stretch: a third option **"Save as draft"** — persist the partial params so
-      the track can be resumed later. Larger; ties into the worktree-less /
-      draft idea in topic 3 (a draft is essentially a not-yet-started track).
-      See parking lot.
+- [ ] **"Save as draft" on Esc-cancel.** The Esc-confirm itself shipped
+      (`caea558`: "Discard this track? Keep editing / Discard", fields
+      repopulated from their bound pointers). Still open is the stretch third
+      option — persist the partially-filled form as a draft. This can now reuse
+      the draft model shipped for failed creations (`StatusDraft` + `Track.Draft`
+      + `tracks launch`); the remaining work is capturing the form's params into
+      a draft on cancel instead of only on a failed creation. See parking lot.
 
 - [ ] **Confirm before End / Kill.** Both are mildly destructive (stop Claude +
       remove the worktree) — add a "Stop track <slug>? Yes/No" confirm to both
@@ -300,19 +251,16 @@ Self-contained improvements/fixes. Add new ones here; tick + delete when done.
 Raw, uncommitted thoughts — promote to a section above when they firm up.
 
 - **Draft tracks.** A track you've started configuring (or fully described) but
-  haven't launched — persisted so you can resume/edit/launch later. Connects
-  two things: the "Save as draft" option on Esc-cancel (small tasks), and the
-  worktree-less types in topic 3 (a draft is a not-yet-started track with no
-  worktree). Worth designing once, used in both places.
+  haven't launched — persisted so you can resume/edit/launch later. The core
+  model now exists (shipped for failed creations: `StatusDraft`, `Track.Draft`,
+  `tracks launch`, dashboard `L`/`x`). Remaining: let the user create a draft
+  *deliberately* (not only after a failure) — the "Save as draft" option on
+  Esc-cancel (small tasks) and the worktree-less types in topic 3 (a draft is a
+  not-yet-started track with no worktree) are the two entry points to wire up.
 
 - **Stacked tracks.** A track that branches off *another track's* branch instead
   of the repo base, so dependent work parallelizes (mirrors the `stac-man`
   stacked-PR workflow). Pick a "parent track / branch" at creation.
-
-- **Resume / continue / retry a finished track.** Send a follow-up prompt to a
-  done track, or retry an errored one, reusing its existing worktree + context
-  rather than re-attaching manually. (Pane already stays usable post-exit; this
-  makes it first-class.)
 
 - **Race track** *(future)* — a track type that runs 3 agents in parallel on the
   same prompt for very tricky problems; pick the best result, discard the rest.
@@ -334,6 +282,35 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 
 Move completed items here with a date, then delete once the dust settles.
 
+- **2026-07-11 — Save a failed track creation as a draft.** A creation that
+  fails mid-provisioning (e.g. a git fetch/clone rejected for an expired GitHub
+  token) now captures the entered params on the errored track; the user chooses
+  **Save as draft** or **Dismiss** at failure time. New non-terminal
+  `StatusDraft` + `Track.Draft`, `save_draft` / `launch` daemon methods, a
+  GitHub auth/permission hint on the failure message, dashboard `L` (launch) /
+  `x` (dismiss) + a DRAFT detail block. Also fixed a data-loss bug where the
+  daemon server tests ran startup GC against the real `~/.local/state/tracks`
+  and deleted live worktrees. `internal/state`, `internal/daemon`,
+  `internal/tui/{newtrack,dashboard}`, `cmd/{menu,new}`. (`c76aec9`, `92a7710`)
+- **2026-07-06/11 — Resume finished tracks + error visibility.** Follow-up
+  prompt to a finished track reusing its worktree + Claude session (dashboard
+  `R`); failed creations surfaced on the dashboard with a stored reason;
+  per-repo settings submenu + service CRUD; per-repo "open PRs as draft".
+  (`ac7ed74`, `b68bdfd`, `2edbdeb`, `8622d01`, `55e73d4`)
+- **2026-07-06 — Bugs 2–6 fixed** (see Bugs section). tmux pane selection,
+  proxy overlay-menu entry, lazy deps install, dashboard SVC column; Bug 3
+  resolved by design. (`b86548a`)
+- **2026-07-01 — PR / in-review state** (was Reliability G). Non-terminal
+  `StatusPR`; a track with an open PR stays in review (worktree + supervisor
+  kept) instead of flipping to `done` on Claude exit; the PR watcher drives the
+  final Done on merge/close and keeps refreshing usage; `pr` tracks re-adopted
+  across daemon restart. (`07b082d`, `ddfe201`, `d2958d0`)
+- **2026-06-29 — apfs-clone provisioning cache** (Topic 0 v1). COW-clone the
+  primary's `node_modules` before the deps install; plain-copy fallback off
+  APFS. (`7d91e10`)
+- **2026-06-29 — Confirm before discarding a new-track form on Esc.** "Discard
+  this track? Keep editing / Discard", fields repopulated from bound pointers.
+  (`caea558`)
 - **2026-07-02 — Dev-server control surface + stable-port proxy** (Topic 1 v1a).
   `tracks up/down/services/url` CLI; tmux log-viewer panes (right 35% column);
   `service_ready` notification; stable-port reverse proxy (`proxy_port:` in
