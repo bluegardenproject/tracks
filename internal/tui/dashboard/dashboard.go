@@ -306,10 +306,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.err = nil
 			m.statusMsg = ""
+			// Re-anchor the cursor on the same track by ID before we
+			// swap in the new slice. Selection is otherwise positional,
+			// so a list that grew or shrank (new / forgotten / pruned
+			// track) would silently slide the highlight onto a different
+			// track without the user moving it.
+			var selID string
+			if m.cursor >= 0 && m.cursor < len(m.tracks) {
+				selID = m.tracks[m.cursor].ID
+			}
 			m.tracks = msg.tracks
 			m.prompts = msg.prompts
+			if selID != "" {
+				for i, t := range m.tracks {
+					if t.ID == selID {
+						m.cursor = i
+						break
+					}
+				}
+			}
 			if m.cursor >= len(m.tracks) {
 				m.cursor = max(0, len(m.tracks)-1)
+			}
+			if m.cursor < 0 {
+				m.cursor = 0
 			}
 			m.refreshDetail()
 		}
@@ -349,142 +369,278 @@ func min(a, b int) int {
 	return b
 }
 
+// View assembles the whole dashboard as a frame that is never taller
+// than the terminal and never wider than it. Bubble Tea's renderer
+// garbles any frame that overflows the window — the table's highlight
+// detaches from the visible rows and the selection appears "lost" —
+// so every section is budgeted against m.height and the result is
+// hard-clamped in both dimensions as a final safety net.
 func (m *model) View() string {
-	header := bigBanner("TRACKS") + "\n\n"
-	table := m.renderTable(m.width)
-	if m.detail == nil {
-		return header + table
+	width := m.width
+	budget := m.height
+	// Before the first WindowSizeMsg (or in a degenerate size) we don't
+	// yet know the window; render everything unclamped for that one
+	// frame rather than guess. A resize message follows almost
+	// immediately under WithAltScreen.
+	unconstrained := budget <= 0
+	if unconstrained {
+		budget = 1 << 30
 	}
-	return header + table + "\n" + m.renderDetail(*m.detail, m.width)
-}
 
-// renderTable draws the dashboard's table + footer. The claude
-// pane for the selected track lives in its own tmux pane below
-// (joined in by syncEmbedded) — we don't render any details
-// here.
-func (m *model) renderTable(width int) string {
-	var b strings.Builder
-
-	// The big "TRACKS" banner above the table is the title now, so
-	// here we only need the live counts as a dim subtitle.
-	b.WriteString(m.styles.dim.Render(fmt.Sprintf("%d tracks · %d pending prompts", len(m.tracks), len(m.prompts))))
-	b.WriteString("\n\n")
-
+	// --- fixed chrome above the table ---
+	var lines []string
+	lines = append(lines, strings.Split(bigBanner("TRACKS"), "\n")...)
+	lines = append(lines, "")
+	lines = append(lines, m.styles.dim.Render(fmt.Sprintf("%d tracks · %d pending prompts", len(m.tracks), len(m.prompts))))
 	for _, p := range m.prompts {
-		b.WriteString(m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   [y=allow / n=deny]",
+		lines = append(lines, m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   [y=allow / n=deny]",
 			shortID(p.TrackID), p.Tool, p.Detail)))
-		b.WriteString("\n")
 	}
-	if len(m.prompts) > 0 {
-		b.WriteString("\n")
-	}
-
 	if m.statusMsg != "" {
-		b.WriteString(m.styles.warn.Render(m.statusMsg) + "\n")
+		lines = append(lines, m.styles.warn.Render(m.statusMsg))
 	}
-	if m.err != nil {
-		b.WriteString(m.styles.dim.Render("daemon unreachable: ") + m.err.Error() + "\n")
-	} else if len(m.tracks) == 0 {
-		b.WriteString(m.styles.dim.Render("no tracks yet — run `tracks new`\n"))
-	} else {
-		b.WriteString(m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-10s  %-22s  %-5s  %-8s",
-			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "SVC", "COST")))
-		b.WriteString("\n")
-		for i, t := range m.tracks {
-			branch := t.Branch
-			if branch == "" {
-				branch = "—"
-			}
-			var line string
-			if i != m.cursor {
-				line = fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
-					shortID(t.ID),
-					padRendered(m.renderKind(t), 7),
-					padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
-					padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
-					m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
-					padRendered(m.renderChangesColored(t.Changes), 22),
-					padRendered(m.renderServices(t), 5),
-					padRendered(m.renderCost(t.Usage), 8),
-				)
-			} else {
-				// Thread the highlight background into every cell individually.
-				// Without this, each cell's own Render() appends a hard ANSI
-				// reset that cancels the outer rowActive background before the
-				// next cell starts, leaving all but the first column unlit.
-				activeBg := lipgloss.Color("236")
-				addBg := func(s lipgloss.Style) lipgloss.Style {
-					return s.Background(activeBg)
-				}
-				pad := func(s string, width int) string {
-					return lipgloss.NewStyle().Width(width).Background(activeBg).Render(s)
-				}
-				sep := lipgloss.NewStyle().Background(activeBg).Render("  ")
+	lines = append(lines, "")
 
-				// KIND: inline to apply bg to the text, not just the outer container.
-				k := t.Kind
-				if k == "" {
-					k = state.KindWork
-				}
-				var kColor lipgloss.TerminalColor
-				switch k {
-				case state.KindAsk, state.KindPlan:
-					kColor = lipgloss.Color("13")
-				case state.KindReview:
-					kColor = lipgloss.Color("11")
-				default:
-					kColor = lipgloss.AdaptiveColor{Light: "30", Dark: "51"}
-				}
-				kindStr := lipgloss.NewStyle().Foreground(kColor).Background(activeBg).Render(string(k))
+	// --- footer (fixed) ---
+	footerLines := []string{
+		"",
+		m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"),
+		m.styles.dim.Render("r refresh   R resume   q quit   (open menu from any window with <prefix>+t)"),
+	}
 
-				// CHANGES: each sub-segment needs bg so inter-segment spaces stay lit.
-				var changesStr string
-				if !t.Changes.IsZero() {
-					changesStr = addBg(m.styles.insertions).Render(fmt.Sprintf("+%d", t.Changes.Insertions)) +
-						addBg(lipgloss.NewStyle()).Render(" ") +
-						addBg(m.styles.deletions).Render(fmt.Sprintf("-%d", t.Changes.Deletions)) +
-						addBg(lipgloss.NewStyle()).Render(" ") +
-						addBg(m.styles.dim).Render(fmt.Sprintf("(%d)", t.Changes.Files))
-				}
-
-				// COST: apply bg to the inner style so the value text is highlighted.
-				var costStr string
-				if t.Usage.IsZero() {
-					costStr = addBg(m.styles.dim).Render("—")
-				} else {
-					costStr = addBg(m.styles.cost).Render(usage.FormatCost(t.Usage.CostUSD))
-				}
-
-				// SVC: apply bg to preserve selection highlight.
-				var svcStr string
-				if live, total := svcCounts(t); total > 0 {
-					sv := fmt.Sprintf("%d/%d", live, total)
-					if live > 0 {
-						svcStr = addBg(m.styles.insertions).Render(sv)
-					} else {
-						svcStr = addBg(m.styles.dim).Render(sv)
-					}
-				}
-
-				line = m.styles.rowActive.Render(fmt.Sprintf("  %-15s", shortID(t.ID))) +
-					sep + pad(kindStr, 7) +
-					sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
-					sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
-					sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), 10)) +
-					sep + pad(changesStr, 22) +
-					sep + pad(svcStr, 5) +
-					sep + pad(costStr, 8)
-			}
-			b.WriteString(line)
-			b.WriteString("\n")
+	// --- detail panel (below footer), height-capped ---
+	var detailLines []string
+	if m.detail != nil && len(m.tracks) > 0 {
+		maxDetail := -1 // unclamped
+		show := unconstrained
+		if !unconstrained {
+			// Give the detail panel at most ~40% of the window so it can
+			// never starve the table of rows; drop it entirely when the
+			// window is too short to show a useful panel.
+			maxDetail = budget * 2 / 5
+			show = maxDetail >= 8
+		}
+		if show {
+			ds := m.renderDetail(*m.detail, width, maxDetail)
+			detailLines = append([]string{""}, strings.Split(ds, "\n")...)
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"))
-	b.WriteString("\n")
-	b.WriteString(m.styles.dim.Render("r refresh   R resume   q quit   (open menu from any window with <prefix>+t)"))
-	return lipgloss.NewStyle().Width(width).Render(b.String())
+	// --- table body gets whatever vertical space is left ---
+	used := len(lines) + len(footerLines) + len(detailLines)
+	rowsBudget := budget - used
+	if rowsBudget < 1 {
+		rowsBudget = 1
+	}
+	if m.err != nil {
+		lines = append(lines, m.styles.dim.Render("daemon unreachable: ")+m.err.Error())
+	} else if len(m.tracks) == 0 {
+		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
+	} else {
+		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-10s  %-22s  %-5s  %-8s",
+			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "SVC", "COST")))
+		// The header consumes one row of the budget; the rest is the
+		// scrolling window of track rows.
+		if rows := m.renderRows(rowsBudget - 1); rows != "" {
+			lines = append(lines, strings.Split(rows, "\n")...)
+		}
+	}
+
+	lines = append(lines, footerLines...)
+	lines = append(lines, detailLines...)
+
+	out := strings.Join(lines, "\n")
+	// Hard bounds: never taller or wider than the window. clampLines
+	// guards any budgeting miscount; MaxWidth stops an over-wide row
+	// from soft-wrapping into extra terminal lines (which would defeat
+	// the height budget).
+	out = clampLines(out, budget)
+	if width > 0 {
+		out = lipgloss.NewStyle().MaxWidth(width).Render(out)
+	}
+	return out
+}
+
+// renderRows renders the track table body as a scrolling window that
+// always keeps the selected row visible, fitting within budget lines
+// (including any "↑ N more" / "↓ N more" indicator lines). Callers
+// pass the space left after the fixed chrome.
+func (m *model) renderRows(budget int) string {
+	n := len(m.tracks)
+	if n == 0 {
+		return ""
+	}
+	if budget < 1 {
+		budget = 1
+	}
+
+	// Everything fits: no scrolling, no indicators.
+	if n <= budget {
+		rows := make([]string, 0, n)
+		for i, t := range m.tracks {
+			rows = append(rows, m.renderRow(i, t))
+		}
+		return strings.Join(rows, "\n")
+	}
+
+	// Scrolling needed. Reserve up to two lines for indicators, then
+	// reclaim one if only a single indicator ends up showing (cursor at
+	// an edge). Two passes suffice: extra capacity can only remove
+	// indicators, never add them.
+	capacity := budget - 2
+	if capacity < 1 {
+		capacity = 1
+	}
+	start, end := visibleRowWindow(n, m.cursor, capacity)
+	reserved := 0
+	if start > 0 {
+		reserved++
+	}
+	if end < n {
+		reserved++
+	}
+	capacity = budget - reserved
+	if capacity < 1 {
+		capacity = 1
+	}
+	start, end = visibleRowWindow(n, m.cursor, capacity)
+
+	var rows []string
+	if start > 0 {
+		rows = append(rows, m.styles.dim.Render(fmt.Sprintf("  ↑ %d more", start)))
+	}
+	for i := start; i < end; i++ {
+		rows = append(rows, m.renderRow(i, m.tracks[i]))
+	}
+	if end < n {
+		rows = append(rows, m.styles.dim.Render(fmt.Sprintf("  ↓ %d more", n-end)))
+	}
+	return strings.Join(rows, "\n")
+}
+
+// visibleRowWindow returns the [start,end) range of row indices to show
+// so that cursor stays visible within at most capacity rows. capacity
+// must be >= 1. The window is centered on the cursor and clamped to the
+// list ends.
+func visibleRowWindow(n, cursor, capacity int) (start, end int) {
+	if capacity >= n {
+		return 0, n
+	}
+	start = cursor - capacity/2
+	if start < 0 {
+		start = 0
+	}
+	end = start + capacity
+	if end > n {
+		end = n
+		start = end - capacity
+	}
+	if start < 0 {
+		start = 0
+	}
+	return start, end
+}
+
+// renderRow renders a single track row. The row at the cursor gets the
+// highlight background threaded through every cell (see the inline note
+// below); all others render plainly.
+func (m *model) renderRow(i int, t state.Track) string {
+	branch := t.Branch
+	if branch == "" {
+		branch = "—"
+	}
+	if i != m.cursor {
+		return fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
+			shortID(t.ID),
+			padRendered(m.renderKind(t), 7),
+			padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
+			padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
+			m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
+			padRendered(m.renderChangesColored(t.Changes), 22),
+			padRendered(m.renderServices(t), 5),
+			padRendered(m.renderCost(t.Usage), 8),
+		)
+	}
+
+	// Thread the highlight background into every cell individually.
+	// Without this, each cell's own Render() appends a hard ANSI
+	// reset that cancels the outer rowActive background before the
+	// next cell starts, leaving all but the first column unlit.
+	activeBg := lipgloss.Color("236")
+	addBg := func(s lipgloss.Style) lipgloss.Style {
+		return s.Background(activeBg)
+	}
+	pad := func(s string, width int) string {
+		return lipgloss.NewStyle().Width(width).Background(activeBg).Render(s)
+	}
+	sep := lipgloss.NewStyle().Background(activeBg).Render("  ")
+
+	// KIND: inline to apply bg to the text, not just the outer container.
+	k := t.Kind
+	if k == "" {
+		k = state.KindWork
+	}
+	var kColor lipgloss.TerminalColor
+	switch k {
+	case state.KindAsk, state.KindPlan:
+		kColor = lipgloss.Color("13")
+	case state.KindReview:
+		kColor = lipgloss.Color("11")
+	default:
+		kColor = lipgloss.AdaptiveColor{Light: "30", Dark: "51"}
+	}
+	kindStr := lipgloss.NewStyle().Foreground(kColor).Background(activeBg).Render(string(k))
+
+	// CHANGES: each sub-segment needs bg so inter-segment spaces stay lit.
+	var changesStr string
+	if !t.Changes.IsZero() {
+		changesStr = addBg(m.styles.insertions).Render(fmt.Sprintf("+%d", t.Changes.Insertions)) +
+			addBg(lipgloss.NewStyle()).Render(" ") +
+			addBg(m.styles.deletions).Render(fmt.Sprintf("-%d", t.Changes.Deletions)) +
+			addBg(lipgloss.NewStyle()).Render(" ") +
+			addBg(m.styles.dim).Render(fmt.Sprintf("(%d)", t.Changes.Files))
+	}
+
+	// COST: apply bg to the inner style so the value text is highlighted.
+	var costStr string
+	if t.Usage.IsZero() {
+		costStr = addBg(m.styles.dim).Render("—")
+	} else {
+		costStr = addBg(m.styles.cost).Render(usage.FormatCost(t.Usage.CostUSD))
+	}
+
+	// SVC: apply bg to preserve selection highlight.
+	var svcStr string
+	if live, total := svcCounts(t); total > 0 {
+		sv := fmt.Sprintf("%d/%d", live, total)
+		if live > 0 {
+			svcStr = addBg(m.styles.insertions).Render(sv)
+		} else {
+			svcStr = addBg(m.styles.dim).Render(sv)
+		}
+	}
+
+	return m.styles.rowActive.Render(fmt.Sprintf("  %-15s", shortID(t.ID))) +
+		sep + pad(kindStr, 7) +
+		sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
+		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
+		sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), 10)) +
+		sep + pad(changesStr, 22) +
+		sep + pad(svcStr, 5) +
+		sep + pad(costStr, 8)
+}
+
+// clampLines truncates s to at most max newline-separated lines. A
+// negative max leaves s untouched.
+func clampLines(s string, max int) string {
+	if max < 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= max {
+		return s
+	}
+	return strings.Join(lines[:max], "\n")
 }
 
 func shortID(id string) string {

@@ -69,7 +69,13 @@ func gatherDetail(cfg config.Config, t state.Track) detail {
 //
 // The TASK section spans the full panel width so long prompts
 // read naturally; the other three split the remaining row evenly.
-func (m *model) renderDetail(d detail, width int) string {
+//
+// maxHeight caps the total rendered height (border included) so the
+// panel can't push the frame past the terminal; a negative maxHeight
+// leaves it uncapped. When the content exceeds the cap the body is
+// truncated and a trailing "…" marks the elision, keeping the panel
+// border intact.
+func (m *model) renderDetail(d detail, width, maxHeight int) string {
 	if width < 60 {
 		width = 60
 	}
@@ -101,6 +107,19 @@ func (m *model) renderDetail(d detail, width int) string {
 		prCol,
 	)
 	body := lipgloss.JoinVertical(lipgloss.Left, title, "", taskSection, "", bottomRow)
+	if maxHeight > 0 {
+		// The rounded border adds one line top and bottom; the panel has
+		// no vertical padding. Truncate the body so border + body fits.
+		innerMax := maxHeight - 2
+		if innerMax < 1 {
+			innerMax = 1
+		}
+		if bl := strings.Split(body, "\n"); len(bl) > innerMax {
+			bl = bl[:innerMax]
+			bl[innerMax-1] = m.styles.dim.Render("…")
+			body = strings.Join(bl, "\n")
+		}
+	}
 	return m.styles.panel.Width(width - 2).Render(body)
 }
 
