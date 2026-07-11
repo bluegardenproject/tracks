@@ -1,0 +1,62 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  repository-projects: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: main
+
+      # Build and upload binaries only when a release is created.
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+
+      - name: Set up Go
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Get dependencies
+        if: ${{ steps.release.outputs.release_created }}
+        run: go mod download
+
+      - name: Build cross-platform binaries
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+
+          VERSION="${{ steps.release.outputs.tag_name }}"
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
+
+          GOOS=linux   GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/tracks-linux-amd64 .
+          GOOS=linux   GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/tracks-linux-arm64 .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/tracks-darwin-amd64 .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/tracks-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/tracks-windows-amd64.exe .
+
+      - name: Upload Release Assets
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh release upload ${{ steps.release.outputs.tag_name }} dist/*
