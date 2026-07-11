@@ -54,8 +54,13 @@ func runGC(ctx context.Context, cfg config.Config) error {
 	}
 
 	removed := 0
+	quarantined := 0
 	for _, e := range entries {
 		if !e.IsDir() {
+			continue
+		}
+		// Never touch the quarantine dir — it holds preserved unsaved work.
+		if e.Name() == daemon.QuarantineDirName {
 			continue
 		}
 		trackDir := filepath.Join(worktreeRoot, e.Name())
@@ -64,16 +69,21 @@ func runGC(ctx context.Context, cfg config.Config) error {
 			// Active track — leave alone.
 			continue
 		}
-		repoEntries, _ := os.ReadDir(trackDir)
-		for _, repoEntry := range repoEntries {
-			path := filepath.Join(trackDir, repoEntry.Name())
-			c := git.WorktreeClient{Path: path, Runner: git.ExecRunner{Dir: path}}
-			_, _, _ = c.Runner.Run(ctx, "worktree", "remove", "--force", path)
-			_ = os.RemoveAll(path)
+		// Reclaim, but never delete unsaved work: a track dir with
+		// uncommitted changes or unpushed commits is moved to
+		// worktrees/_recovered/<id> instead of being removed.
+		wasQuarantined, reason, err := daemon.ReclaimOrphanTrackDir(ctx, worktreeRoot, e.Name())
+		if err != nil {
+			fmt.Printf("skip %s: %v\n", trackDir, err)
+			continue
 		}
-		_ = os.RemoveAll(trackDir)
-		removed++
-		fmt.Printf("removed %s\n", trackDir)
+		if wasQuarantined {
+			quarantined++
+			fmt.Printf("preserved %s (%s) — moved to worktrees/%s/%s\n", trackDir, reason, daemon.QuarantineDirName, e.Name())
+		} else {
+			removed++
+			fmt.Printf("removed %s\n", trackDir)
+		}
 	}
 
 	// Prune git worktree admin entries for every configured primary.
@@ -90,7 +100,11 @@ func runGC(ctx context.Context, cfg config.Config) error {
 		fmt.Printf("pruned %d empty branches\n", pruned)
 	}
 
-	fmt.Printf("done — removed %d orphan track dir(s)\n", removed)
+	if quarantined > 0 {
+		fmt.Printf("done — removed %d orphan track dir(s), preserved %d with unsaved work in worktrees/%s\n", removed, quarantined, daemon.QuarantineDirName)
+	} else {
+		fmt.Printf("done — removed %d orphan track dir(s)\n", removed)
+	}
 	return nil
 }
 

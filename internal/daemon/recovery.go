@@ -158,27 +158,28 @@ func (s *Server) gcOrphanedWorktrees(ctx context.Context) error {
 		if !e.IsDir() {
 			continue
 		}
+		// Never GC the quarantine dir — it holds preserved unsaved work.
+		if e.Name() == QuarantineDirName {
+			continue
+		}
 		if _, ok := known[e.Name()]; ok {
 			continue
 		}
-		// Unknown — clean it up.
-		trackDir := filepath.Join(worktreeRoot, e.Name())
-		repoEntries, err := os.ReadDir(trackDir)
+		// Unknown — reclaim it, but never delete unsaved work: a track
+		// dir with uncommitted changes or unpushed commits is moved to
+		// worktrees/_recovered/<id> instead of being removed.
+		quarantined, reason, err := ReclaimOrphanTrackDir(ctx, worktreeRoot, e.Name())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tracks daemon: gc read %s: %v\n", trackDir, err)
+			fmt.Fprintf(os.Stderr, "tracks daemon: gc %s: %v\n", e.Name(), err)
 			continue
 		}
-		for _, repoEntry := range repoEntries {
-			worktreePath := filepath.Join(trackDir, repoEntry.Name())
-			// We don't know which primary the worktree came from,
-			// but `git worktree remove` works from inside the
-			// worktree as well. Try that.
-			c := git.WorktreeClient{Path: worktreePath, Runner: git.ExecRunner{Dir: worktreePath}}
-			_, _, _ = c.Runner.Run(ctx, "worktree", "remove", "--force", worktreePath)
-			_ = os.RemoveAll(worktreePath)
+		if quarantined {
+			fmt.Fprintf(os.Stderr,
+				"tracks daemon: PRESERVED orphan track %s (%s) — moved to worktrees/%s/%s instead of deleting\n",
+				e.Name(), reason, QuarantineDirName, e.Name())
+		} else {
+			fmt.Fprintf(os.Stderr, "tracks daemon: gc removed orphan track dir %s\n", filepath.Join(worktreeRoot, e.Name()))
 		}
-		_ = os.RemoveAll(trackDir)
-		fmt.Fprintf(os.Stderr, "tracks daemon: gc removed orphan track dir %s\n", trackDir)
 	}
 
 	// Run prune on every configured primary to clean up git's
