@@ -22,6 +22,13 @@ func makeServer(t *testing.T) (*Server, *Client, func()) {
 	dir := t.TempDir()
 	cfg := config.Default()
 	cfg.Paths.SocketDir = dir
+	// Isolate StateDir too: Start() runs reconcileOnStartup ->
+	// gcOrphanedWorktrees, which rm -rf's every worktree dir under the
+	// state dir that has no state entry. With an empty test store and a
+	// default (unset) StateDir that resolves to the real
+	// ~/.local/state/tracks, that would delete the user's actual tracks
+	// worktrees — including live ones. Point it at the temp dir.
+	cfg.Paths.StateDir = dir
 	cfg.Repos = []config.Repo{
 		{Name: "demo", Path: "/nonexistent/demo", Base: "main"},
 	}
@@ -82,6 +89,9 @@ func TestCancelRootContextShutsDownDaemon(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	cfg := config.Default()
 	cfg.Paths.SocketDir = dir
+	// Isolate StateDir so Start()'s startup GC operates on this temp dir,
+	// not the user's real ~/.local/state/tracks worktrees. See makeServer.
+	cfg.Paths.StateDir = dir
 	st := state.NewMemoryStore()
 	srv := NewServer(cfg, st, "test-version")
 	srv.NoTmuxWatch = true
