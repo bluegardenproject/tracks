@@ -7,10 +7,21 @@ session. Your editor's branch never moves while Claude is working.
 ## Install
 
 ```bash
-make install   # → ~/bin/tracks
+curl -fsSL https://raw.githubusercontent.com/bluegardenproject/tracks/main/scripts/install.sh | bash
 ```
 
-Requires Go 1.25, `git`, `tmux`, and the `claude` CLI on `PATH`.
+Downloads the matching binary from the latest release into `~/.tracks` and
+adds it to your `PATH`. Re-run it any time to upgrade — a daemon from the
+previous version restarts automatically on the next `tracks` run. Uninstall
+with [`scripts/uninstall.sh`](scripts/uninstall.sh).
+
+Requires `git`, `tmux`, and the `claude` CLI on `PATH`. Linux and macOS only.
+
+### From source
+
+```bash
+make install   # builds with Go 1.25 → ~/bin/tracks
+```
 
 ## Use
 
