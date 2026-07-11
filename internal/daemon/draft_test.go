@@ -158,6 +158,38 @@ func TestLaunchFailureKeepsSingleDraft(t *testing.T) {
 	}
 }
 
+// TestEndTrackRefusesDraft guards the state-machine gap where ending a
+// draft (which is non-terminal) would flip it to Done and make it
+// prune-eligible, silently destroying the saved parameters. End/Kill must
+// refuse a draft; it stays a launchable draft.
+func TestEndTrackRefusesDraft(t *testing.T) {
+	srv, store := newDraftTestServer(t)
+	tr, _ := failNew(t, srv, store)
+	saveRaw, _ := json.Marshal(SaveDraftParams{ID: tr.ID})
+	if resp := srv.handleSaveDraft(saveRaw); !resp.Ok {
+		t.Fatalf("save draft failed: %s", resp.Error)
+	}
+
+	doneRaw, _ := json.Marshal(DoneParams{ID: tr.ID})
+	if resp := srv.handleDone(context.Background(), doneRaw, func(string) {}); resp.Ok {
+		t.Fatal("expected End to refuse a draft, got ok")
+	}
+	if resp := srv.handleKill(context.Background(), doneRaw, func(string) {}); resp.Ok {
+		t.Fatal("expected Kill to refuse a draft, got ok")
+	}
+
+	got, ok := store.Get(tr.ID)
+	if !ok {
+		t.Fatal("draft vanished after a refused End/Kill")
+	}
+	if got.Status != state.StatusDraft {
+		t.Errorf("status = %q, want it to stay %q", got.Status, state.StatusDraft)
+	}
+	if !got.CanLaunch() {
+		t.Error("draft should still be launchable after a refused End/Kill")
+	}
+}
+
 func TestAuthHintPrefix(t *testing.T) {
 	authy := []string{
 		"fetch demo/main: fatal: Authentication failed for 'https://github.com/x/y.git/'",

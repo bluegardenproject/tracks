@@ -492,6 +492,14 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	if !found {
 		return fail("track not found: " + p.ID)
 	}
+	// A draft has no Claude process, worktree, or tmux window to end.
+	// Ending it would flip it to Done (terminal) via the tail below and
+	// make it eligible for prune — silently destroying the saved
+	// parameters this feature exists to preserve. Dismiss it with `x`
+	// (forget) or launch it with `L` instead.
+	if t.Status == state.StatusDraft {
+		return fail(fmt.Sprintf("track %s is a draft — dismiss it (x) or launch it (L); a draft can't be ended", p.ID))
+	}
 	// If a supervisor is alive, stop it first so the process exits
 	// before we yank its worktrees.
 	s.mu.Lock()
@@ -959,13 +967,10 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 // error. Returns "" for anything that isn't clearly an auth problem.
 func authHintPrefix(msg string) string {
 	m := strings.ToLower(msg)
+	// Unambiguously auth/remote-flavored: fire on their own.
 	for _, needle := range []string{
 		"authentication failed",
-		"permission denied",
-		"access denied",
-		"403 forbidden",
 		"invalid username or password",
-		"invalid credentials",
 		"terminal prompts disabled",
 		"could not read username",
 		"support for password authentication was removed",
@@ -973,11 +978,26 @@ func authHintPrefix(msg string) string {
 		"please make sure you have the correct access rights",
 	} {
 		if strings.Contains(m, needle) {
-			return "GitHub access denied — your token or SSH key may be expired or lack access to this repo. Re-authenticate, then launch this draft again.\n\n"
+			return authHintText
+		}
+	}
+	// Generic phrases ("permission denied", "403") also show up in local
+	// filesystem errors, so only treat them as a GitHub auth problem when
+	// the message is clearly about a git remote.
+	remote := strings.Contains(m, "github.com") || strings.Contains(m, "git@") ||
+		strings.Contains(m, "https://") || strings.Contains(m, "remote:") ||
+		strings.Contains(m, "fetch ") || strings.Contains(m, "origin")
+	if remote {
+		for _, needle := range []string{"permission denied", "access denied", "403 forbidden", "invalid credentials"} {
+			if strings.Contains(m, needle) {
+				return authHintText
+			}
 		}
 	}
 	return ""
 }
+
+const authHintText = "GitHub access denied — your token or SSH key may be expired or lack access to this repo. Re-authenticate, then launch this draft again.\n\n"
 
 func (s *Server) handlePruneCompleted() Response {
 	removed := 0
