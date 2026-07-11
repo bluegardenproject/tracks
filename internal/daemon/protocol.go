@@ -93,6 +93,15 @@ const (
 	// by re-creating any removed worktrees and spawning claude --resume
 	// <session-id>. The track's status moves back to running.
 	MethodResume Method = "resume"
+
+	// MethodSaveDraft turns a failed-creation track into a saved draft
+	// (StatusDraft), keeping its parameters for a later launch instead
+	// of dropping the attempt.
+	MethodSaveDraft Method = "save_draft"
+
+	// MethodLaunch (re)creates a track from its saved Draft parameters —
+	// the same work as MethodNew, driven from a draft/failed track.
+	MethodLaunch Method = "launch"
 )
 
 // Request is the wire payload from CLI → daemon.
@@ -299,6 +308,16 @@ type ResumeParams struct {
 type ResumeResult struct {
 	// WindowName is the tmux window the daemon re-opened for the track.
 	WindowName string `json:"window_name"`
+}
+
+// SaveDraftParams / LaunchParams select a track by ID.
+type SaveDraftParams struct {
+	ID string `json:"id"`
+}
+
+// LaunchParams selects the draft/failed track to (re)create.
+type LaunchParams struct {
+	ID string `json:"id"`
 }
 
 // ProxyEntryStatus describes one proxy entry.

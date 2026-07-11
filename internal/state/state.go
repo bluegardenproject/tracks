@@ -91,6 +91,15 @@ const (
 	// StatusErrored means the Claude process exited non-zero, or
 	// `tracks` was unable to spawn it / set up the worktrees.
 	StatusErrored Status = "errored"
+
+	// StatusDraft is a saved-but-not-launched track: its creation
+	// parameters (repos, prompt, slug, …) are persisted in Track.Draft
+	// but no worktree exists and Claude was never spawned. Reached when
+	// the user saves a failed creation instead of dismissing it, so the
+	// entered info survives a fixable problem (e.g. an expired GitHub
+	// token). It is *not* terminal — a draft can be launched, which
+	// (re)runs creation from its saved parameters.
+	StatusDraft Status = "draft"
 )
 
 // TrackRepo is one repository participating in a track. The Name
@@ -300,13 +309,42 @@ type Track struct {
 	// StatusErrored — a failed git fetch, a spawn error, or an
 	// orphaned-by-restart note. Empty for tracks that never errored.
 	// Surfaced in the dashboard so a failed track explains itself
-	// without digging through the daemon log.
+	// without digging through the daemon log. On a StatusDraft track it
+	// holds the reason the last creation attempt failed.
 	ErrorMsg string `json:"error_msg,omitempty"`
+
+	// Draft holds the parameters needed to (re)create this track. It is
+	// captured whenever creation fails so the attempt can be saved as a
+	// draft and launched later without re-entering everything. Non-nil
+	// on StatusDraft tracks and on failed-creation StatusErrored tracks;
+	// nil once a track has been successfully created.
+	Draft *DraftSpec `json:"draft,omitempty"`
+}
+
+// DraftSpec is the set of user-supplied parameters that a track is
+// created from. Persisted on a track (see Track.Draft) so a creation
+// that failed — or was deliberately saved before launch — can be
+// relaunched from exactly what the user entered. Mirrors the daemon's
+// NewParams; kept in the state package so it can live on Track without
+// state importing the daemon package.
+type DraftSpec struct {
+	Repos      []string `json:"repos,omitempty"`
+	TaskPrompt string   `json:"task_prompt,omitempty"`
+	Slug       string   `json:"slug,omitempty"`
+	ReviewRef  string   `json:"review_ref,omitempty"`
+	Kind       string   `json:"kind,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses.
 func (s Status) IsTerminal() bool {
 	return s == StatusDone || s == StatusErrored
+}
+
+// CanLaunch reports whether the track can be (re)created from saved
+// parameters — i.e. it carries a Draft spec and isn't currently active.
+// True for a saved draft and for a failed-creation errored track.
+func (t Track) CanLaunch() bool {
+	return t.Draft != nil && (t.Status == StatusDraft || t.Status.IsTerminal())
 }
 
 // Duration is the track's wall-clock runtime: from CreatedAt to

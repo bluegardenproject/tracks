@@ -403,6 +403,13 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		fmt.Println()
 		fmt.Println("daemon refused track:", err)
 		fmt.Println()
+		// The daemon returns the persisted track's ID even on a creation
+		// failure. When we have it, let the user save what they entered as
+		// a draft (to fix the problem — e.g. re-auth GitHub — and launch
+		// again) or dismiss the attempt.
+		if res.TrackID != "" {
+			return handleCreateFailure(cl, res.TrackID, err)
+		}
 		fmt.Println("If this looks like a protocol mismatch, the daemon may be running an")
 		fmt.Println("older binary. Run `tmux kill-session -t tracks && tracks` to refresh.")
 		waitForKey()
@@ -412,6 +419,37 @@ func runNewTrackFromMenu(cfg config.Config) error {
 		_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 	}
 	fmt.Printf("created %s on %s\n", res.TrackID, res.Branch)
+	return nil
+}
+
+// handleCreateFailure runs the post-failure choice: save the failed
+// attempt as a draft (kept for a later launch once the underlying problem
+// is fixed) or dismiss it. Called only when the daemon persisted the
+// failed track and returned its ID.
+func handleCreateFailure(cl *daemon.Client, trackID string, cause error) error {
+	action, aerr := newtrack.PickFailureAction(cause.Error())
+	if aerr != nil {
+		// Picker itself failed — leave the failed track in place (it's
+		// visible in the dashboard) rather than guessing.
+		fmt.Println("could not show the save/dismiss prompt:", aerr)
+		waitForKey()
+		return nil
+	}
+	switch action {
+	case newtrack.FailureDismiss:
+		if err := cl.Forget(trackID); err != nil {
+			fmt.Println("could not dismiss the failed track:", err)
+		} else {
+			fmt.Println("dismissed.")
+		}
+	case newtrack.FailureSaveDraft:
+		if err := cl.SaveDraft(trackID); err != nil {
+			fmt.Println("could not save draft:", err)
+		} else {
+			fmt.Println("saved as a draft — fix the problem, then launch it from the dashboard (press L).")
+		}
+	}
+	waitForKey()
 	return nil
 }
 

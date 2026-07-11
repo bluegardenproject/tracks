@@ -242,6 +242,49 @@ func confirmDiscard() (bool, error) {
 	return discard, nil
 }
 
+// FailureAction is the user's choice after a track creation fails.
+type FailureAction int
+
+const (
+	// FailureSaveDraft keeps the failed attempt as a draft to launch later.
+	FailureSaveDraft FailureAction = iota
+	// FailureDismiss discards the failed attempt entirely.
+	FailureDismiss
+)
+
+// PickFailureAction asks whether to save a failed creation as a draft or
+// dismiss it. "Save as draft" is the focused default so an accidental
+// confirm doesn't throw away the info the user entered; aborting the
+// prompt (Esc / Ctrl-C) also counts as save-as-draft, the safe choice.
+// reason is shown as context (typically the failure message).
+func PickFailureAction(reason string) (FailureAction, error) {
+	save := true
+	desc := "Save what you entered as a draft so you can fix the problem and launch it again, or dismiss the attempt."
+	if strings.TrimSpace(reason) != "" {
+		desc = strings.TrimSpace(reason) + "\n\n" + desc
+	}
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Track creation failed").
+				Description(desc).
+				Affirmative("Save as draft").
+				Negative("Dismiss").
+				Value(&save),
+		),
+	)
+	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return FailureSaveDraft, nil
+		}
+		return FailureSaveDraft, err
+	}
+	if save {
+		return FailureSaveDraft, nil
+	}
+	return FailureDismiss, nil
+}
+
 // runReview is the second form for the Review template. A review
 // targets one repo and one PR/branch, so we use a single-select repo
 // and a required target field — unlike the free-form flow, where the

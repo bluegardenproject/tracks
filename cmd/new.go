@@ -61,6 +61,14 @@ func init() {
 				fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
 			})
 			if err != nil {
+				fmt.Println()
+				fmt.Println("daemon:", err)
+				fmt.Println()
+				// The daemon returns the failed track's ID even on error;
+				// offer to save what was entered as a draft or dismiss it.
+				if res.TrackID != "" {
+					return handleCreateFailure(cl, res.TrackID, err)
+				}
 				return fmt.Errorf("daemon: %w", err)
 			}
 			fmt.Println()

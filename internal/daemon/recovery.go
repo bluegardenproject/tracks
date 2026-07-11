@@ -31,6 +31,11 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		if t.Status.IsTerminal() {
 			continue
 		}
+		// A saved draft has no worktree and no Claude process — it's just
+		// stored parameters waiting to be launched. Leave it untouched.
+		if t.Status == state.StatusDraft {
+			continue
+		}
 		// A track left in review (Claude already exited) has no Claude
 		// process to re-supervise, so it must never be marked Errored.
 		// Its dev servers were orphaned by the dead daemon, so free them
