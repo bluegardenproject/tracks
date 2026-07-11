@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -88,6 +89,47 @@ func (c *WorktreeClient) DirtyFiles(ctx context.Context) ([]string, error) {
 		return nil, nil
 	}
 	return strings.Split(out, "\n"), nil
+}
+
+// UnpushedCommits reports whether HEAD has commits that are not
+// reachable from any remote-tracking branch. Implemented with
+// `git rev-list --count HEAD --not --remotes`: a non-zero count means
+// there are local-only commits — work that, together with the branch
+// ref, exists nowhere but this machine.
+func (c *WorktreeClient) UnpushedCommits(ctx context.Context) (bool, error) {
+	out, _, err := c.Runner.Run(ctx, "rev-list", "--count", "HEAD", "--not", "--remotes")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "0", nil
+}
+
+// UnsavedWork returns a short, human-readable reason describing work in
+// the worktree that exists nowhere else — uncommitted changes
+// (including untracked files, which `git status --porcelain` reports)
+// or unpushed commits — or "" when the worktree is safe to delete.
+//
+// This gates destructive garbage-collection: a worktree with unsaved
+// work must be quarantined, never `rm -rf`'d, so a live or orphaned
+// track's work is never lost out from under it.
+func (c *WorktreeClient) UnsavedWork(ctx context.Context) (string, error) {
+	dirty, err := c.DirtyFiles(ctx)
+	if err != nil {
+		return "", err
+	}
+	unpushed, err := c.UnpushedCommits(ctx)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case len(dirty) > 0 && unpushed:
+		return fmt.Sprintf("%d uncommitted file(s) and unpushed commits", len(dirty)), nil
+	case len(dirty) > 0:
+		return fmt.Sprintf("%d uncommitted file(s)", len(dirty)), nil
+	case unpushed:
+		return "unpushed commits", nil
+	}
+	return "", nil
 }
 
 // ShortStat counts the files / insertions / deletions in the diff
