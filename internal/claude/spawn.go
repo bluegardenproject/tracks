@@ -72,7 +72,7 @@ type SpawnOptions struct {
 // Claude. Hardcoded here so we can update the wording with the
 // binary instead of asking every user to edit YAML.
 //
-// Three concerns:
+// Key concerns:
 //
 //  1. Make sure Claude knows it's running interactively (don't
 //     treat every task as one-shot).
@@ -81,6 +81,9 @@ type SpawnOptions struct {
 //  3. Surface the TRACKS_PR_URL marker contract so the dashboard
 //     can detect PR creation — phrased as a side-channel, not a
 //     finish signal.
+//  4. Keep output terse and comment-free — these sessions are read
+//     in a dashboard, so brevity and clean diffs are project-agnostic
+//     wins that belong in the binary, not per-user CLAUDE.md.
 //
 // Repo / branch / commit conventions live in whatever CLAUDE.md
 // the user has configured; Claude picks them up automatically.
@@ -138,7 +141,28 @@ const taskSuffix = "" +
 	"Do NOT add a comment with the PR URL — the PR is already linked " +
 	"automatically and a comment would be duplicate noise.\n" +
 	"  4. Any Atlassian-tool error is non-fatal — note it in your " +
-	"reply and carry on with the actual work."
+	"reply and carry on with the actual work.\n\n" +
+	"**Response style.** These sessions are read in a dashboard, not " +
+	"a chat window — keep answers short.\n" +
+	"  - Lead with the result or conclusion; drop preamble (\"I'll " +
+	"now…\", \"Great question…\") and closing summaries that restate " +
+	"what you just did.\n" +
+	"  - Prefer bullet lists and tables over paragraphs. Use a table " +
+	"when comparing options, listing files with per-file notes, or " +
+	"reporting multiple results.\n" +
+	"  - One line per point. Don't restate the task back, and don't " +
+	"narrate routine steps — the tool calls already show them.\n" +
+	"  - Explain *why* only when it's non-obvious or you're proposing " +
+	"a decision. No filler acknowledgements: answer, act, or ask.\n\n" +
+	"**Code comments.** Do not add comments to code unless a comment " +
+	"is essential to understand a non-obvious fix or behavior.\n" +
+	"  - No comments that restate what the code plainly does, and no " +
+	"\"changed this\" / \"added that\" narration of your own edit.\n" +
+	"  - Match the existing comment density of the file — if the " +
+	"surrounding code has no comments, add none.\n" +
+	"  - A comment earns its place only when the *why* is genuinely " +
+	"surprising (a workaround, an ordering constraint, a subtle edge " +
+	"case)."
 
 // readOnlySuffix is appended for worktree-less (ask/plan) tracks. They
 // point at the user's PRIMARY checkout (the one their editor watches),
