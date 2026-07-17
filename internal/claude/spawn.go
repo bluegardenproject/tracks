@@ -111,22 +111,26 @@ const taskSuffix = "" +
 	"knows what was already vetted.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
-	"**Dev-server services.** Before starting any dev server manually, " +
-	"run `tracks services` — it lists every configured service with its " +
-	"status, port, and log path. If the output is empty there are no " +
-	"services configured and you can skip this section. Otherwise always " +
-	"use the tracks commands below instead of running `pnpm dev`, " +
-	"`npm start`, etc. directly — the supervisor handles port allocation, " +
-	"dependency ordering, and the stable-port proxy the app points at.\n\n" +
+	"**Dev-server services.** When the user asks you to start (or run, " +
+	"boot, spin up) the dev server, do NOT run `pnpm dev` / `npm " +
+	"start` / `pnpm install` yourself. Run `tracks up <name>` instead: " +
+	"it opens a dedicated pane in this track and runs the configured " +
+	"start steps there (dependency install first, then the server) so " +
+	"the process is visible and does not block you. It returns " +
+	"immediately; the install and boot continue in the pane.\n\n" +
 	"`$TRACKS_ID` is already set in the environment; the `--track` flag " +
 	"is never needed.\n" +
-	"  - `tracks services` — status, port, and log path for every service\n" +
-	"  - `tracks up <name>` — start a service (starts dependencies first)\n" +
-	"  - `tracks down <name>` — stop a running service\n" +
-	"  - `tracks url <name>` — print the URL (stable proxy + track port)\n\n" +
-	"The log path shown by `tracks services` is a plain file; read it " +
-	"with `tail -f <path>` or `cat <path>` to check server output without " +
-	"switching panes.\n\n" +
+	"  - `tracks services` lists configured services with status, port, " +
+	"and log path. Run this first to find the service name (if it " +
+	"prints nothing, this repo has no dev server configured; tell the " +
+	"user and stop).\n" +
+	"  - `tracks up <name>` opens a pane and starts the service (its " +
+	"depends_on services first)\n" +
+	"  - `tracks down <name>` stops a running service\n" +
+	"  - `tracks url <name>` prints the URL (stable proxy + track port)\n\n" +
+	"To confirm the server came up, tail/cat the log path from `tracks " +
+	"services` (the pane also tees its output there); do not assume " +
+	"success just because `tracks up` returned.\n\n" +
 	"**Jira sync** (only if your task prompt references a Jira-style " +
 	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +
 	"  1. At the start, use `Bash` to read `git config user.email`. " +

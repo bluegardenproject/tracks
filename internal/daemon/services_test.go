@@ -1,8 +1,7 @@
 package daemon
 
 import (
-	"context"
-	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
@@ -14,13 +13,19 @@ import (
 
 func groupAlive(pgid int) bool { return syscall.Kill(-pgid, 0) == nil }
 
-func readFileContent(t *testing.T, path string) string {
+// spawnGroup starts a shell command in its own process group and returns the
+// pgid (== leader pid). Used to exercise the PGID-based teardown paths without
+// going through tmux (which the real service start now uses).
+func spawnGroup(t *testing.T, script string) int {
 	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
+	cmd := exec.Command("/bin/sh", "-c", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("spawn group: %v", err)
 	}
-	return string(b)
+	pgid := cmd.Process.Pid
+	go func() { _ = cmd.Wait() }() // reap so it doesn't linger as a zombie
+	return pgid
 }
 
 // newServiceTestServer builds a Server backed by a memory store with its
@@ -32,140 +37,99 @@ func newServiceTestServer(t *testing.T) *Server {
 	return NewServer(cfg, state.NewMemoryStore(), "test")
 }
 
-func TestStartServicePersistsAndRuns(t *testing.T) {
-	srv := newServiceTestServer(t)
-	tr := state.Track{ID: "trk-1", Status: state.StatusRunning, Ports: map[string]int{"web": 20001}}
-	if err := srv.store.Put(tr); err != nil {
-		t.Fatal(err)
-	}
-	sup := &supervisor{trackID: tr.ID}
+func TestBuildServiceScript(t *testing.T) {
+	script := buildServiceScript(
+		map[string]string{"PORT": "20001"},
+		[]string{"pnpm install"},
+		"pnpm dev",
+		"/logs/dev.log",
+	)
 
-	st, err := srv.startService(context.Background(), sup, tr, config.Service{Name: "web", Cmd: "sleep 30"}, t.TempDir())
-	if err != nil {
-		t.Fatalf("startService: %v", err)
+	// Env is exported (single-quoted value) before the sequence runs.
+	if !strings.Contains(script, "export PORT='20001';") {
+		t.Errorf("env not exported: %q", script)
 	}
-	defer stopPersistedServices([]state.ServiceState{st}, true)
-
-	if st.Status != state.ServiceRunning || st.PGID <= 0 {
-		t.Fatalf("unexpected service state: %+v", st)
+	// Deps run before the server, short-circuited with &&.
+	if !strings.Contains(script, "pnpm install && pnpm dev") {
+		t.Errorf("deps/server not ordered with &&: %q", script)
 	}
-	if st.Port != 20001 {
-		t.Errorf("port not recorded: %d", st.Port)
+	// Output is teed to the log so `tracks services`/tail can read it.
+	if !strings.Contains(script, "tee '/logs/dev.log'") {
+		t.Errorf("output not teed to log: %q", script)
 	}
-	if !groupAlive(st.PGID) {
-		t.Error("service group not alive after start")
-	}
-	// Persisted on the track.
-	got, _ := srv.store.Get(tr.ID)
-	if len(got.Services) != 1 || got.Services[0].Name != "web" {
-		t.Errorf("service not persisted on track: %+v", got.Services)
+	// Falls back to an interactive shell when the sequence exits.
+	if !strings.Contains(script, "exec ${SHELL:-/bin/bash} -l") {
+		t.Errorf("no interactive fallback shell: %q", script)
 	}
 }
 
-func TestStartServiceWaitsForReadinessAndRunsHooks(t *testing.T) {
-	srv := newServiceTestServer(t)
-	tr := state.Track{ID: "trk-ready", Status: state.StatusRunning}
-	if err := srv.store.Put(tr); err != nil {
-		t.Fatal(err)
+func TestBuildServiceScriptNoDeps(t *testing.T) {
+	script := buildServiceScript(nil, nil, "pnpm dev", "/logs/dev.log")
+	if !strings.Contains(script, "{ pnpm dev ; }") {
+		t.Errorf("expected bare server command in the sequence: %q", script)
 	}
-	sup := &supervisor{trackID: tr.ID}
-
-	// The service announces readiness via a log line; a post_start hook
-	// appends a marker to the same log once ready.
-	svc := config.Service{
-		Name:      "web",
-		Cmd:       "echo LISTENING; sleep 30",
-		Ready:     config.ReadyProbe{LogRegex: "LISTENING"},
-		PostStart: []string{"echo POSTSTART_RAN"},
-	}
-	st, err := srv.startService(context.Background(), sup, tr, svc, t.TempDir())
-	if err != nil {
-		t.Fatalf("startService: %v", err)
-	}
-	defer stopPersistedServices([]state.ServiceState{st}, true)
-
-	if st.Status != state.ServiceReady {
-		t.Errorf("expected ServiceReady after probe passed, got %q", st.Status)
-	}
-	// The probe passing and the post_start hook are both reflected in the log.
-	got := readFileContent(t, st.LogPath)
-	if !strings.Contains(got, "LISTENING") || !strings.Contains(got, "POSTSTART_RAN") {
-		t.Errorf("log missing readiness or post_start output: %q", got)
-	}
-	// Persisted status matches.
-	stored, _ := srv.store.Get(tr.ID)
-	if len(stored.Services) != 1 || stored.Services[0].Status != state.ServiceReady {
-		t.Errorf("persisted service not ready: %+v", stored.Services)
+	if strings.Contains(script, "export ") {
+		t.Errorf("no env should be exported: %q", script)
 	}
 }
 
-func TestStartServicePreStartFailureAborts(t *testing.T) {
-	srv := newServiceTestServer(t)
-	tr := state.Track{ID: "trk-pre", Status: state.StatusRunning}
-	_ = srv.store.Put(tr)
-	sup := &supervisor{trackID: tr.ID}
-
-	svc := config.Service{Name: "web", Cmd: "sleep 30", PreStart: []string{"false"}}
-	_, err := srv.startService(context.Background(), sup, tr, svc, t.TempDir())
-	if err == nil {
-		t.Fatal("expected pre_start failure to abort start")
-	}
-	// Nothing should have been launched or persisted.
-	stored, _ := srv.store.Get(tr.ID)
-	if len(stored.Services) != 0 {
-		t.Errorf("no service should be persisted after pre_start failure: %+v", stored.Services)
+func TestBuildServicePaneCommandWrapsInLoginShell(t *testing.T) {
+	cmd := buildServicePaneCommand(nil, nil, "pnpm dev", "/logs/dev.log")
+	if !strings.Contains(cmd, "${SHELL:-/bin/bash} -lc ") {
+		t.Errorf("not wrapped in a login shell: %q", cmd)
 	}
 }
 
 func TestStopPersistedServicesKillsGroup(t *testing.T) {
-	srv := newServiceTestServer(t)
-	tr := state.Track{ID: "trk-2", Status: state.StatusRunning}
-	_ = srv.store.Put(tr)
-	sup := &supervisor{trackID: tr.ID}
-
-	// A backgrounded child ensures we're testing a real group kill.
-	st, err := srv.startService(context.Background(), sup, tr, config.Service{Name: "svc", Cmd: "sleep 60 & sleep 60"}, t.TempDir())
-	if err != nil {
-		t.Fatalf("startService: %v", err)
-	}
-	if !groupAlive(st.PGID) {
+	// A backgrounded child ensures we're testing a real group kill, not just
+	// the leader.
+	pgid := spawnGroup(t, "sleep 60 & sleep 60")
+	if !groupAlive(pgid) {
 		t.Fatal("group should be alive")
 	}
+	st := state.ServiceState{Name: "svc", Status: state.ServiceRunning, PGID: pgid}
 
 	stopped := stopPersistedServices([]state.ServiceState{st}, true)
 	if stopped[0].Status != state.ServiceStopped {
 		t.Errorf("status not marked stopped: %v", stopped[0].Status)
 	}
-	// Give the group a beat to fully exit.
+	if stopped[0].ExitedAt == nil {
+		t.Error("ExitedAt not set")
+	}
 	time.Sleep(100 * time.Millisecond)
-	if groupAlive(st.PGID) {
+	if groupAlive(pgid) {
 		t.Error("service group still alive after stopPersistedServices — leak")
 	}
 }
 
-func TestMarkServicesStopped(t *testing.T) {
+func TestTeardownTrackServices(t *testing.T) {
 	srv := newServiceTestServer(t)
+
+	// Two real, live groups that must be killed…
+	live1 := spawnGroup(t, "sleep 60")
+	live2 := spawnGroup(t, "sleep 60")
 	tr := state.Track{
 		ID:     "trk-shutdown",
 		Status: state.StatusRunning,
 		Services: []state.ServiceState{
-			{Name: "ready", Status: state.ServiceReady, PGID: 100},
-			{Name: "starting", Status: state.ServiceStarting, PGID: 101},
-			{Name: "running", Status: state.ServiceRunning, PGID: 102},
+			{Name: "ready", Status: state.ServiceReady, PGID: live1},
+			{Name: "running", Status: state.ServiceRunning, PGID: live2},
 			{Name: "already-failed", Status: state.ServiceFailed},
 			{Name: "already-stopped", Status: state.ServiceStopped},
 		},
 	}
-	_ = srv.store.Put(tr)
+	if err := srv.store.Put(tr); err != nil {
+		t.Fatal(err)
+	}
 
-	srv.markServicesStopped(tr.ID)
+	srv.teardownTrackServices(tr.ID, true)
 
 	got, _ := srv.store.Get(tr.ID)
 	byName := map[string]state.ServiceState{}
 	for _, sv := range got.Services {
 		byName[sv.Name] = sv
 	}
-	for _, name := range []string{"ready", "starting", "running"} {
+	for _, name := range []string{"ready", "running"} {
 		sv := byName[name]
 		if sv.Status != state.ServiceStopped {
 			t.Errorf("%s: expected stopped, got %q", name, sv.Status)
@@ -179,6 +143,12 @@ func TestMarkServicesStopped(t *testing.T) {
 	}
 	if byName["already-stopped"].ExitedAt != nil {
 		t.Error("already-stopped service should not get a fresh ExitedAt")
+	}
+
+	// The live groups must actually be dead.
+	time.Sleep(100 * time.Millisecond)
+	if groupAlive(live1) || groupAlive(live2) {
+		t.Error("a service group survived teardownTrackServices — leak")
 	}
 }
 

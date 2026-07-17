@@ -136,6 +136,21 @@ Notes / implementation:
 > and rejected — it would move teardown/readiness onto the pane pid and
 > `capture-pane`, reworking code that already exists and is tested.
 
+> **Revision (2026-07-17) — reversed for interactive starts.** When a user asks
+> the in-track Claude to start the dev server, the headless-process +
+> `tail -f` viewer-pane model failed in practice: `tracks up` blocked
+> synchronously through `pnpm install` + readiness, overrunning Claude's
+> command timeout so the start looked broken, and the log-only output was
+> easy to miss. `tracks up` now **runs the server in its own pane** which
+> owns the process: the pane runs `deps_cmd && cmd` (teed to the same log),
+> returns immediately (no blocking install/readiness wait), and records the
+> pane's pid as the service PGID so the existing state-driven teardown
+> (endTrack / recovery / daemon shutdown, all kill by PGID) still applies.
+> Trade-offs accepted for now: no readiness probe/`service_ready` gating (the
+> proxy switches immediately and 503s until the port binds), and start steps
+> stay in the existing config (`provision.deps_cmd` + `service.cmd` +
+> `pre_start`) rather than a new schema.
+
 **Status: v1a complete.** Services engine (PRs #14–#17) + control surface,
 viewer panes, stable-port proxy, and `service_ready` notification (this PR).
 `tracks up/down/services/url/proxy` all work end-to-end.

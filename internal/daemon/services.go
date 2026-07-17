@@ -1,29 +1,33 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
-// startService brings one declared service up for the track: it runs the
-// pre_start hooks, launches the process in its own group, waits for the
-// readiness probe, then runs the post_start hooks — persisting the
-// service's status at each step. The command, env, hooks, and probe port
-// are all templated (so {{.Port "name"}} resolves). worktree is the
-// directory everything runs in (the service's repo worktree).
+// startServicePane brings one declared service up for the track by opening a
+// dedicated tmux pane in the track window and running its start steps there:
+// the (optional) dependency-install command, any pre_start hooks, then the
+// server command — all templated and joined with `&&`, teed to the service
+// log so `tracks services` and `tail` can read the output.
 //
-// It blocks until the service is ready (or the readiness timeout fires).
-// On any failure the process group is torn down and the service is marked
-// failed, so a half-started service never lingers.
-func (s *Server) startService(ctx context.Context, sup *supervisor, t state.Track, svc config.Service, worktree string) (state.ServiceState, error) {
+// The pane *owns* the process: tmux setsid's each pane, so the pane's pid is
+// the process-group leader. We record it as the service's PGID, which is the
+// authoritative teardown handle (endTrack/recovery/daemon-shutdown all kill
+// the group). We do NOT block on readiness — a slow `pnpm install` used to
+// overrun the caller's timeout and make the start look broken. The pane shows
+// progress live; readiness is the human's (or a later probe's) concern.
+func (s *Server) startServicePane(sup *supervisor, t state.Track, svc config.Service, worktree, depsCmd string) (state.ServiceState, error) {
 	data := services.NewTemplateData(t.ID, worktree, t.Ports)
-	cmd, err := services.Render(svc.Cmd, data)
+	serverCmd, err := services.Render(svc.Cmd, data)
 	if err != nil {
 		return state.ServiceState{}, fmt.Errorf("service %s: render cmd: %w", svc.Name, err)
 	}
@@ -31,79 +35,132 @@ func (s *Server) startService(ctx context.Context, sup *supervisor, t state.Trac
 	if err != nil {
 		return state.ServiceState{}, fmt.Errorf("service %s: render env: %w", svc.Name, err)
 	}
-	probePort, err := services.Render(svc.Ready.Port, data)
-	if err != nil {
-		return state.ServiceState{}, fmt.Errorf("service %s: render ready.port: %w", svc.Name, err)
+
+	// Steps that must succeed before the server starts, in order: deps
+	// install (deferred from worktree creation) then any pre_start hooks.
+	var steps []string
+	if strings.TrimSpace(depsCmd) != "" {
+		rendered, err := services.Render(depsCmd, data)
+		if err != nil {
+			return state.ServiceState{}, fmt.Errorf("service %s: render deps_cmd: %w", svc.Name, err)
+		}
+		steps = append(steps, rendered)
 	}
+	for i, hook := range svc.PreStart {
+		rendered, err := services.Render(hook, data)
+		if err != nil {
+			return state.ServiceState{}, fmt.Errorf("service %s: render pre_start[%d]: %w", svc.Name, i, err)
+		}
+		steps = append(steps, rendered)
+	}
+
 	logPath, err := s.serviceLogPath(t.ID, svc.Name)
 	if err != nil {
 		return state.ServiceState{}, err
 	}
 
-	// pre_start runs before the process exists, so it can't reach the
-	// service log used for hook output yet — but the log file is fine to
-	// append to. A failing pre_start aborts the start entirely.
-	if err := services.RunHooks(ctx, svc.PreStart, data, worktree, logPath); err != nil {
-		return state.ServiceState{}, fmt.Errorf("service %s: pre_start: %w", svc.Name, err)
-	}
-
-	proc, err := services.Start(services.Spec{
-		Name:    svc.Name,
-		Cmd:     cmd,
-		Env:     env,
-		Dir:     worktree,
-		LogPath: logPath,
-	})
+	paneCmd := buildServicePaneCommand(env, steps, serverCmd, logPath)
+	panePID, err := s.openServerPane(sup, svc.Name, t.Ports[svc.Name], paneCmd, worktree)
 	if err != nil {
-		return state.ServiceState{}, err
+		return state.ServiceState{}, fmt.Errorf("service %s: open pane: %w", svc.Name, err)
 	}
 
-	sup.svcMu.Lock()
-	if sup.services == nil {
-		sup.services = make(map[string]*services.Process)
-	}
-	sup.services[svc.Name] = proc
-	sup.svcMu.Unlock()
-
-	probe := services.Probe{Port: probePort, LogRegex: svc.Ready.LogRegex}
 	now := time.Now().UTC()
 	st := state.ServiceState{
 		Name:      svc.Name,
-		Status:    state.ServiceStarting,
-		PID:       proc.PID,
-		PGID:      proc.PGID,
+		Status:    state.ServiceRunning,
+		PID:       panePID,
+		PGID:      panePID,
 		Port:      t.Ports[svc.Name],
 		LogPath:   logPath,
 		StartedAt: &now,
 	}
-	if probe.IsZero() {
-		// No probe: we can't assert it's serving, only that it launched.
-		st.Status = state.ServiceRunning
-	}
 	if err := s.persistService(t.ID, t, st); err != nil {
-		s.failService(sup, svc.Name)
+		// The pane is already running; tear it down so state and reality
+		// don't diverge, then surface the error.
+		terminatePGID(panePID, 0)
+		s.closeServerPane(sup, svc.Name)
 		return state.ServiceState{}, err
 	}
+	return st, nil
+}
 
-	// Wait for readiness, then run post_start. Any failure tears the
-	// process down and records the service as failed.
-	if err := services.WaitReady(ctx, probe, logPath, services.DefaultReadyTimeout); err != nil {
-		s.markServiceFailed(sup, t.ID, svc.Name)
-		return state.ServiceState{}, fmt.Errorf("service %s: %w", svc.Name, err)
-	}
-	if err := services.RunHooks(ctx, svc.PostStart, data, worktree, logPath); err != nil {
-		s.markServiceFailed(sup, t.ID, svc.Name)
-		return state.ServiceState{}, fmt.Errorf("service %s: post_start: %w", svc.Name, err)
-	}
+// buildServicePaneCommand assembles the single shell command a service pane
+// runs, wrapped in a login shell (`$SHELL -lc`) so PATH carries the node/pnpm
+// that nvm/fnm put there, matching how Claude itself is spawned.
+func buildServicePaneCommand(env map[string]string, steps []string, serverCmd, logPath string) string {
+	return "exec ${SHELL:-/bin/bash} -lc " + shellQuoteSvc(buildServiceScript(env, steps, serverCmd, logPath))
+}
 
-	if !probe.IsZero() {
-		st.Status = state.ServiceReady
-		if err := s.persistService(t.ID, t, st); err != nil {
-			s.failService(sup, svc.Name)
-			return state.ServiceState{}, err
+// buildServiceScript is the un-wrapped shell script buildServicePaneCommand
+// runs inside the login shell: env exports, then the ordered steps + server
+// command (short-circuited with `&&`) teed to the log, then a fallback
+// interactive shell so the pane never dies to a blank "[exited]" and the
+// worktree stays pokeable. Split out from the wrapper so it can be asserted on
+// without the outer shell-quoting.
+func buildServiceScript(env map[string]string, steps []string, serverCmd, logPath string) string {
+	var b strings.Builder
+	for _, k := range sortedKeys(env) {
+		b.WriteString("export " + k + "=" + shellQuoteSvc(env[k]) + "; ")
+	}
+	seq := make([]string, 0, len(steps)+1)
+	for _, s := range steps {
+		if strings.TrimSpace(s) != "" {
+			seq = append(seq, s)
 		}
 	}
-	return st, nil
+	if strings.TrimSpace(serverCmd) != "" {
+		seq = append(seq, serverCmd)
+	}
+	b.WriteString("{ " + strings.Join(seq, " && ") + " ; } 2>&1 | tee " + shellQuoteSvc(logPath) + "; ")
+	b.WriteString("exec ${SHELL:-/bin/bash} -l")
+	return b.String()
+}
+
+// openServerPane opens the service's pane in the right column of the track
+// window and returns the pid of the pane's process (the group leader). The
+// first service splits the window right (35%); each subsequent service stacks
+// below the previous one. The pane runs from worktree so relative paths in the
+// command resolve there.
+func (s *Server) openServerPane(sup *supervisor, svcName string, port int, command, worktree string) (panePID int, err error) {
+	tm := tmux.New()
+	session := s.config().Tmux.SessionName
+
+	sup.svcMu.Lock()
+	defer sup.svcMu.Unlock()
+	if sup.servicePanes == nil {
+		sup.servicePanes = make(map[string]string)
+	}
+
+	var paneID string
+	if len(sup.servicePanes) == 0 {
+		paneID, panePID, err = tm.SplitWindowRight(session, sup.windowName, command, worktree, 35)
+	} else {
+		paneID, panePID, err = tm.SplitPaneDown(sup.lastServicePane, command, worktree)
+	}
+	if err != nil {
+		return 0, err
+	}
+	_ = tm.SetPaneTitle(paneID, fmt.Sprintf("%s:%d", svcName, port))
+	sup.servicePanes[svcName] = paneID
+	sup.lastServicePane = paneID
+	return panePID, nil
+}
+
+// closeServerPane kills the pane for the named service (cosmetic — the
+// authoritative teardown is the process-group kill by PGID).
+func (s *Server) closeServerPane(sup *supervisor, svcName string) {
+	sup.svcMu.Lock()
+	defer sup.svcMu.Unlock()
+	if sup.servicePanes == nil {
+		return
+	}
+	paneID, ok := sup.servicePanes[svcName]
+	if !ok {
+		return
+	}
+	delete(sup.servicePanes, svcName)
+	_ = tmux.New().KillPane(paneID)
 }
 
 // persistService upserts a ServiceState onto the track via an atomic
@@ -125,36 +182,6 @@ func (s *Server) persistService(trackID string, fallback state.Track, st state.S
 		}
 	}
 	return nil
-}
-
-// failService tears down a service's process group and drops its handle,
-// without touching persisted state (used when persistence itself failed).
-func (s *Server) failService(sup *supervisor, name string) {
-	sup.svcMu.Lock()
-	proc := sup.services[name]
-	delete(sup.services, name)
-	sup.svcMu.Unlock()
-	if proc != nil {
-		proc.Stop(0)
-	}
-}
-
-// markServiceFailed tears the process down and records the service as
-// failed on the track, via an atomic update so it doesn't clobber the
-// poll loop's concurrent writes.
-func (s *Server) markServiceFailed(sup *supervisor, trackID, name string) {
-	s.failService(sup, name)
-	now := time.Now().UTC()
-	_, _, _ = s.store.Update(trackID, func(t *state.Track) bool {
-		for i := range t.Services {
-			if t.Services[i].Name == name {
-				t.Services[i].Status = state.ServiceFailed
-				t.Services[i].ExitedAt = &now
-				return true
-			}
-		}
-		return false
-	})
 }
 
 // serviceLogPath is where a service's stdout+stderr are streamed, under
@@ -204,4 +231,24 @@ func stopPersistedServices(svcs []state.ServiceState, force bool) []state.Servic
 		out[i].ExitedAt = &now
 	}
 	return out
+}
+
+// sortedKeys returns the map keys in deterministic order so a rendered
+// command is reproducible (and testable).
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// shellQuoteSvc wraps s in single quotes with embedded single quotes
+// escaped — safe to embed anywhere in a /bin/sh command line.
+func shellQuoteSvc(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
