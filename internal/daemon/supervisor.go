@@ -14,7 +14,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/claude"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
-	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/usage"
@@ -63,27 +62,18 @@ type supervisor struct {
 	// re-parsing when it's unchanged, so an idle track costs nothing.
 	lastUsageSig string
 
-	// services holds the dev-server processes started for this track
-	// (lazy, via `tracks up`), keyed by service name. The in-memory
-	// handle gives a clean Stop on shutdown; the authoritative teardown
-	// is always by the persisted process-group id. Guarded by svcMu.
-	svcMu    sync.Mutex
-	services map[string]*services.Process
-
-	// viewerPanes maps service name to the tmux pane ID of its log-viewer
-	// pane in the right column of the track window. Guarded by svcMu.
-	viewerPanes map[string]string
-	// lastViewerPane is the pane ID of the most recently created viewer pane.
-	// SplitPaneDown targets this ID so new panes stack below it in the right
-	// column rather than splitting a random pane (map iteration is unordered).
-	lastViewerPane string
-
-	// depsInstalled tracks which worktree paths have had their DepsCmd run.
-	// Because `tracks up` can be called before `pnpm install` (deps are
-	// deferred from worktree creation), the first service start for each
-	// repo triggers RunDepsOnly; subsequent starts skip it. Guarded by
-	// svcMu (same lock as services/viewerPanes).
-	depsInstalled map[string]bool
+	// servicePanes maps service name to the tmux pane ID running that dev
+	// server in the right column of the track window. The pane *owns* the
+	// process (see startServicePane); killing the pane is cosmetic, the
+	// authoritative teardown is the process-group kill by the persisted
+	// PGID. Guarded by svcMu.
+	svcMu        sync.Mutex
+	servicePanes map[string]string
+	// lastServicePane is the pane ID of the most recently created service
+	// pane. SplitPaneDown targets this ID so new panes stack below it in the
+	// right column rather than splitting a random pane (map iteration is
+	// unordered).
+	lastServicePane string
 }
 
 // waitingNotifyMinInterval is the shortest gap between two
@@ -778,44 +768,23 @@ func (sup *supervisor) Stop(sessionName string) {
 	if sup == nil {
 		return
 	}
-	sup.stopAllServices(5 * time.Second)
 	sup.terminateGroup(5 * time.Second)
 	_ = tmux.New().KillWindow(sessionName, sup.windowName)
 }
 
 // Kill ends a track with prejudice: SIGKILL the whole process group
 // at once (Claude dies before it can spawn any shutdown hook), wait
-// briefly for it to be reaped, then close the window. Dev servers are
-// killed immediately too.
+// briefly for it to be reaped, then close the window.
+//
+// Dev servers run in their own panes (separate process groups); they are
+// torn down by their persisted PGID at the Server level (endTrack /
+// stopAllSupervisors), and the window kill closes their panes.
 func (sup *supervisor) Kill(sessionName string) {
 	if sup == nil {
 		return
 	}
-	sup.stopAllServices(0)
 	killPGID(sup.pid)
 	_ = tmux.New().KillWindow(sessionName, sup.windowName)
-}
-
-// stopAllServices tears down every dev server this supervisor started,
-// in parallel, and clears the registry. A zero grace kills immediately.
-func (sup *supervisor) stopAllServices(grace time.Duration) {
-	sup.svcMu.Lock()
-	procs := make([]*services.Process, 0, len(sup.services))
-	for _, p := range sup.services {
-		procs = append(procs, p)
-	}
-	sup.services = nil
-	sup.svcMu.Unlock()
-
-	var wg sync.WaitGroup
-	for _, p := range procs {
-		wg.Add(1)
-		go func(pr *services.Process) {
-			defer wg.Done()
-			pr.Stop(grace)
-		}(p)
-	}
-	wg.Wait()
 }
 
 // terminateGroup SIGTERMs the pane's process group, waits up to grace
@@ -894,31 +863,28 @@ func (s *Server) stopAllSupervisors() {
 			// goroutine), keeping shutdown symmetric with endTrack.
 			sp.finish()
 			sp.Stop(s.config().Tmux.SessionName)
-			// The tracks stay in the store for the next daemon start to
-			// reconcile, so their service rows must not read "running"
-			// once their processes are gone.
-			s.markServicesStopped(sp.trackID)
+			// Dev servers run in their own panes/process groups, so they're
+			// not torn down by sp.Stop (which only kills Claude's group +
+			// window). Kill them by their persisted PGID and mark them
+			// stopped so the state file the next daemon start reconciles
+			// doesn't keep claiming a killed service is running.
+			s.teardownTrackServices(sp.trackID, true)
 		}(sup)
 	}
 	wg.Wait()
 }
 
-// markServicesStopped records every still-live service on the track as
-// stopped. Used on clean daemon shutdown, where sup.Stop's stopAllServices
-// kills the processes via their in-memory handles but leaves the persisted
-// status untouched — without this the state file would keep claiming a
-// killed service is running/ready.
-func (s *Server) markServicesStopped(trackID string) {
-	now := time.Now().UTC()
-	_, _, _ = s.store.Update(trackID, func(t *state.Track) bool {
-		changed := false
-		for i := range t.Services {
-			if t.Services[i].Status.Live() {
-				t.Services[i].Status = state.ServiceStopped
-				t.Services[i].ExitedAt = &now
-				changed = true
-			}
-		}
-		return changed
-	})
+// teardownTrackServices kills every still-live dev server on the track by its
+// persisted process-group id and records it stopped. This is the
+// state-driven teardown for pane-owned services (no in-memory handle exists):
+// used on clean daemon shutdown. force skips the SIGTERM grace. Without it the
+// state file the next daemon start reconciles would keep claiming a killed
+// service is running/ready.
+func (s *Server) teardownTrackServices(trackID string, force bool) {
+	t, ok := s.store.Get(trackID)
+	if !ok || len(t.Services) == 0 {
+		return
+	}
+	t.Services = stopPersistedServices(t.Services, force)
+	_ = s.store.Put(t)
 }

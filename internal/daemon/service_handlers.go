@@ -4,21 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/notify"
-	"github.com/bluegardenproject/tracks/internal/provision"
 	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 // handleServiceUp starts a named service (and its declared depends_on
-// dependencies) for a track, waits for readiness, opens log-viewer panes,
-// and fires a service_ready notification.
+// dependencies) for a track. Each service runs in its own tmux pane in the
+// track window and *owns* its process (see startServicePane); the call returns
+// as soon as the panes are opened — dependency install and the server come up
+// live in the pane, not behind a blocking wait. The stable-port proxy (if the
+// service declares proxy_port) is pointed at this track immediately.
 func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p ServiceUpParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -42,16 +41,12 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 
 	cfg := s.config()
 
-	// Build a map of all services available across this track's repos,
-	// so we can resolve depends_on and find worktree paths.
+	// Build a map of all services available across this track's repos, so we
+	// can resolve depends_on and find worktree paths + the deferred deps cmd.
 	type svcEntry struct {
 		svc      config.Service
 		worktree string
-		// provision fields for lazy dep installation (deferred from
-		// worktree creation). Empty when no provision config is set.
-		depsCmd       string
-		primaryPath   string
-		cacheStrategy string
+		depsCmd  string
 	}
 	allSvcs := make(map[string]svcEntry)
 	deps := make(map[string][]string)
@@ -62,21 +57,11 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 			continue
 		}
 		depsCmd := ""
-		primaryPath := ""
-		cacheStrategy := ""
 		if cfgRepo.Provision != nil {
 			depsCmd = cfgRepo.Provision.DepsCmd
-			cacheStrategy = cfgRepo.Provision.CacheStrategy
-			primaryPath, _ = cfgRepo.ResolveRepoPath()
 		}
 		for _, svc := range cfgRepo.Services {
-			allSvcs[svc.Name] = svcEntry{
-				svc:           svc,
-				worktree:      trackRepo.Path,
-				depsCmd:       depsCmd,
-				primaryPath:   primaryPath,
-				cacheStrategy: cacheStrategy,
-			}
+			allSvcs[svc.Name] = svcEntry{svc: svc, worktree: trackRepo.Path, depsCmd: depsCmd}
 			deps[svc.Name] = svc.DependsOn
 		}
 	}
@@ -91,21 +76,13 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		return fail("resolve service order: " + err.Error())
 	}
 
-	// Start each service in dependency order, skipping those already live.
+	// Open each service's pane in dependency order, skipping those already live.
 	for _, name := range order {
-		// Re-fetch for fresh service state after each iteration.
 		fresh, ok := s.store.Get(p.TrackID)
 		if !ok {
 			return fail("track disappeared mid-start")
 		}
-		alreadyLive := false
-		for _, ss := range fresh.Services {
-			if ss.Name == name && ss.Status.Live() {
-				alreadyLive = true
-				break
-			}
-		}
-		if alreadyLive {
+		if serviceLive(fresh.Services, name) {
 			if name == p.ServiceName {
 				emit(name + ": already running")
 			} else {
@@ -114,61 +91,26 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 			continue
 		}
 
-		entry, ok := allSvcs[name]
-		if !ok {
-			return fail(fmt.Sprintf("dependency %q not found in track repos", name))
-		}
-
+		entry := allSvcs[name]
 		if name == p.ServiceName {
 			emit("starting " + name + "…")
 		} else {
 			emit("starting dependency " + name + "…")
 		}
 
-		// Deps were deferred at worktree creation (SkipDepsCmd=true).
-		// Run them now, once per worktree, on the first service start.
-		// Mark before running to prevent a concurrent `tracks up` for
-		// another service in the same repo from double-installing;
-		// unmark on failure so a retry can try again.
-		if entry.depsCmd != "" {
-			sup.svcMu.Lock()
-			if sup.depsInstalled == nil {
-				sup.depsInstalled = make(map[string]bool)
-			}
-			alreadyInstalled := sup.depsInstalled[entry.worktree]
-			if !alreadyInstalled {
-				sup.depsInstalled[entry.worktree] = true
-			}
-			sup.svcMu.Unlock()
-			if !alreadyInstalled {
-				emit("installing deps (deferred from track creation)…")
-				if err := provision.RunDepsOnly(ctx, provision.Options{
-					WorktreePath:  entry.worktree,
-					DepsCmd:       entry.depsCmd,
-					PrimaryPath:   entry.primaryPath,
-					CacheStrategy: entry.cacheStrategy,
-				}, emit); err != nil {
-					sup.svcMu.Lock()
-					delete(sup.depsInstalled, entry.worktree)
-					sup.svcMu.Unlock()
-					return fail(fmt.Sprintf("deps for %s: %v", name, err))
-				}
-			}
-		}
-
-		st, err := s.startService(ctx, sup, fresh, entry.svc, entry.worktree)
+		st, err := s.startServicePane(sup, fresh, entry.svc, entry.worktree, entry.depsCmd)
 		if err != nil {
 			return fail(fmt.Sprintf("start %s: %v", name, err))
 		}
-
-		emit(fmt.Sprintf("%s ready on :%d", name, st.Port))
-		s.openViewerPane(cfg.Tmux.SessionName, sup, name, st.Port, st.LogPath)
+		emit(fmt.Sprintf("%s launched on :%d (installing deps + starting in its pane)", name, st.Port))
 	}
 
 	port := t.Ports[p.ServiceName]
 	logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
 
-	// Auto-switch the stable-port proxy to this track's service if configured.
+	// Point the stable-port proxy at this track's service now. The upstream
+	// 503s until the server actually binds the port, then self-heals — we no
+	// longer wait for readiness before switching.
 	s.mu.Lock()
 	mgr := s.proxyMgr
 	s.mu.Unlock()
@@ -187,13 +129,13 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		body = fmt.Sprintf("%s — stable: http://localhost:%d  track: http://localhost:%d",
 			p.ServiceName, proxyPort, port)
 	}
-	s.notifyEvent(string(notify.EventServiceReady), "tracks: service ready", body)
+	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started", body)
 
 	return ok(ServiceUpResult{Port: port, LogPath: logPath})
 }
 
 // handleServiceDown stops a single running service, running its pre_stop
-// hooks first, and closes the log-viewer pane.
+// hooks first, killing its process group, and closing its pane.
 func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p ServiceDownParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -239,21 +181,9 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 
 	emit("stopping " + p.ServiceName + "…")
 
-	s.mu.Lock()
-	sup := s.supervisors[p.TrackID]
-	s.mu.Unlock()
-
-	if sup != nil {
-		sup.svcMu.Lock()
-		proc := sup.services[p.ServiceName]
-		delete(sup.services, p.ServiceName)
-		sup.svcMu.Unlock()
-		if proc != nil {
-			proc.Stop(5 * time.Second)
-		} else if svcState.PGID > 0 {
-			terminatePGID(svcState.PGID, 5*time.Second)
-		}
-	} else if svcState.PGID > 0 {
+	// The pane owns the process; the persisted PGID (= pane pid, the group
+	// leader) is the authoritative teardown handle.
+	if svcState.PGID > 0 {
 		terminatePGID(svcState.PGID, 5*time.Second)
 	}
 
@@ -269,8 +199,11 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 		return false
 	})
 
+	s.mu.Lock()
+	sup := s.supervisors[p.TrackID]
+	s.mu.Unlock()
 	if sup != nil {
-		s.closeViewerPane(sup, p.ServiceName)
+		s.closeServerPane(sup, p.ServiceName)
 	}
 
 	// Clear the stable-port proxy upstream for this service.
@@ -303,59 +236,12 @@ func (s *Server) handleServices(raw json.RawMessage) Response {
 	})
 }
 
-// openViewerPane opens a tail-f pane for the service's log file in the right
-// column of the track's tmux window. The first service splits the window right
-// (35%); each subsequent service stacks below the previous one. Viewer pane
-// failures are logged but never fatal — the service process already runs.
-func (s *Server) openViewerPane(session string, sup *supervisor, svcName string, port int, logPath string) {
-	tm := tmux.New()
-	title := fmt.Sprintf("%s:%d", svcName, port)
-
-	// tail -n 100: show the last 100 lines first so there's context when
-	// the pane opens, then follow new output.
-	quotedPath := "'" + strings.ReplaceAll(logPath, "'", "'\\''") + "'"
-	cmd := "tail -n 100 -F " + quotedPath
-
-	sup.svcMu.Lock()
-	defer sup.svcMu.Unlock()
-
-	if sup.viewerPanes == nil {
-		sup.viewerPanes = make(map[string]string)
+// serviceLive reports whether the named service is in a live state in svcs.
+func serviceLive(svcs []state.ServiceState, name string) bool {
+	for _, ss := range svcs {
+		if ss.Name == name && ss.Status.Live() {
+			return true
+		}
 	}
-
-	var paneID string
-	var err error
-
-	if len(sup.viewerPanes) == 0 {
-		// First service — split the track window horizontally.
-		paneID, err = tm.SplitWindowRight(session, sup.windowName, cmd, 35)
-	} else {
-		// Subsequent services — stack below the most recently created pane.
-		// lastViewerPane tracks this explicitly so we don't rely on
-		// non-deterministic map iteration order.
-		paneID, err = tm.SplitPaneDown(sup.lastViewerPane, cmd)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tracks: open viewer pane for %s: %v\n", svcName, err)
-		return
-	}
-
-	_ = tm.SetPaneTitle(paneID, title)
-	sup.viewerPanes[svcName] = paneID
-	sup.lastViewerPane = paneID
-}
-
-// closeViewerPane kills the log-viewer pane for the named service.
-func (s *Server) closeViewerPane(sup *supervisor, svcName string) {
-	sup.svcMu.Lock()
-	defer sup.svcMu.Unlock()
-	if sup.viewerPanes == nil {
-		return
-	}
-	paneID, ok := sup.viewerPanes[svcName]
-	if !ok {
-		return
-	}
-	delete(sup.viewerPanes, svcName)
-	_ = tmux.New().KillPane(paneID)
+	return false
 }

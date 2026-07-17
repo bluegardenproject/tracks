@@ -529,11 +529,11 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	t, _ = s.store.Get(p.ID)
 
 	// Tear down any dev servers before the worktree is removed so they
-	// release files and ports first. When a supervisor was alive the
-	// Stop/Kill above already stopped them via the in-memory handles;
-	// this is the authoritative, state-driven backstop (it also covers a
-	// track that finished on its own, leaving services with no live
-	// supervisor handle). Idempotent: already-dead groups just ESRCH.
+	// release files and ports first. Dev servers run in their own panes
+	// (separate process groups), so sup.Stop/Kill above did NOT touch them
+	// — this state-driven kill by persisted PGID is their teardown, and it
+	// also covers a track that finished on its own with no live supervisor.
+	// Idempotent: already-dead groups just ESRCH.
 	if len(t.Services) > 0 {
 		emit("stopping dev servers...")
 		t.Services = stopPersistedServices(t.Services, force)

@@ -255,43 +255,58 @@ func (Client) CapturePane(session, window string) (string, error) {
 }
 
 // SplitWindowRight opens a right-hand vertical split in the named window,
-// running command in it, and returns the new pane's ID (e.g. "%42"). The
-// pane occupies percent% of the window width. The right-column log viewer
-// for dev-server services is built on top of this.
-func (Client) SplitWindowRight(session, window, command string, percent int) (string, error) {
+// running command in it (from startDir when non-empty), and returns the new
+// pane's ID (e.g. "%42") and the pid of the pane's process. The pane occupies
+// percent% of the window width. Dev-server panes are built on top of this: the
+// pane_pid is the group leader (tmux setsid's each pane), so it doubles as the
+// PGID we tear the server's process tree down with.
+func (Client) SplitWindowRight(session, window, command, startDir string, percent int) (paneID string, panePID int, err error) {
 	target := session + ":" + window
 	args := []string{
 		"split-window", "-h",
 		"-p", fmt.Sprintf("%d", percent),
 		"-t", target,
-		"-P", "-F", "#{pane_id}",
-		command,
 	}
-	cmd := exec.Command("tmux", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("tmux split-window -h: %w: %s", err, strings.TrimSpace(string(out)))
+	if startDir != "" {
+		args = append(args, "-c", startDir)
 	}
-	return strings.TrimSpace(string(out)), nil
+	args = append(args, "-P", "-F", "#{pane_id} #{pane_pid}", command)
+	return runSplit(args, "-h")
 }
 
 // SplitPaneDown opens a horizontal split below the pane identified by
-// paneID (a string like "%42"), running command in the new pane, and
-// returns the new pane's ID. Used to stack additional service log
-// viewers below the first one in the right column.
-func (Client) SplitPaneDown(paneID, command string) (string, error) {
+// paneID (a string like "%42"), running command in the new pane (from
+// startDir when non-empty), and returns the new pane's ID and its pid.
+// Used to stack additional service panes below the first one in the right
+// column.
+func (Client) SplitPaneDown(paneID, command, startDir string) (newPaneID string, panePID int, err error) {
 	args := []string{
 		"split-window", "-v",
 		"-t", paneID,
-		"-P", "-F", "#{pane_id}",
-		command,
 	}
-	cmd := exec.Command("tmux", args...)
-	out, err := cmd.CombinedOutput()
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	args = append(args, "-P", "-F", "#{pane_id} #{pane_pid}", command)
+	return runSplit(args, "-v")
+}
+
+// runSplit executes a `tmux split-window` argv whose format is
+// "#{pane_id} #{pane_pid}" and parses both back out. dir is only used to
+// label the error.
+func runSplit(args []string, dir string) (paneID string, panePID int, err error) {
+	out, err := exec.Command("tmux", args...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("tmux split-window -v: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", 0, fmt.Errorf("tmux split-window %s: %w: %s", dir, err, strings.TrimSpace(string(out)))
 	}
-	return strings.TrimSpace(string(out)), nil
+	fields := strings.Fields(strings.TrimSpace(string(out)))
+	if len(fields) != 2 {
+		return "", 0, fmt.Errorf("tmux split-window %s: could not parse pane id/pid from %q", dir, string(out))
+	}
+	if _, scanErr := fmt.Sscanf(fields[1], "%d", &panePID); scanErr != nil || panePID <= 0 {
+		return "", 0, fmt.Errorf("tmux split-window %s: could not parse pane pid from %q", dir, string(out))
+	}
+	return fields[0], panePID, nil
 }
 
 // KillPane closes a single pane by ID. No-op when the pane doesn't exist.
