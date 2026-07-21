@@ -257,7 +257,8 @@ type PruneCompletedResult struct {
 	Removed int `json:"removed"`
 }
 
-// ServiceUpParams is the payload for MethodServiceUp.
+// ServiceUpParams is the payload for MethodServiceUp. An empty ServiceName
+// means "start every service configured across the track's repos".
 type ServiceUpParams struct {
 	TrackID     string `json:"track_id"`
 	ServiceName string `json:"service_name"`

@@ -74,16 +74,19 @@ func init() {
 
 	// tracks up <service> [--track <id>]
 	upCmd := &cobra.Command{
-		Use:   "up <service>",
-		Short: "start a dev-server service for a track (and its dependencies)",
-		Args:  cobra.ExactArgs(1),
+		Use:   "up [service]",
+		Short: "start a dev-server service for a track (omit the name to start all of them)",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			trackID, _ := c.Flags().GetString("track")
 			id, err := resolveTrackID(trackID, "tracks up")
 			if err != nil {
 				return err
 			}
-			svcName := args[0]
+			svcName := ""
+			if len(args) == 1 {
+				svcName = args[0]
+			}
 			cfg, err := config.Load()
 			if err != nil {
 				return err
@@ -94,6 +97,11 @@ func init() {
 			})
 			if err != nil {
 				return fmt.Errorf("daemon: %w", err)
+			}
+			if svcName == "" {
+				fmt.Println("services launching in their panes — deps install + server start run there; not confirmed up yet")
+				fmt.Println("run `tracks services` to see status and log paths, and tail a log to confirm readiness")
+				return nil
 			}
 			fmt.Printf("%s launching in a pane on :%d — deps install + server start run there; not confirmed up yet\n", svcName, result.Port)
 			fmt.Printf("tail this log to confirm it actually came up: %s\n", result.LogPath)
