@@ -50,6 +50,12 @@ type SpawnOptions struct {
 	// scripts can find the daemon.
 	SocketDir string
 
+	// BinDir, when set, is prepended to PATH in the pane so a bare
+	// `tracks` resolves even when the binary isn't on the login-shell
+	// PATH (e.g. a from-source `./tracks` build). Set to the directory
+	// of the running daemon binary. Empty leaves PATH untouched.
+	BinDir string
+
 	// SessionID pins Claude's session UUID. In a normal spawn it is
 	// passed as --session-id; when Resume=true it is passed as the
 	// argument to --resume instead (no separate --session-id flag).
@@ -113,7 +119,7 @@ const taskSuffix = "" +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
 	"**Dev-server services.** When the user asks you to start (or run, " +
 	"boot, spin up) the dev server, do NOT run `pnpm dev` / `npm " +
-	"start` / `pnpm install` yourself. Run `tracks up <name>` instead: " +
+	"start` / `pnpm install` yourself, and never background a server process (`… &` / `nohup`). Run `tracks up <name>` instead: " +
 	"it opens a dedicated pane in this track and runs the configured " +
 	"start steps there (dependency install first, then the server) so " +
 	"the process is visible and does not block you. It returns " +
@@ -130,7 +136,7 @@ const taskSuffix = "" +
 	"  - `tracks url <name>` prints the URL (stable proxy + track port)\n\n" +
 	"To confirm the server came up, tail/cat the log path from `tracks " +
 	"services` (the pane also tees its output there); do not assume " +
-	"success just because `tracks up` returned.\n\n" +
+	"success just because `tracks up` returned. If `tracks up` itself errors (command not found, daemon unreachable, unknown service, any non-zero exit), STOP and report the exact error to the user — do not fall back to starting the server yourself.\n\n" +
 	"**Jira sync** (only if your task prompt references a Jira-style " +
 	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +
 	"  1. At the start, use `Bash` to read `git config user.email`. " +
@@ -317,6 +323,11 @@ func (o SpawnOptions) ShellCommand() string {
 
 	envPrefix := "TRACKS_ID=" + shellQuote(o.TrackID) +
 		" TRACKS_SOCKET_DIR=" + shellQuote(o.SocketDir)
+	if o.BinDir != "" {
+		// Prepend so a bare `tracks` resolves. $PATH is expanded by the
+		// outer shell that runs this line.
+		envPrefix += " PATH=" + shellQuote(o.BinDir) + `:"$PATH"`
+	}
 
 	// Outer sh -c "..." wrapper. We deliberately use sh (not bash)
 	// for the outer because /bin/sh is the only shell tmux relies

@@ -17,6 +17,30 @@ func baseTrack(kind state.Kind) state.Track {
 	}
 }
 
+func TestShellCommandInjectsSocketDirAndBinDirOnPath(t *testing.T) {
+	o := SpawnOptions{
+		CLIBinary: "claude",
+		TrackID:   "tid",
+		SocketDir: "/sock/dir",
+		BinDir:    "/opt/tracks/bin",
+	}
+	cmd := o.ShellCommand()
+	if !strings.Contains(cmd, "TRACKS_SOCKET_DIR=") || !strings.Contains(cmd, "/sock/dir") {
+		t.Errorf("expected TRACKS_SOCKET_DIR in command, got: %s", cmd)
+	}
+	if !strings.Contains(cmd, `PATH=`) || !strings.Contains(cmd, "/opt/tracks/bin") || !strings.Contains(cmd, `:"$PATH"`) {
+		t.Errorf("expected BinDir prepended to PATH, got: %s", cmd)
+	}
+}
+
+func TestShellCommandOmitsPathWhenNoBinDir(t *testing.T) {
+	o := SpawnOptions{CLIBinary: "claude", TrackID: "tid", SocketDir: "/sock/dir"}
+	cmd := o.ShellCommand()
+	if strings.Contains(cmd, "PATH=") {
+		t.Errorf("PATH should not be set when BinDir is empty, got: %s", cmd)
+	}
+}
+
 func TestBuildOptionsWorkUsesConfiguredMode(t *testing.T) {
 	cfg := config.Default()
 	cfg.Claude.PermissionMode = "acceptEdits"
