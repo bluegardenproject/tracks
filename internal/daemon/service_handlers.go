@@ -120,6 +120,8 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 			if err := mgr.Switch(p.ServiceName, port); err == nil {
 				proxyPort = entry.PublicPort
 				emit(fmt.Sprintf("proxy :%d → localhost:%d", proxyPort, port))
+			} else {
+				emit(fmt.Sprintf("proxy :%d unavailable (%v) — use the track port http://localhost:%d directly", entry.PublicPort, err, port))
 			}
 		}
 	}

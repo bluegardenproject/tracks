@@ -274,7 +274,9 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 - ~~**Stable-port proxy / dev-server switchboard**~~ — **Shipped** in this PR.
   `proxy_port:` on a service config; `tracks proxy` / `tracks proxy switch`;
   auto-wired on `tracks up/down`. WebSocket-friendly (FlushInterval -1).
-  State persisted in `proxy.json` — survives daemon restart.
+  Ports bind lazily — claimed on `tracks up`, released on `tracks down` — so
+  an idle daemon never squats a well-known port (e.g. Metro's 8081) that a
+  manual dev server wants.
 
 ---
 
@@ -315,7 +317,9 @@ Move completed items here with a date, then delete once the dust settles.
   `tracks up/down/services/url` CLI; tmux log-viewer panes (right 35% column);
   `service_ready` notification; stable-port reverse proxy (`proxy_port:` in
   service config, `tracks proxy` / `tracks proxy switch`); auto-switch on up/down;
-  WebSocket-friendly (HMR works through proxy); `proxy.json` persistence.
+  WebSocket-friendly (HMR works through proxy); ports bind lazily on
+  `tracks up` and release on `tracks down` so an idle daemon never squats a
+  well-known port (e.g. Metro's 8081).
   `internal/proxy`, `internal/daemon/service_handlers.go`,
   `internal/daemon/proxy_handlers.go`, `cmd/services.go`. (`3417537`, this PR)
 
