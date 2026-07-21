@@ -245,6 +245,7 @@ func TestResolveStateDirHomeExpansion(t *testing.T) {
 
 func TestResolveSocketDirXDGRuntime(t *testing.T) {
 	c := Default()
+	t.Setenv("TRACKS_SOCKET_DIR", "")
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	got, err := c.ResolveSocketDir()
 	if err != nil {
@@ -257,6 +258,7 @@ func TestResolveSocketDirXDGRuntime(t *testing.T) {
 
 func TestResolveSocketDirTMPDIRFallback(t *testing.T) {
 	c := Default()
+	t.Setenv("TRACKS_SOCKET_DIR", "")
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	t.Setenv("TMPDIR", "/tmp")
 	got, err := c.ResolveSocketDir()
@@ -265,6 +267,37 @@ func TestResolveSocketDirTMPDIRFallback(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, "/tmp/tracks-") {
 		t.Errorf("got %q, want /tmp/tracks-<uid>", got)
+	}
+}
+
+// TRACKS_SOCKET_DIR is how a track's Claude pane is told where the daemon
+// actually bound its socket; it must win over the XDG/TMPDIR heuristics.
+func TestResolveSocketDirEnvVarWinsOverHeuristics(t *testing.T) {
+	c := Default()
+	t.Setenv("TRACKS_SOCKET_DIR", "/daemon/real/sockdir")
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	t.Setenv("TMPDIR", "/tmp")
+	got, err := c.ResolveSocketDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "/daemon/real/sockdir" {
+		t.Errorf("got %q, want the TRACKS_SOCKET_DIR value", got)
+	}
+}
+
+// An explicit config override is more specific than the injected env var,
+// so it stays the top priority.
+func TestResolveSocketDirConfigOverrideWinsOverEnv(t *testing.T) {
+	c := Default()
+	c.Paths.SocketDir = "/config/override"
+	t.Setenv("TRACKS_SOCKET_DIR", "/daemon/real/sockdir")
+	got, err := c.ResolveSocketDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "/config/override" {
+		t.Errorf("got %q, want the config override", got)
 	}
 }
 

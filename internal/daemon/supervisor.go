@@ -97,6 +97,9 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	if err != nil {
 		return nil, err
 	}
+	if s.exePath != "" {
+		opts.BinDir = filepath.Dir(s.exePath)
+	}
 	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
 }
 
@@ -113,6 +116,9 @@ func (s *Server) startSupervisorResume(ctx context.Context, t state.Track) (*sup
 	opts, err := claude.BuildResumeOptions(s.config(), t, s.socketDir, sentinelPath)
 	if err != nil {
 		return nil, err
+	}
+	if s.exePath != "" {
+		opts.BinDir = filepath.Dir(s.exePath)
 	}
 	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
 }

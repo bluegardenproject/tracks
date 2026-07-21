@@ -95,8 +95,8 @@ func init() {
 			if err != nil {
 				return fmt.Errorf("daemon: %w", err)
 			}
-			fmt.Printf("%s is up — http://localhost:%d\n", svcName, result.Port)
-			fmt.Printf("log: %s\n", result.LogPath)
+			fmt.Printf("%s launching in a pane on :%d — deps install + server start run there; not confirmed up yet\n", svcName, result.Port)
+			fmt.Printf("tail this log to confirm it actually came up: %s\n", result.LogPath)
 			return nil
 		},
 	}

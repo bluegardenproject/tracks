@@ -583,11 +583,29 @@ func (c Config) ResolveStateDir() (string, error) {
 }
 
 // ResolveSocketDir returns the absolute socket dir to use. Honors the
-// config override; otherwise $XDG_RUNTIME_DIR/tracks on Linux,
-// $TMPDIR/tracks-<uid> on macOS or anywhere XDG_RUNTIME_DIR isn't set.
+// config override first; then the TRACKS_SOCKET_DIR env var; otherwise
+// $XDG_RUNTIME_DIR/tracks on Linux, $TMPDIR/tracks-<uid> on macOS or
+// anywhere XDG_RUNTIME_DIR isn't set.
+//
+// TRACKS_SOCKET_DIR is how a track's Claude pane finds the daemon: the
+// daemon exports the dir it actually bound into the pane env, and the CLI
+// honors it here. Without this, the CLI would recompute the dir from
+// $TMPDIR/$XDG_RUNTIME_DIR — which on macOS can differ between the
+// daemon's environment and a login shell's — and dial the wrong socket.
+//
+// This resolver serves both roles: "where to dial" (CLI) and "where to
+// bind" (daemon, via SocketPath at startup). Honoring the env var is safe
+// only because the var is injected per-pane (see spawn.go), never into the
+// tmux global env, and the daemon is started via `tmux run-shell -b` in the
+// server env — so the daemon never inherits a pane's value and binds by the
+// heuristic below. Do not launch the daemon from inside a track pane, or it
+// would bind to the injected dir instead of its own.
 func (c Config) ResolveSocketDir() (string, error) {
 	if c.Paths.SocketDir != "" {
 		return expandHome(c.Paths.SocketDir)
+	}
+	if env := os.Getenv("TRACKS_SOCKET_DIR"); env != "" {
+		return expandHome(env)
 	}
 	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
 		return filepath.Join(xdg, "tracks"), nil
