@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -66,12 +67,27 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		}
 	}
 
-	if _, ok := allSvcs[p.ServiceName]; !ok {
-		return fail(fmt.Sprintf("service %q not found in any repo of this track", p.ServiceName))
+	// Determine which services to start: a single named one, or — when the
+	// name is empty (`tracks up` with no arg) — every service configured
+	// across the track's repos.
+	var targets []string
+	if p.ServiceName == "" {
+		for name := range allSvcs {
+			targets = append(targets, name)
+		}
+		if len(targets) == 0 {
+			return fail("no services configured for any of this track's repos")
+		}
+		sort.Strings(targets)
+	} else {
+		if _, ok := allSvcs[p.ServiceName]; !ok {
+			return fail(fmt.Sprintf("service %q not found in any repo of this track", p.ServiceName))
+		}
+		targets = []string{p.ServiceName}
 	}
 
 	// Resolve full start order including dependencies.
-	order, err := services.StartOrder([]string{p.ServiceName}, deps)
+	order, err := services.StartOrder(targets, deps)
 	if err != nil {
 		return fail("resolve service order: " + err.Error())
 	}
@@ -83,20 +99,12 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 			return fail("track disappeared mid-start")
 		}
 		if serviceLive(fresh.Services, name) {
-			if name == p.ServiceName {
-				emit(name + ": already running")
-			} else {
-				emit("dependency " + name + ": already running, skipping")
-			}
+			emit(name + ": already running")
 			continue
 		}
 
 		entry := allSvcs[name]
-		if name == p.ServiceName {
-			emit("starting " + name + "…")
-		} else {
-			emit("starting dependency " + name + "…")
-		}
+		emit("starting " + name + "…")
 
 		st, err := s.startServicePane(sup, fresh, entry.svc, entry.worktree, entry.depsCmd)
 		if err != nil {
@@ -105,35 +113,49 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		emit(fmt.Sprintf("%s launched on :%d (installing deps + starting in its pane)", name, st.Port))
 	}
 
-	port := t.Ports[p.ServiceName]
-	logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
-
-	// Point the stable-port proxy at this track's service now. The upstream
-	// 503s until the server actually binds the port, then self-heals — we no
-	// longer wait for readiness before switching.
+	// Point each explicitly-requested service's stable proxy at this track.
+	// We switch only the targets, not their pulled-in dependencies: a bare
+	// `tracks up dep-having-service` should not silently hijack a
+	// dependency's stable port from another track that is serving it. For
+	// start-all, targets is every service, so all proxies get switched. The
+	// upstream 503s until the server binds, then self-heals.
 	s.mu.Lock()
 	mgr := s.proxyMgr
 	s.mu.Unlock()
-	proxyPort := 0
 	if mgr != nil {
-		if entry := mgr.Entry(p.ServiceName); entry != nil {
-			if err := mgr.Switch(p.ServiceName, port); err == nil {
-				proxyPort = entry.PublicPort
-				emit(fmt.Sprintf("proxy :%d → localhost:%d", proxyPort, port))
+		for _, name := range targets {
+			entry := mgr.Entry(name)
+			if entry == nil {
+				continue
+			}
+			port := t.Ports[name]
+			if err := mgr.Switch(name, port); err == nil {
+				emit(fmt.Sprintf("proxy :%d → %s (localhost:%d)", entry.PublicPort, name, port))
 			} else {
 				emit(fmt.Sprintf("proxy :%d unavailable (%v) — use the track port http://localhost:%d directly", entry.PublicPort, err, port))
 			}
 		}
 	}
 
-	body := fmt.Sprintf("%s — http://localhost:%d", p.ServiceName, port)
-	if proxyPort > 0 {
-		body = fmt.Sprintf("%s — stable: http://localhost:%d  track: http://localhost:%d",
-			p.ServiceName, proxyPort, port)
+	// Single-service call: notify with its URL and return its port/log so the
+	// CLI can print them. Start-all: a brief notification, no single port.
+	if p.ServiceName != "" {
+		port := t.Ports[p.ServiceName]
+		body := fmt.Sprintf("%s — http://localhost:%d", p.ServiceName, port)
+		if mgr != nil {
+			if e := mgr.Entry(p.ServiceName); e != nil && e.Upstream() != "" {
+				body = fmt.Sprintf("%s — stable: http://localhost:%d  track: http://localhost:%d",
+					p.ServiceName, e.PublicPort, port)
+			}
+		}
+		s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started", body)
+		logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
+		return ok(ServiceUpResult{Port: port, LogPath: logPath})
 	}
-	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started", body)
 
-	return ok(ServiceUpResult{Port: port, LogPath: logPath})
+	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev servers started",
+		fmt.Sprintf("%d service(s) launching in their panes", len(order)))
+	return ok(ServiceUpResult{})
 }
 
 // handleServiceDown stops a single running service, running its pre_stop

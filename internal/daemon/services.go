@@ -119,7 +119,7 @@ func buildServiceScript(env map[string]string, steps []string, serverCmd, logPat
 
 // openServerPane opens the service's pane in the right column of the track
 // window and returns the pid of the pane's process (the group leader). The
-// first service splits the window right (35%); each subsequent service stacks
+// first service splits the window right (30%); each subsequent service stacks
 // below the previous one. The pane runs from worktree so relative paths in the
 // command resolve there.
 func (s *Server) openServerPane(sup *supervisor, svcName string, port int, command, worktree string) (panePID int, err error) {
@@ -134,7 +134,7 @@ func (s *Server) openServerPane(sup *supervisor, svcName string, port int, comma
 
 	var paneID string
 	if len(sup.servicePanes) == 0 {
-		paneID, panePID, err = tm.SplitWindowRight(session, sup.windowName, command, worktree, 35)
+		paneID, panePID, err = tm.SplitWindowRight(session, sup.windowName, command, worktree, 30)
 	} else {
 		paneID, panePID, err = tm.SplitPaneDown(sup.lastServicePane, command, worktree)
 	}

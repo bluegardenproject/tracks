@@ -40,7 +40,13 @@ apps, and autonomous mobile testing via Argent.
       **Shipped:** config, ports, supervisor, readiness, hooks, group-kill
       teardown (PRs #14–#17), then CLI control surface + tmux viewer panes +
       service_ready notification + stable-port reverse proxy (this PR).
-      `tracks up/down/services/url/proxy` are all working.
+      `tracks up/down/services/url/proxy` are all working. Follow-ups:
+      reliable trigger (CLI honors `TRACKS_SOCKET_DIR`; `tracks` on the pane
+      PATH; no silent `pnpm dev` fallback); `tracks up` with no arg starts
+      all of a track's servers; a live **Proxy dashboard tab** (Tab) to see
+      running servers, link them to fixed ports, and free ports — plus
+      dashboard-driven start (`u`) so booting a server no longer depends on
+      Claude.
 - [ ] **v1b** — mobile manual (Metro + simulator boot, hand off to human).
 - [ ] **v1c** — autonomous mobile smoke-test via Argent (isolation + MCP
       injection + task-suffix). *Next: run the Argent spike.*

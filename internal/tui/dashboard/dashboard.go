@@ -112,6 +112,14 @@ func Run(cfg config.Config) error {
 	return err
 }
 
+// viewMode selects which tab the dashboard is showing.
+type viewMode int
+
+const (
+	modeTracks viewMode = iota // the track list (default)
+	modeProxy                  // the stable-port proxy + running-servers view
+)
+
 // model is the bubbletea Model.
 type model struct {
 	cfg      config.Config
@@ -125,6 +133,13 @@ type model struct {
 	height   int
 	err      error
 	lastPoll time.Time
+
+	// mode is the active tab; toggled with Tab.
+	mode viewMode
+	// proxies is the last-polled stable-port proxy status, shown in the
+	// Proxy tab. proxyCursor is the selected running-server row there.
+	proxies     []daemon.ProxyEntryStatus
+	proxyCursor int
 
 	// detail is the lazily-refreshed extra info shown below the
 	// table for whatever row the cursor's on. Refreshed every
@@ -153,6 +168,7 @@ type tickMsg time.Time
 type pollResult struct {
 	tracks  []state.Track
 	prompts []daemon.PendingPrompt
+	proxies []daemon.ProxyEntryStatus
 	err     error
 }
 
@@ -204,13 +220,11 @@ func (m *model) poll() tea.Cmd {
 		if err != nil {
 			return pollResult{err: err}
 		}
-		prompts, err := cl.PendingPrompts()
-		if err != nil {
-			// Pending prompts is best-effort; don't fail the whole
-			// poll on its error.
-			return pollResult{tracks: tracks}
-		}
-		return pollResult{tracks: tracks, prompts: prompts}
+		// Prompts and proxy status are best-effort; a failure in either
+		// must not blank the whole dashboard.
+		prompts, _ := cl.PendingPrompts()
+		ps, _ := cl.ProxyStatus()
+		return pollResult{tracks: tracks, prompts: prompts, proxies: ps.Proxies}
 	}
 }
 
@@ -238,12 +252,52 @@ func (m *model) launchTrack(id string) tea.Cmd {
 	}
 }
 
+// serversResult reports the outcome of a start-all / stop dev-server action.
+type serversResult struct {
+	verb string // "start" or "stop", for the status message
+	err  error
+}
+
+// startServers boots every configured dev server for a track (the daemon
+// opens one pane per service). Runs async because deps install + boot can
+// take a moment; progress shows in the panes, not here.
+func (m *model) startServers(id string) tea.Cmd {
+	cfg := m.cfg
+	return func() tea.Msg {
+		cl := daemon.NewClient(cfg)
+		_, err := cl.ServiceUpWithProgress(id, "", nil)
+		return serversResult{verb: "start", err: err}
+	}
+}
+
+// stopServer stops one running dev server (runs its pre_stop hooks first).
+func (m *model) stopServer(trackID, service string) tea.Cmd {
+	cfg := m.cfg
+	return func() tea.Msg {
+		cl := daemon.NewClient(cfg)
+		err := cl.ServiceDownWithProgress(trackID, service, nil)
+		return serversResult{verb: "stop", err: err}
+	}
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		// Tab toggles between the Tracks and Proxy views regardless of mode.
+		if msg.String() == "tab" {
+			if m.mode == modeTracks {
+				m.mode = modeProxy
+			} else {
+				m.mode = modeTracks
+			}
+			return m, nil
+		}
+		if m.mode == modeProxy {
+			return m.updateProxy(msg)
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -320,6 +374,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.poll()
 				}
 			}
+		case "u":
+			// Start all of the highlighted track's dev servers, daemon-side
+			// (no Claude involved). The daemon opens one pane per service.
+			if len(m.tracks) > 0 {
+				t := m.tracks[m.cursor]
+				if t.Status.IsTerminal() {
+					m.statusMsg = "track is finished — can't start its servers"
+				} else {
+					m.statusMsg = "starting servers for " + shortID(t.ID) + "…"
+					return m, m.startServers(t.ID)
+				}
+			}
 		case "r":
 			return m, m.poll()
 		case "R":
@@ -361,6 +427,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.tracks = msg.tracks
 			m.prompts = msg.prompts
+			m.proxies = msg.proxies
 			if selID != "" {
 				for i, t := range m.tracks {
 					if t.ID == selID {
@@ -389,6 +456,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "launch failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
+		}
+		return m, m.poll()
+	case serversResult:
+		if msg.err != nil {
+			m.statusMsg = msg.verb + " servers failed: " + msg.err.Error()
+		} else {
+			m.statusMsg = ""
 		}
 		return m, m.poll()
 	}
@@ -427,6 +501,9 @@ func min(a, b int) int {
 // so every section is budgeted against m.height and the result is
 // hard-clamped in both dimensions as a final safety net.
 func (m *model) View() string {
+	if m.mode == modeProxy {
+		return m.viewProxy()
+	}
 	width := m.width
 	budget := m.height
 	// Before the first WindowSizeMsg (or in a degenerate size) we don't
@@ -455,8 +532,8 @@ func (m *model) View() string {
 	// --- footer (fixed) ---
 	footerLines := []string{
 		"",
-		m.styles.dim.Render("↑/↓ select   enter attach   d end   K kill   x forget   X clear completed   y/n approve"),
-		m.styles.dim.Render("r refresh   R resume   L launch draft   q quit   (open menu from any window with <prefix>+t)"),
+		m.styles.dim.Render("↑/↓ select   enter attach   u start servers   d end   K kill   x forget   X clear completed   y/n approve"),
+		m.styles.dim.Render("tab proxy   r refresh   R resume   L launch draft   q quit   (open menu from any window with <prefix>+t)"),
 	}
 
 	// --- detail panel (below footer), height-capped ---

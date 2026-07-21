@@ -130,7 +130,7 @@ const taskSuffix = "" +
 	"and log path. Run this first to find the service name (if it " +
 	"prints nothing, this repo has no dev server configured; tell the " +
 	"user and stop).\n" +
-	"  - `tracks up <name>` opens a pane and starts the service (its " +
+	"  - `tracks up` (no arg) starts ALL the track's services, each in its own pane — use this when asked to run the dev servers; `tracks up <name>` starts just one (its " +
 	"depends_on services first)\n" +
 	"  - `tracks down <name>` stops a running service\n" +
 	"  - `tracks url <name>` prints the URL (stable proxy + track port)\n\n" +
