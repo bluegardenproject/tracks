@@ -23,7 +23,7 @@ import (
 // Release Please bumps this on every release via the `extra-files`
 // entry in release-please-config.json, so the in-tree default also
 // matches the latest tagged release between rebuilds.
-var Version = "0.3.0" // x-release-please-version
+var Version = "0.3.1" // x-release-please-version
 
 // BuildTime is the UTC timestamp the binary was built at, set via:
 //
