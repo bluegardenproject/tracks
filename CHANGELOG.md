@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/bluegardenproject/tracks/compare/v0.3.0...v0.3.1) (2026-07-21)
+
+
+### Miscellaneous
+
+* **main:** release 0.3.0 ([5cabeba](https://github.com/bluegardenproject/tracks/commit/5cabebaf50d614507f7095769d50c7a9e4635943))
+
 ## [0.3.0](https://github.com/bluegardenproject/tracks/compare/v0.2.0...v0.3.0) (2026-07-21)
 
 
