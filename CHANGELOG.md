@@ -8,6 +8,7 @@
 * **claude:** add response-style and code-comment guidance to task prompt ([3022ceb](https://github.com/bluegardenproject/tracks/commit/3022ceb10d01fe905923360b45ab59db4ab6aa68))
 * save a failed track creation as a draft ([793a777](https://github.com/bluegardenproject/tracks/commit/793a7771e7112b9b74c1696fc24dc46f284ff49d))
 * **services:** run dev servers in a pane that owns the process ([466e05d](https://github.com/bluegardenproject/tracks/commit/466e05d58f9fc3eda5ad46b52f5ced8a92c2d611))
+* **services:** start-all `tracks up` + live Proxy dashboard tab ([459281a](https://github.com/bluegardenproject/tracks/commit/459281aba51d4ddbea8555c9ca275a38b7de2cd1))
 
 
 ### Bug Fixes
