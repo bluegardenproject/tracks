@@ -264,28 +264,22 @@ func (s *Server) Start(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, "tracks daemon: install global helpers: %v\n", err)
 	}
 
-	// Initialize and start the stable-port proxy manager. Register all
-	// services with a proxy_port from the current config, then bind.
-	// Failures are non-fatal: the proxy is a convenience layer and a bind
-	// error (e.g. port in use) should not prevent the daemon from serving.
-	if stateDir, err := s.config().ResolveStateDir(); err == nil {
-		mgr := proxy.NewManager(stateDir)
-		for _, repo := range s.config().Repos {
-			for _, svc := range repo.Services {
-				if svc.ProxyPort > 0 {
-					mgr.Register(svc.Name, svc.ProxyPort)
-				}
+	// Register the stable-port proxy manager. Every service with a
+	// proxy_port is registered, but no port is bound now: listeners are
+	// claimed lazily on the first `tracks up` (Switch) and released on
+	// `tracks down` (Clear). This keeps an idle daemon off well-known
+	// ports like Metro's 8081 so a manual dev server can bind them.
+	mgr := proxy.NewManager()
+	for _, repo := range s.config().Repos {
+		for _, svc := range repo.Services {
+			if svc.ProxyPort > 0 {
+				mgr.Register(svc.Name, svc.ProxyPort)
 			}
 		}
-		if startErr := mgr.Start(); startErr != nil {
-			fmt.Fprintf(os.Stderr, "tracks daemon: proxy start: %v\n", startErr)
-			mgr.Stop() // clean up any entries that did bind before the failure
-		} else {
-			s.mu.Lock()
-			s.proxyMgr = mgr
-			s.mu.Unlock()
-		}
 	}
+	s.mu.Lock()
+	s.proxyMgr = mgr
+	s.mu.Unlock()
 
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
 	s.mu.Lock()
