@@ -82,8 +82,11 @@ type SpawnOptions struct {
 //
 //  1. Make sure Claude knows it's running interactively (don't
 //     treat every task as one-shot).
-//  2. Mandate a code-review gate before any push / PR — the
-//     review uses whatever conventions the repo documents.
+//  2. Mandate a code-review gate before any push / PR when the
+//     diff contains code — the review uses whatever conventions
+//     the repo documents. Docs- and agent-config-only diffs skip
+//     it: there is nothing for a code reviewer to find, and the
+//     round-trip is pure latency.
 //  3. Surface the TRACKS_PR_URL marker contract so the dashboard
 //     can detect PR creation — phrased as a side-channel, not a
 //     finish signal.
@@ -101,8 +104,18 @@ const taskSuffix = "" +
 	"pane at any time to reply. Stay engaged: if the task naturally " +
 	"ends with a question or a confirmation, ask it and wait — do " +
 	"NOT wrap up the session just to acknowledge completion.\n\n" +
-	"**Mandatory pre-push review.** Before you run `git push` or " +
-	"open a pull request:\n" +
+	"**Mandatory pre-push review (code changes only).** Before you " +
+	"run `git push` or open a pull request, check what the branch " +
+	"actually changes with `git diff --name-only <base>...HEAD`:\n" +
+	"  - If every changed path is documentation or agent " +
+	"configuration — `*.md`, `*.mdx`, `*.txt`, `docs/**`, " +
+	"`.claude/**`, `AGENTS.md`, `CLAUDE.md`, `LICENSE` — skip the " +
+	"review and push. Say in one line that you skipped it because " +
+	"the diff is docs-only.\n" +
+	"  - Otherwise (any source, config, test, schema, lockfile, " +
+	"build or CI change, including a diff that mixes those with " +
+	"docs) the review below is mandatory. When in doubt, review.\n\n" +
+	"The review:\n" +
 	"  1. Invoke the dedicated review subagent via the Task tool:\n" +
 	"     `Task({ subagent_type: \"tracks-reviewer\", prompt: " +
 	"\"Review my changes in this worktree before push.\" })`\n" +
