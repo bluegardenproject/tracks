@@ -162,6 +162,22 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 			out = append(out, errStyle.Render(line))
 		}
 	}
+	// An interrupted track wasn't a failure — say what happened and how to
+	// pick it back up, in its own (non-red) styling.
+	if t.Status == state.StatusInterrupted {
+		intStyle := m.styles.status[state.StatusInterrupted]
+		out = append(out, "", m.styles.sectionHdr.Render("INTERRUPTED"))
+		if t.ErrorMsg != "" {
+			for _, line := range wrapInfoText(t.ErrorMsg, w) {
+				out = append(out, intStyle.Render(line))
+			}
+		}
+		if t.Resumable() {
+			out = append(out, m.styles.dim.Render("press R to reopen it where it left off"))
+		} else {
+			out = append(out, m.styles.dim.Render("no session ID — this track can't be reopened"))
+		}
+	}
 	// A saved draft explains what it will launch with, and why the last
 	// creation attempt failed if it came from one.
 	if t.Status == state.StatusDraft {

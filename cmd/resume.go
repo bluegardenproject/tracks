@@ -16,7 +16,7 @@ func init() {
 		Short: "resume a finished track's Claude conversation",
 		Long: "Re-creates the track's worktree (if it was removed by `tracks done`) and " +
 			"spawns Claude with `--resume <session-id>` so the conversation continues " +
-			"from where it left off. The track must be in a terminal state (done/error) " +
+			"from where it left off. The track must be finished (done / errored / interrupted) " +
 			"and must have a session ID (all tracks created since session-ID tracking was added).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {

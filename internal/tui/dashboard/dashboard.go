@@ -76,6 +76,10 @@ func defaultStyles() styles {
 			// terminals and clearly distinct from the other statuses.
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "215"}),
 			state.StatusErrored: lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+			// Slate — tracks was quit while this one was running. Nothing
+			// failed, so it must not read as red; it's actionable (press R),
+			// so it must not read as inert gray either.
+			state.StatusInterrupted: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "60", Dark: "146"}),
 			// Gray — a saved draft, not yet launched. Deliberately muted so
 			// it reads as inert next to the active and end-state colors.
 			state.StatusDraft: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "244"}),
@@ -389,10 +393,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m, m.poll()
 		case "R":
-			// Resume the highlighted track (must be terminal with a session ID).
+			// Resume the highlighted track (must be finished with a session ID).
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				if t.Status.IsTerminal() && t.SessionID != "" {
+				if t.Resumable() {
 					return m, m.resumeTrack(t.ID)
 				}
 			}
@@ -565,8 +569,8 @@ func (m *model) View() string {
 	} else if len(m.tracks) == 0 {
 		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
 	} else {
-		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-10s  %-22s  %-5s  %-8s",
-			"ID", "KIND", "BRANCH", "SLUG", "STATUS", "CHANGES", "SVC", "COST")))
+		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-*s  %-22s  %-5s  %-8s",
+			"ID", "KIND", "BRANCH", "SLUG", statusColWidth, "STATUS", "CHANGES", "SVC", "COST")))
 		// The header consumes one row of the budget; the rest is the
 		// scrolling window of track rows.
 		if rows := m.renderRows(rowsBudget - 1); rows != "" {
@@ -669,6 +673,11 @@ func visibleRowWindow(n, cursor, capacity int) (start, end int) {
 	return start, end
 }
 
+// statusColWidth is the STATUS column's width, wide enough for the
+// longest status name ("interrupted"). Shared by the header and both
+// row renderers so they can't drift apart.
+const statusColWidth = 11
+
 // renderRow renders a single track row. The row at the cursor gets the
 // highlight background threaded through every cell (see the inline note
 // below); all others render plainly.
@@ -683,7 +692,7 @@ func (m *model) renderRow(i int, t state.Track) string {
 			padRendered(m.renderKind(t), 7),
 			padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
 			padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
-			m.styles.status[t.Status].Render(padRight(string(t.Status), 10)),
+			m.styles.status[t.Status].Render(padRight(string(t.Status), statusColWidth)),
 			padRendered(m.renderChangesColored(t.Changes), 22),
 			padRendered(m.renderServices(t), 5),
 			padRendered(m.renderCost(t.Usage), 8),
@@ -754,7 +763,7 @@ func (m *model) renderRow(i int, t state.Track) string {
 		sep + pad(kindStr, 7) +
 		sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
 		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
-		sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), 10)) +
+		sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), statusColWidth)) +
 		sep + pad(changesStr, 22) +
 		sep + pad(svcStr, 5) +
 		sep + pad(costStr, 8)

@@ -167,6 +167,16 @@ startup GC against the real `~/.local/state/tracks` and deleted live worktrees.
 unique nonexistent `Tmux.SessionName` and `t.Fatalf`s if that name ever
 resolves. Scoped to one helper in one file, so it doesn't protect anything else.
 
+**Confirmed live, then narrowed**: this bit again during the `interrupted` work
+— a review probe built on `newQuietServer` opened a real window in the attached
+session. That helper now sets a per-test `Tmux.SessionName` and a temp
+`Paths.StateDir`, and asserts the name doesn't resolve (same guard as
+`newDocTestServer`), so `pr_review_test.go`, `status_transition_test.go` and the
+new interrupted-status tests are covered too. Still building servers from bare
+`config.Default()`: `create_error_test.go`, `draft_test.go`, `services_test.go`,
+`server_test.go`, and `skill_test.go` (no overrides at all). Narrowed, not
+closed — two hardened helpers is still per-test discipline.
+
 **Fix**: make it structural, not per-test discipline.
 - [ ] A package-level spawn seam — e.g. `var newWindow = tmux.New().NewWindowReturningPaneID`
       overridden in tests — so no daemon test can reach real tmux regardless of config.

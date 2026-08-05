@@ -60,12 +60,13 @@ const (
 
 	// MethodForget removes a single track entry from persistent
 	// state. The track must already be in a terminal status
-	// (Done / Errored) — forgetting a running track would orphan
-	// the supervisor goroutine.
+	// (Done / Errored / Interrupted) — forgetting a running track
+	// would orphan the supervisor goroutine.
 	MethodForget Method = "forget"
 
-	// MethodPruneCompleted removes every track entry with a
-	// terminal status. Returns the count removed.
+	// MethodPruneCompleted removes every done and errored track entry.
+	// Interrupted tracks are deliberately kept — the user still means to
+	// reopen those. Returns the count removed.
 	MethodPruneCompleted Method = "prune_completed"
 
 	// MethodServiceUp starts a named dev-server service for a track (and
@@ -89,9 +90,10 @@ const (
 	// MethodProxyStatus returns the current state of all registered proxies.
 	MethodProxyStatus Method = "proxy_status"
 
-	// MethodResume re-opens a finished (done/errored) track's Claude session
-	// by re-creating any removed worktrees and spawning claude --resume
-	// <session-id>. The track's status moves back to running.
+	// MethodResume re-opens a finished (done / errored / interrupted)
+	// track's Claude session by re-creating any removed worktrees and
+	// spawning claude --resume <session-id>. The track's status moves back
+	// to running.
 	MethodResume Method = "resume"
 
 	// MethodSaveDraft turns a failed-creation track into a saved draft

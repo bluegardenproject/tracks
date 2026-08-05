@@ -240,7 +240,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionForget:
-		t, err := menu.PickTrack(cl, "Forget which completed track?", menu.CompletedOnly)
+		t, err := menu.PickTrack(cl, "Forget which finished track?", menu.FinishedOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -261,7 +261,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 
 	case menu.ActionPrune:
 		yes, err := menu.Confirm("Clear all completed tracks?",
-			"Removes every done/errored track from the dashboard. Worktrees are already gone; branches and log files stay on disk.")
+			"Removes every done/errored track from the dashboard. Interrupted tracks are kept. Worktrees are already gone; branches and log files stay on disk.")
 		if err != nil || !yes {
 			return nil
 		}

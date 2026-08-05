@@ -615,7 +615,15 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	if path, err := s.sentinelPathFor(t.ID); err == nil {
 		_ = os.Remove(path)
 	}
-	if !t.Status.IsTerminal() {
+	// Completed rather than IsTerminal: ending an *interrupted* track is
+	// the user saying they're finished with it, so it must settle on Done
+	// and stop being offered for reopen (its worktree is gone now anyway).
+	if !t.Status.Completed() {
+		if t.Status == state.StatusInterrupted {
+			// The "tracks was shut down…" note described a state the track
+			// is no longer in; leaving it behind would misreport a Done track.
+			t.ErrorMsg = ""
+		}
 		t.Status = state.StatusDone
 		now := time.Now().UTC()
 		t.ExitedAt = &now
@@ -1051,7 +1059,10 @@ const authHintText = "GitHub access denied — your token or SSH key may be expi
 func (s *Server) handlePruneCompleted() Response {
 	removed := 0
 	for _, t := range s.store.All() {
-		if !t.Status.IsTerminal() {
+		// Completed only: an interrupted track is terminal but the user
+		// still means to reopen it, so a "clear completed" sweep must not
+		// take it.
+		if !t.Status.Completed() {
 			continue
 		}
 		if _, err := s.store.Delete(t.ID); err == nil {

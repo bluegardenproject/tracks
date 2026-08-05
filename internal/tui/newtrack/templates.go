@@ -93,7 +93,7 @@ var templateDescriptions = map[Template]string{
 	TemplatePlan:      "Read-only planning against your primary checkout. Promote later to implement.",
 	TemplateReview:    "Checks out a PR/branch detached so the reviewer agent can diff it.",
 	TemplateDocReview: "Reviews a file on disk (md/pdf/image/csv) and fact-checks its claims against your repos, GitHub, and Jira.",
-	TemplateResume:    "Picks a done/errored track and reopens its Claude conversation from where it left off.",
+	TemplateResume:    "Picks a finished track — including ones interrupted by a quit — and reopens its Claude conversation.",
 }
 
 // kindFor maps a Template to the daemon track Kind string.

@@ -151,9 +151,10 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}}, nil
 }
 
-// PickResumable shows a single-select picker over terminal-state tracks that
-// have a session ID and can therefore be resumed. Returns the selected track
-// ID or ErrCancelled when the user backs out.
+// PickResumable shows a single-select picker over finished tracks that
+// have a session ID and can therefore be resumed — including the ones
+// interrupted by a tracks shutdown. Returns the selected track ID or
+// ErrCancelled when the user backs out.
 func PickResumable(client *daemon.Client) (string, error) {
 	tracks, err := client.Ls()
 	if err != nil {
@@ -162,7 +163,7 @@ func PickResumable(client *daemon.Client) (string, error) {
 
 	options := []huh.Option[string]{}
 	for _, t := range tracks {
-		if !t.Status.IsTerminal() || t.SessionID == "" {
+		if !t.Resumable() {
 			continue
 		}
 		branch := t.Branch
