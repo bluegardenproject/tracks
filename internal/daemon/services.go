@@ -134,9 +134,9 @@ func (s *Server) openServerPane(sup *supervisor, svcName string, port int, comma
 
 	var paneID string
 	if len(sup.servicePanes) == 0 {
-		paneID, panePID, err = tm.SplitWindowRight(session, sup.windowName, command, worktree, 30)
+		paneID, panePID, err = spawnServicePaneRight(session, sup.windowName, command, worktree, 30)
 	} else {
-		paneID, panePID, err = tm.SplitPaneDown(sup.lastServicePane, command, worktree)
+		paneID, panePID, err = spawnServicePaneBelow(sup.lastServicePane, command, worktree)
 	}
 	if err != nil {
 		return 0, err

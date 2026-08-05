@@ -10,7 +10,6 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 func TestResolveDocPath(t *testing.T) {
@@ -118,25 +117,15 @@ func TestResolveDocPathExpansions(t *testing.T) {
 // newDocTestServer builds an isolated daemon with no repos configured —
 // a doc review needs none.
 //
-// The tmux session name MUST be a unique nonexistent one. Creation runs
-// all the way to spawning Claude, and config.Default() names the user's
-// real session ("tracks"), so a default-config server here would open
-// live windows running real Claude processes in it. Pointing at a
-// missing session makes the spawn fail instead, which is what these
-// tests want anyway: failCreate then persists the track *and* its
-// draft, which is the record under test.
+// Creation runs all the way to the spawn (a doc track has no worktree
+// step to fail at first), so these tests depend on the package-wide
+// default-deny in TestMain: the spawn is refused, failCreate persists
+// the track *and* its draft, and that record is what they assert on.
+// testConfig supplies the rest of the isolation.
 func newDocTestServer(t *testing.T, repos ...config.Repo) (*Server, *state.MemoryStore) {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Repos = repos
-	cfg.Tmux.SessionName = "tracks-test-" + strings.ReplaceAll(t.Name(), "/", "-")
-	// Checked, not assumed: if this name ever resolves, the spawn would
-	// succeed and open live Claude windows in somebody's session. Fail
-	// loudly instead.
-	if tmux.New().HasSession(cfg.Tmux.SessionName) {
-		t.Fatalf("test tmux session %q exists; refusing to run a spawn against a live session", cfg.Tmux.SessionName)
-	}
 	store := state.NewMemoryStore()
 	return NewServer(cfg, store, "test"), store
 }

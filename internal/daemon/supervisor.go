@@ -129,7 +129,7 @@ func (s *Server) startSupervisorResume(ctx context.Context, t state.Track) (*sup
 func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPath string, opts claude.SpawnOptions) (*supervisor, error) {
 	tm := tmux.New()
 	window := t.WindowName()
-	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
+	pid, err := spawnTrackWindow(s.config().Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux window: %w", err)
 	}
