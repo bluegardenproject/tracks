@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/bluegardenproject/tracks/compare/v0.3.1...v0.4.0) (2026-08-05)
+
+
+### Features
+
+* **claude:** skip pre-push review for docs-only diffs ([adc019d](https://github.com/bluegardenproject/tracks/commit/adc019dae9a60c259e86b94dd840bb1cce9dcaf8))
+* **cmd:** reopen the tracks interrupted by the last shutdown ([db6936c](https://github.com/bluegardenproject/tracks/commit/db6936cc6c213eeed4b7baec54f0dffb9851967c))
+* **daemon:** record interrupted tracks instead of erroring them ([3a711d6](https://github.com/bluegardenproject/tracks/commit/3a711d68518957596b000c74488c96462cf56c7b))
+* **newtrack:** add doc-review track type ([866df94](https://github.com/bluegardenproject/tracks/commit/866df94bbc4f087c37509830113bbf6e310ae194))
+
+
+### Documentation
+
+* **roadmap:** log the test-spawns-into-live-tmux bug as high prio ([1d0bb67](https://github.com/bluegardenproject/tracks/commit/1d0bb671fe35b957dc8244c6d7d9a853badac103))
+
 ## [0.3.1](https://github.com/bluegardenproject/tracks/compare/v0.3.0...v0.3.1) (2026-07-21)
 
 
