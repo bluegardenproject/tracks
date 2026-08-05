@@ -145,6 +145,40 @@ cross-compiled release assets; `.github/workflows/ci.yml` adds lint/build/test.
 Mirrors the stac-man approach; `main`-only, no develop branch. *First release
 needs a `PAT_TOKEN` repo secret to publish assets.*
 
+### Bug 7 — Daemon tests can spawn real Claude sessions into the user's live tmux  ⭐ *(high prio)*
+
+**Symptom**: writing new `handleNew` tests during the doc-review work opened four
+real windows in the attached `tracks` session — `architecture-review-9e84ee`,
+`q3-deck-75684d`, `spec-e40558`, `spec-162097` — each running an actual `claude`
+process against the test's prompt. Killed by hand (`tmux kill-window`).
+
+**Root cause**: the daemon tests build servers from `config.Default()`, whose
+`Tmux.SessionName` is `"tracks"` — the user's real session. `handleNew` runs all
+the way through to `startSupervisor`, so *any* test that gets past
+`createWorktrees` spawns for real. The existing tests
+(`create_error_test.go`, `draft_test.go`) are safe **only by accident**: their
+single repo is `/nonexistent/demo`, so creation dies at the fetch before the
+spawn. Nothing in the code prevents the next test from going further —
+`handlePromote` and `handleResume` spawn too and have no test coverage at all
+yet. Same class as the bug fixed on 2026-07-11, where the server tests ran
+startup GC against the real `~/.local/state/tracks` and deleted live worktrees.
+
+**Interim mitigation (shipped with the doc kind)**: `newDocTestServer` sets a
+unique nonexistent `Tmux.SessionName` and `t.Fatalf`s if that name ever
+resolves. Scoped to one helper in one file, so it doesn't protect anything else.
+
+**Fix**: make it structural, not per-test discipline.
+- [ ] A package-level spawn seam — e.g. `var newWindow = tmux.New().NewWindowReturningPaneID`
+      overridden in tests — so no daemon test can reach real tmux regardless of config.
+- [ ] Failing that, one shared `newTestServer(t, repos...)` used by every daemon
+      test file (`create_error_test.go`, `draft_test.go`, `pr_review_test.go`,
+      `services_test.go`, `docreview_test.go`), owning the safe session name in
+      one place.
+- [ ] Consider making `config.Default()` unsafe-by-omission rather than
+      unsafe-by-default for tests (e.g. tests must opt into a session name).
+
+---
+
 > **Bugs 2–6 fixed** (`b86548a`) and removed from this list: tmux pane not
 > selected (dropped `-d`), missing proxy overlay-menu entry, eager `pnpm install`
 > at creation (now deferred to first `tracks up`), and the empty dashboard SVC
