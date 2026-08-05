@@ -51,6 +51,9 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 	case menu.ActionResumeTrack:
 		return runResumeTrackFromMenu(cfg)
 
+	case menu.ActionReopen:
+		return runReopenFromMenu(cfg)
+
 	case menu.ActionDashboard:
 		// Ensure the dashboard window exists, then switch to it.
 		return ensureWindowAndSelect(cfg, tm, "Dashboard", "dashboard")
@@ -356,6 +359,56 @@ func runResumeTrackFromMenu(cfg config.Config) error {
 	if tm.HasSession(cfg.Tmux.SessionName) && res.WindowName != "" {
 		_ = tm.SelectWindow(cfg.Tmux.SessionName, res.WindowName)
 	}
+	return nil
+}
+
+// runReopenFromMenu brings back every track interrupted by the last
+// shutdown. Unlike the resume flow there's nothing to pick — the set is
+// whatever was live when tracks stopped — so it confirms, reports, and
+// waits for a key so the user can read the outcome before the popup
+// closes.
+func runReopenFromMenu(cfg config.Config) error {
+	cl := daemon.NewClient(cfg)
+	pending, err := interruptedTracks(cl)
+	if err != nil {
+		fmt.Println(err)
+		waitForKey()
+		return nil
+	}
+	if len(pending) == 0 {
+		fmt.Println("nothing to reopen — no interrupted tracks")
+		waitForKey()
+		return nil
+	}
+
+	yes, err := menu.Confirm(
+		fmt.Sprintf("Reopen %d interrupted track(s)?", len(pending)),
+		"Each gets its worktree back and a fresh window running claude --resume, "+
+			"continuing the conversation where it stopped.")
+	if err != nil || !yes {
+		return nil
+	}
+
+	fmt.Println()
+	res, err := cl.ReopenWithProgress(nil, func(msg string) {
+		fmt.Printf("  [%s] %s\n", time.Now().Format("15:04:05"), msg)
+	})
+	if err != nil {
+		fmt.Println()
+		fmt.Println("daemon:", err)
+		waitForKey()
+		return nil
+	}
+	fmt.Println()
+	printReopenResult(res)
+	if len(res.Reopened) == 1 {
+		tm := tmux.New()
+		if tm.HasSession(cfg.Tmux.SessionName) && res.Reopened[0].WindowName != "" {
+			_ = tm.SelectWindow(cfg.Tmux.SessionName, res.Reopened[0].WindowName)
+			return nil
+		}
+	}
+	waitForKey()
 	return nil
 }
 

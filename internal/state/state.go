@@ -105,7 +105,7 @@ const (
 	// than finishing. It is terminal (nothing is running) but, unlike
 	// Errored, nothing went wrong: the branch, worktree and Claude
 	// session all survive, so the track can be picked back up with
-	// `tracks resume`. Deliberately *not* Completed, so a
+	// `tracks reopen` / `tracks resume`. Deliberately *not* Completed, so a
 	// prune-completed sweep never throws away work the user meant to
 	// come back to.
 	StatusInterrupted Status = "interrupted"

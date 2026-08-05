@@ -96,6 +96,11 @@ const (
 	// to running.
 	MethodResume Method = "resume"
 
+	// MethodReopen resumes the tracks that were interrupted when tracks
+	// last shut down (StatusInterrupted) — all of them by default, or a
+	// given subset. Per-track failures are reported in the result.
+	MethodReopen Method = "reopen"
+
 	// MethodSaveDraft turns a failed-creation track into a saved draft
 	// (StatusDraft), keeping its parameters for a later launch instead
 	// of dropping the attempt.
@@ -319,6 +324,33 @@ type ResumeParams struct {
 type ResumeResult struct {
 	// WindowName is the tmux window the daemon re-opened for the track.
 	WindowName string `json:"window_name"`
+}
+
+// ReopenParams is the payload for MethodReopen. An empty IDs slice means
+// "every interrupted track".
+type ReopenParams struct {
+	IDs []string `json:"ids,omitempty"`
+}
+
+// ReopenResult reports the outcome per track: reopening is best-effort
+// across the set, so a caller needs to know which came back and which
+// didn't.
+type ReopenResult struct {
+	Reopened []ReopenedTrack `json:"reopened,omitempty"`
+	Failed   []ReopenFailure `json:"failed,omitempty"`
+}
+
+// ReopenedTrack is one track that came back, with the tmux window the
+// daemon opened for it.
+type ReopenedTrack struct {
+	ID         string `json:"id"`
+	WindowName string `json:"window_name"`
+}
+
+// ReopenFailure is one track that could not be reopened, and why.
+type ReopenFailure struct {
+	ID    string `json:"id"`
+	Error string `json:"error"`
 }
 
 // SaveDraftParams / LaunchParams select a track by ID.

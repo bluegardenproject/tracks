@@ -43,6 +43,8 @@ Inside the session, press `<prefix>+t` to open the menu:
   exported to PDF — and fact-checks its claims against your repos, GitHub,
   and Jira, then offers to save the report next to the document.
 - **Dashboard** — live list of all tracks, statuses, PR URLs.
+- **Reopen interrupted tracks** — brings back everything that was still
+  running when tracks was last quit (see below).
 - **List / Attach… / End… / Kill…** — manage tracks.
 - **Settings** — add, edit, or remove repos via a guided form (no YAML
   editing).
@@ -50,3 +52,28 @@ Inside the session, press `<prefix>+t` to open the menu:
 
 When a track ends, its worktree is removed but the branch stays locally so
 you can `git checkout <branch>` from your editor afterwards.
+
+## Quitting and coming back
+
+Quitting tracks doesn't finish your tracks. Anything still live is recorded
+as `interrupted` — its branch, worktree and Claude session all survive — and
+the next `tracks` offers to bring them back:
+
+```
+2 track(s) were still running when tracks last stopped:
+  20260805-091305-1e1ec7  swap-rate-tooltip
+  20260805-095525-ee2eb3  reopen-tracks
+
+Reopen 2 interrupted track(s)? [Yes / Cancel]
+```
+
+Each reopened track gets its worktree back and a fresh window running
+`claude --resume`, so the conversation continues where it stopped — Claude
+picks up with the full history and waits for your next message. Cancel and
+they stay as they are; run `tracks reopen` (or the menu entry) whenever you
+want them. Interrupted tracks are never touched by `X` (clear completed) or
+`tracks gc`, so their worktrees wait for you.
+
+To be done with one, **end** it (`d` in the dashboard) — that removes the
+worktree and keeps the branch. Forgetting it (`x`) only drops the dashboard
+entry; the worktree stays on disk until the next `tracks gc` reclaims it.

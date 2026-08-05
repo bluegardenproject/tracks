@@ -835,10 +835,96 @@ func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emi
 		return fail("track not found: " + p.ID)
 	}
 	if !t.Status.IsTerminal() {
-		return fail(fmt.Sprintf("track %s is %s; only done/errored tracks can be resumed", p.ID, t.Status))
+		return fail(fmt.Sprintf("track %s is %s; only finished tracks can be resumed", p.ID, t.Status))
 	}
 	if t.SessionID == "" {
 		return fail("track has no session ID; cannot resume")
+	}
+
+	window, err := s.resumeTrackSession(ctx, t, emit)
+	if err != nil {
+		return fail(err.Error())
+	}
+	return ok(ResumeResult{WindowName: window})
+}
+
+// resumeTrackSession re-creates any worktrees the track lost, resets its
+// status, and spawns `claude --resume <session-id>` in a fresh tmux
+// window. Returns the window name.
+//
+// Shared by MethodResume (one track the user picked) and MethodReopen
+// (every track interrupted by the last shutdown). Callers own the
+// eligibility checks; this does the work.
+//
+// The track is claimed atomically (terminal → Pending) before any work
+// starts, so two concurrent resumes — two `tracks reopen` runs, or the
+// startup prompt answered in two terminals — can't both spawn
+// `claude --resume` on the same session. On failure the claim is
+// released back to the status the track came in with, keeping an
+// interrupted track interrupted (and therefore retryable, and out of
+// reach of prune/gc) rather than downgrading it to errored.
+func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emit) (string, error) {
+	// Refuse once the daemon is winding down: a window spawned now would
+	// have its watcher cancelled immediately, leaving `running` behind for
+	// the next start to clean up.
+	if s.shuttingDown.Load() {
+		return "", fmt.Errorf("tracks is shutting down")
+	}
+
+	// mutate runs exactly once under the store's lock in both Store
+	// implementations, so a flag set inside it is an exact "we took the
+	// claim" signal — the returned Track alone can't distinguish our own
+	// Pending from one another caller just wrote.
+	var prev state.Track
+	var claimedByUs bool
+	claimed, found, err := s.store.Update(t.ID, func(cur *state.Track) bool {
+		if !cur.Status.IsTerminal() {
+			return false // already claimed, or live again
+		}
+		prev = *cur
+		cur.Status = state.StatusPending
+		cur.ExitedAt = nil
+		cur.ExitCode = nil
+		cur.ErrorMsg = ""
+		claimedByUs = true
+		return true
+	})
+	if !found {
+		return "", fmt.Errorf("track not found: %s", t.ID)
+	}
+	if !claimedByUs {
+		if err != nil {
+			return "", fmt.Errorf("persist state: %w", err)
+		}
+		return "", fmt.Errorf("track %s is %s — already being resumed", t.ID, claimed.Status)
+	}
+	t = claimed
+
+	// release hands the claim back, restoring the exit bookkeeping the
+	// claim cleared — a resume that fails must not make a finished track
+	// look like it just exited (which would inflate its reported runtime)
+	// or lose its exit code.
+	release := func(status state.Status, msg string) {
+		_, _, _ = s.store.Update(t.ID, func(cur *state.Track) bool {
+			cur.Status = status
+			cur.ErrorMsg = msg
+			cur.ExitCode = prev.ExitCode
+			cur.ExitedAt = prev.ExitedAt
+			if status.IsTerminal() && cur.ExitedAt == nil {
+				now := time.Now().UTC()
+				cur.ExitedAt = &now
+			}
+			return true
+		})
+	}
+
+	// FileStore.Update mutates its in-memory map before flushing and
+	// reports the flush error, so a failed write leaves the claim applied.
+	// Hand it back rather than wedging the track in Pending with no
+	// supervisor behind it.
+	if err != nil {
+		release(prev.Status, "resume: persist state: "+err.Error())
+		return "", fmt.Errorf("persist state: %w", err)
 	}
 
 	// Re-create any worktrees that were removed when the track was closed.
@@ -848,20 +934,24 @@ func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emi
 			if _, err := os.Stat(tr.Path); err == nil {
 				continue // worktree still on disk
 			}
+			restoreErr := func(err error) error {
+				release(prev.Status, err.Error())
+				return err
+			}
 			r, ok := s.config().RepoByName(tr.Name)
 			if !ok {
-				return fail("unknown repo: " + tr.Name)
+				return "", restoreErr(fmt.Errorf("unknown repo: %s", tr.Name))
 			}
 			primaryPath, err := r.ResolveRepoPath()
 			if err != nil {
-				return fail(err.Error())
+				return "", restoreErr(err)
 			}
 			branch := tr.Branch
 			if branch == "" {
 				branch = t.Branch
 			}
 			if branch == "" {
-				return fail(fmt.Sprintf("cannot determine branch for repo %s", tr.Name))
+				return "", restoreErr(fmt.Errorf("cannot determine branch for repo %s", tr.Name))
 			}
 			emit(fmt.Sprintf("re-creating worktree for %s on %s...", tr.Name, branch))
 			primary := git.NewPrimaryRepoClient(primaryPath)
@@ -869,33 +959,127 @@ func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emi
 			// force-removed worktree dir doesn't block re-creation.
 			_ = primary.PruneWorktrees(ctx)
 			if err := primary.CheckoutWorktree(ctx, tr.Path, branch); err != nil {
-				return fail(fmt.Sprintf("re-create worktree %s: %v", tr.Name, err))
+				return "", restoreErr(fmt.Errorf("re-create worktree %s: %w", tr.Name, err))
 			}
 		}
 	}
 
-	// Reset the track to a resumable state, preserving identity fields.
-	t.Status = state.StatusPending
-	t.ExitedAt = nil
-	t.ExitCode = nil
-	t.ErrorMsg = ""
-	if err := s.store.Put(t); err != nil {
-		return fail("persist state: " + err.Error())
+	// Tear down any dev servers still recorded on the track before their
+	// panes go with the window below. A pane kill is cosmetic — the
+	// authoritative teardown is the process-group kill by persisted PGID
+	// (see stopAllSupervisors) — so skipping this would leave Services
+	// claiming `ready` for processes nobody owns, and a later `tracks up`
+	// would decline to start them ("already running"). Same order
+	// endTrack uses. Usually a no-op for an interrupted track, whose
+	// services were already stopped at shutdown; it's a resumed *done*
+	// track that can still have live ones.
+	if t, ok := s.store.Get(t.ID); ok && len(t.Services) > 0 {
+		emit("stopping dev servers left from the previous run...")
+		s.teardownTrackServices(t.ID, true)
 	}
+
+	// Close any window left over from the track's previous life. A track
+	// interrupted by an unclean death (tmux survived, only the pane's
+	// process died) still has its window, and tmux happily creates a
+	// second one with the same name — after which selecting or killing
+	// that window by name is ambiguous. Idempotent when there's none.
+	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, t.WindowName())
 
 	emit("spawning claude (resume)...")
 	if _, err := s.startSupervisorResume(ctx, t); err != nil {
-		t.Status = state.StatusErrored
-		t.ErrorMsg = "spawn claude: " + err.Error()
-		now := time.Now().UTC()
-		t.ExitedAt = &now
-		_ = s.store.Put(t)
-		return fail("spawn claude: " + err.Error())
+		// An interrupted track stays interrupted: the user hasn't finished
+		// with it, and Errored is Completed() — which would put its
+		// worktree in reach of prune-completed and `tracks gc`.
+		failStatus := state.StatusErrored
+		if prev.Status == state.StatusInterrupted {
+			failStatus = state.StatusInterrupted
+		}
+		release(failStatus, "spawn claude: "+err.Error())
+		return "", fmt.Errorf("spawn claude: %w", err)
 	}
 	emit("claude running")
-	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track resumed",
-		fmt.Sprintf("%s on %s", labelFor(t), t.Branch))
-	return ok(ResumeResult{WindowName: t.WindowName()})
+	// Worktree-less kinds (doc/ask/plan) have no branch, so the "on
+	// <branch>" tail is omitted rather than rendered blank — same shape
+	// handleNew uses for its own notification.
+	detail := labelFor(t)
+	if t.Branch != "" {
+		detail += " on " + t.Branch
+	}
+	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track resumed", detail)
+	return t.WindowName(), nil
+}
+
+// handleReopen brings back the tracks that were interrupted when tracks
+// last shut down — the counterpart to markInterruptedOnShutdown. With no
+// IDs it reopens every interrupted track, oldest first; with IDs it
+// reopens exactly those.
+//
+// Failures are per-track: one track whose branch has since been deleted
+// must not stop the others from coming back, so each is reported in the
+// result rather than failing the whole call.
+func (s *Server) handleReopen(ctx context.Context, raw json.RawMessage, emit Emit) Response {
+	var p ReopenParams
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return fail("bad params: " + err.Error())
+		}
+	}
+
+	targets, err := s.reopenTargets(p.IDs)
+	if err != nil {
+		return fail(err.Error())
+	}
+
+	var res ReopenResult
+	for _, t := range targets {
+		if !t.Resumable() {
+			res.Failed = append(res.Failed, ReopenFailure{
+				ID:    t.ID,
+				Error: "no session ID — this track predates session tracking and can't be reopened",
+			})
+			continue
+		}
+		emit(fmt.Sprintf("reopening %s (%s)...", t.ID, labelFor(t)))
+		window, err := s.resumeTrackSession(ctx, t, emit)
+		if err != nil {
+			res.Failed = append(res.Failed, ReopenFailure{ID: t.ID, Error: err.Error()})
+			continue
+		}
+		res.Reopened = append(res.Reopened, ReopenedTrack{ID: t.ID, WindowName: window})
+	}
+	return ok(res)
+}
+
+// reopenTargets resolves the tracks handleReopen should act on. An empty
+// ids slice selects every interrupted track, oldest first (Store.All is
+// CreatedAt-ascending) so reopened windows land in the order the tracks
+// were created. Explicit ids are validated: a track that isn't
+// interrupted is a caller mistake worth an error, not a silent skip
+// (`tracks resume` is the way to re-open a finished one).
+func (s *Server) reopenTargets(ids []string) ([]state.Track, error) {
+	if len(ids) > 0 {
+		out := make([]state.Track, 0, len(ids))
+		for _, id := range ids {
+			t, found := s.store.Get(id)
+			if !found {
+				return nil, fmt.Errorf("track not found: %s", id)
+			}
+			if t.Status != state.StatusInterrupted {
+				return nil, fmt.Errorf("track %s is %s, not interrupted; use `tracks resume %s` instead",
+					id, t.Status, id)
+			}
+			out = append(out, t)
+		}
+		return out, nil
+	}
+
+	var out []state.Track
+	for _, t := range s.store.All() {
+		if t.Status == state.StatusInterrupted {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func (s *Server) handleForget(raw json.RawMessage) Response {

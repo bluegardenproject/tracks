@@ -214,6 +214,14 @@ func (c *Client) ResumeWithProgress(id string, onProgress func(string)) (ResumeR
 	return r, c.callStreaming(MethodResume, ResumeParams{ID: id}, &r, onProgress)
 }
 
+// ReopenWithProgress resumes the tracks interrupted by the last
+// shutdown. Pass nil ids for all of them. Streams Progress frames —
+// re-creating worktrees for several tracks takes a moment.
+func (c *Client) ReopenWithProgress(ids []string, onProgress func(string)) (ReopenResult, error) {
+	var r ReopenResult
+	return r, c.callStreaming(MethodReopen, ReopenParams{IDs: ids}, &r, onProgress)
+}
+
 // PendingPrompts returns the daemon's outstanding permission prompts.
 func (c *Client) PendingPrompts() ([]PendingPrompt, error) {
 	var r PendingPromptsResult

@@ -36,6 +36,7 @@ type Action string
 const (
 	ActionNewTrack      Action = "new"
 	ActionResumeTrack   Action = "resume"
+	ActionReopen        Action = "reopen"
 	ActionDashboard     Action = "dashboard"
 	ActionList          Action = "list"
 	ActionAttach        Action = "attach"
@@ -58,6 +59,7 @@ const (
 var actionHints = map[Action]string{
 	ActionNewTrack:      "Pick a type (work / ask / plan / review), then create it.",
 	ActionResumeTrack:   "Continue a finished track's Claude conversation from where it left off.",
+	ActionReopen:        "Bring back every track that was still running when tracks was last quit.",
 	ActionDashboard:     "Live list of all tracks, their status and PRs.",
 	ActionAddRepo:       "Realised the change spans another repo? Mount it onto a running track.",
 	ActionPromote:       "Done investigating? Turn a read-only ask/plan track into a worktree to implement.",
@@ -80,6 +82,7 @@ func PickAction() (Action, error) {
 				Options(
 					huh.NewOption("New track", ActionNewTrack),
 					huh.NewOption("Resume a track…", ActionResumeTrack),
+					huh.NewOption("Reopen interrupted tracks", ActionReopen),
 					huh.NewOption("Dashboard", ActionDashboard),
 					huh.NewOption("Add repo to a track…", ActionAddRepo),
 					huh.NewOption("Promote a read-only track…", ActionPromote),

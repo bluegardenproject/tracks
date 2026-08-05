@@ -238,6 +238,11 @@ closed — two hardened helpers is still per-test discipline.
   - Distinguish clean exit vs crash vs **auth-expiry** ("Please run /login") vs
     killed, as a terminal status + exit reason. (A roadmap track auth-expired
     mid-run but showed `done`.)
+    *Partial:* "tracks was quit while this was running" is now its own status
+    (`interrupted`, see Recently shipped) instead of being reported as
+    `errored`. Still undistinguished: clean exit vs crash vs auth-expiry, which
+    all land on `done` because the tmux-hosted process gives us no exit code
+    (future: `pane_dead_status`).
 
 - [ ] **D. Encode the lifecycle + fault tests (stop the whack-a-mole).** *(The
       git log is a row of one-off lifecycle fixes: index.lock stealing,
@@ -364,6 +369,30 @@ Move completed items here with a date, then delete once the dust settles.
   modes are clamped to a prompting one as a backstop. `internal/state`,
   `internal/daemon/{docreview,skill,handlers}`, `internal/claude/spawn`,
   `internal/tui/{newtrack,dashboard}`.
+
+- **2026-08-05 — Survive quitting tracks: `interrupted` status + reopen.** A
+  track that was live when tracks stopped is no longer reported as `errored`
+  ("orphaned by a daemon restart"). New terminal-but-not-`Completed` status
+  `interrupted`, written by a shutdown sweep in `Server.Stop` and by startup
+  reconciliation when the previous daemon died without sweeping; prune-completed
+  and `tracks gc` skip those tracks so the worktree waits for you. Bare `tracks`
+  then offers "Reopen N interrupted track(s)?" before attaching, with
+  `tracks reopen [id...]`, a menu entry, and a `reopen` daemon method behind it
+  (per-track failures reported, not fatal). Nothing new was needed to recover
+  the conversation itself — `SessionID` in `state.json` plus the transcript in
+  `~/.claude/projects/` already survived; only the UX was missing.
+  `internal/state`, `internal/daemon/{recovery,server,handlers,protocol,client}`,
+  `cmd/{reopen,bootstrap,menu}`, `internal/tui/{dashboard,menu}`.
+  A resume now claims its track atomically (terminal → pending, exactly-once via
+  the store's `Update`), so two reopens can't double-spawn one session; a failed
+  restore releases the claim back to `interrupted` (restoring the exit
+  bookkeeping) so the track stays retryable, and any window left from the
+  track's previous life is closed first so window names stay unambiguous.
+  Follow-ups: dev servers are *not* restarted on reopen (the track comes back
+  without its `tracks up` services); a reopened Claude waits for your next
+  message rather than continuing on its own — consider seeding a "continue where
+  you left off" prompt; Reliability B (re-adopting live tracks across a daemon
+  bounce) is still open and is the case this doesn't cover.
 
 - **2026-07-11 — Save a failed track creation as a draft.** A creation that
   fails mid-provisioning (e.g. a git fetch/clone rejected for an expired GitHub

@@ -472,6 +472,8 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleProxyStatus()
 	case MethodResume:
 		return s.handleResume(ctx, req.Params, emit)
+	case MethodReopen:
+		return s.handleReopen(ctx, req.Params, emit)
 	case MethodSaveDraft:
 		return s.handleSaveDraft(req.Params)
 	case MethodLaunch:
