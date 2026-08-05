@@ -145,37 +145,54 @@ cross-compiled release assets; `.github/workflows/ci.yml` adds lint/build/test.
 Mirrors the stac-man approach; `main`-only, no develop branch. *First release
 needs a `PAT_TOKEN` repo secret to publish assets.*
 
-### Bug 7 — Daemon tests can spawn real Claude sessions into the user's live tmux  ⭐ *(high prio)*
+### Bug 7 — Daemon tests can spawn real Claude sessions into the user's live tmux  ✅ FIXED
 
 **Symptom**: writing new `handleNew` tests during the doc-review work opened four
 real windows in the attached `tracks` session — `architecture-review-9e84ee`,
 `q3-deck-75684d`, `spec-e40558`, `spec-162097` — each running an actual `claude`
 process against the test's prompt. Killed by hand (`tmux kill-window`).
 
-**Root cause**: the daemon tests build servers from `config.Default()`, whose
+**Root cause**: the daemon tests built servers from `config.Default()`, whose
 `Tmux.SessionName` is `"tracks"` — the user's real session. `handleNew` runs all
-the way through to `startSupervisor`, so *any* test that gets past
-`createWorktrees` spawns for real. The existing tests
-(`create_error_test.go`, `draft_test.go`) are safe **only by accident**: their
-single repo is `/nonexistent/demo`, so creation dies at the fetch before the
-spawn. Nothing in the code prevents the next test from going further —
-`handlePromote` and `handleResume` spawn too and have no test coverage at all
-yet. Same class as the bug fixed on 2026-07-11, where the server tests ran
-startup GC against the real `~/.local/state/tracks` and deleted live worktrees.
+the way through to `startSupervisor`, so *any* test that got past
+`createWorktrees` spawned for real. The tests that existed at the time
+(`create_error_test.go`, `draft_test.go`) were safe **only by accident**: their
+single repo is `/nonexistent/demo`, so creation died at the fetch before the
+spawn. Nothing in the code prevented the next test from going further —
+`handlePromote` and `handleResume` spawn too and still have no test coverage.
+Same class as the bug fixed on 2026-07-11, where the server tests ran startup GC
+against the real `~/.local/state/tracks` and deleted live worktrees.
 
-**Interim mitigation (shipped with the doc kind)**: `newDocTestServer` sets a
-unique nonexistent `Tmux.SessionName` and `t.Fatalf`s if that name ever
-resolves. Scoped to one helper in one file, so it doesn't protect anything else.
+**Fix (shipped)**: a package-level spawn seam plus package-wide default-deny —
+structural, not per-test discipline.
 
-**Fix**: make it structural, not per-test discipline.
-- [ ] A package-level spawn seam — e.g. `var newWindow = tmux.New().NewWindowReturningPaneID`
-      overridden in tests — so no daemon test can reach real tmux regardless of config.
-- [ ] Failing that, one shared `newTestServer(t, repos...)` used by every daemon
-      test file (`create_error_test.go`, `draft_test.go`, `pr_review_test.go`,
-      `services_test.go`, `docreview_test.go`), owning the safe session name in
-      one place.
-- [ ] Consider making `config.Default()` unsafe-by-omission rather than
-      unsafe-by-default for tests (e.g. tests must opt into a session name).
+- `internal/daemon/spawn_seam.go` routes all three process-launching tmux calls
+  through package vars: `spawnTrackWindow` (the track's Claude window) and
+  `spawnServicePaneRight` / `spawnServicePaneBelow` (dev-server panes, which run
+  the repo's install and start commands — at least as consequential).
+- `TestMain` (`main_test.go`) points every seam at a refusal, so protection is a
+  property of the test binary. A new test can't lose it by forgetting a setup
+  line, and reaching a spawn produces a clear error instead of side effects the
+  author may never notice.
+- Tests that *mean* to spawn call `allowSpawn(t)`, which records the calls
+  (kind, target, command, cwd) instead of performing them and restores
+  default-deny on cleanup. That also made a *successful* `handleNew` testable
+  for the first time.
+- Regression test configures **the real session name** (`"tracks"`), drives a
+  creation to the spawn, and asserts it is refused and still persisted as a
+  recoverable errored track. Everything else about that test is sandboxed.
+
+Notifications are part of the same class and got the same treatment: the moment
+a creation is allowed to succeed, the daemon fires a real macOS notification and
+writes a terminal bell to `/dev/tty` (which tmux renders as an activity marker on
+whatever window the user is looking at). `testConfig` zeroes `Notify`, and the
+recorder hands back identifiers the OS and tmux can't resolve — a plausible pane
+id would be retitled by `SetPaneTitle` and killed by `KillPane`, and a plausible
+pid would be SIGTERMed by `terminatePGID`.
+
+*Not covered, deliberately*: `KillWindow` still addresses live tmux, but it can
+only target a window name built from a random track id, so it's inert. Worth
+seaming too if the daemon ever gains pattern-based window matching.
 
 ---
 
@@ -334,6 +351,18 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 ## Recently shipped
 
 Move completed items here with a date, then delete once the dust settles.
+
+- **2026-08-05 — Bug 7 fixed: daemon tests can no longer touch the user's
+  machine.** Package-level spawn seams (`internal/daemon/spawn_seam.go`) for the
+  three tmux calls that start processes, plus a `TestMain` that points them all
+  at a refusal — so default-deny is a property of the test binary, not of each
+  author remembering a setup line. `allowSpawn(t)` opts a single test in and
+  records the calls instead, which made a *successful* `handleNew` testable for
+  the first time. Same pass silenced notifications in tests (a succeeding
+  creation fired real macOS notifications and terminal bells) and made the
+  recorder's pids/pane ids unresolvable so downstream `SetPaneTitle` / `KillPane`
+  / `terminatePGID` can't hit anything real. Regression test drives a creation to
+  the spawn with the real session name configured and asserts it's refused.
 
 - **2026-08-05 — Doc-review track type.** New worktree-less `doc` kind whose
   target is a path on disk (a file, or a directory of files) rather than a git

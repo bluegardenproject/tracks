@@ -15,8 +15,7 @@ import (
 // failed-creation → draft flow without a real git remote.
 func newDraftTestServer(t *testing.T) (*Server, *state.MemoryStore) {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Repos = []config.Repo{{Name: "demo", Path: "/nonexistent/demo", Base: "main"}}
 	store := state.NewMemoryStore()
 	return NewServer(cfg, store, "test"), store
