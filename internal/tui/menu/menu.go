@@ -259,9 +259,12 @@ func ActiveOnly(t state.Track) bool {
 }
 
 // PromotableOnly filters to active worktree-less (ask/plan) tracks —
-// the only ones that can be promoted.
+// the only ones that can be promoted. Doc reviews are worktree-less too
+// but have no code work to promote *to* (see handlePromote), so they
+// stay out of the picker.
 func PromotableOnly(t state.Track) bool {
-	return !t.Status.IsTerminal() && t.Status != state.StatusDraft && t.Kind.Worktreeless()
+	return !t.Status.IsTerminal() && t.Status != state.StatusDraft &&
+		t.Kind.Worktreeless() && t.Kind != state.KindDoc
 }
 
 // WorktreeTrack filters to active tracks that own worktrees (work /

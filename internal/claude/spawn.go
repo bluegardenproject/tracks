@@ -10,6 +10,7 @@ package claude
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -187,6 +188,58 @@ const taskSuffix = "" +
 	"surprising (a workaround, an ordering constraint, a subtle edge " +
 	"case)."
 
+// docReviewTemplate is appended for KindDoc tracks. It owns the two
+// invariants of a doc review that must survive the user editing the
+// task prompt: the write contract (exactly one file may be written,
+// and only on request) and the save protocol at the end.
+//
+// Unlike ask/plan, a doc-review track does NOT run in plan permission
+// mode — saving the report is a real write, and an ExitPlanMode
+// "approve to implement" dialog is the wrong framing for it. The save
+// confirmation is therefore the pane question below, not a permission
+// prompt: no permission mode guarantees one (auto may auto-approve,
+// acceptEdits and bypassPermissions never prompt), so the protocol has
+// to carry it. docPermissionMode clamps the permissive modes to a
+// prompting one as a backstop, which leaves this contract the main thing
+// standing between Claude and the attached primary checkouts.
+//
+// %s is the resolved document path.
+const docReviewTemplate = "" +
+	"You're running interactively inside a `tracks` doc-review track. " +
+	"The user can switch into this tmux pane at any time to reply.\n\n" +
+	"**The document under review is:** `%s`\n\n" +
+	"Run the review through the dedicated subagent rather than " +
+	"reviewing it yourself:\n\n" +
+	"    Task({ subagent_type: \"tracks-docs-reviewer\", prompt: " +
+	"\"Review the document at <path>. Repos attached for grounding: " +
+	"<names or none>.\" })\n\n" +
+	"The subagent is auto-discovered from the user's global Claude " +
+	"config — no setup needed. It is read-only and ends its report " +
+	"with a `DOC REVIEW OUTCOME:` line.\n\n" +
+	"Present its report **verbatim** in the pane — do not re-summarize, " +
+	"re-rank, or soften it.\n\n" +
+	"**Then ask whether to save it.** After presenting the report, ask " +
+	"the user a single question: whether to write it to a markdown file " +
+	"next to the document (`<document-basename>.review.md`). Wait for " +
+	"the answer.\n" +
+	"  - Only write the file if they say yes. If they name a different " +
+	"path, use that instead.\n" +
+	"  - If the target file already exists, read it first and offer a " +
+	"dated name (`<basename>.review-YYYY-MM-DD.md`) rather than " +
+	"overwriting a previous review.\n" +
+	"  - The saved file is the report as presented, plus a header line " +
+	"naming the reviewed document and the date.\n\n" +
+	"**Write contract.** That report file is the ONLY file you may " +
+	"create or modify in this track. Any repos attached to this track " +
+	"are the user's PRIMARY checkouts — the working copies their editor " +
+	"watches — and are attached solely as read-only ground truth for " +
+	"checking the document's claims. Never edit them, never commit, " +
+	"never push, never open a PR, and never change a Jira ticket's " +
+	"status or assignee (this is a read-only audit).\n\n" +
+	"**Response style.** These sessions are read in a dashboard — no " +
+	"preamble, no closing summary restating the report. Lead with the " +
+	"report itself."
+
 // readOnlySuffix is appended for worktree-less (ask/plan) tracks. They
 // point at the user's PRIMARY checkout (the one their editor watches),
 // so the prompt makes the read-only contract explicit as a second line
@@ -226,6 +279,28 @@ func draftPRSuffix(draftRepos []string, totalRepos int) string {
 		"otherwise: " + strings.Join(draftRepos, ", ") + "."
 }
 
+// docPermissionMode clamps the configured permission mode for a
+// doc-review track.
+//
+// A doc track is deliberately not put in plan mode — saving the report
+// is a real write, and an ExitPlanMode "approve to implement" dialog is
+// the wrong framing for it (the save confirmation is the pane question
+// docReviewTemplate mandates). But its write contract is prose, and the
+// track carries --add-dir grants on the user's PRIMARY checkouts, so
+// the modes that never prompt are clamped to one that does: acceptEdits
+// and bypassPermissions skip prompting entirely, and auto's classifier
+// may auto-approve a write. A configured "plan" is stricter than we
+// need, so it's left alone.
+//
+// Shared with BuildResumeOptions: resuming a doc track restores those
+// same grants, so it must not restore a non-prompting mode with them.
+func docPermissionMode(configured string) string {
+	if configured == "plan" {
+		return "plan"
+	}
+	return "default"
+}
+
 // BuildOptions assembles SpawnOptions from a Track and Config.
 // Returns an error when the configuration is incomplete (e.g. no
 // worktrees on the track).
@@ -236,9 +311,23 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	if len(t.Repos) == 0 && !t.Kind.Worktreeless() {
 		return SpawnOptions{}, errors.New("track has no repos")
 	}
-	addDirs := make([]string, 0, len(t.Repos))
+	addDirs := make([]string, 0, len(t.Repos)+1)
 	for _, r := range t.Repos {
 		addDirs = append(addDirs, r.Path)
+	}
+	// A reviewed document usually lives outside every configured repo
+	// (~/Downloads/deck.pdf), so its directory has to be granted
+	// explicitly or Claude can't read it — or write the report beside it.
+	//
+	// Gated on the kind, not just on DocPath: promoting a doc track to
+	// work leaves DocPath in place as provenance, and a work session
+	// must not inherit the document's directory as a grant or a cwd.
+	docDir := ""
+	if t.Kind == state.KindDoc {
+		docDir = t.DocDir()
+	}
+	if docDir != "" {
+		addDirs = append(addDirs, docDir)
 	}
 
 	prompt := strings.TrimRight(t.TaskPrompt, " \t\n\r")
@@ -253,7 +342,10 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	// verbatim. (Plan mode is a strong default, not a hard sandbox —
 	// it's interactively switchable; promotion is the path to editing.)
 	permMode := cfg.Claude.PermissionMode
-	if t.Kind.Worktreeless() {
+	if t.Kind == state.KindDoc {
+		permMode = docPermissionMode(permMode)
+		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath)
+	} else if t.Kind.Worktreeless() {
 		permMode = "plan"
 		if len(t.Repos) > 0 {
 			prompt += readOnlySuffix
@@ -265,10 +357,19 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		}
 	}
 
-	// CWD is the first worktree; for a repo-less ask, fall back to the
-	// user's home dir so tmux has a valid directory to open the pane in.
+	// CWD is the document's directory for a doc review, otherwise the
+	// first worktree, otherwise the user's home dir so tmux always has a
+	// valid directory to open the pane in.
+	//
+	// The document wins over an attached repo deliberately: a doc track
+	// isn't in plan mode, and the attached repos are the user's primary
+	// checkouts, reached by absolute path for grounding. This is a
+	// narrowing, not a guarantee — a document that lives inside an
+	// attached repo (the in-repo spec case) puts cwd there anyway.
 	cwd := ""
-	if len(t.Repos) > 0 {
+	if docDir != "" {
+		cwd = docDir
+	} else if len(t.Repos) > 0 {
 		cwd = t.Repos[0].Path
 	} else if home, err := os.UserHomeDir(); err == nil {
 		cwd = home
@@ -356,19 +457,39 @@ func BuildResumeOptions(cfg config.Config, t state.Track, socketDir, sentinelPat
 	if t.SessionID == "" {
 		return SpawnOptions{}, errors.New("track has no session ID; cannot resume")
 	}
-	addDirs := make([]string, 0, len(t.Repos))
+	addDirs := make([]string, 0, len(t.Repos)+1)
 	for _, r := range t.Repos {
 		addDirs = append(addDirs, r.Path)
 	}
+	docDir := ""
+	if t.Kind == state.KindDoc {
+		docDir = t.DocDir()
+	}
+	if docDir != "" {
+		addDirs = append(addDirs, docDir)
+	}
+	// The doc contract itself isn't re-sent on resume — it lives in the
+	// restored transcript — so the clamp is the only thing carried over
+	// structurally. Without it, resuming a doc track would hand a
+	// non-prompting mode back to a session that still holds --add-dir on
+	// the primary checkouts. (Note ask/plan resume already inherits the
+	// configured mode rather than plan; that predates this and is
+	// unchanged here.)
+	permMode := cfg.Claude.PermissionMode
+	if t.Kind == state.KindDoc {
+		permMode = docPermissionMode(permMode)
+	}
 	cwd := ""
-	if len(t.Repos) > 0 {
+	if docDir != "" {
+		cwd = docDir
+	} else if len(t.Repos) > 0 {
 		cwd = t.Repos[0].Path
 	} else if home, err := os.UserHomeDir(); err == nil {
 		cwd = home
 	}
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
-		PermissionMode: cfg.Claude.PermissionMode,
+		PermissionMode: permMode,
 		AddDirs:        addDirs,
 		CWD:            cwd,
 		TrackID:        t.ID,

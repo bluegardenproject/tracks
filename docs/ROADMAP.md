@@ -67,8 +67,19 @@ worktree-less `ask`/`investigate` and `plan` types that start instantly, with
 the ability to promote to a full worktree later.
 **Detail:** [`design/new-track-flow.md`](design/new-track-flow.md)
 
+- [x] **doc** — review a local document (md/pdf/image/csv) instead of a diff;
+      see Recently shipped, 2026-08-05.
 - [ ] follow-ups: Claude self-promote skill; capture a plan track's output to
       seed the promoted work prompt; per-kind configurable permission mode.
+- [ ] doc review follow-ups: **scoped write permission** — a doc track clamps
+      to a prompting permission mode (`default`, unless `plan` is configured)
+      so a write can't land silently, but the prompt is unscoped: the track
+      holds `--add-dir` on the user's primary checkouts, and only the prompt
+      contract says the report file is the sole legitimate write. A per-track
+      settings file allowing `Write` under the document's directory *only*
+      would make that structural. Also: `.pptx`/`.key` support via a
+      `soffice --convert-to pdf` normalize step (deliberately skipped —
+      external dependency, and export to PDF is one manual step).
 
 ### 4. Concurrency cap & queue  *(mid prio)*
 Limit how many tracks run Claude simultaneously; queue the rest and auto-start
@@ -289,6 +300,26 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 ## Recently shipped
 
 Move completed items here with a date, then delete once the dust settles.
+
+- **2026-08-05 — Doc-review track type.** New worktree-less `doc` kind whose
+  target is a path on disk (a file, or a directory of files) rather than a git
+  ref: `.md`/`.pdf`/images/`.csv` — anything Claude can read directly.
+  Unreadable formats (`.pptx`, `.docx`, `.key`, …) are rejected at the form
+  with an "export to PDF" message rather than failing confusingly later. Repos
+  are optional and attached read-only, purely as ground truth: a new
+  `tracks-docs-reviewer` subagent extracts the document's load-bearing claims,
+  then verifies them against local repos (Grep), GitHub (`gh`), and Jira
+  (Atlassian MCP), reporting each as confirmed / contradicted / **unverified**
+  — the last being first-class so "couldn't find it" never reads as "fine". The
+  report leads with a `DOC REVIEW OUTCOME:` verdict and a capped, locator-
+  anchored Strengths section, and the pane offers to save it as
+  `<doc>.review.md` next to the document — the save confirmation is that pane
+  question, since no permission mode reliably prompts. Unlike ask/plan, doc
+  tracks do *not* force `plan` mode (an ExitPlanMode "approve to implement"
+  dialog is the wrong framing for saving a report); instead the permissive
+  modes are clamped to a prompting one as a backstop. `internal/state`,
+  `internal/daemon/{docreview,skill,handlers}`, `internal/claude/spawn`,
+  `internal/tui/{newtrack,dashboard}`.
 
 - **2026-07-11 — Save a failed track creation as a draft.** A creation that
   fails mid-provisioning (e.g. a git fetch/clone rejected for an expired GitHub

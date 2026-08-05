@@ -143,12 +143,26 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		checkout = &c
 	}
 
+	// A document target makes this a doc-review track: no worktree, no
+	// git ref — Claude reads a local file (or directory of files) and
+	// reviews it, with any attached repos serving as read-only ground
+	// truth for the claims it makes.
+	var docPath string
+	if rawPath := strings.TrimSpace(p.DocPath); rawPath != "" {
+		resolved, err := ResolveDocPath(rawPath)
+		if err != nil {
+			return fail(err.Error())
+		}
+		docPath = resolved
+	}
+
 	// Determine the track kind. Empty defaults to work; unknown values
 	// are rejected rather than stored verbatim; a review ref always
-	// means a review track regardless of what the client sent.
+	// means a review track regardless of what the client sent, and a
+	// document path always means a doc review.
 	kind := state.Kind(strings.TrimSpace(p.Kind))
 	switch kind {
-	case state.KindWork, state.KindReview, state.KindAsk, state.KindPlan:
+	case state.KindWork, state.KindReview, state.KindAsk, state.KindPlan, state.KindDoc:
 		// recognized
 	case "":
 		kind = state.KindWork
@@ -157,6 +171,15 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	}
 	if checkout != nil {
 		kind = state.KindReview
+	}
+	if docPath != "" {
+		if checkout != nil {
+			return fail("a track reviews either a PR/branch or a document, not both")
+		}
+		kind = state.KindDoc
+	}
+	if kind == state.KindDoc && docPath == "" {
+		return fail("a doc review needs a document path (a local file or directory)")
 	}
 
 	// Work and review tracks need a worktree, so they require at least
@@ -185,6 +208,17 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 
 	emit(fmt.Sprintf("track id %s", trackID))
 
+	// A doc-review track has no branch, so with an empty slug its
+	// dashboard row and tmux tab would carry nothing identifying. The
+	// document's name is the obvious label. Derived here rather than
+	// stored on the draft, so relaunching re-derives it from whatever
+	// path the user ends up with.
+	slug := strings.TrimSpace(p.Slug)
+	if slug == "" && docPath != "" {
+		base := filepath.Base(docPath)
+		slug = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+
 	// Build the track record up front so any failure during provisioning
 	// can be persisted as an errored track — carrying the prompt and the
 	// reason — instead of vanishing as a transient CLI error. A git fetch
@@ -194,9 +228,10 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	t := state.Track{
 		ID:         trackID,
 		Branch:     branch,
-		Slug:       strings.TrimSpace(p.Slug),
+		Slug:       slug,
 		Kind:       kind,
 		Status:     state.StatusPending,
+		DocPath:    docPath,
 		LogPath:    logPath,
 		TaskPrompt: p.TaskPrompt,
 		SessionID:  sessionID,
@@ -211,7 +246,10 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		TaskPrompt: p.TaskPrompt,
 		Slug:       strings.TrimSpace(p.Slug),
 		ReviewRef:  strings.TrimSpace(p.ReviewRef),
-		Kind:       string(kind),
+		// Resolved, not raw: a relative path would otherwise re-resolve
+		// against the daemon's cwd on a later relaunch.
+		DocPath: docPath,
+		Kind:    string(kind),
 	}
 	// failCreate persists the in-progress track as errored (with the
 	// reason and the draft spec) and returns the wire error, so the
@@ -289,7 +327,10 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		return failCreate("spawn claude: " + err.Error())
 	}
 	emit("claude running")
-	if kind.Worktreeless() {
+	switch {
+	case kind == state.KindDoc:
+		emit("reviewing " + docPath)
+	case kind.Worktreeless():
 		emit(fmt.Sprintf("read-only %s track — run `tracks promote %s` (or menu → Promote) when ready to implement", kind, trackID))
 	}
 
@@ -596,7 +637,7 @@ func (s *Server) handleAddRepo(ctx context.Context, raw json.RawMessage, emit Em
 		return fail("track not found: " + p.TrackID)
 	}
 	if t.Kind.Worktreeless() {
-		return fail("track is read-only (ask/plan); promote it to a worktree first")
+		return fail("track is read-only (ask/plan/doc); for ask/plan, promote it to a worktree first")
 	}
 	r, ok2 := s.config().RepoByName(p.RepoName)
 	if !ok2 {
@@ -668,6 +709,13 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	t, found := s.store.Get(p.ID)
 	if !found {
 		return fail("track not found: " + p.ID)
+	}
+	// Doc reviews are worktree-less but not promotable: the target is a
+	// document, not a diff, so "start editing the code" has no meaning
+	// here — the follow-up to a doc review is a new work track. Allowing
+	// it would also strand DocPath on a work-kind record.
+	if t.Kind == state.KindDoc {
+		return fail("a doc-review track can't be promoted; start a work track for the changes it found")
 	}
 	if !t.Kind.Worktreeless() {
 		return fail("only ask/plan tracks can be promoted; this is already a working track")
@@ -930,6 +978,7 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 		TaskPrompt: t.Draft.TaskPrompt,
 		Slug:       t.Draft.Slug,
 		ReviewRef:  t.Draft.ReviewRef,
+		DocPath:    t.Draft.DocPath,
 		Kind:       t.Draft.Kind,
 	}
 	rawNew, err := json.Marshal(params)

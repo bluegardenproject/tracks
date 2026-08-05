@@ -714,6 +714,8 @@ func (m *model) renderRow(i int, t state.Track) string {
 		kColor = lipgloss.Color("13")
 	case state.KindReview:
 		kColor = lipgloss.Color("11")
+	case state.KindDoc:
+		kColor = lipgloss.Color("12")
 	default:
 		kColor = lipgloss.AdaptiveColor{Light: "30", Dark: "51"}
 	}
@@ -804,6 +806,8 @@ func (m *model) renderKind(t state.Track) string {
 		color = lipgloss.Color("13") // magenta — read-only
 	case state.KindReview:
 		color = lipgloss.Color("11") // yellow
+	case state.KindDoc:
+		color = lipgloss.Color("12") // blue — read-only, but not a code track
 	default:
 		// Teal — readable on both themes and distinct from the magenta
 		// (ask/plan) and yellow (review) kinds.
