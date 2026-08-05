@@ -138,6 +138,9 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	if repos := joinRepos(t.Repos); repos != "" {
 		meta += "  " + m.styles.dim.Render("repos ") + m.styles.repo.Render(repos)
 	}
+	if t.DocPath != "" {
+		meta += "  " + m.styles.dim.Render("doc ") + m.styles.repo.Render(t.DocPath)
+	}
 
 	out := []string{header, meta}
 	if t.SessionID != "" {

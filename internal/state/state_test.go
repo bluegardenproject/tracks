@@ -20,7 +20,7 @@ func makeTrack(id string) Track {
 }
 
 func TestKindWorktreeless(t *testing.T) {
-	for _, k := range []Kind{KindAsk, KindPlan} {
+	for _, k := range []Kind{KindAsk, KindPlan, KindDoc} {
 		if !k.Worktreeless() {
 			t.Errorf("%q should be worktreeless", k)
 		}
@@ -29,6 +29,40 @@ func TestKindWorktreeless(t *testing.T) {
 		if k.Worktreeless() {
 			t.Errorf("%q should not be worktreeless", k)
 		}
+	}
+}
+
+// KIND is rendered into a 7-wide dashboard column; a longer value
+// would break the table's alignment for every row.
+func TestKindFitsDashboardColumn(t *testing.T) {
+	for _, k := range []Kind{KindWork, KindReview, KindAsk, KindPlan, KindDoc} {
+		if len(k) > 7 {
+			t.Errorf("kind %q is %d chars, want <= 7 (dashboard KIND column width)", k, len(k))
+		}
+	}
+}
+
+func TestDocDir(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "spec.md")
+	if err := os.WriteFile(file, []byte("# spec\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := (Track{}).DocDir(); got != "" {
+		t.Errorf("DocDir() with no DocPath = %q, want empty", got)
+	}
+	if got := (Track{DocPath: file}).DocDir(); got != dir {
+		t.Errorf("DocDir() for a file = %q, want its parent %q", got, dir)
+	}
+	if got := (Track{DocPath: dir}).DocDir(); got != dir {
+		t.Errorf("DocDir() for a directory = %q, want %q", got, dir)
+	}
+	// A document deleted after track creation must not break spawning:
+	// fall back to the parent so Claude reports the missing file itself.
+	gone := filepath.Join(dir, "vanished", "deck.pdf")
+	if got := (Track{DocPath: gone}).DocDir(); got != filepath.Dir(gone) {
+		t.Errorf("DocDir() for a missing path = %q, want %q", got, filepath.Dir(gone))
 	}
 }
 

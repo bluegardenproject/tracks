@@ -178,9 +178,17 @@ type NewParams struct {
 	// review. Accepts a GitHub PR URL (…/pull/123) or a branch name
 	// (local or on origin). Only meaningful with a single repo.
 	ReviewRef string `json:"review_ref,omitempty"`
-	// Kind is the track type (work/review/ask/plan). Empty defaults to
-	// work. ask/plan are worktree-less: the daemon points Claude at the
-	// primary checkout read-only instead of creating a worktree.
+	// DocPath, when set, makes this a document-review track: the target
+	// is a local file (or directory of files) rather than a git ref, and
+	// no worktree is created. Accepts `~`-relative and relative paths;
+	// the daemon resolves and validates it (see ResolveDocPath). Any
+	// repos on the track are attached read-only, for grounding the
+	// document's claims against code.
+	DocPath string `json:"doc_path,omitempty"`
+	// Kind is the track type (work/review/ask/plan/doc). Empty defaults
+	// to work. ask/plan/doc are worktree-less — no worktree is created.
+	// ask/plan point Claude at the primary checkout read-only; doc
+	// points it at DocPath and attaches any repos for grounding.
 	Kind string `json:"kind,omitempty"`
 }
 

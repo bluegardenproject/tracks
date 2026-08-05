@@ -51,6 +51,13 @@ const (
 	// KindPlan is like KindAsk but framed to produce an implementation
 	// plan. Also worktree-less and read-only.
 	KindPlan Kind = "plan"
+
+	// KindDoc is a review of a local document (markdown, PDF, image,
+	// CSV) rather than a code diff: the target is Track.DocPath, not a
+	// git ref. Worktree-less — any repos on the track are attached for
+	// grounding claims, not for editing. Kept to <=7 chars so it fits
+	// the dashboard's KIND column.
+	KindDoc Kind = "doc"
 )
 
 // Worktreeless reports whether tracks of this kind run without their
@@ -58,7 +65,7 @@ const (
 // tracks skip worktree creation, branch tracking, diff aggregation,
 // and worktree removal.
 func (k Kind) Worktreeless() bool {
-	return k == KindAsk || k == KindPlan
+	return k == KindAsk || k == KindPlan || k == KindDoc
 }
 
 // Status is the lifecycle phase of a track.
@@ -214,10 +221,17 @@ type Track struct {
 	// the field blank.
 	Slug string `json:"slug,omitempty"`
 
-	// Kind is the track type (work/review/ask/plan). Empty in v1 files;
-	// migrated to KindWork on load. Drives worktree handling and how
-	// Claude is launched.
+	// Kind is the track type (work/review/ask/plan/doc). Empty in v1
+	// files; migrated to KindWork on load. Drives worktree handling and
+	// how Claude is launched.
 	Kind Kind `json:"kind,omitempty"`
+
+	// DocPath is the absolute path of the document under review on a
+	// KindDoc track — a file, or a directory of files. Its parent
+	// directory is passed to Claude as an --add-dir so the file is
+	// readable (documents usually live outside every configured repo).
+	// Empty on every other kind.
+	DocPath string `json:"doc_path,omitempty"`
 
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
@@ -332,6 +346,7 @@ type DraftSpec struct {
 	TaskPrompt string   `json:"task_prompt,omitempty"`
 	Slug       string   `json:"slug,omitempty"`
 	ReviewRef  string   `json:"review_ref,omitempty"`
+	DocPath    string   `json:"doc_path,omitempty"`
 	Kind       string   `json:"kind,omitempty"`
 }
 
@@ -365,6 +380,23 @@ func (t Track) Duration() time.Duration {
 // status bar tab stays readable. The unique ID suffix is appended on
 // top of this.
 const windowLabelMaxLen = 24
+
+// DocDir returns the directory Claude needs access to in order to read
+// the track's document: DocPath itself when it's a directory, its
+// parent when it's a file. Empty when the track has no DocPath.
+//
+// Falls back to the parent when the path can't be stat'd — a document
+// deleted between track creation and a later resume shouldn't break
+// spawning; Claude reports the missing file instead.
+func (t Track) DocDir() string {
+	if t.DocPath == "" {
+		return ""
+	}
+	if info, err := os.Stat(t.DocPath); err == nil && info.IsDir() {
+		return t.DocPath
+	}
+	return filepath.Dir(t.DocPath)
+}
 
 // WindowName is the tmux window name for this track. It's the single
 // source of truth: the daemon opens the window under this name and

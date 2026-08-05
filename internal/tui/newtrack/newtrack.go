@@ -59,13 +59,21 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 		return Result{ResumeID: id}, nil
 	}
 
-	if len(cfg.Repos) == 0 {
-		return Result{}, errors.New("no repos configured — run `tracks` and open Settings to add some")
-	}
-
 	repoOptions := make([]huh.Option[string], 0, len(cfg.Repos))
 	for _, r := range cfg.Repos {
 		repoOptions = append(repoOptions, huh.NewOption(r.Name, r.Name))
+	}
+
+	// Doc review is the one flow that works with no repos configured at
+	// all: the target is a file on disk, and repos are attached only to
+	// fact-check what the document claims.
+	if template == TemplateDocReview {
+		params, err := runDocReview(repoOptions)
+		return Result{Params: params}, err
+	}
+
+	if len(cfg.Repos) == 0 {
+		return Result{}, errors.New("no repos configured — run `tracks` and open Settings to add some")
 	}
 
 	if template == TemplateReview {
@@ -348,6 +356,85 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	}, nil
 }
 
+// runDocReview is the second form for the Doc review template. The
+// target is a path on disk rather than a git ref, so repos are optional
+// here — they're attached read-only, purely so the reviewer can check
+// the document's claims against real code. A deck that makes no claims
+// about any repo is a perfectly valid track with none attached.
+//
+// The path is validated against daemon.ResolveDocPath as it's typed, so
+// a typo or a `.pptx` is rejected here rather than after a track exists.
+func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
+	var (
+		docPath string
+		repos   []string
+		slug    string
+		task    = templatePrompts[TemplateDocReview]
+	)
+
+	build := func() *huh.Form {
+		fields := []huh.Field{
+			huh.NewInput().
+				Title("Document to review").
+				Description("Path to a file Claude can read directly — .md, .pdf, .png/.jpg, .csv, source. Or a directory (e.g. a deck exported one image per slide). `~` works. Export PowerPoint/Keynote/Word to PDF first.").
+				Placeholder("~/Downloads/architecture-review.pdf").
+				Validate(func(v string) error {
+					_, err := daemon.ResolveDocPath(v)
+					return err
+				}).
+				Value(&docPath),
+		}
+		if len(repoOptions) > 0 {
+			fields = append(fields, huh.NewMultiSelect[string]().
+				Title("Repos for grounding (optional)").
+				Description("Space to toggle, enter to confirm. Attached read-only so the reviewer can check the document's claims against the code. Leave empty if the document makes no claims about a repo.").
+				Options(repoOptions...).
+				Value(&repos))
+		}
+		fields = append(fields,
+			huh.NewInput().
+				Title("Slug (optional)").
+				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to use the document's filename.").
+				Placeholder("e.g. q3-architecture-deck").
+				Value(&slug),
+			huh.NewText().
+				Title("Task prompt").
+				Description("Pre-filled. Fill in audience / ground truth / focus to sharpen the review, or leave as-is.").
+				CharLimit(8192).
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("task prompt is required")
+					}
+					return nil
+				}).
+				Value(&task),
+		)
+		return huh.NewForm(huh.NewGroup(fields...))
+	}
+
+	if err := runFormWithDiscardConfirm(build); err != nil {
+		return daemon.NewParams{}, err
+	}
+
+	// Send the resolved path, not what was typed. ResolveDocPath turns a
+	// relative path into an absolute one against the *caller's* cwd, and
+	// the daemon's cwd is whatever tmux started it with — resolving there
+	// instead would reject a path that just validated here, or silently
+	// pick a same-named file under a different repo.
+	resolved, err := daemon.ResolveDocPath(docPath)
+	if err != nil {
+		return daemon.NewParams{}, err
+	}
+
+	return daemon.NewParams{
+		Repos:      repos,
+		Slug:       strings.TrimSpace(slug),
+		TaskPrompt: strings.TrimSpace(task),
+		DocPath:    resolved,
+		Kind:       kindFor(TemplateDocReview),
+	}, nil
+}
+
 // pickTemplate is the first form: a single select between the configured
 // templates. When showResume is true, a "Resume" option is appended.
 // Returns ErrCancelled when the user presses Esc.
@@ -358,6 +445,7 @@ func pickTemplate(showResume bool) (Template, error) {
 		huh.NewOption(templateLabels[TemplateAsk], TemplateAsk),
 		huh.NewOption(templateLabels[TemplatePlan], TemplatePlan),
 		huh.NewOption(templateLabels[TemplateReview], TemplateReview),
+		huh.NewOption(templateLabels[TemplateDocReview], TemplateDocReview),
 	}
 	if showResume {
 		options = append(options, huh.NewOption(templateLabels[TemplateResume], TemplateResume))
@@ -366,7 +454,7 @@ func pickTemplate(showResume bool) (Template, error) {
 		huh.NewGroup(
 			huh.NewSelect[Template]().
 				Title("Track type").
-				Description("Work edits on a branch. Ask/Plan are read-only against your primary checkout (no worktree) and can be promoted later. Review checks out a PR/branch.").
+				Description("Work edits on a branch. Ask/Plan are read-only against your primary checkout (no worktree) and can be promoted later. Review checks out a PR/branch; Doc review targets a file on disk.").
 				Options(options...).
 				DescriptionFunc(func() string { return templateDescriptions[choice] }, &choice).
 				Value(&choice),
