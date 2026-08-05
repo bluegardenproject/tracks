@@ -34,7 +34,13 @@ func bootstrap(ctx context.Context) error {
 	cfg, _ := config.Load()
 	tm := tmux.New()
 
-	if !tm.HasSession(cfg.Tmux.SessionName) {
+	// Whether this invocation is the one that started the session, as
+	// opposed to attaching a second client to a session that's already
+	// running. Only the former is "coming back to tracks", which is when
+	// the reopen offer belongs.
+	freshSession := !tm.HasSession(cfg.Tmux.SessionName)
+
+	if freshSession {
 		// The dashboard is the landing window: it shows every track
 		// at a glance and is where most users will live. We invoke
 		// `tracks dashboard` directly so the bubbletea TUI owns the
@@ -61,6 +67,17 @@ func bootstrap(ctx context.Context) error {
 	// Ensure the daemon is up.
 	if err := ensureDaemonUp(cfg); err != nil {
 		return err
+	}
+
+	// The daemon has now reconciled state, so any track that was live when
+	// tracks last stopped is sitting in `interrupted`. Offer to bring them
+	// back before we hand the terminal over to tmux — this is the only
+	// moment in the flow where we still own stdin. Gated on a fresh
+	// session so attaching a second client (or re-attaching after a
+	// detach) doesn't re-ask a question already answered; the menu entry
+	// and `tracks reopen` are there for later.
+	if freshSession {
+		offerReopen(cfg)
 	}
 
 	// Attach / switch-client.

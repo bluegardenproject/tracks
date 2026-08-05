@@ -155,7 +155,7 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		switch t.Status {
 		case state.StatusInterrupted:
 			fmt.Fprintf(os.Stderr,
-				"tracks daemon: track %s was still running when tracks last stopped; marked interrupted (press R on it in the dashboard to pick it back up)\n", t.ID)
+				"tracks daemon: track %s was still running when tracks last stopped; marked interrupted (bring it back with `tracks reopen`)\n", t.ID)
 		case state.StatusErrored:
 			if alive {
 				fmt.Fprintf(os.Stderr,
