@@ -99,6 +99,17 @@ const (
 	// `tracks` was unable to spawn it / set up the worktrees.
 	StatusErrored Status = "errored"
 
+	// StatusInterrupted means the track was still live when tracks itself
+	// went away — the tmux session was quit, the daemon was stopped, or
+	// the machine slept — so Claude was torn down mid-conversation rather
+	// than finishing. It is terminal (nothing is running) but, unlike
+	// Errored, nothing went wrong: the branch, worktree and Claude
+	// session all survive, so the track can be picked back up with
+	// `tracks resume`. Deliberately *not* Completed, so a
+	// prune-completed sweep never throws away work the user meant to
+	// come back to.
+	StatusInterrupted Status = "interrupted"
+
 	// StatusDraft is a saved-but-not-launched track: its creation
 	// parameters (repos, prompt, slug, …) are persisted in Track.Draft
 	// but no worktree exists and Claude was never spawned. Reached when
@@ -324,7 +335,9 @@ type Track struct {
 	// orphaned-by-restart note. Empty for tracks that never errored.
 	// Surfaced in the dashboard so a failed track explains itself
 	// without digging through the daemon log. On a StatusDraft track it
-	// holds the reason the last creation attempt failed.
+	// holds the reason the last creation attempt failed; on a
+	// StatusInterrupted one, what tore the track down (a deliberate quit
+	// vs. an unclean daemon exit).
 	ErrorMsg string `json:"error_msg,omitempty"`
 
 	// Draft holds the parameters needed to (re)create this track. It is
@@ -350,9 +363,27 @@ type DraftSpec struct {
 	Kind       string   `json:"kind,omitempty"`
 }
 
-// IsTerminal reports whether s is one of the end-state statuses.
+// IsTerminal reports whether s is one of the end-state statuses —
+// nothing is running and no supervisor owns the track.
 func (s Status) IsTerminal() bool {
+	return s == StatusDone || s == StatusErrored || s == StatusInterrupted
+}
+
+// Completed reports whether the track reached an end state of its own
+// accord (Claude finished, or something failed) rather than being cut
+// short by a tracks shutdown. Prune-completed uses this so interrupted
+// tracks — which the user still intends to reopen — are never swept up
+// alongside genuinely finished ones.
+func (s Status) Completed() bool {
 	return s == StatusDone || s == StatusErrored
+}
+
+// Resumable reports whether the track's Claude conversation can be
+// picked up again with `claude --resume`: it must be in an end state
+// (nothing running) and must carry the session UUID the transcript is
+// stored under.
+func (t Track) Resumable() bool {
+	return t.Status.IsTerminal() && t.SessionID != ""
 }
 
 // CanLaunch reports whether the track can be (re)created from saved

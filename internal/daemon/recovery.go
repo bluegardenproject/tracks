@@ -12,13 +12,80 @@ import (
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
+// interruptedByQuit is the note left on a track that was still live
+// when tracks was deliberately shut down (menu → Quit session, the
+// tmux session killed, or the daemon SIGTERMed).
+const interruptedByQuit = "tracks was shut down while this track was still running"
+
+// interruptedUnclean is the note left on a track the previous daemon
+// never got to finalize — it died without running its shutdown sweep
+// (SIGKILL, a crash, or the machine sleeping).
+const interruptedUnclean = "tracks stopped unexpectedly while this track was still running"
+
+// markInterruptedOnShutdown is called from Server.Stop, right after the
+// supervisors have been torn down, to record *why* every still-live
+// track stopped: tracks went away, the track didn't fail. Without this
+// the state file would just say "running" and the next start could only
+// guess (see reconcileOnStartup) — and the user would be told their
+// work errored when all they did was quit.
+//
+// StatusPR tracks are deliberately left alone: Claude already exited on
+// those and reconcileOnStartup re-adopts them into review, which is the
+// truthful state to come back to. Drafts have no process at all.
+func (s *Server) markInterruptedOnShutdown() {
+	now := time.Now().UTC()
+	for _, t := range s.store.All() {
+		if !sweepable(t) {
+			continue
+		}
+		_, _, _ = s.store.Update(t.ID, func(t *state.Track) bool {
+			if !sweepable(*t) {
+				return false
+			}
+			// Only a track Claude actually ran in can be resumed. A track
+			// cut down mid-creation has a session id but no conversation
+			// behind it, so Interrupted would offer a reopen that spawns
+			// `claude --resume` on an empty session — Errored is the honest
+			// state. Its saved Draft is usually the way back, though a
+			// creation killed before handleNew's own failure path ran won't
+			// have one.
+			if t.PID > 0 {
+				t.Status = state.StatusInterrupted
+				t.ErrorMsg = interruptedByQuit
+			} else {
+				t.Status = state.StatusErrored
+				t.ErrorMsg = creationInterrupted
+			}
+			t.ExitedAt = &now
+			return true
+		})
+	}
+}
+
+// creationInterrupted is the note left on a track that was still being
+// created (no Claude spawned yet) when tracks went away.
+const creationInterrupted = "tracks was shut down while this track was still being created"
+
+// sweepable reports whether the shutdown sweep owns this track's end
+// state. Terminal tracks are already settled, a draft has no process,
+// and a track in review is re-adopted on the next start.
+func sweepable(t state.Track) bool {
+	return !t.Status.IsTerminal() &&
+		t.Status != state.StatusDraft &&
+		t.Status != state.StatusPR
+}
+
 // reconcileOnStartup is called once during Server.Start, before
 // accepting any requests. It does two things:
 //
-//  1. Marks every non-terminal track Errored. We can't re-supervise
-//     a Claude process across daemon restarts (no portable way to
-//     reattach to a child's exit code), so the safest thing is to
-//     acknowledge the gap in observation.
+//  1. Settles every track the previous daemon left non-terminal. A
+//     clean shutdown already marked those Interrupted (see
+//     markInterruptedOnShutdown), so anything still "running" here
+//     means the previous daemon died without sweeping: the track is
+//     recorded Interrupted too, with a note saying so. The exception is
+//     a track whose PID is somehow still alive — we can't re-supervise
+//     a process across restarts, so that one is Errored and the user is
+//     told how to kill it.
 //
 //  2. Garbage-collects worktree directories that no longer have a
 //     corresponding state entry, in case the daemon crashed
@@ -66,22 +133,38 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		if len(t.Services) > 0 {
 			t.Services = stopPersistedServices(t.Services, true)
 		}
-		t.Status = state.StatusErrored
 		now := time.Now().UTC()
 		t.ExitedAt = &now
-		if alive {
+		switch {
+		case alive:
+			t.Status = state.StatusErrored
 			t.ErrorMsg = fmt.Sprintf("orphaned by a daemon restart while still running (PID %d) — the daemon can't re-supervise a process across restarts", t.PID)
-		} else {
-			t.ErrorMsg = "process was gone after a daemon restart (crash, machine sleep, or killed)"
+		case t.PID == 0:
+			// Never spawned — cut down mid-creation, so there's no
+			// conversation to come back to (see markInterruptedOnShutdown).
+			t.Status = state.StatusErrored
+			t.ErrorMsg = creationInterrupted
+		default:
+			// Nothing is running and nothing failed: tracks went away
+			// mid-conversation. Interrupted keeps it resumable and keeps it
+			// out of any prune-completed sweep.
+			t.Status = state.StatusInterrupted
+			t.ErrorMsg = interruptedUnclean
 		}
 		_ = s.store.Put(t)
-		if alive {
+		switch t.Status {
+		case state.StatusInterrupted:
 			fmt.Fprintf(os.Stderr,
-				"tracks daemon: track %s had non-terminal status with live PID %d (orphaned from previous daemon); marked errored. To kill the process, run: kill %d\n",
-				t.ID, t.PID, t.PID)
-		} else {
-			fmt.Fprintf(os.Stderr,
-				"tracks daemon: track %s had non-terminal status with no live process; marked errored\n", t.ID)
+				"tracks daemon: track %s was still running when tracks last stopped; marked interrupted (press R on it in the dashboard to pick it back up)\n", t.ID)
+		case state.StatusErrored:
+			if alive {
+				fmt.Fprintf(os.Stderr,
+					"tracks daemon: track %s had non-terminal status with live PID %d (orphaned from previous daemon); marked errored. To kill the process, run: kill %d\n",
+					t.ID, t.PID, t.PID)
+			} else {
+				fmt.Fprintf(os.Stderr,
+					"tracks daemon: track %s never finished being created; marked errored\n", t.ID)
+			}
 		}
 	}
 

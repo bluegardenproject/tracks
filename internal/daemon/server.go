@@ -71,6 +71,12 @@ type Server struct {
 	lockFile        *os.File
 	stopped         atomic.Bool
 	cancelTmuxWatch context.CancelFunc
+
+	// shuttingDown is set for the whole of Stop(). Supervisor watchers
+	// consult it so a pane dying *because we are killing it* is recorded
+	// as Interrupted by the sweep in Stop, not as a natural Done by the
+	// watcher that happens to tick first.
+	shuttingDown atomic.Bool
 }
 
 type promptCh struct {
@@ -323,6 +329,10 @@ func (s *Server) Stop() {
 	if s.stopped.Swap(true) {
 		return
 	}
+	// Announce the shutdown before anything is torn down, so the
+	// supervisor watchers stop finalizing tracks as Done from here on
+	// (markInterruptedOnShutdown owns their end state now).
+	s.shuttingDown.Store(true)
 	// Read the cancel func under the lock (it's set under the same lock
 	// in Start), but invoke it without holding the lock.
 	s.mu.Lock()
@@ -334,6 +344,9 @@ func (s *Server) Stop() {
 	// Tear down active Claude processes before closing the listener
 	// so they get a chance to finalize their logs.
 	s.stopAllSupervisors()
+	// Record why they stopped, so the next start (and the user) can tell
+	// "tracks was quit" apart from "this track failed".
+	s.markInterruptedOnShutdown()
 	s.mu.Lock()
 	mgr := s.proxyMgr
 	s.mu.Unlock()

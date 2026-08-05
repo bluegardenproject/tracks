@@ -274,9 +274,11 @@ func WorktreeTrack(t state.Track) bool {
 	return !t.Status.IsTerminal() && t.Status != state.StatusDraft && !t.Kind.Worktreeless()
 }
 
-// CompletedOnly is a PickTrack filter that excludes still-running
-// tracks. Use for Forget / Clean flows.
-func CompletedOnly(t state.Track) bool { return t.Status.IsTerminal() }
+// FinishedOnly is a PickTrack filter that excludes still-running
+// tracks. Use for Forget / Clean flows. Interrupted tracks are offered
+// too — forgetting one is an explicit choice to stop intending to
+// reopen it, which is exactly what this picker is for.
+func FinishedOnly(t state.Track) bool { return t.Status.IsTerminal() }
 
 // HasLiveWorktree is a PickTrack filter that includes any track —
 // regardless of status — that still owns at least one worktree

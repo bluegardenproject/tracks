@@ -247,6 +247,14 @@ func (sup *supervisor) finish() {
 // polling PR state and refreshing token usage until the PR closes or
 // the user ends the track. Everything else finalizes to Done as usual.
 func (s *Server) retireOrReview(sup *supervisor) {
+	// A pane that died because Stop() is killing it is not Claude
+	// finishing its work. Leave the end state to
+	// markInterruptedOnShutdown so the track reads as interrupted
+	// (resumable) rather than done.
+	if s.shuttingDown.Load() {
+		sup.finish()
+		return
+	}
 	s.mu.Lock()
 	current := s.supervisors[sup.trackID] == sup
 	s.mu.Unlock()

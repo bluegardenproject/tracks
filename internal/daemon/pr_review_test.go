@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 func TestHasOpenPR(t *testing.T) {
@@ -29,11 +31,28 @@ func TestHasOpenPR(t *testing.T) {
 // newQuietServer builds a Server with notifications disabled so
 // finalize paths don't touch the OS. It is not Started (no socket, no
 // goroutines) — enough to exercise pure state transitions.
+//
+// Both the state dir and the tmux session name are overridden even
+// though these tests don't deliberately touch either: `config.Default()`
+// points at the user's real ~/.local/state/tracks and their live `tracks`
+// tmux session, so any path or tmux call a server *does* reach (GC,
+// sentinels, worktrees, spawning a window) would land on the real thing.
+// A daemon test once deleted live worktrees that way, and another
+// spawned real Claude sessions into the attached tmux session (Bug 7 in
+// the roadmap); this keeps the isolation structural rather than a
+// property of what today's tests happen to touch. The HasSession
+// assertion mirrors newDocTestServer in docreview_test.go — if the
+// generated name somehow resolves, fail loudly instead of spawning.
 func newQuietServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := config.Default()
 	cfg.Notify.MacOS = false
 	cfg.Notify.Bell = false
+	cfg.Paths.StateDir = t.TempDir()
+	cfg.Tmux.SessionName = "tracks-test-" + strings.ReplaceAll(t.Name(), "/", "-")
+	if tmux.New().HasSession(cfg.Tmux.SessionName) {
+		t.Fatalf("test tmux session %q exists; refusing to run against a live session", cfg.Tmux.SessionName)
+	}
 	return NewServer(cfg, state.NewMemoryStore(), "test")
 }
 

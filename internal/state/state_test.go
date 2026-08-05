@@ -356,16 +356,60 @@ func TestUpdatePersistsToDisk(t *testing.T) {
 
 func TestStatusIsTerminal(t *testing.T) {
 	cases := map[Status]bool{
-		StatusPending: false,
-		StatusRunning: false,
-		StatusWaiting: false,
-		StatusPR:      false,
-		StatusDone:    true,
-		StatusErrored: true,
+		StatusPending:     false,
+		StatusRunning:     false,
+		StatusWaiting:     false,
+		StatusPR:          false,
+		StatusDone:        true,
+		StatusErrored:     true,
+		StatusInterrupted: true,
 	}
 	for s, want := range cases {
 		if s.IsTerminal() != want {
 			t.Errorf("%s.IsTerminal() = %v, want %v", s, !want, want)
+		}
+	}
+}
+
+// Completed is the narrower predicate prune / gc use: an interrupted
+// track is terminal but the user still means to reopen it, so it must
+// never count as completed.
+func TestStatusCompleted(t *testing.T) {
+	cases := map[Status]bool{
+		StatusPending:     false,
+		StatusRunning:     false,
+		StatusWaiting:     false,
+		StatusPR:          false,
+		StatusDraft:       false,
+		StatusDone:        true,
+		StatusErrored:     true,
+		StatusInterrupted: false,
+	}
+	for s, want := range cases {
+		if s.Completed() != want {
+			t.Errorf("%s.Completed() = %v, want %v", s, !want, want)
+		}
+	}
+}
+
+func TestTrackResumable(t *testing.T) {
+	const sid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+	cases := []struct {
+		name string
+		trk  Track
+		want bool
+	}{
+		{"running", Track{Status: StatusRunning, SessionID: sid}, false},
+		{"in review", Track{Status: StatusPR, SessionID: sid}, false},
+		{"draft", Track{Status: StatusDraft, SessionID: sid}, false},
+		{"done", Track{Status: StatusDone, SessionID: sid}, true},
+		{"errored", Track{Status: StatusErrored, SessionID: sid}, true},
+		{"interrupted", Track{Status: StatusInterrupted, SessionID: sid}, true},
+		{"interrupted without session", Track{Status: StatusInterrupted}, false},
+	}
+	for _, c := range cases {
+		if got := c.trk.Resumable(); got != c.want {
+			t.Errorf("%s: Resumable() = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
