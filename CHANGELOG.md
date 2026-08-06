@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/bluegardenproject/tracks/compare/v0.4.0...v0.4.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* **release:** drop the windows build that blocked binary uploads ([69d857b](https://github.com/bluegardenproject/tracks/commit/69d857b41719d6e408ec16c5bdf186f083fbc843))
+
 ## [0.4.0](https://github.com/bluegardenproject/tracks/compare/v0.3.1...v0.4.0) (2026-08-05)
 
 
