@@ -46,6 +46,19 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # The release job cross-compiles these exact targets. Build them
+      # here too so a platform-specific break fails the PR instead of
+      # silently shipping a release with no binaries attached.
+      - name: Cross-compile release targets
+        env:
+          CGO_ENABLED: 0
+        run: |
+          set -euo pipefail
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            echo "==> $target"
+            GOOS="${target%/*}" GOARCH="${target#*/}" go build -o /dev/null .
+          done
+
   test:
     name: Build & test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}

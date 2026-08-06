@@ -10,7 +10,7 @@ build:
 	@go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 	@echo "Built ./$(BINARY_NAME)"
 
-# Cross-compile to dist/ for the 5 release targets. CGO is off so the
+# Cross-compile to dist/ for the 4 release targets. CGO is off so the
 # resulting binaries are fully static and don't depend on libc on the
 # host they're installed to.
 build-all:
@@ -20,7 +20,6 @@ build-all:
 	@CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-linux-arm64 .
 	@CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-darwin-amd64 .
 	@CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-darwin-arm64 .
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-windows-amd64.exe .
 	@echo "Built all platform binaries in dist/"
 
 release: clean build-all
