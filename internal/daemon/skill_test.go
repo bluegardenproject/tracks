@@ -25,7 +25,12 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 			name:     "tracks-reviewer",
 			body:     reviewerAgentTemplate,
 			wantName: "name: tracks-reviewer",
-			wantAll:  []string{"REVIEW OUTCOME: pass", "REVIEW OUTCOME: blocked"},
+			wantAll: []string{
+				"REVIEW OUTCOME: pass",
+				"REVIEW OUTCOME: blocked",
+				"## Candor level",
+				"Candor level: 3/10",
+			},
 		},
 		{
 			name:     "tracks-docs-reviewer",
@@ -34,12 +39,19 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 			wantAll: []string{
 				"DOC REVIEW OUTCOME: ship | revise | rework",
 				"## Strengths (keep)",
+				"## Opinion",
 				"## Findings",
 				"## Claim check",
 				"## Not checked",
 				"confirmed",
 				"contradicted",
 				"unverified",
+				"## Candor level",
+				// The brief the daemon renders (claude.docReviewBrief) uses
+				// exactly these keys; the agent has to recognise them.
+				"`Candor level: N/10`",
+				"`Opinion section: ON|OFF`",
+				"`Claim check: ON|OFF`",
 			},
 		},
 	}
@@ -60,6 +72,41 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Candor is a delivery setting. An agent that read a high level as
+// permission to drop or downgrade findings would turn the dial into a
+// way of ordering a friendlier verdict, so the invariant is pinned in
+// both templates rather than left to the wording of the scale.
+func TestCandorIsDeliveryOnlyInBothAgents(t *testing.T) {
+	for name, body := range map[string]string{
+		"tracks-reviewer":      reviewerAgentTemplate,
+		"tracks-docs-reviewer": docsReviewerAgentTemplate,
+	} {
+		if !strings.Contains(body, "**Candor changes wording only.**") {
+			t.Errorf("%s: missing the candor delivery-only invariant", name)
+		}
+	}
+}
+
+// The optional sections have to be gated in the workflow, not only
+// listed in the report skeleton: an agent that runs the verification
+// lookups and then hides the table has ignored the point of switching
+// claim check off.
+func TestDocsReviewerGatesOptionalSections(t *testing.T) {
+	for _, want := range []string{
+		"*(Claim check ON only",
+		"*(Opinion ON only.)*",
+		"**When claim check is OFF**",
+		"repo, GitHub, or Jira lookups",
+		// Both switches can be off at once, so findings must come from a
+		// step no switch gates — otherwise that review has no source.
+		"*(Always — this is the section no switch turns\n   off.)*",
+	} {
+		if !strings.Contains(docsReviewerAgentTemplate, want) {
+			t.Errorf("docs reviewer template missing %q", want)
+		}
 	}
 }
 

@@ -197,6 +197,17 @@ type NewParams struct {
 	// ask/plan point Claude at the primary checkout read-only; doc
 	// points it at DocPath and attaches any repos for grounding.
 	Kind string `json:"kind,omitempty"`
+	// Candor sets how bluntly a review is delivered, 1 (radical candor)
+	// to 10 (honest but gently framed). Zero means "unset" and the
+	// daemon applies state.DefaultCandor. Only kept on review and
+	// doc-review tracks; ignored (and cleared) on the others.
+	Candor int `json:"candor,omitempty"`
+	// DocSkipClaimCheck turns off the doc review's claim verification:
+	// no repo/GitHub/Jira lookups and no claim-check table.
+	DocSkipClaimCheck bool `json:"doc_skip_claim_check,omitempty"`
+	// DocSkipOpinion turns off the doc review's opinion section — the
+	// reviewer's judgement of the argument, reasoning, and readability.
+	DocSkipOpinion bool `json:"doc_skip_opinion,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.

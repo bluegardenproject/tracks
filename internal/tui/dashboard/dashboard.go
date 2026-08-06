@@ -1086,6 +1086,23 @@ func (m *model) renderServices(t state.Track) string {
 	return m.styles.dim.Render(s)
 }
 
+// docSectionsOff names the optional doc-review sections the track
+// turned off, for the detail panel. Empty when the review runs whole —
+// the panel only reports the narrowing, not the default.
+func docSectionsOff(t state.Track) string {
+	if t.Kind != state.KindDoc {
+		return ""
+	}
+	var off []string
+	if t.DocSkipOpinion {
+		off = append(off, "opinion")
+	}
+	if t.DocSkipClaimCheck {
+		off = append(off, "claim-check")
+	}
+	return strings.Join(off, ",")
+}
+
 func joinRepos(rs []state.TrackRepo) string {
 	names := make([]string, 0, len(rs))
 	for _, r := range rs {

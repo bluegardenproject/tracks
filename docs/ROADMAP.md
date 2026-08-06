@@ -362,6 +362,27 @@ Move completed items here with a date, then delete once the dust settles.
   **remove**, and `x` / `X` now go through a modal y/n confirmation (as does
   the menu's remove flow). This supersedes the 2026-07-01 `StatusPR` entry
   below.
+
+- **2026-08-06 — Review shape: candor dial, optional claim check, Opinion.**
+  First round of feedback on the doc-review flow. Review and doc-review tracks
+  now carry a **candor** level (`Track.Candor`, 1–10, default 3 — blunt by
+  default because a review that reads as optional gets skipped), rendered into
+  the prompt as a brief the main agent forwards to the reviewer subagent. Both
+  reviewer agents pin the same invariant: candor is *delivery only* — it never
+  changes which findings are reported, their severity, or the verdict, since a
+  dial that could also drop findings would be a way to order a friendlier
+  verdict. Doc reviews additionally get two switches
+  (`DocSkipClaimCheck` / `DocSkipOpinion`, stored as negations so old tracks
+  keep both sections): **claim check** is now optional — OFF skips the lookups
+  entirely, not just the table, and a shaky claim becomes an unverified `warn`
+  — and a new **Opinion** section judges the argument, whether the content
+  holds up, what's missing, and how easily it reads, with content and argument
+  problems now first-class findings rather than fact-checks only. The switches
+  ride on the draft so a relaunch runs the same review, and are cleared on the
+  kinds that don't read them. `internal/state`,
+  `internal/daemon/{skill,handlers,protocol}`, `internal/claude/spawn`,
+  `internal/tui/{newtrack,dashboard}`.
+
 - **2026-08-05 — Doc-review track type.** New worktree-less `doc` kind whose
   target is a path on disk (a file, or a directory of files) rather than a git
   ref: `.md`/`.pdf`/images/`.csv` — anything Claude can read directly.

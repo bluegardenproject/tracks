@@ -159,6 +159,111 @@ func TestBuildOptionsDocReview(t *testing.T) {
 	}
 }
 
+// docTrack is a doc-review track pointed at a real (empty) file, since
+// BuildOptions stats DocPath to decide the --add-dir grant.
+func docTrack(t *testing.T) state.Track {
+	t.Helper()
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "spec.md")
+	if err := os.WriteFile(doc, []byte("# spec\n"), 0o644); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+	tr := baseTrack(state.KindDoc)
+	tr.DocPath = doc
+	return tr
+}
+
+// The brief is the only thing carrying the user's review settings to the
+// subagent, so each switch has to appear in words — the ON states too.
+// An omitted line reads as "unspecified" and lets the subagent fall back
+// to its own default.
+func TestBuildOptionsDocReviewBriefDefaults(t *testing.T) {
+	tr := docTrack(t) // Candor unset, neither section skipped
+	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Candor level: 3/10",
+		"Opinion section: ON",
+		"Claim check: ON",
+	} {
+		if !strings.Contains(opts.TaskPrompt, want) {
+			t.Errorf("doc prompt missing %q", want)
+		}
+	}
+}
+
+func TestBuildOptionsDocReviewBriefHonoursPicks(t *testing.T) {
+	tr := docTrack(t)
+	tr.Candor = 9
+	tr.DocSkipOpinion = true
+	tr.DocSkipClaimCheck = true
+
+	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Candor level: 9/10",
+		"Opinion section: OFF",
+		"Claim check: OFF",
+	} {
+		if !strings.Contains(opts.TaskPrompt, want) {
+			t.Errorf("doc prompt missing %q", want)
+		}
+	}
+	if strings.Contains(opts.TaskPrompt, "Claim check: ON") {
+		t.Error("claim check was switched off but the prompt still says ON")
+	}
+}
+
+// An out-of-range candor (a hand-edited state file, or a track written
+// before the setting existed) must not leak into the prompt as-is.
+func TestBuildOptionsDocReviewBriefClampsCandor(t *testing.T) {
+	tr := docTrack(t)
+	tr.Candor = 42
+
+	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(opts.TaskPrompt, "Candor level: 3/10") {
+		t.Error("out-of-range candor should fall back to the default level")
+	}
+	if strings.Contains(opts.TaskPrompt, "42/10") {
+		t.Error("out-of-range candor leaked into the prompt")
+	}
+}
+
+// Candor reaches the code reviewer too, but only for review tracks —
+// a work track's prompt has no review subagent to brief.
+func TestBuildOptionsReviewCarriesCandor(t *testing.T) {
+	tr := baseTrack(state.KindReview)
+	tr.Candor = 7
+
+	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(opts.TaskPrompt, "Candor level: 7/10") {
+		t.Errorf("review prompt should brief the subagent with the candor level, got:\n%s", opts.TaskPrompt)
+	}
+	if !strings.Contains(opts.TaskPrompt, "TRACKS_PR_URL") {
+		t.Error("review prompt should still carry the work suffix")
+	}
+}
+
+func TestBuildOptionsWorkOmitsCandor(t *testing.T) {
+	opts, err := BuildOptions(config.Default(), baseTrack(state.KindWork), "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(opts.TaskPrompt, "Candor level") {
+		t.Error("work prompt should not carry a review candor brief")
+	}
+}
+
 // A doc review needs no repos: a deck that makes no claims about any
 // code is a valid track. The pane then opens in the document's own
 // directory rather than the user's home.

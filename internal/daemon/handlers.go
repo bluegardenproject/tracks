@@ -182,6 +182,19 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		return fail("a doc review needs a document path (a local file or directory)")
 	}
 
+	// Review shape. Candor and the section switches only mean something
+	// to a review, so they're cleared on the other kinds rather than
+	// stored as dead weight a later promotion could inherit.
+	if p.Candor != 0 && (p.Candor < state.MinCandor || p.Candor > state.MaxCandor) {
+		return fail(fmt.Sprintf("candor must be between %d and %d (got %d)", state.MinCandor, state.MaxCandor, p.Candor))
+	}
+	candor := p.Candor
+	if kind != state.KindReview && kind != state.KindDoc {
+		candor = 0
+	}
+	skipClaimCheck := p.DocSkipClaimCheck && kind == state.KindDoc
+	skipOpinion := p.DocSkipOpinion && kind == state.KindDoc
+
 	// Work and review tracks need a worktree, so they require at least
 	// one repo. Ask/plan are worktree-less and may run with none — a
 	// general question needn't be tied to any repo.
@@ -226,16 +239,19 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	// shows up in the dashboard, where the preserved prompt makes it easy
 	// to retry and the message makes it easy to debug.
 	t := state.Track{
-		ID:         trackID,
-		Branch:     branch,
-		Slug:       slug,
-		Kind:       kind,
-		Status:     state.StatusPending,
-		DocPath:    docPath,
-		LogPath:    logPath,
-		TaskPrompt: p.TaskPrompt,
-		SessionID:  sessionID,
-		CreatedAt:  time.Now().UTC(),
+		ID:                trackID,
+		Branch:            branch,
+		Slug:              slug,
+		Kind:              kind,
+		Status:            state.StatusPending,
+		DocPath:           docPath,
+		Candor:            candor,
+		DocSkipClaimCheck: skipClaimCheck,
+		DocSkipOpinion:    skipOpinion,
+		LogPath:           logPath,
+		TaskPrompt:        p.TaskPrompt,
+		SessionID:         sessionID,
+		CreatedAt:         time.Now().UTC(),
 	}
 	// draft captures exactly what the user entered so a failed creation
 	// can be saved and relaunched without re-typing anything. Stored on
@@ -248,8 +264,11 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		ReviewRef:  strings.TrimSpace(p.ReviewRef),
 		// Resolved, not raw: a relative path would otherwise re-resolve
 		// against the daemon's cwd on a later relaunch.
-		DocPath: docPath,
-		Kind:    string(kind),
+		DocPath:           docPath,
+		Kind:              string(kind),
+		Candor:            candor,
+		DocSkipClaimCheck: skipClaimCheck,
+		DocSkipOpinion:    skipOpinion,
 	}
 	// failCreate persists the in-progress track as errored (with the
 	// reason and the draft spec) and returns the wire error, so the
@@ -1167,12 +1186,15 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 	}
 
 	params := NewParams{
-		Repos:      t.Draft.Repos,
-		TaskPrompt: t.Draft.TaskPrompt,
-		Slug:       t.Draft.Slug,
-		ReviewRef:  t.Draft.ReviewRef,
-		DocPath:    t.Draft.DocPath,
-		Kind:       t.Draft.Kind,
+		Repos:             t.Draft.Repos,
+		TaskPrompt:        t.Draft.TaskPrompt,
+		Slug:              t.Draft.Slug,
+		ReviewRef:         t.Draft.ReviewRef,
+		DocPath:           t.Draft.DocPath,
+		Kind:              t.Draft.Kind,
+		Candor:            t.Draft.Candor,
+		DocSkipClaimCheck: t.Draft.DocSkipClaimCheck,
+		DocSkipOpinion:    t.Draft.DocSkipOpinion,
 	}
 	rawNew, err := json.Marshal(params)
 	if err != nil {

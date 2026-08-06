@@ -245,6 +245,86 @@ func TestNewDocTrackDraftRoundTrip(t *testing.T) {
 	}
 }
 
+// The review shape (candor + section switches) has to reach both the
+// track and its draft, or a relaunch would silently run a different
+// review than the one the user configured.
+func TestNewDocTrackCarriesReviewShape(t *testing.T) {
+	srv, store := newDocTestServer(t)
+	tr := createDoc(t, srv, store, NewParams{
+		TaskPrompt:        "review it",
+		DocPath:           newDoc(t, "spec.md"),
+		Candor:            8,
+		DocSkipClaimCheck: true,
+	})
+
+	if tr.Candor != 8 {
+		t.Errorf("Candor = %d, want 8", tr.Candor)
+	}
+	if !tr.DocSkipClaimCheck {
+		t.Error("DocSkipClaimCheck lost on the track")
+	}
+	if tr.DocSkipOpinion {
+		t.Error("DocSkipOpinion set when the client didn't ask for it")
+	}
+	if tr.Draft == nil {
+		t.Fatal("failed creation should capture a draft")
+	}
+	if tr.Draft.Candor != 8 || !tr.Draft.DocSkipClaimCheck || tr.Draft.DocSkipOpinion {
+		t.Errorf("draft lost the review shape: %+v", tr.Draft)
+	}
+}
+
+// Candor only means something to a review, and the doc section switches
+// only to a doc review. Storing them on other kinds would leave a work
+// track carrying settings nothing reads.
+func TestNewClearsReviewShapeOnOtherKinds(t *testing.T) {
+	srv, store := newDocTestServer(t)
+	raw, err := json.Marshal(NewParams{
+		TaskPrompt:        "answer it",
+		Kind:              "ask",
+		Candor:            9,
+		DocSkipOpinion:    true,
+		DocSkipClaimCheck: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.handleNew(context.Background(), raw, func(string) {})
+	tracks := store.All()
+	if len(tracks) != 1 {
+		t.Fatalf("expected 1 persisted track, got %d", len(tracks))
+	}
+	tr := tracks[0]
+	if tr.Candor != 0 || tr.DocSkipOpinion || tr.DocSkipClaimCheck {
+		t.Errorf("ask track kept review shape: candor=%d skipOpinion=%v skipClaimCheck=%v",
+			tr.Candor, tr.DocSkipOpinion, tr.DocSkipClaimCheck)
+	}
+}
+
+// An out-of-range candor is rejected at creation rather than clamped:
+// the only way to send one is a buggy client, and silently reinterpreting
+// it would hide that.
+func TestNewRejectsOutOfRangeCandor(t *testing.T) {
+	for _, candor := range []int{-1, 11, 99} {
+		srv, store := newDocTestServer(t)
+		raw, err := json.Marshal(NewParams{
+			TaskPrompt: "review it",
+			DocPath:    newDoc(t, "spec.md"),
+			Candor:     candor,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp := srv.handleNew(context.Background(), raw, func(string) {})
+		if resp.Ok || !strings.Contains(resp.Error, "candor must be between") {
+			t.Errorf("candor %d: want a range rejection, got ok=%v err=%q", candor, resp.Ok, resp.Error)
+		}
+		if n := len(store.All()); n != 0 {
+			t.Errorf("candor %d: persisted %d tracks for a rejected creation", candor, n)
+		}
+	}
+}
+
 func TestNewDocTrackRejections(t *testing.T) {
 	cases := []struct {
 		name string

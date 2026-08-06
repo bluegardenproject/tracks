@@ -304,6 +304,21 @@ type Track struct {
 	// Empty on every other kind.
 	DocPath string `json:"doc_path,omitempty"`
 
+	// Candor dials the *delivery* of a review on KindReview / KindDoc
+	// tracks: 1 is radical candor, 10 is honest but gently framed. Zero
+	// means the user didn't pick one — read it through CandorLevel(),
+	// which supplies DefaultCandor. Never affects which findings a review
+	// reports or their severity; see claude.docReviewBrief and
+	// claude.reviewCandorSuffix for how it reaches the reviewer.
+	Candor int `json:"candor,omitempty"`
+
+	// DocSkipClaimCheck / DocSkipOpinion drop one of the optional
+	// sections of a doc review. Stored as negations so the zero value —
+	// and therefore every track written before these existed — keeps
+	// both sections on.
+	DocSkipClaimCheck bool `json:"doc_skip_claim_check,omitempty"`
+	DocSkipOpinion    bool `json:"doc_skip_opinion,omitempty"`
+
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
 	// appended).
@@ -409,12 +424,15 @@ type Track struct {
 // NewParams; kept in the state package so it can live on Track without
 // state importing the daemon package.
 type DraftSpec struct {
-	Repos      []string `json:"repos,omitempty"`
-	TaskPrompt string   `json:"task_prompt,omitempty"`
-	Slug       string   `json:"slug,omitempty"`
-	ReviewRef  string   `json:"review_ref,omitempty"`
-	DocPath    string   `json:"doc_path,omitempty"`
-	Kind       string   `json:"kind,omitempty"`
+	Repos             []string `json:"repos,omitempty"`
+	TaskPrompt        string   `json:"task_prompt,omitempty"`
+	Slug              string   `json:"slug,omitempty"`
+	ReviewRef         string   `json:"review_ref,omitempty"`
+	DocPath           string   `json:"doc_path,omitempty"`
+	Kind              string   `json:"kind,omitempty"`
+	Candor            int      `json:"candor,omitempty"`
+	DocSkipClaimCheck bool     `json:"doc_skip_claim_check,omitempty"`
+	DocSkipOpinion    bool     `json:"doc_skip_opinion,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses —
@@ -583,6 +601,56 @@ func (t Track) DocDir() string {
 		return t.DocPath
 	}
 	return filepath.Dir(t.DocPath)
+}
+
+// Candor bounds. The scale runs 1 (radical candor) to 10 (honest but
+// gently framed); DefaultCandor leans blunt deliberately — a review
+// that reads as optional is a review the reader skips.
+const (
+	MinCandor     = 1
+	MaxCandor     = 10
+	DefaultCandor = 3
+)
+
+// CandorLevel is the track's review candor, normalised. Zero (the user
+// never picked one, or the track predates the setting) and any
+// out-of-range value fall back to DefaultCandor.
+func (t Track) CandorLevel() int {
+	if t.Candor < MinCandor || t.Candor > MaxCandor {
+		return DefaultCandor
+	}
+	return t.Candor
+}
+
+// candorLabels is the one-phrase gloss for each level. Lives here so the
+// new-track picker and the prompt the daemon renders for Claude describe
+// the same scale — and so a level still reads unambiguously in the
+// prompt even if the reviewer agent definition is stale or missing.
+//
+// The band names (radical candor / direct / measured / diplomatic /
+// gently framed) are the ones the reviewer agents use for the same pairs
+// of levels, so a user who picks 6 here and reads the agent definition
+// finds their choice described in the same words.
+var candorLabels = [MaxCandor + 1]string{
+	1:  "radical candor — lead with the problem, no cushioning",
+	2:  "radical candor — blunt, with minimal framing",
+	3:  "direct — plain statements, no hedging",
+	4:  "direct — states the problem, adds the why",
+	5:  "measured — neutral and even-handed",
+	6:  "measured — findings posed as shared problems",
+	7:  "diplomatic — leads with what works, findings as suggestions",
+	8:  "diplomatic — soft framing, problems posed as questions",
+	9:  "gently framed — heavily cushioned, nothing stated flatly",
+	10: "gently framed — maximally kind wording, still nothing omitted",
+}
+
+// CandorLabel describes a candor level in one phrase. Out-of-range
+// levels get DefaultCandor's label, matching CandorLevel.
+func CandorLabel(level int) string {
+	if level < MinCandor || level > MaxCandor {
+		level = DefaultCandor
+	}
+	return candorLabels[level]
 }
 
 // WindowName is the tmux window name for this track. It's the single

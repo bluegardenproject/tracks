@@ -92,7 +92,7 @@ var templateDescriptions = map[Template]string{
 	TemplateAsk:       "Points Claude at your primary checkout read-only. Promote later to start editing.",
 	TemplatePlan:      "Read-only planning against your primary checkout. Promote later to implement.",
 	TemplateReview:    "Checks out a PR/branch detached so the reviewer agent can diff it.",
-	TemplateDocReview: "Reviews a file on disk (md/pdf/image/csv) and fact-checks its claims against your repos, GitHub, and Jira.",
+	TemplateDocReview: "Reviews a file on disk (md/pdf/image/csv): judges the argument and how it reads, and optionally fact-checks its claims against your repos, GitHub, and Jira.",
 	TemplateResume:    "Picks a finished track — including ones interrupted by a quit — and reopens its Claude conversation.",
 }
 
