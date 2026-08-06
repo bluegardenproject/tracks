@@ -40,8 +40,13 @@ Inside the session, press `<prefix>+t` to open the menu:
   are read-only against your primary checkout and can be promoted to a
   worktree later. **Review** checks a PR or branch out detached and diffs it.
   **Doc review** points at a file on disk — a spec, one-pager, or deck
-  exported to PDF — and fact-checks its claims against your repos, GitHub,
-  and Jira, then offers to save the report next to the document.
+  exported to PDF — and reports findings on it, then offers to save the report
+  next to the document. Two sections are switchable, both on by default:
+  **Opinion** (is the argument sound, does the content hold up, how easily
+  does it read) and **Claim check** (fact-check its claims against your repos,
+  GitHub, and Jira). Review and Doc review also ask for a **candor** level
+  from 1 (radical candor) to 10 (honest but gently framed), which changes how
+  the findings are worded and nothing else.
 - **Dashboard** — live list of all tracks, statuses, PR URLs.
 - **Reopen interrupted tracks** — brings back everything that was still
   running when tracks was last quit (see below).

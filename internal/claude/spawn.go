@@ -205,16 +205,24 @@ const taskSuffix = "" +
 // prompting one as a backstop, which leaves this contract the main thing
 // standing between Claude and the attached primary checkouts.
 //
-// %s is the resolved document path.
+// %[1]s is the resolved document path; %[2]s is the review brief from
+// docReviewBrief (candor level and which optional sections to run).
 const docReviewTemplate = "" +
 	"You're running interactively inside a `tracks` doc-review track. " +
 	"The user can switch into this tmux pane at any time to reply.\n\n" +
-	"**The document under review is:** `%s`\n\n" +
+	"**The document under review is:** `%[1]s`\n\n" +
 	"Run the review through the dedicated subagent rather than " +
 	"reviewing it yourself:\n\n" +
 	"    Task({ subagent_type: \"tracks-docs-reviewer\", prompt: " +
 	"\"Review the document at <path>. Repos attached for grounding: " +
 	"<names or none>.\" })\n\n" +
+	"**Review brief.** These are the user's settings for this review. " +
+	"Append them verbatim to the subagent's prompt — they are not " +
+	"defaults for you to reinterpret, and a section switched off must " +
+	"stay off:\n\n" +
+	"%[2]s\n\n" +
+	"Candor governs wording only. It never changes which findings the " +
+	"review reports, their severity, or the verdict.\n\n" +
 	"The subagent is auto-discovered from the user's global Claude " +
 	"config — no setup needed. It is read-only and ends its report " +
 	"with a `DOC REVIEW OUTCOME:` line.\n\n" +
@@ -241,6 +249,47 @@ const docReviewTemplate = "" +
 	"**Response style.** These sessions are read in a dashboard — no " +
 	"preamble, no closing summary restating the report. Lead with the " +
 	"report itself."
+
+// docReviewBrief renders the indented block of review settings the
+// caller must forward to the docs-reviewer subagent: the candor level
+// and whether each optional section runs.
+//
+// Both switches are stated explicitly, ON as well as OFF. An omitted
+// line reads as "unspecified" and invites the subagent to fall back to
+// its own default, which is exactly the reinterpretation the brief
+// exists to prevent.
+func docReviewBrief(t state.Track) string {
+	level := t.CandorLevel()
+	lines := []string{
+		fmt.Sprintf("    Candor level: %d/10 (%s). 1 = radical candor, 10 = honest but gently framed.", level, state.CandorLabel(level)),
+	}
+	if t.DocSkipOpinion {
+		lines = append(lines, "    Opinion section: OFF — skip it; report findings only.")
+	} else {
+		lines = append(lines, "    Opinion section: ON — judge the argument, the reasoning, "+
+			"whether the content holds up, and how easily it reads for its audience.")
+	}
+	if t.DocSkipClaimCheck {
+		lines = append(lines, "    Claim check: OFF — do not verify claims. No repo, GitHub, or Jira "+
+			"lookups and no claim-check table; flag a claim that looks shaky as an unverified `warn` instead.")
+	} else {
+		lines = append(lines, "    Claim check: ON — verify the load-bearing claims and report the claim-check table.")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// reviewCandorSuffix is appended for KindReview (code) tracks so the
+// candor level reaches tracks-reviewer the same way it reaches the docs
+// reviewer. Kept short: unlike a doc review, nothing else about a code
+// review's shape is configurable.
+func reviewCandorSuffix(level int) string {
+	return fmt.Sprintf("\n\n**Review candor: %d/10** (%s) — 1 is radical "+
+		"candor, 10 is honest but gently framed. Include the line "+
+		"`Candor level: %d/10` in the review subagent's prompt. Candor "+
+		"governs wording only: it never changes which findings are "+
+		"reported, their severity, or the pass/blocked verdict.",
+		level, state.CandorLabel(level), level)
+}
 
 // readOnlySuffix is appended for worktree-less (ask/plan) tracks. They
 // point at the user's PRIMARY checkout (the one their editor watches),
@@ -346,7 +395,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	permMode := cfg.Claude.PermissionMode
 	if t.Kind == state.KindDoc {
 		permMode = docPermissionMode(permMode)
-		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath)
+		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath, docReviewBrief(t))
 	} else if t.Kind.Worktreeless() {
 		permMode = "plan"
 		if len(t.Repos) > 0 {
@@ -356,6 +405,9 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		prompt += "\n\n" + taskSuffix
 		if draft := draftPRRepos(cfg, t.Repos); len(draft) > 0 {
 			prompt += draftPRSuffix(draft, len(t.Repos))
+		}
+		if t.Kind == state.KindReview {
+			prompt += reviewCandorSuffix(t.CandorLevel())
 		}
 	}
 

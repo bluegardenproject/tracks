@@ -66,6 +66,38 @@ func TestDocDir(t *testing.T) {
 	}
 }
 
+// Zero means "the user never picked one" — including every track
+// written before candor existed — so it has to read as the default
+// rather than as level 0.
+func TestCandorLevel(t *testing.T) {
+	for candor, want := range map[int]int{
+		0:   DefaultCandor,
+		-3:  DefaultCandor,
+		11:  DefaultCandor,
+		1:   1,
+		3:   3,
+		10:  10,
+		999: DefaultCandor,
+	} {
+		if got := (Track{Candor: candor}).CandorLevel(); got != want {
+			t.Errorf("Track{Candor: %d}.CandorLevel() = %d, want %d", candor, got, want)
+		}
+	}
+}
+
+// Every level needs a gloss: the picker renders one per option and the
+// spawn prompt embeds it, so a gap would show up as a blank label.
+func TestCandorLabelCoversEveryLevel(t *testing.T) {
+	for level := MinCandor; level <= MaxCandor; level++ {
+		if CandorLabel(level) == "" {
+			t.Errorf("no label for candor level %d", level)
+		}
+	}
+	if CandorLabel(0) != CandorLabel(DefaultCandor) {
+		t.Error("an out-of-range level should describe the default, matching CandorLevel")
+	}
+}
+
 func TestKindRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	fs, err := OpenFileStore(dir)
@@ -84,6 +116,39 @@ func TestKindRoundtrip(t *testing.T) {
 	got, _ := fs2.Get("a")
 	if got.Kind != KindPlan {
 		t.Errorf("kind = %q, want plan", got.Kind)
+	}
+}
+
+// Track has a hand-written UnmarshalJSON (it folds the pre-v3 single-PR
+// fields into PRs), so every field added to the struct passes through a
+// decoder that could silently drop it. Pin the review-shape fields
+// through a real write-and-reload.
+func TestReviewShapeRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := makeTrack("a")
+	tr.Kind = KindDoc
+	tr.Candor = 8
+	tr.DocSkipClaimCheck = true
+	if err := fs.Put(tr); err != nil {
+		t.Fatal(err)
+	}
+	fs2, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := fs2.Get("a")
+	if got.Candor != 8 {
+		t.Errorf("Candor = %d, want 8 after a reload", got.Candor)
+	}
+	if !got.DocSkipClaimCheck {
+		t.Error("DocSkipClaimCheck lost across a reload")
+	}
+	if got.DocSkipOpinion {
+		t.Error("DocSkipOpinion set after a reload; it was never stored")
 	}
 }
 

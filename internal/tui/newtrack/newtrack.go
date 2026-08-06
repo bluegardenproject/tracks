@@ -11,6 +11,7 @@ package newtrack
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -294,6 +295,33 @@ func PickFailureAction(reason string) (FailureAction, error) {
 	return FailureDismiss, nil
 }
 
+// docSection values for the optional-sections multi-select on the
+// doc-review form. Findings and Strengths aren't offered — a review
+// without them isn't a review.
+const (
+	docSectionOpinion    = "opinion"
+	docSectionClaimCheck = "claim-check"
+)
+
+// candorField builds the review-tone select shared by the review and
+// doc-review forms. v must already hold the default level: huh preselects
+// the option matching the bound value.
+func candorField(v *int) *huh.Select[int] {
+	options := make([]huh.Option[int], 0, state.MaxCandor)
+	for level := state.MinCandor; level <= state.MaxCandor; level++ {
+		label := fmt.Sprintf("%d — %s", level, state.CandorLabel(level))
+		if level == state.DefaultCandor {
+			label += " (default)"
+		}
+		options = append(options, huh.NewOption(label, level))
+	}
+	return huh.NewSelect[int]().
+		Title("Candor").
+		Description("How bluntly the review is written: 1 is radical candor, 10 is honest but gently framed. Wording only — it never changes which findings are reported, their severity, or the verdict.").
+		Options(options...).
+		Value(v)
+}
+
 // runReview is the second form for the Review template. A review
 // targets one repo and one PR/branch, so we use a single-select repo
 // and a required target field — unlike the free-form flow, where the
@@ -303,6 +331,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		repo      string
 		reviewRef string
 		slug      string
+		candor    = state.DefaultCandor
 		task      = templatePrompts[TemplateReview]
 	)
 
@@ -330,6 +359,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
 					Placeholder("e.g. rate-bug-review").
 					Value(&slug),
+				candorField(&candor),
 				huh.NewText().
 					Title("Task prompt").
 					Description("What should Claude do? Pre-filled with the review prompt — tweak as needed.").
@@ -354,6 +384,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 		ReviewRef:  strings.TrimSpace(reviewRef),
+		Candor:     candor,
 	}, nil
 }
 
@@ -370,7 +401,11 @@ func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		docPath string
 		repos   []string
 		slug    string
-		task    = templatePrompts[TemplateDocReview]
+		candor  = state.DefaultCandor
+		// Both optional sections start selected — the useful default is a
+		// full review, and the switches exist to trim it down.
+		sections = []string{docSectionOpinion, docSectionClaimCheck}
+		task     = templatePrompts[TemplateDocReview]
 	)
 
 	build := func() *huh.Form {
@@ -398,6 +433,15 @@ func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to use the document's filename.").
 				Placeholder("e.g. q3-architecture-deck").
 				Value(&slug),
+			candorField(&candor),
+			huh.NewMultiSelect[string]().
+				Title("Optional review sections").
+				Description("Space to toggle, enter to confirm. Findings and Strengths always run. Turning a section off drops it from the report entirely.").
+				Options(
+					huh.NewOption("Opinion — is the argument sound, does the content hold up, does it read well", docSectionOpinion),
+					huh.NewOption("Claim check — verify the claims against your repos, GitHub, and Jira", docSectionClaimCheck),
+				).
+				Value(&sections),
 			huh.NewText().
 				Title("Task prompt").
 				Description("Pre-filled. Fill in audience / ground truth / focus to sharpen the review, or leave as-is.").
@@ -428,11 +472,14 @@ func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	}
 
 	return daemon.NewParams{
-		Repos:      repos,
-		Slug:       strings.TrimSpace(slug),
-		TaskPrompt: strings.TrimSpace(task),
-		DocPath:    resolved,
-		Kind:       kindFor(TemplateDocReview),
+		Repos:             repos,
+		Slug:              strings.TrimSpace(slug),
+		TaskPrompt:        strings.TrimSpace(task),
+		DocPath:           resolved,
+		Kind:              kindFor(TemplateDocReview),
+		Candor:            candor,
+		DocSkipOpinion:    !slices.Contains(sections, docSectionOpinion),
+		DocSkipClaimCheck: !slices.Contains(sections, docSectionClaimCheck),
 	}, nil
 }
 

@@ -141,6 +141,12 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	if t.DocPath != "" {
 		meta += "  " + m.styles.dim.Render("doc ") + m.styles.repo.Render(t.DocPath)
 	}
+	if t.Kind == state.KindReview || t.Kind == state.KindDoc {
+		meta += "  " + m.styles.dim.Render("candor ") + m.styles.repo.Render(fmt.Sprintf("%d/10", t.CandorLevel()))
+	}
+	if off := docSectionsOff(t); off != "" {
+		meta += "  " + m.styles.dim.Render("off ") + m.styles.repo.Render(off)
+	}
 
 	out := []string{header, meta}
 	if t.SessionID != "" {
