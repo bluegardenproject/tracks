@@ -110,6 +110,177 @@ func TestMigrateV1TracksGetKind(t *testing.T) {
 	}
 }
 
+// A v2 file carries one PR in flat pr_* fields and spells the in-review
+// status "pr". Both must survive the upgrade: the PR becomes PRs[0] with
+// its polled state intact, and the status becomes "pr open".
+func TestMigrateV2SinglePRBecomesPRList(t *testing.T) {
+	dir := t.TempDir()
+	raw := `{"schema_version":2,"tracks":[` +
+		`{"id":"a","branch":"fix/x","kind":"work","repos":[],"status":"pr",` +
+		`"log_path":"","task_prompt":"",` +
+		`"pr_url":"https://example.test/pr/7","pr_state":"OPEN",` +
+		`"pr_draft":true,"pr_review_state":"CHANGES_REQUESTED","pr_comments":3},` +
+		`{"id":"b","branch":"fix/y","kind":"work","repos":[],"status":"done",` +
+		`"log_path":"","task_prompt":""}` +
+		`]}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := fs.Get("a")
+	if a.Status != StatusPROpen {
+		t.Errorf("status = %q, want %q", a.Status, StatusPROpen)
+	}
+	if len(a.PRs) != 1 {
+		t.Fatalf("PRs = %+v, want exactly one entry", a.PRs)
+	}
+	want := PRRef{
+		URL:         "https://example.test/pr/7",
+		State:       "OPEN",
+		Draft:       true,
+		ReviewState: "CHANGES_REQUESTED",
+		Comments:    3,
+	}
+	if a.PRs[0] != want {
+		t.Errorf("PRs[0] = %+v, want %+v", a.PRs[0], want)
+	}
+	// A track that never opened a PR must not gain a phantom entry.
+	if b, _ := fs.Get("b"); len(b.PRs) != 0 {
+		t.Errorf("PR-less track migrated to %+v, want none", b.PRs)
+	}
+}
+
+func TestPRListRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prs := []PRRef{
+		{URL: "https://example.test/pr/1", State: "MERGED"},
+		{URL: "https://example.test/pr/2", State: "OPEN", Comments: 2},
+	}
+	if err := fs.Put(Track{ID: "s", Status: StatusPROpen, PRs: prs}); err != nil {
+		t.Fatal(err)
+	}
+	fs2, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := fs2.Get("s")
+	if len(got.PRs) != 2 || got.PRs[0] != prs[0] || got.PRs[1] != prs[1] {
+		t.Errorf("PRs = %+v, want %+v", got.PRs, prs)
+	}
+}
+
+func TestStatusLabel(t *testing.T) {
+	pr := func(state string) PRRef { return PRRef{URL: "u", State: state} }
+	cases := []struct {
+		name string
+		trk  Track
+		want string
+	}{
+		{"no PR", Track{Status: StatusDone}, "done"},
+		{"one open", Track{Status: StatusPROpen, PRs: []PRRef{pr("OPEN")}}, "pr open"},
+		{"two, one open", Track{Status: StatusPROpen,
+			PRs: []PRRef{pr("MERGED"), pr("OPEN")}}, "prs open"},
+		{"one merged", Track{Status: StatusPRMerged, PRs: []PRRef{pr("MERGED")}}, "pr merged"},
+		{"three merged", Track{Status: StatusPRMerged,
+			PRs: []PRRef{pr("MERGED"), pr("MERGED"), pr("MERGED")}}, "all merged"},
+		{"running", Track{Status: StatusRunning}, "running"},
+		{"interrupted", Track{Status: StatusInterrupted}, "interrupted"},
+	}
+	for _, c := range cases {
+		if got := c.trk.StatusLabel(); got != c.want {
+			t.Errorf("%s: StatusLabel() = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// The dashboard's STATUS column is fixed-width; a label wider than it
+// would be silently truncated mid-word.
+func TestStatusLabelsFitDashboardColumn(t *testing.T) {
+	const statusColWidth = 11
+	labels := []string{
+		string(StatusPending), string(StatusRunning), string(StatusWaiting),
+		string(StatusDone), string(StatusErrored), string(StatusInterrupted),
+		string(StatusDraft), "pr open", "prs open", "pr merged", "all merged",
+	}
+	for _, l := range labels {
+		if len(l) > statusColWidth {
+			t.Errorf("status label %q is %d chars, wider than the %d-char column",
+				l, len(l), statusColWidth)
+		}
+	}
+}
+
+func TestTrackPRHelpers(t *testing.T) {
+	var trk Track
+	if !trk.AddPR("https://example.test/pr/1") {
+		t.Error("AddPR on an empty track = false, want true")
+	}
+	if trk.AddPR("https://example.test/pr/1") {
+		t.Error("AddPR of a known URL = true, want false (no duplicate)")
+	}
+	if trk.AddPR("") {
+		t.Error("AddPR(\"\") = true, want false")
+	}
+	trk.AddPR("https://example.test/pr/2")
+	if got := trk.PRIndex("https://example.test/pr/2"); got != 1 {
+		t.Errorf("PRIndex = %d, want 1", got)
+	}
+	if got := trk.PRIndex("nope"); got != -1 {
+		t.Errorf("PRIndex of unknown URL = %d, want -1", got)
+	}
+	// Unpolled PRs count as open, so nothing is merged yet.
+	if !trk.HasOpenPR() || trk.AllPRsMerged() {
+		t.Errorf("unpolled PRs: HasOpenPR=%v AllPRsMerged=%v, want true/false",
+			trk.HasOpenPR(), trk.AllPRsMerged())
+	}
+	trk.SetPR(0, PRRef{URL: trk.PRs[0].URL, State: "MERGED"})
+	trk.SetPR(1, PRRef{URL: trk.PRs[1].URL, State: "MERGED"})
+	if trk.HasOpenPR() || !trk.AllPRsMerged() {
+		t.Errorf("both merged: HasOpenPR=%v AllPRsMerged=%v, want false/true",
+			trk.HasOpenPR(), trk.AllPRsMerged())
+	}
+	if got := trk.MergedPRs(); got != 2 {
+		t.Errorf("MergedPRs = %d, want 2", got)
+	}
+	// SetPR must not touch a snapshot taken before the write — the two
+	// Tracks share a backing array until the copy-on-write kicks in.
+	snapshot := trk
+	if !trk.SetPR(0, PRRef{URL: trk.PRs[0].URL, State: "CLOSED"}) {
+		t.Error("SetPR of a changed entry = false, want true")
+	}
+	if snapshot.PRs[0].State != "MERGED" {
+		t.Errorf("SetPR wrote through to an earlier snapshot: %+v", snapshot.PRs[0])
+	}
+	if trk.SetPR(0, trk.PRs[0]) {
+		t.Error("SetPR of an unchanged entry = true, want false")
+	}
+	if trk.SetPR(9, PRRef{URL: "x"}) {
+		t.Error("SetPR out of range = true, want false")
+	}
+}
+
+func TestPRRefNumber(t *testing.T) {
+	cases := map[string]string{
+		"https://github.com/o/r/pull/123": "#123",
+		"https://example.test/pr/7":       "#7",
+		"https://github.com/o/r/pull/":    "",
+		"not-a-url":                       "",
+		"https://github.com/o/r/pull/abc": "",
+	}
+	for url, want := range cases {
+		if got := (PRRef{URL: url}).Number(); got != want {
+			t.Errorf("Number(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
 func TestFileStoreRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	fs, err := OpenFileStore(dir)
@@ -359,8 +530,9 @@ func TestStatusIsTerminal(t *testing.T) {
 		StatusPending:     false,
 		StatusRunning:     false,
 		StatusWaiting:     false,
-		StatusPR:          false,
+		StatusPROpen:      false,
 		StatusDone:        true,
+		StatusPRMerged:    true,
 		StatusErrored:     true,
 		StatusInterrupted: true,
 	}
@@ -379,9 +551,10 @@ func TestStatusCompleted(t *testing.T) {
 		StatusPending:     false,
 		StatusRunning:     false,
 		StatusWaiting:     false,
-		StatusPR:          false,
+		StatusPROpen:      false,
 		StatusDraft:       false,
 		StatusDone:        true,
+		StatusPRMerged:    true,
 		StatusErrored:     true,
 		StatusInterrupted: false,
 	}
@@ -400,9 +573,10 @@ func TestTrackResumable(t *testing.T) {
 		want bool
 	}{
 		{"running", Track{Status: StatusRunning, SessionID: sid}, false},
-		{"in review", Track{Status: StatusPR, SessionID: sid}, false},
+		{"in review", Track{Status: StatusPROpen, SessionID: sid}, false},
 		{"draft", Track{Status: StatusDraft, SessionID: sid}, false},
 		{"done", Track{Status: StatusDone, SessionID: sid}, true},
+		{"pr merged", Track{Status: StatusPRMerged, SessionID: sid}, true},
 		{"errored", Track{Status: StatusErrored, SessionID: sid}, true},
 		{"interrupted", Track{Status: StatusInterrupted, SessionID: sid}, true},
 		{"interrupted without session", Track{Status: StatusInterrupted}, false},

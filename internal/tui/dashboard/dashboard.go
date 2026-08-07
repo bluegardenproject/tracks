@@ -54,6 +54,11 @@ type styles struct {
 	warn       lipgloss.Style
 	fail       lipgloss.Style
 	panel      lipgloss.Style
+	// confirmPanel / confirmTitle style the modal shown before a
+	// destructive action. Red border so it reads as a stop sign next to
+	// the (teal) detail panel.
+	confirmPanel lipgloss.Style
+	confirmTitle lipgloss.Style
 }
 
 func defaultStyles() styles {
@@ -69,9 +74,12 @@ func defaultStyles() styles {
 			// Hot pink — a waiting track is blocking the developer
 			// and should jump out of the table.
 			state.StatusWaiting: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")),
-			// Blue — Claude is done and the PR is open for review. Not
+			// Blue — Claude is done and the PR(s) are open for review. Not
 			// blocking the dev like Waiting, but still an active track.
-			state.StatusPR: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+			state.StatusPROpen: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+			// Purple — the work shipped. Same hue as the "merged" PR badge
+			// so the table and the detail panel tell one story.
+			state.StatusPRMerged: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13")),
 			// Amber — a finished track, readable on both light and dark
 			// terminals and clearly distinct from the other statuses.
 			state.StatusDone:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "215"}),
@@ -105,6 +113,11 @@ func defaultStyles() styles {
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("14")).
 			Padding(0, 1),
+		confirmPanel: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("9")).
+			Padding(0, 1),
+		confirmTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")),
 	}
 }
 
@@ -154,6 +167,19 @@ type model struct {
 	// feedback (e.g., a failed resume). Unlike m.err it does not
 	// hide the track table. Cleared on the next successful poll.
 	statusMsg string
+
+	// confirm holds a destructive action waiting for an explicit y/n.
+	// While it's set the dashboard is modal: every other key is inert,
+	// so the answer can't be mistaken for a fresh command.
+	confirm *confirmation
+}
+
+// confirmation is a pending destructive action: what to tell the user,
+// and what to run if they say yes.
+type confirmation struct {
+	title string
+	body  string
+	run   func(*model) tea.Cmd
 }
 
 func newModel(cfg config.Config) *model {
@@ -302,6 +328,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == modeProxy {
 			return m.updateProxy(msg)
 		}
+		// A pending confirmation swallows every key: y/Y goes ahead,
+		// n/N/esc/q backs out, anything else is ignored so a stray
+		// keystroke neither confirms nor slips through to the table.
+		if c := m.confirm; c != nil {
+			switch msg.String() {
+			case "y", "Y":
+				m.confirm = nil
+				return m, c.run(m)
+			case "n", "N", "esc", "q", "ctrl+c":
+				m.confirm = nil
+				m.statusMsg = "cancelled"
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -331,33 +371,38 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.poll()
 			}
 		case "x":
-			// Forget the highlighted track. Valid for a terminal track or a
-			// saved draft (neither has a live process); a draft dismissed
-			// here is the same as choosing "Dismiss" at creation time.
+			// Remove the highlighted track from tracks entirely. Valid for a
+			// terminal track or a saved draft (neither has a live process); a
+			// draft removed here is the same as choosing "Dismiss" at
+			// creation time. Confirmed first — the record, and with it the
+			// task prompt, cost and PR links, is gone for good.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				if t.Status.IsTerminal() || t.Status == state.StatusDraft {
-					_ = m.client.Forget(t.ID)
-					return m, m.poll()
+					m.confirm = removeTrackConfirmation(t)
 				}
 			}
 		case "X":
-			// Prune every completed track.
-			_, _ = m.client.PruneCompleted()
-			return m, m.poll()
+			// Remove every completed track in one go — same confirmation,
+			// since it's the same loss several times over.
+			if n := m.completedCount(); n > 0 {
+				m.confirm = clearCompletedConfirmation(n)
+			} else {
+				m.statusMsg = "no completed tracks to clear"
+			}
 		case "d":
-			// Graceful end of the highlighted track. Valid whether
+			// Close the highlighted track gracefully. Valid whether
 			// it's still active or already finished: a finished track
 			// keeps its pane alive as a shell (see ShellCommand), and
 			// "d" is how the user tears that down. The daemon removes
-			// the worktree and closes the tmux window as part of Done.
-			// A draft has nothing to end — it's launched (L) or
-			// dismissed (x), so End/Kill skip it (the daemon refuses it
-			// too, but guarding here gives a clear hint).
+			// the worktree and closes the tmux window as it settles the
+			// end state. A draft has nothing to close — it's launched (L)
+			// or removed (x), so Close/Kill skip it (the daemon refuses
+			// it too, but guarding here gives a clear hint).
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				if t.Status == state.StatusDraft {
-					m.statusMsg = "draft — press L to launch or x to dismiss"
+					m.statusMsg = "draft — press L to launch or x to remove"
 				} else {
 					_ = m.client.Done(t.ID)
 					return m, m.poll()
@@ -368,11 +413,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Capital K to distinguish from lowercase k (cursor-up
 			// vim convention) and to make accidental kills harder.
 			// Also valid on a finished track to close its lingering
-			// shell window. A draft is launched (L) / dismissed (x).
+			// shell window. A draft is launched (L) / removed (x).
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				if t.Status == state.StatusDraft {
-					m.statusMsg = "draft — press L to launch or x to dismiss"
+					m.statusMsg = "draft — press L to launch or x to remove"
 				} else {
 					_ = m.client.Kill(t.ID)
 					return m, m.poll()
@@ -473,6 +518,85 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// removeTrackConfirmation is the y/n gate in front of `x`. Removal drops
+// the whole record, so the prompt names the track and says what's lost.
+func removeTrackConfirmation(t state.Track) *confirmation {
+	what := "track " + shortID(t.ID)
+	if t.Status == state.StatusDraft {
+		what = "draft " + shortID(t.ID)
+	}
+	if t.Slug != "" {
+		what += " (" + t.Slug + ")"
+	}
+	body := "Drops its record from tracks — task prompt, cost and PR links go with it. " +
+		"Any branch it created stays in the repo."
+	switch t.Status {
+	case state.StatusDraft:
+		body = "Discards the saved creation parameters. Nothing else is touched."
+	case state.StatusInterrupted:
+		// The record is the only handle `tracks reopen` has, and an
+		// interrupted track's worktree is still on disk.
+		body += " This track was interrupted, not closed: removing it gives " +
+			"up reopening it, and leaves its worktree for the next `tracks gc`."
+	}
+	return &confirmation{
+		title: "Remove " + what + "?",
+		body:  body,
+		run: func(m *model) tea.Cmd {
+			if err := m.client.Forget(t.ID); err != nil {
+				m.statusMsg = "remove failed: " + err.Error()
+			}
+			return m.poll()
+		},
+	}
+}
+
+// clearCompletedConfirmation is the y/n gate in front of `X`.
+func clearCompletedConfirmation(n int) *confirmation {
+	return &confirmation{
+		title: fmt.Sprintf("Remove all %d completed tracks?", n),
+		body: "Drops every finished, merged and errored track's record. " +
+			"Interrupted tracks (still reopenable) and branches are kept.",
+		run: func(m *model) tea.Cmd {
+			if _, err := m.client.PruneCompleted(); err != nil {
+				m.statusMsg = "clear failed: " + err.Error()
+			}
+			return m.poll()
+		},
+	}
+}
+
+// completedCount is how many tracks `X` would remove.
+func (m *model) completedCount() int {
+	n := 0
+	for _, t := range m.tracks {
+		if t.Status.Completed() {
+			n++
+		}
+	}
+	return n
+}
+
+// renderConfirm draws the modal confirmation shown above the table: a
+// box normally, one line when the window is too short to guarantee the
+// box's y/n line survives the frame's height clamp (a modal that eats
+// every key must always say how to answer it).
+func (m *model) renderConfirm(c confirmation, width, height int) []string {
+	if width < 40 {
+		width = 40
+	}
+	if height > 0 && height < 16 {
+		return []string{m.styles.confirmTitle.Render(
+			truncate(c.title+"   y = yes   n / esc = cancel", width))}
+	}
+	inner := width - 4
+	lines := []string{m.styles.confirmTitle.Render(truncate(c.title, inner))}
+	lines = append(lines, wrapInfoText(c.body, inner)...)
+	lines = append(lines, m.styles.dim.Render("y = yes   n / esc = cancel"))
+	box := m.styles.confirmPanel.Width(width - 2).Render(strings.Join(lines, "\n"))
+	return strings.Split(box, "\n")
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -525,18 +649,28 @@ func (m *model) View() string {
 	lines = append(lines, "")
 	lines = append(lines, m.styles.dim.Render(fmt.Sprintf("%d tracks · %d pending prompts", len(m.tracks), len(m.prompts))))
 	for _, p := range m.prompts {
-		lines = append(lines, m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   [y=allow / n=deny]",
-			shortID(p.TrackID), p.Tool, p.Detail)))
+		// y/n belongs to the confirmation while one is open — advertising
+		// it here too would invite the user to "approve" a tool call and
+		// remove a track instead.
+		keys := "[y=allow / n=deny]"
+		if m.confirm != nil {
+			keys = "[answer the box below first]"
+		}
+		lines = append(lines, m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   %s",
+			shortID(p.TrackID), p.Tool, p.Detail, keys)))
 	}
 	if m.statusMsg != "" {
 		lines = append(lines, m.styles.warn.Render(m.statusMsg))
+	}
+	if m.confirm != nil {
+		lines = append(lines, m.renderConfirm(*m.confirm, width, m.height)...)
 	}
 	lines = append(lines, "")
 
 	// --- footer (fixed) ---
 	footerLines := []string{
 		"",
-		m.styles.dim.Render("↑/↓ select   enter attach   u start servers   d end   K kill   x forget   X clear completed   y/n approve"),
+		m.styles.dim.Render("↑/↓ select   enter attach   u start servers   d close   K kill   x remove   X clear completed   y/n approve"),
 		m.styles.dim.Render("tab proxy   r refresh   R resume   L launch draft   q quit   (open menu from any window with <prefix>+t)"),
 	}
 
@@ -674,8 +808,9 @@ func visibleRowWindow(n, cursor, capacity int) (start, end int) {
 }
 
 // statusColWidth is the STATUS column's width, wide enough for the
-// longest status name ("interrupted"). Shared by the header and both
-// row renderers so they can't drift apart.
+// longest status label ("interrupted"; the widest PR one is "all
+// merged"). Shared by the header and both row renderers so they can't
+// drift apart.
 const statusColWidth = 11
 
 // renderRow renders a single track row. The row at the cursor gets the
@@ -692,7 +827,7 @@ func (m *model) renderRow(i int, t state.Track) string {
 			padRendered(m.renderKind(t), 7),
 			padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
 			padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
-			m.styles.status[t.Status].Render(padRight(string(t.Status), statusColWidth)),
+			m.styles.status[t.Status].Render(padRight(t.StatusLabel(), statusColWidth)),
 			padRendered(m.renderChangesColored(t.Changes), 22),
 			padRendered(m.renderServices(t), 5),
 			padRendered(m.renderCost(t.Usage), 8),
@@ -763,7 +898,7 @@ func (m *model) renderRow(i int, t state.Track) string {
 		sep + pad(kindStr, 7) +
 		sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
 		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
-		sep + addBg(m.styles.status[t.Status]).Render(padRight(string(t.Status), statusColWidth)) +
+		sep + addBg(m.styles.status[t.Status]).Render(padRight(t.StatusLabel(), statusColWidth)) +
 		sep + pad(changesStr, 22) +
 		sep + pad(svcStr, 5) +
 		sep + pad(costStr, 8)
@@ -853,38 +988,18 @@ func padRendered(s string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(s)
 }
 
-// renderPRCell builds the right-hand PR column: URL + a state
-// badge + an optional comment count. Color picks a hint that
-// matches the badge (pink for changes-requested, green for
-// approved, etc.).
-func (m *model) renderPRCell(t state.Track) string {
-	if t.PRURL == "" {
-		return ""
-	}
-	url := m.styles.pr.Render(t.PRURL)
-	badge := prBadge(t)
-	if badge != "" {
-		badge = m.prBadgeStyle(t).Render(" [" + badge + "]")
-	}
-	count := ""
-	if t.PRComments > 0 {
-		count = m.styles.dim.Render(fmt.Sprintf(" (%d comments)", t.PRComments))
-	}
-	return url + badge + count
-}
-
-// prBadge returns the short label shown after the URL.
-func prBadge(t state.Track) string {
-	if t.PRDraft {
+// prBadge returns the short label shown after a PR's URL.
+func prBadge(p state.PRRef) string {
+	if p.Draft {
 		return "draft"
 	}
-	switch t.PRState {
+	switch p.State {
 	case "MERGED":
 		return "merged"
 	case "CLOSED":
 		return "closed"
 	}
-	switch t.PRReviewState {
+	switch p.ReviewState {
 	case "APPROVED":
 		return "approved"
 	case "CHANGES_REQUESTED":
@@ -892,28 +1007,27 @@ func prBadge(t state.Track) string {
 	case "REVIEW_REQUIRED":
 		return "review-required"
 	}
-	if t.PRState == "OPEN" {
+	if p.State == "OPEN" {
 		return "open"
 	}
 	return ""
 }
 
-// prBadgeStyle picks the lipgloss style for the badge based on
-// the track's PR state. Falls back to dim when we don't have a
-// specific opinion.
-func (m *model) prBadgeStyle(t state.Track) lipgloss.Style {
+// prBadgeStyle picks the lipgloss style for the badge based on the PR's
+// state. Falls back to dim when we don't have a specific opinion.
+func (m *model) prBadgeStyle(p state.PRRef) lipgloss.Style {
 	switch {
-	case t.PRDraft:
+	case p.Draft:
 		return m.styles.dim
-	case t.PRState == "MERGED":
+	case p.State == "MERGED":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // purple
-	case t.PRState == "CLOSED":
+	case p.State == "CLOSED":
 		return m.styles.dim
-	case t.PRReviewState == "APPROVED":
+	case p.ReviewState == "APPROVED":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
-	case t.PRReviewState == "CHANGES_REQUESTED":
+	case p.ReviewState == "CHANGES_REQUESTED":
 		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")) // pink
-	case t.PRReviewState == "REVIEW_REQUIRED":
+	case p.ReviewState == "REVIEW_REQUIRED":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
 	default:
 		return m.styles.dim

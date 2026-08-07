@@ -130,7 +130,9 @@ const taskSuffix = "" +
 	"include the final `REVIEW OUTCOME` line so the human reviewer " +
 	"knows what was already vetted.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
-	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it.\n\n" +
+	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. " +
+	"If you open several, emit one such line per PR — the dashboard " +
+	"tracks each one and rolls them up into the track's status.\n\n" +
 	"**Dev-server services.** When the user asks you to start (or run, " +
 	"boot, spin up) the dev server, do NOT run `pnpm dev` / `npm " +
 	"start` / `pnpm install` yourself, and never background a server process (`… &` / `nohup`). Run `tracks up <name>` instead: " +

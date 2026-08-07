@@ -71,7 +71,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			return nil
 		}
 		for _, t := range tracks {
-			fmt.Printf("  %-15s  %-30s  %-10s\n", lastN(t.ID, 15), t.Branch, t.Status)
+			fmt.Printf("  %-15s  %-30s  %-11s\n", lastN(t.ID, 15), t.Branch, t.StatusLabel())
 		}
 		waitForKey()
 		return nil
@@ -101,7 +101,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return tm.SelectWindow(cfg.Tmux.SessionName, window)
 
 	case menu.ActionDone:
-		t, err := menu.PickTrack(cl, "End which track?", menu.ActiveOnly)
+		t, err := menu.PickTrack(cl, "Close which track?", menu.ActiveOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -116,7 +116,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		if err := cl.Done(t.ID); err != nil {
 			return err
 		}
-		fmt.Printf("done: %s\n", t.ID)
+		fmt.Printf("closed: %s\n", t.ID)
 		waitForKey()
 		return nil
 
@@ -243,7 +243,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionForget:
-		t, err := menu.PickTrack(cl, "Forget which finished track?", menu.FinishedOnly)
+		t, err := menu.PickTrack(cl, "Remove which finished track?", menu.FinishedOnly)
 		if err != nil {
 			if errors.Is(err, menu.ErrCancelled) {
 				return nil
@@ -255,16 +255,20 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			}
 			return err
 		}
+		yes, cerr := menu.ConfirmRemoveTrack(t)
+		if cerr != nil || !yes {
+			return nil
+		}
 		if err := cl.Forget(t.ID); err != nil {
 			return err
 		}
-		fmt.Printf("forgot %s\n", t.ID)
+		fmt.Printf("removed %s\n", t.ID)
 		waitForKey()
 		return nil
 
 	case menu.ActionPrune:
-		yes, err := menu.Confirm("Clear all completed tracks?",
-			"Removes every done/errored track from the dashboard. Interrupted tracks are kept. Worktrees are already gone; branches and log files stay on disk.")
+		yes, err := menu.Confirm("Remove all completed tracks?",
+			"Drops every closed/merged/errored track's record from the dashboard. Interrupted tracks are kept. Worktrees are already gone; branches and log files stay on disk.")
 		if err != nil || !yes {
 			return nil
 		}

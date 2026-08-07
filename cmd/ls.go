@@ -37,7 +37,7 @@ func init() {
 					repos += r.Name
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-					t.ID, t.Branch, t.Slug, t.Status, repos, t.UpdatedAt.Format("2006-01-02 15:04:05"))
+					t.ID, t.Branch, t.Slug, t.StatusLabel(), repos, t.UpdatedAt.Format("2006-01-02 15:04:05"))
 			}
 			return tw.Flush()
 		},

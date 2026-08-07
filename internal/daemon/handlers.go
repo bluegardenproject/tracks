@@ -556,7 +556,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 		}
 		// Drop the supervisor and release its PR watcher. For a running
 		// track the watch goroutine would also do this on the next poll,
-		// but a track in review (StatusPR) has no live watch goroutine —
+		// but a track in review (StatusPROpen) has no live watch goroutine —
 		// only the PR watcher — so we must release it here.
 		s.mu.Lock()
 		if s.supervisors[t.ID] == sup {
@@ -616,15 +616,16 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 		_ = os.Remove(path)
 	}
 	// Completed rather than IsTerminal: ending an *interrupted* track is
-	// the user saying they're finished with it, so it must settle on Done
-	// and stop being offered for reopen (its worktree is gone now anyway).
+	// the user saying they're finished with it, so it must settle on an end
+	// state and stop being offered for reopen (its worktree is gone now
+	// anyway).
 	if !t.Status.Completed() {
 		if t.Status == state.StatusInterrupted {
 			// The "tracks was shut down…" note described a state the track
-			// is no longer in; leaving it behind would misreport a Done track.
+			// is no longer in; leaving it behind would misreport a closed track.
 			t.ErrorMsg = ""
 		}
-		t.Status = state.StatusDone
+		t.Status = terminalStatusFor(t)
 		now := time.Now().UTC()
 		t.ExitedAt = &now
 	}
@@ -835,7 +836,7 @@ func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emi
 		return fail("track not found: " + p.ID)
 	}
 	if !t.Status.IsTerminal() {
-		return fail(fmt.Sprintf("track %s is %s; only finished tracks can be resumed", p.ID, t.Status))
+		return fail(fmt.Sprintf("track %s is %s; only finished tracks can be resumed", p.ID, t.StatusLabel()))
 	}
 	if t.SessionID == "" {
 		return fail("track has no session ID; cannot resume")
@@ -1100,7 +1101,7 @@ func (s *Server) handleForget(raw json.RawMessage) Response {
 	// always be dismissed.
 	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
 		return fail(fmt.Sprintf("track %s is %s; run `tracks done %s` first",
-			p.ID, t.Status, p.ID))
+			p.ID, t.StatusLabel(), p.ID))
 	}
 	if _, err := s.store.Delete(p.ID); err != nil {
 		return fail(err.Error())
@@ -1129,7 +1130,7 @@ func (s *Server) handleSaveDraft(raw json.RawMessage) Response {
 		return fail(fmt.Sprintf("track %s has no saved parameters to draft", p.ID))
 	}
 	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
-		return fail(fmt.Sprintf("track %s is %s; only a finished or failed track can be saved as a draft", p.ID, t.Status))
+		return fail(fmt.Sprintf("track %s is %s; only a finished or failed track can be saved as a draft", p.ID, t.StatusLabel()))
 	}
 	t.Status = state.StatusDraft
 	t.ExitedAt = nil
@@ -1162,7 +1163,7 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 		return fail(fmt.Sprintf("track %s has no saved parameters to launch", p.ID))
 	}
 	if !t.Status.IsTerminal() && t.Status != state.StatusDraft {
-		return fail(fmt.Sprintf("track %s is %s; only a draft or finished/failed track can be launched", p.ID, t.Status))
+		return fail(fmt.Sprintf("track %s is %s; only a draft or finished/failed track can be launched", p.ID, t.StatusLabel()))
 	}
 
 	params := NewParams{

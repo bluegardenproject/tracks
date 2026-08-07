@@ -74,6 +74,23 @@ they stay as they are; run `tracks reopen` (or the menu entry) whenever you
 want them. Interrupted tracks are never touched by `X` (clear completed) or
 `tracks gc`, so their worktrees wait for you.
 
-To be done with one, **end** it (`d` in the dashboard) — that removes the
-worktree and keeps the branch. Forgetting it (`x`) only drops the dashboard
-entry; the worktree stays on disk until the next `tracks gc` reclaims it.
+To be done with one, **close** it (`d` in the dashboard) — that removes the
+worktree and keeps the branch. **Removing** it (`x`) drops the dashboard entry
+itself; the worktree stays on disk until the next `tracks gc` reclaims it.
+Because that throws away the record — task prompt, cost, PR links, and the
+handle `tracks reopen` needs — `x` and `X` (remove all completed) ask for a
+`y`/`n` confirmation first.
+
+### Track status
+
+| status | meaning |
+| --- | --- |
+| `running` / `waiting` | Claude is working, or sitting at a question |
+| `pr open` / `prs open` | Claude finished and left pull requests open; the track stays alive so review comments and follow-up commits still land in it |
+| `pr merged` / `all merged` | every PR the track opened was merged — the work shipped |
+| `done` | finished without a merged PR: none was opened, one was closed unmerged, or you closed the track yourself |
+| `interrupted` | tracks was quit while this one was live — reopenable |
+| `errored` / `draft` | creation or the session failed / saved but never launched |
+
+Tracks that open several PRs get each one polled and listed separately in the
+dashboard's detail panel; emit one `TRACKS_PR_URL=<url>` line per PR.

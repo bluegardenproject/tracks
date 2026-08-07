@@ -350,6 +350,18 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 
 Move completed items here with a date, then delete once the dust settles.
 
+- **2026-08-06 — Per-PR track state + remove confirmation.** `Track.PRs` is now
+  a list (schema v3, old flat `pr_*` fields migrated on load), so a track that
+  opens a stack of PRs has each one polled and shown separately. Statuses:
+  `pr` → `pr open`, plus a terminal `pr merged` for work that actually shipped
+  (a PR closed unmerged still settles on `done`); the dashboard, `tracks ls`
+  and the pickers render them through `Track.StatusLabel()`, which pluralizes
+  to `prs open` / `all merged`. The PR watcher no longer finalizes a track
+  whose Claude is still running, so PR #1 merging mid-session can't cut the
+  session short. Dashboard keys relabelled `d` end → **close** and `x` forget →
+  **remove**, and `x` / `X` now go through a modal y/n confirmation (as does
+  the menu's remove flow). This supersedes the 2026-07-01 `StatusPR` entry
+  below.
 - **2026-08-05 — Doc-review track type.** New worktree-less `doc` kind whose
   target is a path on disk (a file, or a directory of files) rather than a git
   ref: `.md`/`.pdf`/images/`.csv` — anything Claude can read directly.

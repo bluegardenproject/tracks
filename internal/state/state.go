@@ -29,8 +29,11 @@ import (
 // files on disk are migrated when loaded; newer files are refused so
 // a forward-compatible field doesn't get silently dropped.
 //
-// v2 adds Track.Kind. v1 tracks are migrated on load (see load()).
-const CurrentSchemaVersion = 2
+// v2 adds Track.Kind. v3 replaces the single-PR fields (pr_url,
+// pr_state, …) with Track.PRs and renames the "pr" status to "pr open".
+// Older tracks are migrated on load (see Track.UnmarshalJSON and
+// migrateTrack).
+const CurrentSchemaVersion = 3
 
 // Kind is the type of a track. It decides whether the track owns
 // worktrees and how Claude is launched.
@@ -84,16 +87,31 @@ const (
 	// hasn't grown in a while, or a permission prompt is outstanding.
 	StatusWaiting Status = "waiting"
 
-	// StatusDone means the Claude process exited cleanly.
+	// StatusDone means the Claude process exited cleanly without leaving
+	// a merged pull request behind — either it opened none at all, or the
+	// ones it opened were closed unmerged.
 	StatusDone Status = "done"
 
-	// StatusPR means Claude exited after opening a pull request, but the
-	// track is deliberately kept open: review comments, discussion, and
-	// follow-up commits are still likely. It is *non-terminal* (see
-	// IsTerminal) so the worktree is preserved and token usage keeps
-	// accruing. The PR watcher drives it to Done once the PR is
-	// merged/closed; an explicit End/Kill also finalizes it.
-	StatusPR Status = "pr"
+	// StatusPROpen means Claude exited after opening at least one pull
+	// request that is still open, and the track is deliberately kept
+	// alive: review comments, discussion, and follow-up commits are
+	// still likely. It is *non-terminal* (see IsTerminal) so the
+	// worktree is preserved and token usage keeps accruing. The PR
+	// watcher drives it to an end state once every PR is merged/closed;
+	// an explicit End/Kill also finalizes it. Renders as "prs open" when
+	// the track carries more than one PR (see StatusLabel).
+	StatusPROpen Status = "pr open"
+
+	// StatusPRMerged is the end state of a track whose pull requests all
+	// landed — the happy path for work that ends in a PR. Terminal and
+	// Completed (so a prune sweeps it like Done), but distinct from Done
+	// so the dashboard can say the work actually shipped. Renders as
+	// "all merged" for a multi-PR track (see StatusLabel).
+	StatusPRMerged Status = "pr merged"
+
+	// statusPRLegacy is the pre-v3 spelling of StatusPROpen. Only read
+	// during migration (see migrateTrack); never written.
+	statusPRLegacy Status = "pr"
 
 	// StatusErrored means the Claude process exited non-zero, or
 	// `tracks` was unable to spawn it / set up the worktrees.
@@ -216,6 +234,48 @@ type ServiceState struct {
 	ExitedAt  *time.Time    `json:"exited_at,omitempty"`
 }
 
+// PRRef is one pull request a track opened. Tracks routinely produce
+// more than one — a stack of PRs, or a follow-up alongside the main
+// change — so each is recorded separately and the track's status is a
+// roll-up over all of them.
+type PRRef struct {
+	// URL is the marker value the daemon saw in the track's pane
+	// (TRACKS_PR_URL=<url>). It's the identity of the entry.
+	URL string `json:"url"`
+
+	// State / Draft / ReviewState / Comments are filled by the track's
+	// gh-poll goroutine. Empty until its first poll lands.
+	State       string `json:"state,omitempty"` // OPEN / CLOSED / MERGED
+	Draft       bool   `json:"draft,omitempty"`
+	ReviewState string `json:"review_state,omitempty"` // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED
+	Comments    int    `json:"comments,omitempty"`
+}
+
+// Open reports whether this PR is still awaiting a merge/close decision.
+// A PR we haven't polled yet (empty State) counts as open — the watcher
+// corrects it on its first poll.
+func (p PRRef) Open() bool { return p.State != "MERGED" && p.State != "CLOSED" }
+
+// Merged reports whether this PR landed.
+func (p PRRef) Merged() bool { return p.State == "MERGED" }
+
+// Number is the "#123" shorthand parsed off the tail of the PR URL, or
+// "" when the URL doesn't end in a number. Used to tell PRs apart in
+// notifications on a track carrying several.
+func (p PRRef) Number() string {
+	i := strings.LastIndex(p.URL, "/")
+	if i < 0 || i == len(p.URL)-1 {
+		return ""
+	}
+	tail := p.URL[i+1:]
+	for _, r := range tail {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return "#" + tail
+}
+
 // Track is the persistent record of one Claude session.
 type Track struct {
 	// ID is opaque to the user: <YYYYMMDD-HHMMSS>-<6char-rand>.
@@ -275,17 +335,11 @@ type Track struct {
 	// can show it without re-reading the log.
 	TaskPrompt string `json:"task_prompt"`
 
-	// PRURL is set when the daemon sees a TRACKS_PR_URL=<url> marker
-	// in the log. Empty otherwise.
-	PRURL string `json:"pr_url,omitempty"`
-
-	// PRState / PRDraft / PRReviewState / PRComments are filled by
-	// the supervisor's gh-poll goroutine once a PRURL is known.
-	// Empty until that first poll lands.
-	PRState       string `json:"pr_state,omitempty"` // OPEN / CLOSED / MERGED
-	PRDraft       bool   `json:"pr_draft,omitempty"`
-	PRReviewState string `json:"pr_review_state,omitempty"` // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED
-	PRComments    int    `json:"pr_comments,omitempty"`
+	// PRs are the pull requests this track opened, in the order their
+	// TRACKS_PR_URL=<url> markers first appeared in the pane. Empty
+	// until the daemon sees one. Pre-v3 tracks carried a single PR in
+	// flat pr_* fields; those are folded into PRs[0] on load.
+	PRs []PRRef `json:"prs,omitempty"`
 
 	// LastOutput is a freshly-captured snippet of the bottom of the
 	// track's tmux pane — the last few non-empty lines after ANSI
@@ -366,7 +420,8 @@ type DraftSpec struct {
 // IsTerminal reports whether s is one of the end-state statuses —
 // nothing is running and no supervisor owns the track.
 func (s Status) IsTerminal() bool {
-	return s == StatusDone || s == StatusErrored || s == StatusInterrupted
+	return s == StatusDone || s == StatusPRMerged ||
+		s == StatusErrored || s == StatusInterrupted
 }
 
 // Completed reports whether the track reached an end state of its own
@@ -375,7 +430,108 @@ func (s Status) IsTerminal() bool {
 // tracks — which the user still intends to reopen — are never swept up
 // alongside genuinely finished ones.
 func (s Status) Completed() bool {
-	return s == StatusDone || s == StatusErrored
+	return s == StatusDone || s == StatusPRMerged || s == StatusErrored
+}
+
+// StatusLabel is the track's status as shown to the user. It differs
+// from the raw status only for the two PR statuses, which pluralize
+// over how many PRs the track opened: one reads "pr open" / "pr
+// merged", several read "prs open" / "all merged". Every renderer
+// (dashboard, `tracks ls`, the menu pickers) goes through this so they
+// can't disagree about what a track's status is called.
+func (t Track) StatusLabel() string {
+	switch t.Status {
+	case StatusPROpen:
+		if len(t.PRs) > 1 {
+			return "prs open"
+		}
+	case StatusPRMerged:
+		if len(t.PRs) > 1 {
+			return "all merged"
+		}
+	}
+	return string(t.Status)
+}
+
+// OpenPRs counts the track's pull requests that haven't been merged or
+// closed yet.
+func (t Track) OpenPRs() int {
+	n := 0
+	for _, p := range t.PRs {
+		if p.Open() {
+			n++
+		}
+	}
+	return n
+}
+
+// MergedPRs counts the track's pull requests that landed.
+func (t Track) MergedPRs() int {
+	n := 0
+	for _, p := range t.PRs {
+		if p.Merged() {
+			n++
+		}
+	}
+	return n
+}
+
+// HasOpenPR reports whether the track is still waiting on a decision
+// for at least one of its pull requests. Such a track is kept in review
+// rather than finalized.
+func (t Track) HasOpenPR() bool { return t.OpenPRs() > 0 }
+
+// AllPRsMerged reports whether the track opened at least one pull
+// request and every one of them merged. This is what earns a track
+// StatusPRMerged instead of StatusDone.
+func (t Track) AllPRsMerged() bool {
+	return len(t.PRs) > 0 && t.MergedPRs() == len(t.PRs)
+}
+
+// PRIndex returns the index of the PR with the given URL in t.PRs, or
+// -1 when the track doesn't know that URL.
+func (t Track) PRIndex(url string) int {
+	for i, p := range t.PRs {
+		if p.URL == url {
+			return i
+		}
+	}
+	return -1
+}
+
+// AddPR appends url as a new pull request unless the track already
+// knows it. Reports whether anything was added.
+//
+// Copy-on-write, like SetPR: a Track handed out by the store shares its
+// PRs backing array with the stored one, so appending in place could
+// write into a snapshot another goroutine is still reading.
+func (t *Track) AddPR(url string) bool {
+	if url == "" || t.PRIndex(url) >= 0 {
+		return false
+	}
+	prs := make([]PRRef, len(t.PRs), len(t.PRs)+1)
+	copy(prs, t.PRs)
+	t.PRs = append(prs, PRRef{URL: url})
+	return true
+}
+
+// SetPR replaces the pull request at index i, and reports whether that
+// changed anything. Out-of-range indices are a no-op.
+//
+// The slice is copied before the write: Store.Update hands the mutator a
+// *struct* copy, which still shares the PRs backing array with the
+// stored track and with any snapshot a reader (e.g. a `tracks ls` about
+// to be serialized) took earlier. Writing an element in place would be
+// visible to those readers without synchronisation.
+func (t *Track) SetPR(i int, p PRRef) bool {
+	if i < 0 || i >= len(t.PRs) || t.PRs[i] == p {
+		return false
+	}
+	prs := make([]PRRef, len(t.PRs))
+	copy(prs, t.PRs)
+	prs[i] = p
+	t.PRs = prs
+	return true
 }
 
 // Resumable reports whether the track's Claude conversation can be
@@ -583,7 +739,10 @@ func (fs *FileStore) load() error {
 
 // migrateTrack upgrades a track loaded from an older schema in place.
 // v1 had no Kind; infer it from the branch (pr/* came from review
-// tracks) and default everything else to work.
+// tracks) and default everything else to work. v2 spelled the
+// in-review status "pr"; it's "pr open" from v3 on. (The v2 flat pr_*
+// fields are folded into PRs by UnmarshalJSON, which has to run at
+// decode time to see them at all.)
 func migrateTrack(t *Track) {
 	if t.Kind == "" {
 		if strings.HasPrefix(t.Branch, "pr/") {
@@ -592,6 +751,41 @@ func migrateTrack(t *Track) {
 			t.Kind = KindWork
 		}
 	}
+	if t.Status == statusPRLegacy {
+		t.Status = StatusPROpen
+	}
+}
+
+// UnmarshalJSON decodes a Track, folding the pre-v3 single-PR fields
+// (pr_url, pr_state, pr_draft, pr_review_state, pr_comments) into the
+// PRs list. Done here rather than in migrateTrack because those fields
+// no longer exist on Track — this is the only place they're still
+// visible. Tracks decoded from the daemon socket get the same treatment,
+// so an older state file needs no rewrite before it can be served.
+func (t *Track) UnmarshalJSON(data []byte) error {
+	type track Track // shed the method set to avoid recursing
+	var aux struct {
+		track
+		LegacyPRURL         string `json:"pr_url"`
+		LegacyPRState       string `json:"pr_state"`
+		LegacyPRDraft       bool   `json:"pr_draft"`
+		LegacyPRReviewState string `json:"pr_review_state"`
+		LegacyPRComments    int    `json:"pr_comments"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*t = Track(aux.track)
+	if len(t.PRs) == 0 && aux.LegacyPRURL != "" {
+		t.PRs = []PRRef{{
+			URL:         aux.LegacyPRURL,
+			State:       aux.LegacyPRState,
+			Draft:       aux.LegacyPRDraft,
+			ReviewState: aux.LegacyPRReviewState,
+			Comments:    aux.LegacyPRComments,
+		}}
+	}
+	return nil
 }
 
 // Path returns the absolute path of the state file (useful for

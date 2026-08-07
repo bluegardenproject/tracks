@@ -125,7 +125,7 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 		if branch == "" {
 			branch = "—"
 		}
-		label := fmt.Sprintf("%s  [%s]  %s  [%s]  %s", shortID(t.ID), kindOf(t), branch, t.Status, reposLabel(t))
+		label := fmt.Sprintf("%s  [%s]  %s  [%s]  %s", shortID(t.ID), kindOf(t), branch, t.StatusLabel(), reposLabel(t))
 		options = append(options, huh.NewOption(label, t.ID))
 		byID[t.ID] = t
 	}
@@ -193,6 +193,25 @@ func ConfirmQuit(sessionName string) (bool, error) {
 		fmt.Sprintf("Kills tmux session %q and stops the daemon. Running Claude processes will be SIGTERMed.", sessionName))
 }
 
+// ConfirmRemoveTrack is the yes/no gate in front of removing a track for
+// good. Removal drops the record — task prompt, cost, PR links — so the
+// prompt names the track and spells out what survives.
+func ConfirmRemoveTrack(t state.Track) (bool, error) {
+	what := shortID(t.ID)
+	if t.Slug != "" {
+		what += " (" + t.Slug + ")"
+	}
+	body := "Drops its record from tracks — task prompt, cost and PR links go " +
+		"with it. Any branch it created stays in the repo. This cannot be undone."
+	if t.Status == state.StatusInterrupted {
+		// The record is the only handle `tracks reopen` has, and an
+		// interrupted track's worktree is still on disk.
+		body += " This track was interrupted, not closed: removing it gives up " +
+			"reopening it, and leaves its worktree for the next `tracks gc`."
+	}
+	return Confirm(fmt.Sprintf("Remove track %s?", what), body)
+}
+
 // Confirm is a generic yes/no popup used by any menu action that
 // needs an explicit go-ahead before doing something destructive.
 func Confirm(title, description string) (bool, error) {
@@ -255,7 +274,7 @@ func kindOf(t state.Track) state.Kind {
 }
 
 // ActiveOnly is a PickTrack filter that excludes terminal-state tracks
-// and drafts. Use for Attach / End / Kill flows — a draft has no window,
+// and drafts. Use for Attach / Close / Kill flows — a draft has no window,
 // process, or worktree to act on (it's launched with L / dismissed with x).
 func ActiveOnly(t state.Track) bool {
 	return !t.Status.IsTerminal() && t.Status != state.StatusDraft
@@ -278,8 +297,8 @@ func WorktreeTrack(t state.Track) bool {
 }
 
 // FinishedOnly is a PickTrack filter that excludes still-running
-// tracks. Use for Forget / Clean flows. Interrupted tracks are offered
-// too — forgetting one is an explicit choice to stop intending to
+// tracks. Use for Remove / Clear flows. Interrupted tracks are offered
+// too — removing one is an explicit choice to stop intending to
 // reopen it, which is exactly what this picker is for.
 func FinishedOnly(t state.Track) bool { return t.Status.IsTerminal() }
 
