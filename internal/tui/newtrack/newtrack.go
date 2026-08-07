@@ -478,5 +478,5 @@ func shortID(id string) string {
 }
 
 func trackStatus(t state.Track) string {
-	return string(t.Status)
+	return t.StatusLabel()
 }

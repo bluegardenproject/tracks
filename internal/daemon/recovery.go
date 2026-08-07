@@ -29,7 +29,7 @@ const interruptedUnclean = "tracks stopped unexpectedly while this track was sti
 // guess (see reconcileOnStartup) — and the user would be told their
 // work errored when all they did was quit.
 //
-// StatusPR tracks are deliberately left alone: Claude already exited on
+// StatusPROpen tracks are deliberately left alone: Claude already exited on
 // those and reconcileOnStartup re-adopts them into review, which is the
 // truthful state to come back to. Drafts have no process at all.
 func (s *Server) markInterruptedOnShutdown() {
@@ -72,7 +72,7 @@ const creationInterrupted = "tracks was shut down while this track was still bei
 func sweepable(t state.Track) bool {
 	return !t.Status.IsTerminal() &&
 		t.Status != state.StatusDraft &&
-		t.Status != state.StatusPR
+		t.Status != state.StatusPROpen
 }
 
 // reconcileOnStartup is called once during Server.Start, before
@@ -107,17 +107,17 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		// process to re-supervise, so it must never be marked Errored.
 		// Its dev servers were orphaned by the dead daemon, so free them
 		// first either way.
-		if t.Status == state.StatusPR {
+		if t.Status == state.StatusPROpen {
 			if len(t.Services) > 0 {
 				t.Services = stopPersistedServices(t.Services, true)
 			}
-			if hasOpenPR(t) {
+			if t.HasOpenPR() {
 				// Still open — keep it in review and re-arm its PR watcher.
 				_ = s.store.Put(t)
 				s.resumePRReview(t)
 			} else {
-				// PR merged/closed during the downtime — finalize to Done.
-				t.Status = state.StatusDone
+				// Every PR merged/closed during the downtime — finalize.
+				t.Status = terminalStatusFor(t)
 				now := time.Now().UTC()
 				t.ExitedAt = &now
 				_ = s.store.Put(t)
@@ -176,10 +176,10 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 // resumePRReview re-attaches a PR watcher to a track the previous daemon
 // left in review. There is no Claude process to supervise (it exited
 // before the restart), so this registers a minimal review-only
-// supervisor whose only job is to keep polling the PR and refreshing
-// usage until it merges/closes (or the user ends the track).
+// supervisor whose only job is to keep polling the track's PRs and
+// refreshing usage until they merge/close (or the user ends the track).
 func (s *Server) resumePRReview(t state.Track) {
-	if t.PRURL == "" {
+	if len(t.PRs) == 0 {
 		return
 	}
 	sup := &supervisor{
@@ -194,9 +194,10 @@ func (s *Server) resumePRReview(t state.Track) {
 	}
 	s.supervisors[t.ID] = sup
 	s.mu.Unlock()
-	s.startPRWatcher(sup, t.PRURL)
+	s.startPRWatcher(sup)
 	fmt.Fprintf(os.Stderr,
-		"tracks daemon: track %s left in review; resumed PR watch on %s\n", t.ID, t.PRURL)
+		"tracks daemon: track %s left in review; resumed PR watch on %d PR(s)\n",
+		t.ID, len(t.PRs))
 }
 
 // processAlive reports whether the given PID is still a valid

@@ -241,11 +241,25 @@ func (sup *supervisor) finish() {
 	sup.finishOnce.Do(func() { close(sup.done) })
 }
 
+// claudeExited reports whether this track's Claude process has finished.
+// The pane's pid is no help — the wrapper shell lives on as a plain
+// shell after Claude exits (see ShellCommand) — so the exit sentinel is
+// the signal. A supervisor with no sentinel path is the review-only one
+// adopted by reconcileOnStartup, where Claude exited before the restart
+// by definition.
+func (sup *supervisor) claudeExited() bool {
+	if sup.sentinelPath == "" {
+		return true
+	}
+	_, err := os.Stat(sup.sentinelPath)
+	return err == nil
+}
+
 // retireOrReview is the Claude-exited handler. A track that opened a PR
-// which isn't merged/closed goes into StatusPR ("in review") and is
+// which isn't merged/closed goes into StatusPROpen ("in review") and is
 // kept alive — its supervisor stays registered and its PR watcher keeps
-// polling PR state and refreshing token usage until the PR closes or
-// the user ends the track. Everything else finalizes to Done as usual.
+// polling PR state and refreshing token usage until every PR closes or
+// the user ends the track. Everything else finalizes as usual.
 func (s *Server) retireOrReview(sup *supervisor) {
 	// A pane that died because Stop() is killing it is not Claude
 	// finishing its work. Leave the end state to
@@ -264,40 +278,44 @@ func (s *Server) retireOrReview(sup *supervisor) {
 		sup.finish()
 		return
 	}
-	if t, ok := s.store.Get(sup.trackID); ok && !t.Status.IsTerminal() && hasOpenPR(t) {
+	if t, ok := s.store.Get(sup.trackID); ok && !t.Status.IsTerminal() && t.HasOpenPR() {
 		s.enterPRReview(sup)
 		return
 	}
 	s.retire(sup)
 }
 
-// hasOpenPR reports whether a track has a pull request that is still
-// open. A known URL whose state we haven't polled yet (empty PRState)
-// counts as open — the watcher will correct it on its first poll.
-func hasOpenPR(t state.Track) bool {
-	return t.PRURL != "" && t.PRState != "MERGED" && t.PRState != "CLOSED"
+// terminalStatusFor is the end state a finishing track settles on:
+// StatusPRMerged when it opened pull requests and every one of them
+// landed, StatusDone otherwise (no PR at all, or a PR that was closed
+// unmerged, or one still open when the user ended the track by hand).
+func terminalStatusFor(t state.Track) state.Status {
+	if t.AllPRsMerged() {
+		return state.StatusPRMerged
+	}
+	return state.StatusDone
 }
 
-// enterPRReview transitions a Claude-exited track to StatusPR without
-// retiring its supervisor, so sup.done stays open and the PR watcher
-// keeps polling PR state + refreshing usage. Ownership of the eventual
-// Done transition passes to the PR watcher (on merge/close) or to
-// endTrack (on an explicit End/Kill).
+// enterPRReview transitions a Claude-exited track to StatusPROpen
+// without retiring its supervisor, so sup.done stays open and the PR
+// watcher keeps polling PR state + refreshing usage. Ownership of the
+// eventual end-state transition passes to the PR watcher (once every PR
+// merges/closes) or to endTrack (on an explicit End/Kill).
 func (s *Server) enterPRReview(sup *supervisor) {
 	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
-		if t.Status.IsTerminal() || t.Status == state.StatusPR {
+		if t.Status.IsTerminal() || t.Status == state.StatusPROpen {
 			return false
 		}
-		t.Status = state.StatusPR
+		t.Status = state.StatusPROpen
 		return true
 	})
 	// Settle usage now (so the figure covers everything up to the PR),
 	// then keep it current on the watcher's ticks for any follow-up work.
 	s.refreshUsage(sup)
-	// The watcher was started when the URL first appeared; this is a
+	// The watcher was started when the first URL appeared; this is a
 	// no-op then, and starts it for a reconcile-spawned review supervisor.
-	if updated.PRURL != "" {
-		s.startPRWatcher(sup, updated.PRURL)
+	if len(updated.PRs) > 0 {
+		s.startPRWatcher(sup)
 	}
 }
 
@@ -378,12 +396,12 @@ const paneIdleThreshold = 6 * time.Second
 // nextLiveStatus maps the current status, pane-idle flag, and whether a
 // new PR URL just appeared to the desired target status for a live track.
 // The PR case takes priority: once a PR URL is detected the status becomes
-// PR and is not overridden by the idle heuristic. The idle heuristic only
-// flips between Running and Waiting.
+// PR-open and is not overridden by the idle heuristic. The idle heuristic
+// only flips between Running and Waiting.
 func nextLiveStatus(current state.Status, idle, newPR bool) state.Status {
 	switch {
 	case newPR:
-		return state.StatusPR
+		return state.StatusPROpen
 	case idle && current == state.StatusRunning:
 		return state.StatusWaiting
 	case !idle && current == state.StatusWaiting:
@@ -415,7 +433,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	}
 	idle := time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
 	snippet, awaiting := paneSnippet(snapshot)
-	prURL := scanForPRURL(snapshot)
+	prURLs := scanForPRURLs(snapshot)
 	changes := s.aggregateChanges(t)
 	updatedRepos, rolledUpBranch := s.refreshBranches(t)
 
@@ -424,22 +442,22 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	// The transition bookkeeping the notifications need is captured out
 	// of the closure.
 	var prevStatus, newStatus state.Status
-	var prevPRURL, newPRURL string
+	var addedPRs []string
 	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
 		if t.Status.IsTerminal() {
 			return false
 		}
-		prevStatus, prevPRURL = t.Status, t.PRURL
-		newPR := prURL != "" && prURL != t.PRURL
-		target := nextLiveStatus(t.Status, idle, newPR)
+		prevStatus = t.Status
+		addedPRs = unknownPRs(*t, prURLs)
+		target := nextLiveStatus(t.Status, idle, len(addedPRs) > 0)
 		if target == t.Status &&
 			snippet == t.LastOutput &&
 			awaiting == t.AwaitingInput &&
-			(prURL == "" || prURL == t.PRURL) &&
+			len(addedPRs) == 0 &&
 			changes == t.Changes &&
 			rolledUpBranch == t.Branch &&
 			reposBranchesEqual(updatedRepos, t.Repos) {
-			newStatus, newPRURL = t.Status, t.PRURL
+			newStatus = t.Status
 			return false
 		}
 		t.Status = target
@@ -448,10 +466,10 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		t.Changes = changes
 		t.Repos = updatedRepos
 		t.Branch = rolledUpBranch
-		if newPR {
-			t.PRURL = prURL
+		for _, url := range addedPRs {
+			t.AddPR(url)
 		}
-		newStatus, newPRURL = t.Status, t.PRURL
+		newStatus = t.Status
 		return true
 	})
 	label := labelFor(updated)
@@ -467,12 +485,27 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 			sup.lastWaitingNotifyAt = time.Now()
 		}
 	}
-	if newPRURL != "" && prevPRURL == "" {
+	for _, url := range addedPRs {
 		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",
-			label+" → "+newPRURL)
-		// Kick off the gh-poll loop for this PR.
-		s.startPRWatcher(sup, newPRURL)
+			label+" → "+url)
 	}
+	if len(addedPRs) > 0 {
+		// Kick off the gh-poll loop; it picks up every PR on the track,
+		// including any that appear after it started.
+		s.startPRWatcher(sup)
+	}
+}
+
+// unknownPRs returns the subset of urls the track doesn't already know
+// about, in the order they were seen.
+func unknownPRs(t state.Track, urls []string) []string {
+	var out []string
+	for _, url := range urls {
+		if t.PRIndex(url) < 0 {
+			out = append(out, url)
+		}
+	}
+	return out
 }
 
 // labelFor returns a short human label for a track — slug if the
@@ -504,7 +537,15 @@ func (s *Server) notifyEvent(event, title, body string) {
 // `\S+` capture would (incorrectly) grab that placeholder on the
 // very first poll — before Claude has produced anything — and
 // fire a fake "PR opened" notification.
-var prURLPattern = regexp.MustCompile(`TRACKS_PR_URL=(https?://\S+|none)`)
+//
+// The marker must also start its line, which is how the prompt asks for
+// it. Leading non-letters are allowed so the bullets and indentation
+// Claude's TUI draws around a message don't defeat the anchor, while
+// prose that merely mentions the marker ("include the URL as
+// `TRACKS_PR_URL=…`") no longer matches. Since every match is now
+// recorded as its own PR, a false positive would stick around as a PR
+// that gh can never resolve.
+var prURLPattern = regexp.MustCompile(`(?m)^[^A-Za-z]*TRACKS_PR_URL=(https?://\S+|none)`)
 
 // refreshBranches re-reads each worktree's current branch via
 // `git branch --show-current` and returns an updated copy of
@@ -585,19 +626,26 @@ func (s *Server) aggregateChanges(t state.Track) state.Changes {
 	return agg
 }
 
-// scanForPRURL pulls the URL portion out of a TRACKS_PR_URL=<url>
-// marker in the pane snapshot. Returns "" when no marker is
-// present or the value is the sentinel "none".
-func scanForPRURL(snapshot string) string {
-	matches := prURLPattern.FindStringSubmatch(snapshot)
-	if len(matches) < 2 {
-		return ""
+// scanForPRURLs pulls every URL out of the TRACKS_PR_URL=<url> markers
+// in the pane snapshot, de-duplicated and in the order they appear. A
+// track that opens several PRs emits one marker line per PR, and the
+// pane usually still shows the earlier ones. The sentinel "none" and
+// empty values are skipped.
+func scanForPRURLs(snapshot string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, m := range prURLPattern.FindAllStringSubmatch(snapshot, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		v := strings.TrimSpace(m[1])
+		if v == "" || v == "none" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
 	}
-	v := strings.TrimSpace(matches[1])
-	if v == "" || v == "none" {
-		return ""
-	}
-	return v
+	return out
 }
 
 // paneSnippet returns a snippet of pane content suitable for the
@@ -735,9 +783,9 @@ func (s *Server) finalizeTrack(trackID string) {
 		}
 		t.ExitedAt = &now
 		// We don't have a reliable exit code from the tmux-hosted
-		// process; treat any natural exit as Done. (Future: parse
-		// pane_dead_status via tmux.)
-		t.Status = state.StatusDone
+		// process; treat any natural exit as a clean finish. (Future:
+		// parse pane_dead_status via tmux.)
+		t.Status = terminalStatusFor(*t)
 		if haveSettled {
 			t.Usage = settled
 		}
@@ -749,7 +797,20 @@ func (s *Server) finalizeTrack(trackID string) {
 	}
 
 	s.notifyEvent(string(notify.EventDone), "tracks: track finished",
-		labelFor(updated)+" is done"+usageSuffix(updated))
+		labelFor(updated)+" "+finishedVerb(updated)+usageSuffix(updated))
+}
+
+// finishedVerb is how the done notification describes the end state: a
+// track whose PRs all landed says so, everything else "is done". Reads
+// as a clause because usageSuffix appends " — 1.2M tok · $3.45" after it.
+func finishedVerb(t state.Track) string {
+	if t.Status == state.StatusPRMerged {
+		if len(t.PRs) > 1 {
+			return "merged all its PRs"
+		}
+		return "merged its PR"
+	}
+	return "is done"
 }
 
 // usageSuffix renders a compact " — 1.2M tok · $3.45 · 12m" tail for

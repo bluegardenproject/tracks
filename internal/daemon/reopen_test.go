@@ -32,7 +32,7 @@ func TestReopenTargetsAllInterruptedOldestFirst(t *testing.T) {
 		{ID: "done", Status: state.StatusDone, CreatedAt: base},
 		{ID: "running", Status: state.StatusRunning, CreatedAt: base},
 		{ID: "draft", Status: state.StatusDraft, CreatedAt: base},
-		{ID: "review", Status: state.StatusPR, CreatedAt: base},
+		{ID: "review", Status: state.StatusPROpen, CreatedAt: base},
 	} {
 		if err := srv.store.Put(tr); err != nil {
 			t.Fatalf("put %s: %v", tr.ID, err)

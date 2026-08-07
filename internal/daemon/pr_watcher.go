@@ -17,9 +17,11 @@ const prPollInterval = 60 * time.Second
 
 // startPRWatcher launches one goroutine per track once the
 // supervisor sees a PR URL appear on the track. The watcher polls
-// `gh pr view` until the PR is merged/closed or the track ends
-// (sup.done closes).
-func (s *Server) startPRWatcher(sup *supervisor, url string) {
+// `gh pr view` for every PR the track has opened — re-reading the list
+// each tick, so PRs opened later are picked up without a second
+// goroutine — until none are open any more or the track ends (sup.done
+// closes).
+func (s *Server) startPRWatcher(sup *supervisor) {
 	s.mu.Lock()
 	if sup.prWatcherStarted {
 		s.mu.Unlock()
@@ -28,14 +30,13 @@ func (s *Server) startPRWatcher(sup *supervisor, url string) {
 	sup.prWatcherStarted = true
 	s.mu.Unlock()
 
-	go s.runPRWatcher(sup, url)
+	go s.runPRWatcher(sup)
 }
 
-func (s *Server) runPRWatcher(sup *supervisor, url string) {
+func (s *Server) runPRWatcher(sup *supervisor) {
 	// First poll fires immediately so the dashboard reflects PR
 	// state within a second of the URL appearing.
-	if s.refreshPR(sup, url) {
-		s.onPRTerminal(sup)
+	if s.refreshPRs(sup) && s.onPRTerminal(sup) {
 		return
 	}
 	ticker := time.NewTicker(prPollInterval)
@@ -45,79 +46,133 @@ func (s *Server) runPRWatcher(sup *supervisor, url string) {
 		case <-sup.done:
 			return
 		case <-ticker.C:
-			terminal := s.refreshPR(sup, url)
+			terminal := s.refreshPRs(sup)
 			// A track in review keeps accruing usage if the user resumes
 			// Claude to address comments — keep the stored figure current.
 			s.refreshUsage(sup)
-			if terminal {
-				s.onPRTerminal(sup)
+			if terminal && s.onPRTerminal(sup) {
 				return
 			}
 		}
 	}
 }
 
-// onPRTerminal finalizes a review track once its PR is merged/closed.
-// Only a track that's actually in review (Claude has already exited) is
-// finalized here; if the PR closes while Claude is still running, the
-// normal exit path handles the Done transition instead.
-func (s *Server) onPRTerminal(sup *supervisor) {
-	if t, ok := s.store.Get(sup.trackID); ok && t.Status == state.StatusPR {
-		s.retire(sup)
+// onPRTerminal is called once every PR the track opened is merged or
+// closed, and reports whether the watcher is finished.
+//
+// It finalizes the track only when Claude has already exited — that's a
+// track sitting in review whose last PR just landed. If Claude is still
+// running (it opened a PR early and kept working, which is exactly the
+// stacked-PR flow) the track must stay live: it may open more PRs, and
+// finalizing here would stamp an end state on a live session, after
+// which every state write is refused as terminal. In that case the
+// watcher keeps ticking so those later PRs are picked up too, and the
+// normal Claude-exit path owns the end-state transition.
+func (s *Server) onPRTerminal(sup *supervisor) bool {
+	t, ok := s.store.Get(sup.trackID)
+	if !ok {
+		return true // track is gone.
 	}
+	if t.Status != state.StatusPROpen {
+		return true // someone else already settled it.
+	}
+	if !sup.claudeExited() {
+		return false
+	}
+	s.retire(sup)
+	return true
 }
 
-// refreshPR polls gh once and updates state.Track. Returns true
-// when the PR has reached a terminal state (MERGED/CLOSED) and the
-// caller should stop polling.
-func (s *Server) refreshPR(sup *supervisor, url string) bool {
+// refreshPRs polls gh once for each of the track's pull requests and
+// updates their stored state. Returns true when the caller should stop
+// polling: the track is gone, has no PRs, or none of its PRs is open any
+// more.
+func (s *Server) refreshPRs(sup *supervisor) bool {
+	t, ok := s.store.Get(sup.trackID)
+	if !ok {
+		return true // track is gone; stop polling.
+	}
+	if len(t.PRs) == 0 {
+		return true
+	}
+	for _, pr := range t.PRs {
+		// Skip PRs already merged or closed. A closed PR can technically be
+		// reopened, but polling a settled stack once a minute for that is
+		// not worth the gh calls — the user reopening one can reopen the
+		// track too.
+		if !pr.Open() {
+			continue
+		}
+		if !s.refreshPR(sup.trackID, pr.URL) {
+			return true // track vanished mid-poll.
+		}
+	}
+	updated, ok := s.store.Get(sup.trackID)
+	return !ok || !updated.HasOpenPR()
+}
+
+// refreshPR polls gh once for one PR and updates its entry on the
+// track. Returns false only when the track no longer exists.
+func (s *Server) refreshPR(trackID, url string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	status, err := github.Inspect(ctx, url)
 	if err != nil {
 		// Swallow — gh might be down or PR not yet visible. We'll
 		// retry on the next tick.
-		return false
+		return true
 	}
 
-	var prev state.Track
-	updated, found, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
-		prev = state.Track{
-			PRState:       t.PRState,
-			PRDraft:       t.PRDraft,
-			PRReviewState: t.PRReviewState,
-			PRComments:    t.PRComments,
+	var prev state.PRRef
+	var known bool
+	updated, found, _ := s.store.Update(trackID, func(t *state.Track) bool {
+		i := t.PRIndex(url)
+		if i < 0 {
+			return false
 		}
-		if t.PRState == status.State && t.PRDraft == status.Draft &&
-			t.PRReviewState == status.ReviewState && t.PRComments == status.CommentCount {
-			return false // nothing changed; skip the write + flush.
-		}
-		t.PRState = status.State
-		t.PRDraft = status.Draft
-		t.PRReviewState = status.ReviewState
-		t.PRComments = status.CommentCount
-		return true
+		known = true
+		prev = t.PRs[i]
+		next := prev
+		next.State = status.State
+		next.Draft = status.Draft
+		next.ReviewState = status.ReviewState
+		next.Comments = status.CommentCount
+		// False when nothing changed, which skips the write + flush.
+		return t.SetPR(i, next)
 	})
 	if !found {
-		return true // track is gone; stop polling.
+		return false
+	}
+	if !known {
+		// The track was replaced under us (a Forget + New reusing the ID)
+		// and no longer carries this PR. prev is meaningless, so notifying
+		// off it would report a transition that never happened.
+		return true
 	}
 	t := updated
 
 	// Notify only on review-decision changes — the user wants to
 	// know "the PR needs me again" without being woken up by
-	// every passing comment.
-	if status.ReviewState != prev.PRReviewState && status.ReviewState != "" {
+	// every passing comment. The PR number is included when the track
+	// carries several, so the user knows which one moved.
+	suffix := ""
+	if len(t.PRs) > 1 {
+		if n := prev.Number(); n != "" {
+			suffix = " " + n
+		}
+	}
+	if status.ReviewState != prev.ReviewState && status.ReviewState != "" {
 		s.notifyEvent(string(notify.EventPRStateChanged),
 			"tracks: PR review update",
-			labelFor(t)+" → "+humanReview(status.ReviewState))
+			labelFor(t)+suffix+" → "+humanReview(status.ReviewState))
 	}
-	if status.State != prev.PRState && status.State != "" && status.State != "OPEN" {
+	if status.State != prev.State && status.State != "" && status.State != "OPEN" {
 		s.notifyEvent(string(notify.EventPRStateChanged),
 			"tracks: PR closed",
-			labelFor(t)+" → "+humanState(status.State))
+			labelFor(t)+suffix+" → "+humanState(status.State))
 	}
 
-	return status.State == "MERGED" || status.State == "CLOSED"
+	return true
 }
 
 func humanReview(s string) string {

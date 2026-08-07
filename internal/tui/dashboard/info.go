@@ -130,7 +130,7 @@ func (m *model) renderDetail(d detail, width, maxHeight int) string {
 func (m *model) renderTaskSection(t state.Track, w int) string {
 	header := m.styles.sectionHdr.Render("TASK")
 
-	meta := m.styles.dim.Render("status ") + m.styles.status[t.Status].Render(string(t.Status)) +
+	meta := m.styles.dim.Render("status ") + m.styles.status[t.Status].Render(t.StatusLabel()) +
 		"  " + m.styles.dim.Render("branch ") + m.styles.branch.Render(t.Branch)
 	if !t.UpdatedAt.IsZero() {
 		meta += "  " + m.styles.dim.Render("idle ") + renderIdle(t)
@@ -263,23 +263,44 @@ func (m *model) renderChangesSection(t state.Track, files []string, w int) strin
 	return strings.Join(lines, "\n")
 }
 
-// renderPRSection: URL + state badge + comments + (optional) when
-// the track has no PR yet, a small hint.
+// renderPRSection: one block per pull request the track opened — URL,
+// state badge, comment count — or a small hint when there's none yet.
+// The header counts them so a stacked track reads as such at a glance.
 func (m *model) renderPRSection(t state.Track, w int) string {
-	lines := []string{
-		m.styles.sectionHdr.Render("PR"),
+	header := "PR"
+	if len(t.PRs) > 1 {
+		header = fmt.Sprintf("PRS (%d)", len(t.PRs))
 	}
-	if t.PRURL == "" {
+	lines := []string{m.styles.sectionHdr.Render(header)}
+	if len(t.PRs) == 0 {
 		lines = append(lines, m.styles.dim.Render("(no PR yet)"))
 		return strings.Join(lines, "\n")
 	}
-	lines = append(lines, m.styles.pr.Render(truncate(t.PRURL, w)))
-	badge := prBadge(t)
-	if badge != "" {
-		lines = append(lines, m.prBadgeStyle(t).Render("● "+badge))
+	// Cap the list so a long stack can't crowd out the neighbouring
+	// columns; the count in the header still tells the whole story.
+	const maxPRs = 4
+	shown := t.PRs
+	if len(shown) > maxPRs {
+		shown = shown[:maxPRs]
 	}
-	if t.PRComments > 0 {
-		lines = append(lines, m.styles.count.Render(fmt.Sprintf("%d comments", t.PRComments)))
+	for _, pr := range shown {
+		lines = append(lines, m.styles.pr.Render(truncate(pr.URL, w)))
+		meta := ""
+		if badge := prBadge(pr); badge != "" {
+			meta = m.prBadgeStyle(pr).Render("● " + badge)
+		}
+		if pr.Comments > 0 {
+			if meta != "" {
+				meta += "  "
+			}
+			meta += m.styles.count.Render(fmt.Sprintf("%d comments", pr.Comments))
+		}
+		if meta != "" {
+			lines = append(lines, meta)
+		}
+	}
+	if len(t.PRs) > maxPRs {
+		lines = append(lines, m.styles.dim.Render(fmt.Sprintf("  …%d more", len(t.PRs)-maxPRs)))
 	}
 	return strings.Join(lines, "\n")
 }
