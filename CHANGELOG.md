@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/bluegardenproject/tracks/compare/v0.4.1...v0.5.0) (2026-08-07)
+
+
+### Features
+
+* **review:** candor dial, optional claim check, opinion section ([0d29f66](https://github.com/bluegardenproject/tracks/commit/0d29f6650a84838114bd40d5500c333dbd0ae0f2))
+* **state:** per-PR track state with pr open / pr merged statuses ([7f3f332](https://github.com/bluegardenproject/tracks/commit/7f3f332df6a3410e7b5b3b75406224d9d8d13f11))
+
+
+### Bug Fixes
+
+* **services:** stop the runner tests racing the shell and the kernel ([4156bfe](https://github.com/bluegardenproject/tracks/commit/4156bfe85e6b18194c853420e087b79489918290))
+
 ## [0.4.1](https://github.com/bluegardenproject/tracks/compare/v0.4.0...v0.4.1) (2026-08-06)
 
 
