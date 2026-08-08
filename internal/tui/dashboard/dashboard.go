@@ -924,17 +924,6 @@ func shortID(id string) string {
 	return id[len(id)-15:]
 }
 
-// renderChanges turns a state.Changes into the dashboard's compact
-// `+ins -del (N)` form (plain text). Empty when there's nothing
-// to show. Kept around for non-coloured contexts (the daemon doesn't
-// know our styles).
-func renderChanges(c state.Changes) string {
-	if c.IsZero() {
-		return ""
-	}
-	return fmt.Sprintf("+%d -%d (%d)", c.Insertions, c.Deletions, c.Files)
-}
-
 // renderKind renders a track's kind as a short colored badge.
 // Read-only kinds (ask/plan) get a distinct color so they're easy to
 // pick out from editable work/review tracks. Empty kind (pre-migration)
