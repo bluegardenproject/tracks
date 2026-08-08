@@ -55,6 +55,7 @@ func latestFrom(ctx context.Context, url string) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "tracks-updater")
 	resp, err := client.Do(req)
 	if err != nil {
 		return Release{}, err
@@ -164,7 +165,8 @@ func Apply(ctx context.Context, rel Release) (string, error) {
 		return "", err
 	}
 	dir := filepath.Dir(target)
-	tmp, err := os.CreateTemp(dir, ".tracks-update-*")
+	sweepLeftovers(dir)
+	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
 	if err != nil {
 		return "", fmt.Errorf("cannot write to %s: %w — re-run scripts/install.sh instead", dir, err)
 	}
@@ -178,7 +180,7 @@ func Apply(ctx context.Context, rel Release) (string, error) {
 	if err := tmp.Close(); err != nil {
 		return "", err
 	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
+	if err := os.Chmod(tmpName, targetMode(target)); err != nil {
 		return "", err
 	}
 	if err := verify(ctx, tmpName); err != nil {
@@ -188,6 +190,35 @@ func Apply(ctx context.Context, rel Release) (string, error) {
 		return "", fmt.Errorf("replacing %s: %w", target, err)
 	}
 	return target, nil
+}
+
+// tmpPrefix names the in-flight download. Dotted so it stays out of the
+// way on PATH, and fixed so an update killed mid-download can be swept up
+// by the next one.
+const tmpPrefix = ".tracks-update-"
+
+func sweepLeftovers(dir string) {
+	matches, err := filepath.Glob(filepath.Join(dir, tmpPrefix+"*"))
+	if err != nil {
+		return
+	}
+	for _, m := range matches {
+		_ = os.Remove(m)
+	}
+}
+
+// targetMode keeps the permissions of the binary being replaced, so a
+// deliberately private install doesn't silently widen to 0755.
+func targetMode(target string) os.FileMode {
+	fi, err := os.Stat(target)
+	if err != nil {
+		return 0o755
+	}
+	mode := fi.Mode().Perm()
+	if mode&0o100 == 0 {
+		return 0o755
+	}
+	return mode
 }
 
 func download(ctx context.Context, url string, dst io.Writer) error {
@@ -223,8 +254,10 @@ func verify(ctx context.Context, path string) error {
 }
 
 // selfPath resolves the running binary, following symlinks so an update
-// replaces the real file rather than turning a symlink into a copy.
-func selfPath() (string, error) {
+// replaces the real file rather than turning a symlink into a copy. It's a
+// var so tests can point Apply at a throwaway binary instead of the test
+// process's own.
+var selfPath = func() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locating the running binary: %w", err)
