@@ -285,7 +285,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		t.Draft = draft
 		now := time.Now().UTC()
 		t.ExitedAt = &now
-		_ = s.store.Put(t)
+		s.persist(t, "failed creation")
 		resultRaw, _ := json.Marshal(NewResult{TrackID: trackID})
 		return Response{Ok: false, Error: msg, Result: resultRaw}
 	}
@@ -597,7 +597,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	if len(t.Services) > 0 {
 		emit("stopping dev servers...")
 		t.Services = stopPersistedServices(t.Services, force)
-		_ = s.store.Put(t)
+		s.persist(t, "stopped dev servers")
 	}
 
 	// Close the track's tmux window. When a supervisor was alive the
@@ -821,7 +821,7 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 		t.ErrorMsg = "spawn claude: " + err.Error()
 		now := time.Now().UTC()
 		t.ExitedAt = &now
-		_ = s.store.Put(t)
+		s.persist(t, "promote spawn failure")
 		return fail("spawn claude: " + err.Error())
 	}
 	emit("claude running")
@@ -925,7 +925,7 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	// look like it just exited (which would inflate its reported runtime)
 	// or lose its exit code.
 	release := func(status state.Status, msg string) {
-		_, _, _ = s.store.Update(t.ID, func(cur *state.Track) bool {
+		s.update(t.ID, "resume claim release", func(cur *state.Track) bool {
 			cur.Status = status
 			cur.ErrorMsg = msg
 			cur.ExitCode = prev.ExitCode
@@ -1204,7 +1204,7 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 	resp := s.handleNew(ctx, rawNew, emit)
 	if resp.Ok {
 		// Draft consumed by a successful launch.
-		_, _ = s.store.Delete(p.ID)
+		s.forget(p.ID, "draft consumed by launch")
 		return resp
 	}
 
@@ -1214,12 +1214,12 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 	if len(resp.Result) > 0 {
 		var nr NewResult
 		if json.Unmarshal(resp.Result, &nr) == nil && nr.TrackID != "" && nr.TrackID != p.ID {
-			_, _ = s.store.Delete(nr.TrackID)
+			s.forget(nr.TrackID, "duplicate record from a failed relaunch")
 		}
 	}
 	if cur, ok := s.store.Get(p.ID); ok {
 		cur.ErrorMsg = resp.Error
-		_ = s.store.Put(cur)
+		s.persist(cur, "refreshed draft failure reason")
 	}
 	return resp
 }
@@ -1272,7 +1272,7 @@ func (s *Server) handlePruneCompleted() Response {
 		if !t.Status.Completed() {
 			continue
 		}
-		if _, err := s.store.Delete(t.ID); err == nil {
+		if s.forget(t.ID, "prune completed") {
 			removed++
 		}
 	}

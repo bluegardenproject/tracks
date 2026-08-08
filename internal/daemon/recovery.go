@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/dlog"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
@@ -38,7 +39,7 @@ func (s *Server) markInterruptedOnShutdown() {
 		if !sweepable(t) {
 			continue
 		}
-		_, _, _ = s.store.Update(t.ID, func(t *state.Track) bool {
+		s.update(t.ID, "shutdown sweep", func(t *state.Track) bool {
 			if !sweepable(*t) {
 				return false
 			}
@@ -113,14 +114,14 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 			}
 			if t.HasOpenPR() {
 				// Still open — keep it in review and re-arm its PR watcher.
-				_ = s.store.Put(t)
+				s.persist(t, "review re-adoption")
 				s.resumePRReview(t)
 			} else {
 				// Every PR merged/closed during the downtime — finalize.
 				t.Status = terminalStatusFor(t)
 				now := time.Now().UTC()
 				t.ExitedAt = &now
-				_ = s.store.Put(t)
+				s.persist(t, "review finalization")
 			}
 			continue
 		}
@@ -151,25 +152,22 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 			t.Status = state.StatusInterrupted
 			t.ErrorMsg = interruptedUnclean
 		}
-		_ = s.store.Put(t)
+		s.persist(t, "reconciled status")
 		switch t.Status {
 		case state.StatusInterrupted:
-			fmt.Fprintf(os.Stderr,
-				"tracks daemon: track %s was still running when tracks last stopped; marked interrupted (bring it back with `tracks reopen`)\n", t.ID)
+			dlog.Printf("track %s was still running when tracks last stopped; marked interrupted (bring it back with `tracks reopen`)", t.ID)
 		case state.StatusErrored:
 			if alive {
-				fmt.Fprintf(os.Stderr,
-					"tracks daemon: track %s had non-terminal status with live PID %d (orphaned from previous daemon); marked errored. To kill the process, run: kill %d\n",
+				dlog.Printf("track %s had non-terminal status with live PID %d (orphaned from previous daemon); marked errored. To kill the process, run: kill %d",
 					t.ID, t.PID, t.PID)
 			} else {
-				fmt.Fprintf(os.Stderr,
-					"tracks daemon: track %s never finished being created; marked errored\n", t.ID)
+				dlog.Printf("track %s never finished being created; marked errored", t.ID)
 			}
 		}
 	}
 
 	if err := s.gcOrphanedWorktrees(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "tracks daemon: gc orphans: %v\n", err)
+		dlog.Printf("gc orphans: %v", err)
 	}
 }
 
@@ -195,9 +193,7 @@ func (s *Server) resumePRReview(t state.Track) {
 	s.supervisors[t.ID] = sup
 	s.mu.Unlock()
 	s.startPRWatcher(sup)
-	fmt.Fprintf(os.Stderr,
-		"tracks daemon: track %s left in review; resumed PR watch on %d PR(s)\n",
-		t.ID, len(t.PRs))
+	dlog.Printf("track %s left in review; resumed PR watch on %d PR(s)", t.ID, len(t.PRs))
 }
 
 // processAlive reports whether the given PID is still a valid
@@ -259,15 +255,14 @@ func (s *Server) gcOrphanedWorktrees(ctx context.Context) error {
 		// worktrees/_recovered/<id> instead of being removed.
 		quarantined, reason, err := ReclaimOrphanTrackDir(ctx, worktreeRoot, e.Name())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tracks daemon: gc %s: %v\n", e.Name(), err)
+			dlog.Printf("gc %s: %v", e.Name(), err)
 			continue
 		}
 		if quarantined {
-			fmt.Fprintf(os.Stderr,
-				"tracks daemon: PRESERVED orphan track %s (%s) — moved to worktrees/%s/%s instead of deleting\n",
+			dlog.Printf("PRESERVED orphan track %s (%s) — moved to worktrees/%s/%s instead of deleting",
 				e.Name(), reason, QuarantineDirName, e.Name())
 		} else {
-			fmt.Fprintf(os.Stderr, "tracks daemon: gc removed orphan track dir %s\n", filepath.Join(worktreeRoot, e.Name()))
+			dlog.Printf("gc removed orphan track dir %s", filepath.Join(worktreeRoot, e.Name()))
 		}
 	}
 
