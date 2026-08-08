@@ -222,20 +222,6 @@ func (c *Client) ReopenWithProgress(ids []string, onProgress func(string)) (Reop
 	return r, c.callStreaming(MethodReopen, ReopenParams{IDs: ids}, &r, onProgress)
 }
 
-// PendingPrompts returns the daemon's outstanding permission prompts.
-func (c *Client) PendingPrompts() ([]PendingPrompt, error) {
-	var r PendingPromptsResult
-	if err := c.callMethod(MethodPendingPrompts, nil, &r); err != nil {
-		return nil, err
-	}
-	return r.Prompts, nil
-}
-
-// AnswerPrompt allows or denies one pending prompt.
-func (c *Client) AnswerPrompt(id string, allow bool) error {
-	return c.callMethod(MethodAnswerPrompt, AnswerPromptParams{ID: id, Allow: allow}, nil)
-}
-
 // Shutdown asks the daemon to exit cleanly.
 func (c *Client) Shutdown() error {
 	return c.callMethod(MethodShutdown, nil, nil)

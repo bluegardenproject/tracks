@@ -1,11 +1,11 @@
 // Package dashboard renders the live track list as a bubbletea TUI.
 //
-// It polls the daemon every second for tracks and pending permission
-// prompts. The user can:
+// It polls the daemon every second for track state. The user can:
 //
 //   - press enter to switch the tmux client to the highlighted
 //     track's window;
-//   - press y / n to approve or deny a pending permission prompt;
+//   - act on the highlighted track (close, kill, resume, launch, start
+//     its dev servers);
 //   - press q to quit.
 //
 // The dashboard is intentionally read-only on the state file —
@@ -40,7 +40,6 @@ type styles struct {
 	row        lipgloss.Style
 	rowActive  lipgloss.Style
 	status     map[state.Status]lipgloss.Style
-	prompt     lipgloss.Style
 	dim        lipgloss.Style
 	pr         lipgloss.Style
 	branch     lipgloss.Style
@@ -92,7 +91,6 @@ func defaultStyles() styles {
 			// it reads as inert next to the active and end-state colors.
 			state.StatusDraft: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "244"}),
 		},
-		prompt: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("3")).Padding(0, 1),
 		// AdaptiveColor picks at render time: a mid-dark gray on
 		// light terminals (where ANSI 8 turns nearly invisible)
 		// and a lighter gray on dark terminals. Same code path
@@ -144,7 +142,6 @@ type model struct {
 	tmux     *tmux.Client
 	styles   styles
 	tracks   []state.Track
-	prompts  []daemon.PendingPrompt
 	cursor   int // selected row in the tracks table
 	width    int
 	height   int
@@ -197,7 +194,6 @@ type tickMsg time.Time
 // pollResult is what the refresh goroutine returns.
 type pollResult struct {
 	tracks  []state.Track
-	prompts []daemon.PendingPrompt
 	proxies []daemon.ProxyEntryStatus
 	err     error
 }
@@ -240,8 +236,8 @@ func tickEvery() tea.Cmd {
 	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// poll fetches latest tracks + prompts. Errors are surfaced into
-// model.err so the UI still renders something useful.
+// poll fetches the latest track and proxy state. Errors are surfaced
+// into model.err so the UI still renders something useful.
 func (m *model) poll() tea.Cmd {
 	cfg := m.cfg
 	return func() tea.Msg {
@@ -250,11 +246,10 @@ func (m *model) poll() tea.Cmd {
 		if err != nil {
 			return pollResult{err: err}
 		}
-		// Prompts and proxy status are best-effort; a failure in either
-		// must not blank the whole dashboard.
-		prompts, _ := cl.PendingPrompts()
+		// Proxy status is best-effort; a failure there must not blank the
+		// whole dashboard.
 		ps, _ := cl.ProxyStatus()
-		return pollResult{tracks: tracks, prompts: prompts, proxies: ps.Proxies}
+		return pollResult{tracks: tracks, proxies: ps.Proxies}
 	}
 }
 
@@ -359,16 +354,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
 				_ = m.attachTrack(t)
-			}
-		case "y", "Y":
-			if len(m.prompts) > 0 {
-				_ = m.client.AnswerPrompt(m.prompts[0].ID, true)
-				return m, m.poll()
-			}
-		case "n", "N":
-			if len(m.prompts) > 0 {
-				_ = m.client.AnswerPrompt(m.prompts[0].ID, false)
-				return m, m.poll()
 			}
 		case "x":
 			// Remove the highlighted track from tracks entirely. Valid for a
@@ -475,7 +460,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				selID = m.tracks[m.cursor].ID
 			}
 			m.tracks = msg.tracks
-			m.prompts = msg.prompts
 			m.proxies = msg.proxies
 			if selID != "" {
 				for i, t := range m.tracks {
@@ -647,18 +631,7 @@ func (m *model) View() string {
 	var lines []string
 	lines = append(lines, strings.Split(bigBanner("TRACKS"), "\n")...)
 	lines = append(lines, "")
-	lines = append(lines, m.styles.dim.Render(fmt.Sprintf("%d tracks · %d pending prompts", len(m.tracks), len(m.prompts))))
-	for _, p := range m.prompts {
-		// y/n belongs to the confirmation while one is open — advertising
-		// it here too would invite the user to "approve" a tool call and
-		// remove a track instead.
-		keys := "[y=allow / n=deny]"
-		if m.confirm != nil {
-			keys = "[answer the box below first]"
-		}
-		lines = append(lines, m.styles.prompt.Render(fmt.Sprintf("APPROVAL  %s wants %s — %s   %s",
-			shortID(p.TrackID), p.Tool, p.Detail, keys)))
-	}
+	lines = append(lines, m.styles.dim.Render(fmt.Sprintf("%d tracks", len(m.tracks))))
 	if m.statusMsg != "" {
 		lines = append(lines, m.styles.warn.Render(m.statusMsg))
 	}
@@ -670,7 +643,7 @@ func (m *model) View() string {
 	// --- footer (fixed) ---
 	footerLines := []string{
 		"",
-		m.styles.dim.Render("↑/↓ select   enter attach   u start servers   d close   K kill   x remove   X clear completed   y/n approve"),
+		m.styles.dim.Render("↑/↓ select   enter attach   u start servers   d close   K kill   x remove   X clear completed"),
 		m.styles.dim.Render("tab proxy   r refresh   R resume   L launch draft   q quit   (open menu from any window with <prefix>+t)"),
 	}
 
