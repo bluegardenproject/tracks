@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/bluegardenproject/tracks/compare/v0.5.0...v0.6.0) (2026-08-08)
+
+
+### Features
+
+* **menu:** check for updates and self-install a newer release ([a2c246d](https://github.com/bluegardenproject/tracks/commit/a2c246d495d710c3cc67877aa2bcee3e28930fa0))
+
+
+### Bug Fixes
+
+* **update:** count only the tracks the restart actually interrupts ([faf9081](https://github.com/bluegardenproject/tracks/commit/faf9081364c2d5d2b9cdb3cf534382fd1683c514))
+* **update:** state the real cost of the next tracks run ([e521a50](https://github.com/bluegardenproject/tracks/commit/e521a50eff0e55f4bae3a447cc9b0a174b8ae0de))
+
 ## [0.5.0](https://github.com/bluegardenproject/tracks/compare/v0.4.1...v0.5.0) (2026-08-07)
 
 
