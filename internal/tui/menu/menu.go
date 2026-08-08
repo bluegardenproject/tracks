@@ -50,6 +50,7 @@ const (
 	ActionProxy         Action = "proxy"
 	ActionSettings      Action = "settings"
 	ActionGC            Action = "gc"
+	ActionUpdate        Action = "update"
 	ActionQuitSession   Action = "quit"
 	ActionClose         Action = "close"
 )
@@ -67,6 +68,7 @@ var actionHints = map[Action]string{
 	ActionProxy:         "Show stable-port proxy status (fixed port → active track's service).",
 	ActionSettings:      "Add, edit, or remove repos.",
 	ActionGC:            "Clean up orphaned worktree directories.",
+	ActionUpdate:        "Compare your version against the latest release and install it.",
 	ActionQuitSession:   "Kill the tmux session and stop the daemon.",
 	ActionClose:         "Close this menu.",
 }
@@ -90,6 +92,7 @@ func PickAction() (Action, error) {
 					huh.NewOption("Proxy status", ActionProxy),
 					huh.NewOption("Settings", ActionSettings),
 					huh.NewOption("Garbage-collect orphan worktrees", ActionGC),
+					huh.NewOption("Check for updates…", ActionUpdate),
 					huh.NewOption("Quit session", ActionQuitSession),
 					huh.NewOption("Close menu", ActionClose),
 				).
