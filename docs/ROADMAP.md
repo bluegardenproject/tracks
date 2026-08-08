@@ -120,12 +120,19 @@ problem on every upgrade.
       version-bump PR, tag on merge, and build-and-attach of the cross-compiled
       binaries to the GitHub release. **Requires a `PAT_TOKEN` repo secret** for
       the first release to publish assets.
-- [ ] **Update safety (closes the daemon loop)** — on upgrade the daemon must
+- [x] **Update safety (closes the daemon loop)** — on upgrade the daemon must
       actually restart onto the new binary. A real version bump makes
       `ensureDaemonUp` restart it on the next `tracks` run for *installed* users,
-      the same way PR #21 does for local `go build`. Consider a `tracks upgrade`
-      that re-runs the installer and bounces the daemon; make sure the one-time
-      "old daemon can't restart itself" caveat is handled by the installer.
+      the same way PR #21 does for local `go build`. **Shipped**: `internal/update`
+      + `tracks update` (`--check` to only report) and the menu's *Check for
+      updates…* entry read the latest GitHub release, compare it against the
+      running version, and swap the binary in place — downloading next to the
+      target so the final step is an atomic rename, and executing the new file
+      once before the swap so a truncated or wrong-platform asset can't replace a
+      working install. The daemon is deliberately *not* bounced from the update
+      itself (that would tear down live tracks); the confirm says so, and names
+      how many tracks the next `tracks` run would interrupt. Still no checksum on
+      the asset — same tradeoff as the installer above.
 
 ---
 

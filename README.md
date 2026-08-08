@@ -17,8 +17,9 @@ with [`scripts/uninstall.sh`](scripts/uninstall.sh).
 
 To upgrade later without leaving the session, use **Check for updates** in the
 menu (or `tracks update`; `tracks update --check` only reports). It swaps the
-binary in place — running tracks keep the old one until you quit the session
-and start `tracks` again.
+binary in place and leaves whatever is running alone — the daemon and open
+windows stay on the old binary until the next `tracks` run restarts the daemon
+to match, which interrupts any track still going (**Reopen** brings those back).
 
 Requires `git`, `tmux`, and the `claude` CLI on `PATH`. Linux and macOS only.
 

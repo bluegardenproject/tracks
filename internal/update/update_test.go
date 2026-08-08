@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -99,5 +102,99 @@ func TestLatestFromErrors(t *testing.T) {
 func TestApplyWithoutAsset(t *testing.T) {
 	if _, err := Apply(context.Background(), Release{Tag: "v1.0.0"}); err == nil {
 		t.Error("want an error when the release has no asset for this platform")
+	}
+}
+
+// fakeInstall lays down a stand-in for the running binary and points
+// selfPath at it, so Apply can be exercised end to end without touching
+// the test process's own executable.
+func fakeInstall(t *testing.T) string {
+	t.Helper()
+	target := filepath.Join(t.TempDir(), "tracks")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\necho old\n"), 0o700); err != nil {
+		t.Fatalf("writing fake install: %v", err)
+	}
+	orig := selfPath
+	selfPath = func() (string, error) { return target, nil }
+	t.Cleanup(func() { selfPath = orig })
+	return target
+}
+
+// assetServer serves body as the release asset.
+func assetServer(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestApplyReplacesBinary(t *testing.T) {
+	target := fakeInstall(t)
+	srv := assetServer(t, "#!/bin/sh\necho new\n")
+
+	got, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got != target {
+		t.Errorf("replaced %q, want %q", got, target)
+	}
+	content, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("reading target: %v", err)
+	}
+	if !strings.Contains(string(content), "echo new") {
+		t.Errorf("target still holds the old binary: %q", content)
+	}
+	fi, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat target: %v", err)
+	}
+	if fi.Mode().Perm() != 0o700 {
+		t.Errorf("mode = %v, want the replaced binary's 0700", fi.Mode().Perm())
+	}
+	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(target), tmpPrefix+"*"))
+	if len(leftovers) != 0 {
+		t.Errorf("left temp files behind: %v", leftovers)
+	}
+}
+
+func TestApplyKeepsTargetWhenDownloadDoesNotRun(t *testing.T) {
+	target := fakeInstall(t)
+	// A binary for another platform (or a truncated download) fails to
+	// execute — the working install must survive.
+	srv := assetServer(t, "not an executable")
+
+	if _, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL}); err == nil {
+		t.Fatal("want an error when the downloaded binary does not run")
+	}
+	content, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("reading target: %v", err)
+	}
+	if !strings.Contains(string(content), "echo old") {
+		t.Errorf("target was replaced by a broken download: %q", content)
+	}
+	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(target), tmpPrefix+"*"))
+	if len(leftovers) != 0 {
+		t.Errorf("left temp files behind: %v", leftovers)
+	}
+}
+
+func TestApplySweepsStaleTempFiles(t *testing.T) {
+	target := fakeInstall(t)
+	stale := filepath.Join(filepath.Dir(target), tmpPrefix+"killed")
+	if err := os.WriteFile(stale, []byte("half a download"), 0o600); err != nil {
+		t.Fatalf("writing stale temp file: %v", err)
+	}
+	srv := assetServer(t, "#!/bin/sh\nexit 0\n")
+
+	if _, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale temp file survived: %v", err)
 	}
 }

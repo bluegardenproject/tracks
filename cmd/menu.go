@@ -327,7 +327,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionUpdate:
-		return runUpdateFromMenu()
+		return runUpdateFromMenu(cfg)
 
 	case menu.ActionQuitSession:
 		yes, err := menu.ConfirmQuit(cfg.Tmux.SessionName)
