@@ -41,6 +41,13 @@ type supervisor struct {
 	// or when the track is ended — whichever happens first.
 	finishOnce sync.Once
 
+	// mu guards the observation bookkeeping below. Two goroutines reach
+	// it: the pane watcher (watchTrackProcess) and, once a PR URL shows
+	// up while Claude is still working — the stacked-PR flow — the PR
+	// watcher, which refreshes usage on its own ticks. It is a leaf lock:
+	// never hold it across a store write, a tmux call, or a notification.
+	mu sync.Mutex
+
 	// lastPane is the most recent capture-pane snapshot. Used to
 	// detect a stalled pane (= Claude waiting for user input).
 	lastPane         string
@@ -241,6 +248,56 @@ func (sup *supervisor) finish() {
 	sup.finishOnce.Do(func() { close(sup.done) })
 }
 
+// observePane records the latest pane snapshot and reports whether the
+// pane has now been unchanged for longer than paneIdleThreshold — the
+// signal that Claude is sitting at a prompt rather than working.
+func (sup *supervisor) observePane(snapshot string) bool {
+	sup.mu.Lock()
+	defer sup.mu.Unlock()
+	if snapshot != sup.lastPane {
+		sup.lastPane = snapshot
+		sup.lastPaneChangeAt = time.Now()
+	}
+	return time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
+}
+
+// usageSigChanged reports whether the track's transcript has changed
+// since the last usage refresh, recording sig as the new baseline.
+func (sup *supervisor) usageSigChanged(sig string) bool {
+	sup.mu.Lock()
+	defer sup.mu.Unlock()
+	if sig == sup.lastUsageSig {
+		return false
+	}
+	sup.lastUsageSig = sig
+	return true
+}
+
+// claimWaitingNotify reports whether enough time has passed since the
+// last "Claude needs you" notification for this track to send another,
+// recording the send when it says yes.
+func (sup *supervisor) claimWaitingNotify() bool {
+	sup.mu.Lock()
+	defer sup.mu.Unlock()
+	if time.Since(sup.lastWaitingNotifyAt) < waitingNotifyMinInterval {
+		return false
+	}
+	sup.lastWaitingNotifyAt = time.Now()
+	return true
+}
+
+// claimPRWatcher reports whether this caller is the one that gets to
+// start the track's PR watcher; every later caller gets false.
+func (sup *supervisor) claimPRWatcher() bool {
+	sup.mu.Lock()
+	defer sup.mu.Unlock()
+	if sup.prWatcherStarted {
+		return false
+	}
+	sup.prWatcherStarted = true
+	return true
+}
+
 // claudeExited reports whether this track's Claude process has finished.
 // The pane's pid is no help — the wrapper shell lives on as a plain
 // shell after Claude exits (see ShellCommand) — so the exit sentinel is
@@ -338,11 +395,9 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		cwd = t.Repos[0].Path
 	}
 	paths := usage.Locate(t.SessionID, cwd)
-	sig := transcriptSig(paths)
-	if sig == sup.lastUsageSig {
+	if !sup.usageSigChanged(transcriptSig(paths)) {
 		return
 	}
-	sup.lastUsageSig = sig
 
 	u, err := usage.ParseFiles(paths)
 	if err != nil {
@@ -423,15 +478,11 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	if err != nil {
 		return
 	}
-	if snapshot != sup.lastPane {
-		sup.lastPane = snapshot
-		sup.lastPaneChangeAt = time.Now()
-	}
+	idle := sup.observePane(snapshot)
 	t, ok := s.store.Get(sup.trackID)
 	if !ok || t.Status.IsTerminal() {
 		return
 	}
-	idle := time.Since(sup.lastPaneChangeAt) > paneIdleThreshold
 	snippet, awaiting := paneSnippet(snapshot)
 	prURLs := scanForPRURLs(snapshot)
 	changes := s.aggregateChanges(t)
@@ -478,12 +529,9 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	// who isn't looking at the dashboard right now. EventWaiting
 	// gets a per-track cooldown so the Running↔Waiting flicker
 	// caused by Claude's TUI spinners doesn't spam the user.
-	if newStatus == state.StatusWaiting && prevStatus != state.StatusWaiting {
-		if time.Since(sup.lastWaitingNotifyAt) >= waitingNotifyMinInterval {
-			s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
-				label+" is waiting for input")
-			sup.lastWaitingNotifyAt = time.Now()
-		}
+	if newStatus == state.StatusWaiting && prevStatus != state.StatusWaiting && sup.claimWaitingNotify() {
+		s.notifyEvent(string(notify.EventWaiting), "tracks: Claude needs you",
+			label+" is waiting for input")
 	}
 	for _, url := range addedPRs {
 		s.notifyEvent(string(notify.EventPROpened), "tracks: PR opened",
