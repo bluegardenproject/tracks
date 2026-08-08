@@ -26,17 +26,33 @@ import (
 )
 
 // Entry is one managed proxy: a fixed public port forwarding to an
-// optional upstream. All fields except ServiceName and PublicPort are
-// guarded by mu.
+// optional upstream. All fields except ServiceName, PublicPort and
+// BindAll are guarded by mu.
 type Entry struct {
 	ServiceName string
 	PublicPort  int
+
+	// BindAll listens on every interface instead of loopback. Off by
+	// default: the proxy fronts a dev server running against the user's
+	// own checkout, and binding 0.0.0.0 hands it to anyone on the
+	// network — a coffee-shop Wi-Fi away from a stranger's browser.
+	// Services that must be reachable from a physical device (a phone
+	// loading a Metro bundle) opt in via `proxy_bind_all: true`.
+	BindAll bool
 
 	mu       sync.RWMutex
 	upstream string                 // "host:port" or "" for inactive
 	rp       *httputil.ReverseProxy // cached proxy for the current upstream; nil when inactive
 	server   *http.Server           // nil when the listener is not bound
 	ln       net.Listener           // nil when the listener is not bound
+}
+
+// listenAddr is the address this entry binds when it goes active.
+func (e *Entry) listenAddr() string {
+	if e.BindAll {
+		return fmt.Sprintf(":%d", e.PublicPort)
+	}
+	return fmt.Sprintf("127.0.0.1:%d", e.PublicPort)
 }
 
 // Upstream returns the current upstream ("host:port"), or "" if inactive.
@@ -77,7 +93,7 @@ func (e *Entry) ensureBound() error {
 	if e.ln != nil {
 		return nil
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", e.PublicPort))
+	ln, err := net.Listen("tcp", e.listenAddr())
 	if err != nil {
 		return err
 	}
@@ -148,18 +164,72 @@ func NewManager() *Manager {
 	}
 }
 
-// Register declares a proxy entry for the named service on publicPort.
-// Registration does not bind the port — that happens lazily on the first
-// Switch. Idempotent: a second call for the same serviceName is silently
-// ignored (the first registration wins).
-func (m *Manager) Register(serviceName string, publicPort int) {
+// Registration is one service's stable-port declaration, as it appears
+// in the user's config.
+type Registration struct {
+	ServiceName string
+	PublicPort  int
+	BindAll     bool
+}
+
+// Register declares a proxy entry for the named service. Registration
+// does not bind the port — that happens lazily on the first Switch.
+// Idempotent: a second call for the same serviceName is silently ignored
+// (the first registration wins).
+func (m *Manager) Register(r Registration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.entries[serviceName]; !ok {
-		m.entries[serviceName] = &Entry{
-			ServiceName: serviceName,
-			PublicPort:  publicPort,
+	if _, ok := m.entries[r.ServiceName]; !ok {
+		m.entries[r.ServiceName] = &Entry{
+			ServiceName: r.ServiceName,
+			PublicPort:  r.PublicPort,
+			BindAll:     r.BindAll,
 		}
+	}
+}
+
+// Sync reconciles the registered entries against the set the config now
+// declares: new services are registered, ones whose port or bind changed
+// are rebuilt, and ones that disappeared release their port.
+//
+// Without this the registrations were a startup-only snapshot, so a
+// service added through Settings — which the daemon otherwise picks up on
+// its next config reload — had no proxy until the daemon was restarted.
+//
+// An entry that survives unchanged keeps its live listener and upstream,
+// so reloading the config never interrupts a track that is serving.
+func (m *Manager) Sync(regs []Registration) {
+	m.mu.Lock()
+	stale := make([]*Entry, 0)
+	want := make(map[string]bool, len(regs))
+	for _, r := range regs {
+		want[r.ServiceName] = true
+		cur, ok := m.entries[r.ServiceName]
+		if ok && cur.PublicPort == r.PublicPort && cur.BindAll == r.BindAll {
+			continue
+		}
+		if ok {
+			stale = append(stale, cur)
+		}
+		m.entries[r.ServiceName] = &Entry{
+			ServiceName: r.ServiceName,
+			PublicPort:  r.PublicPort,
+			BindAll:     r.BindAll,
+		}
+	}
+	for name, e := range m.entries {
+		if !want[name] {
+			stale = append(stale, e)
+			delete(m.entries, name)
+		}
+	}
+	m.mu.Unlock()
+
+	// Released outside the lock: release closes a listener, and the Serve
+	// goroutine it unblocks has no business waiting on the manager.
+	for _, e := range stale {
+		e.SetUpstream("")
+		e.release()
 	}
 }
 
