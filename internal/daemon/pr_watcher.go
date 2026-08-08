@@ -125,7 +125,7 @@ func (s *Server) refreshPR(trackID, url string) bool {
 
 	var prev state.PRRef
 	var known bool
-	updated, found, _ := s.store.Update(trackID, func(t *state.Track) bool {
+	updated, found := s.update(trackID, "polled pr state", func(t *state.Track) bool {
 		i := t.PRIndex(url)
 		if i < 0 {
 			return false

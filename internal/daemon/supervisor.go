@@ -302,7 +302,7 @@ func terminalStatusFor(t state.Track) state.Status {
 // eventual end-state transition passes to the PR watcher (once every PR
 // merges/closes) or to endTrack (on an explicit End/Kill).
 func (s *Server) enterPRReview(sup *supervisor) {
-	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
+	updated, _ := s.update(sup.trackID, "pr-review transition", func(t *state.Track) bool {
 		if t.Status.IsTerminal() || t.Status == state.StatusPROpen {
 			return false
 		}
@@ -351,7 +351,7 @@ func (s *Server) refreshUsage(sup *supervisor) {
 	// Persist via an atomic update so we only ever touch the Usage field
 	// and never clobber a concurrent write from the pane poll or a
 	// service start.
-	_, _, _ = s.store.Update(sup.trackID, func(t *state.Track) bool {
+	s.update(sup.trackID, "token usage", func(t *state.Track) bool {
 		if u == t.Usage {
 			return false
 		}
@@ -443,7 +443,7 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	// of the closure.
 	var prevStatus, newStatus state.Status
 	var addedPRs []string
-	updated, _, _ := s.store.Update(sup.trackID, func(t *state.Track) bool {
+	updated, _ := s.update(sup.trackID, "observed pane state", func(t *state.Track) bool {
 		if t.Status.IsTerminal() {
 			return false
 		}
@@ -777,7 +777,7 @@ func (s *Server) finalizeTrack(trackID string) {
 	}
 	now := time.Now().UTC()
 	var finalized bool
-	updated, _, _ := s.store.Update(trackID, func(t *state.Track) bool {
+	updated, _ := s.update(trackID, "terminal status", func(t *state.Track) bool {
 		if t.Status.IsTerminal() {
 			return false
 		}
@@ -961,5 +961,5 @@ func (s *Server) teardownTrackServices(trackID string, force bool) {
 		return
 	}
 	t.Services = stopPersistedServices(t.Services, force)
-	_ = s.store.Put(t)
+	s.persist(t, "service teardown")
 }

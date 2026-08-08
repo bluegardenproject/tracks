@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -26,8 +27,14 @@ func init() {
 			// The daemon's own stderr goes nowhere (it runs under
 			// `tmux run-shell -b`), so point the user at the file instead —
 			// this is the command they reach for when something looks wrong.
+			// Only when it exists: the daemon carries on when it can't open
+			// its log, and naming a missing file in exactly that case would
+			// send the user looking for the wrong thing.
 			if dir, err := cfg.ResolveStateDir(); err == nil {
-				fmt.Printf("log: %s\n", filepath.Join(dir, "logs", dlog.FileName))
+				p := filepath.Join(dir, "logs", dlog.FileName)
+				if _, err := os.Stat(p); err == nil {
+					fmt.Printf("log: %s\n", p)
+				}
 			}
 			return nil
 		},

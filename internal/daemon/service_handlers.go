@@ -212,7 +212,7 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 	}
 
 	now := time.Now().UTC()
-	_, _, _ = s.store.Update(p.TrackID, func(t *state.Track) bool {
+	s.update(p.TrackID, "stopped service", func(t *state.Track) bool {
 		for i := range t.Services {
 			if t.Services[i].Name == p.ServiceName {
 				t.Services[i].Status = state.ServiceStopped
