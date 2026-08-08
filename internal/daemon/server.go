@@ -191,7 +191,36 @@ func (s *Server) maybeReloadConfig() {
 	s.cfg.Store(&newCfg)
 	s.cfgModTime = fi.ModTime()
 	s.cfgSize = fi.Size()
+	// Proxy registrations follow the config: a service added (or given a
+	// proxy_port) through Settings gets its stable port here rather than
+	// on the next daemon restart.
+	s.syncProxies(newCfg)
 	dlog.Printf("reloaded config (%d repos)", len(newCfg.Repos))
+}
+
+// syncProxies reconciles the proxy manager's registrations with the
+// services cfg declares. No-op before the manager exists (Start hasn't
+// reached it yet).
+func (s *Server) syncProxies(cfg config.Config) {
+	s.mu.Lock()
+	mgr := s.proxyMgr
+	s.mu.Unlock()
+	if mgr == nil {
+		return
+	}
+	var regs []proxy.Registration
+	for _, repo := range cfg.Repos {
+		for _, svc := range repo.Services {
+			if svc.ProxyPort > 0 {
+				regs = append(regs, proxy.Registration{
+					ServiceName: svc.Name,
+					PublicPort:  svc.ProxyPort,
+					BindAll:     svc.ProxyBindAll,
+				})
+			}
+		}
+	}
+	mgr.Sync(regs)
 }
 
 // SocketPath returns the absolute path to the Unix socket. Useful for
@@ -275,16 +304,10 @@ func (s *Server) Start(ctx context.Context) error {
 	// `tracks down` (Clear). This keeps an idle daemon off well-known
 	// ports like Metro's 8081 so a manual dev server can bind them.
 	mgr := proxy.NewManager()
-	for _, repo := range s.config().Repos {
-		for _, svc := range repo.Services {
-			if svc.ProxyPort > 0 {
-				mgr.Register(svc.Name, svc.ProxyPort)
-			}
-		}
-	}
 	s.mu.Lock()
 	s.proxyMgr = mgr
 	s.mu.Unlock()
+	s.syncProxies(s.config())
 
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
 	s.mu.Lock()

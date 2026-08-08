@@ -203,6 +203,14 @@ type Service struct {
 	// always points at the fixed ProxyPort, and you flip the upstream
 	// instead of patching manifests.
 	ProxyPort int `yaml:"proxy_port,omitempty"`
+
+	// ProxyBindAll exposes that stable port on every network interface
+	// instead of loopback only. Off by default, because the proxy fronts a
+	// dev server running against your own checkout and 0.0.0.0 offers it
+	// to everyone on the network. Turn it on for a service a physical
+	// device has to reach — a phone loading a Metro bundle — and only on
+	// networks you trust.
+	ProxyBindAll bool `yaml:"proxy_bind_all,omitempty"`
 }
 
 // ReadyProbe is how a service signals readiness. At most one field set.

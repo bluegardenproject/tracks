@@ -801,6 +801,7 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 
 	envText := envToText(svc.Env)
 
+	proxyBindAll := svc.ProxyBindAll
 	proxyPortStr := ""
 	if svc.ProxyPort != 0 {
 		proxyPortStr = strconv.Itoa(svc.ProxyPort)
@@ -878,6 +879,10 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 					return nil
 				}).
 				Value(&proxyPortStr),
+			huh.NewConfirm().
+				Title("Expose the stable port on the network?").
+				Description("No keeps it on localhost. Yes lets other devices reach it — needed for a phone loading a Metro bundle, but it also offers your dev server to everyone else on that network.").
+				Value(&proxyBindAll),
 		),
 		// Group 3 — readiness probe
 		huh.NewGroup(
@@ -944,6 +949,7 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 	svc.Cmd = strings.TrimSpace(cmd)
 	svc.Env = env
 	svc.ProxyPort = proxyPort
+	svc.ProxyBindAll = proxyBindAll && proxyPort != 0
 	svc.Ready = config.ReadyProbe{
 		Port:     strings.TrimSpace(readyPort),
 		LogRegex: strings.TrimSpace(readyLogRegex),
