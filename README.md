@@ -15,6 +15,11 @@ adds it to your `PATH`. Re-run it any time to upgrade — a daemon from the
 previous version restarts automatically on the next `tracks` run. Uninstall
 with [`scripts/uninstall.sh`](scripts/uninstall.sh).
 
+To upgrade later without leaving the session, use **Check for updates** in the
+menu (or `tracks update`; `tracks update --check` only reports). It swaps the
+binary in place — running tracks keep the old one until you quit the session
+and start `tracks` again.
+
 Requires `git`, `tmux`, and the `claude` CLI on `PATH`. Linux and macOS only.
 
 ### From source
@@ -53,6 +58,8 @@ Inside the session, press `<prefix>+t` to open the menu:
 - **List / Attach… / End… / Kill…** — manage tracks.
 - **Settings** — add, edit, or remove repos via a guided form (no YAML
   editing).
+- **Check for updates…** — compares your version against the latest GitHub
+  release and, after a confirm, installs it over the binary you're running.
 - **Quit session** — kills tmux and the daemon; running Claudes get SIGTERM.
 
 When a track ends, its worktree is removed but the branch stays locally so

@@ -326,6 +326,9 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		waitForKey()
 		return nil
 
+	case menu.ActionUpdate:
+		return runUpdateFromMenu()
+
 	case menu.ActionQuitSession:
 		yes, err := menu.ConfirmQuit(cfg.Tmux.SessionName)
 		if err != nil || !yes {
