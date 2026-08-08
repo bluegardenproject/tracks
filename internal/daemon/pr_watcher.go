@@ -22,14 +22,9 @@ const prPollInterval = 60 * time.Second
 // goroutine — until none are open any more or the track ends (sup.done
 // closes).
 func (s *Server) startPRWatcher(sup *supervisor) {
-	s.mu.Lock()
-	if sup.prWatcherStarted {
-		s.mu.Unlock()
+	if !sup.claimPRWatcher() {
 		return
 	}
-	sup.prWatcherStarted = true
-	s.mu.Unlock()
-
 	go s.runPRWatcher(sup)
 }
 
