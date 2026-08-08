@@ -32,6 +32,10 @@ const (
 	// ReleasesPage is where callers point the user when the latest
 	// release carries no asset for their platform.
 	ReleasesPage = "https://github.com/bluegardenproject/tracks/releases"
+
+	// userAgent identifies these requests to GitHub, which asks callers
+	// for one and answers rate-limit questions by it.
+	userAgent = "tracks-updater"
 )
 
 // Release is the subset of a GitHub release the update flow needs.
@@ -55,7 +59,7 @@ func latestFrom(ctx context.Context, url string) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "tracks-updater")
+	req.Header.Set("User-Agent", userAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return Release{}, err
@@ -226,6 +230,7 @@ func download(ctx context.Context, url string, dst io.Writer) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", userAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("downloading %s: %w", url, err)
