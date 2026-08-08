@@ -19,9 +19,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"sync"
 	"time"
+
+	"github.com/bluegardenproject/tracks/internal/dlog"
 )
 
 // Entry is one managed proxy: a fixed public port forwarding to an
@@ -92,7 +93,7 @@ func (e *Entry) ensureBound() error {
 	}
 	go func(srv *http.Server, l net.Listener, name string) {
 		if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "tracks proxy %s: %v\n", name, err)
+			dlog.Printf("proxy %s: %v", name, err)
 		}
 	}(e.server, ln, e.ServiceName)
 	return nil

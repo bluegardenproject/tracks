@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/dlog"
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/proxy"
 	"github.com/bluegardenproject/tracks/internal/state"
@@ -175,7 +176,7 @@ func (s *Server) maybeReloadConfig() {
 
 	newCfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tracks daemon: config reload failed, keeping previous config: %v\n", err)
+		dlog.Printf("config reload failed, keeping previous config: %v", err)
 		// Advance the baseline so we don't re-read and re-log the same
 		// broken file every request; the next edit will retry.
 		s.cfgModTime = fi.ModTime()
@@ -192,7 +193,7 @@ func (s *Server) maybeReloadConfig() {
 	s.cfg.Store(&newCfg)
 	s.cfgModTime = fi.ModTime()
 	s.cfgSize = fi.Size()
-	fmt.Fprintf(os.Stderr, "tracks daemon: reloaded config (%d repos)\n", len(newCfg.Repos))
+	dlog.Printf("reloaded config (%d repos)", len(newCfg.Repos))
 }
 
 // SocketPath returns the absolute path to the Unix socket. Useful for
@@ -267,7 +268,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// an install failure just means the named subagent won't be
 	// available and the main agent has to inline its work.
 	if err := s.InstallGlobalHelpers(); err != nil {
-		fmt.Fprintf(os.Stderr, "tracks daemon: install global helpers: %v\n", err)
+		dlog.Printf("install global helpers: %v", err)
 	}
 
 	// Register the stable-port proxy manager. Every service with a
@@ -371,7 +372,7 @@ func (s *Server) acceptLoop(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			fmt.Fprintln(os.Stderr, "tracks daemon: accept:", err)
+			dlog.Printf("accept: %v", err)
 			return
 		}
 		go s.handleConn(ctx, conn)
@@ -501,7 +502,7 @@ func (s *Server) tmuxWatchLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if !tmuxHasSession(name) {
-				fmt.Fprintf(os.Stderr, "tracks daemon: tmux session %q gone, exiting\n", name)
+				dlog.Printf("tmux session %q gone, exiting", name)
 				go s.Stop()
 				return
 			}
