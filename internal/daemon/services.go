@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -8,6 +9,8 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/dlog"
+	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -24,7 +27,8 @@ import (
 // authoritative teardown handle (endTrack/recovery/daemon-shutdown all kill
 // the group). We do NOT block on readiness — a slow `pnpm install` used to
 // overrun the caller's timeout and make the start look broken. The pane shows
-// progress live; readiness is the human's (or a later probe's) concern.
+// progress live, and a service that declares a `ready:` probe has it resolved
+// in the background by watchServiceReady.
 func (s *Server) startServicePane(sup *supervisor, t state.Track, svc config.Service, worktree, depsCmd string) (state.ServiceState, error) {
 	data := services.NewTemplateData(t.ID, worktree, t.Ports)
 	serverCmd, err := services.Render(svc.Cmd, data)
@@ -59,16 +63,30 @@ func (s *Server) startServicePane(sup *supervisor, t state.Track, svc config.Ser
 		return state.ServiceState{}, err
 	}
 
+	probe, err := renderProbe(svc.Ready, data)
+	if err != nil {
+		return state.ServiceState{}, fmt.Errorf("service %s: %w", svc.Name, err)
+	}
+
 	paneCmd := buildServicePaneCommand(env, steps, serverCmd, logPath)
 	panePID, err := s.openServerPane(sup, svc.Name, t.Ports[svc.Name], paneCmd, worktree)
 	if err != nil {
 		return state.ServiceState{}, fmt.Errorf("service %s: open pane: %w", svc.Name, err)
 	}
 
+	// A service with a readiness probe or post_start hooks isn't usable
+	// yet — it's "starting" until watchServiceReady says otherwise. One
+	// with neither has nothing left to observe, so it goes straight to
+	// running (we can't assert it's serving, only that it launched).
+	status := state.ServiceRunning
+	if !probe.IsZero() || len(svc.PostStart) > 0 {
+		status = state.ServiceStarting
+	}
+
 	now := time.Now().UTC()
 	st := state.ServiceState{
 		Name:      svc.Name,
-		Status:    state.ServiceRunning,
+		Status:    status,
 		PID:       panePID,
 		PGID:      panePID,
 		Port:      t.Ports[svc.Name],
@@ -82,7 +100,135 @@ func (s *Server) startServicePane(sup *supervisor, t state.Track, svc config.Ser
 		s.closeServerPane(sup, svc.Name)
 		return state.ServiceState{}, err
 	}
+	if status == state.ServiceStarting {
+		go s.watchServiceReady(sup, t.ID, svc, probe, worktree, logPath, t.Ports)
+	}
 	return st, nil
+}
+
+// renderProbe resolves a service's configured readiness probe against the
+// track's template data, so `port: '{{.Port "live-app"}}'` becomes the
+// port actually allocated to this track.
+func renderProbe(p config.ReadyProbe, data services.TemplateData) (services.Probe, error) {
+	if p.IsZero() {
+		return services.Probe{}, nil
+	}
+	port, err := services.Render(p.Port, data)
+	if err != nil {
+		return services.Probe{}, fmt.Errorf("render ready.port: %w", err)
+	}
+	return services.Probe{Port: strings.TrimSpace(port), LogRegex: p.LogRegex}, nil
+}
+
+// watchServiceReady waits for a freshly-started service to become usable,
+// then runs its post_start hooks and marks it ready — the transition the
+// `service_ready` notification announces.
+//
+// It runs in its own goroutine so `tracks up` stays non-blocking: a slow
+// `pnpm install` in the pane used to overrun the caller's timeout and make
+// a perfectly healthy start look broken. The probe is what makes the
+// difference between "the pane opened" and "the server is answering", so
+// nothing here is on the request path.
+func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.Service, probe services.Probe, worktree, logPath string, ports map[string]int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Give up the moment the track ends or the daemon shuts down. In that
+	// case the service's end state belongs to teardown, not to us — see
+	// the ctx.Err() checks below.
+	go func() {
+		select {
+		case <-sup.done:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	if err := services.WaitReady(ctx, probe, logPath, s.probeTimeout()); err != nil {
+		if ctx.Err() != nil {
+			return // torn down while waiting; teardown owns the status
+		}
+		s.failService(trackID, svc.Name, "never became ready", err, logPath)
+		return
+	}
+	if len(svc.PostStart) > 0 {
+		data := services.NewTemplateData(trackID, worktree, ports)
+		if err := services.RunHooks(ctx, svc.PostStart, data, worktree, logPath); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			s.failService(trackID, svc.Name, "post_start hooks failed", err, logPath)
+			return
+		}
+	}
+	if !s.markService(trackID, svc.Name, state.ServiceReady) {
+		return // stopped or gone while we waited — nothing to announce
+	}
+	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server ready",
+		svc.Name+" — "+s.serviceURLs(svc.Name, ports[svc.Name]))
+}
+
+// probeTimeout is how long a readiness probe may take before the service
+// is called failed.
+func (s *Server) probeTimeout() time.Duration {
+	if s.readyTimeout > 0 {
+		return s.readyTimeout
+	}
+	return services.DefaultReadyTimeout
+}
+
+// failService records a service as failed and tells the user where to
+// look. The pane is deliberately left alone: a server that missed the
+// readiness deadline may still be coming up, and killing it would throw
+// away the log the user needs. It stays in NeedsTeardown, so the track's
+// teardown still reclaims the process and its port.
+func (s *Server) failService(trackID, name, what string, cause error, logPath string) {
+	dlog.Printf("service %s on track %s: %s: %v", name, trackID, what, cause)
+	if !s.markService(trackID, name, state.ServiceFailed) {
+		return
+	}
+	s.notifyEvent(string(notify.EventServiceFailed), "tracks: dev server problem",
+		fmt.Sprintf("%s %s — see %s", name, what, logPath))
+}
+
+// markService moves one of a track's services to a new status, reporting
+// whether the change was applied. A service that is no longer live (the
+// user ran `tracks down`, or the track ended) is left alone: a probe that
+// finishes afterwards must not resurrect it as ready.
+func (s *Server) markService(trackID, name string, status state.ServiceStatus) bool {
+	applied := false
+	s.update(trackID, "service status", func(t *state.Track) bool {
+		for i := range t.Services {
+			if t.Services[i].Name != name {
+				continue
+			}
+			if !t.Services[i].Status.Live() || t.Services[i].Status == status {
+				return false
+			}
+			t.Services[i].Status = status
+			if status == state.ServiceFailed {
+				now := time.Now().UTC()
+				t.Services[i].ExitedAt = &now
+			}
+			applied = true
+			return true
+		}
+		return false
+	})
+	return applied
+}
+
+// serviceURLs renders the address(es) a ready service is reachable at:
+// the track's own port, plus the stable proxy port when one is bound.
+func (s *Server) serviceURLs(name string, port int) string {
+	s.mu.Lock()
+	mgr := s.proxyMgr
+	s.mu.Unlock()
+	if mgr != nil {
+		if e := mgr.Entry(name); e != nil && e.Upstream() != "" {
+			return fmt.Sprintf("stable: http://localhost:%d  track: http://localhost:%d", e.PublicPort, port)
+		}
+	}
+	return fmt.Sprintf("http://localhost:%d", port)
 }
 
 // buildServicePaneCommand assembles the single shell command a service pane
@@ -219,7 +365,7 @@ func stopPersistedServices(svcs []state.ServiceState, force bool) []state.Servic
 	out := make([]state.ServiceState, len(svcs))
 	copy(out, svcs)
 	for i := range out {
-		if !out[i].Status.Live() || out[i].PGID <= 0 {
+		if !out[i].NeedsTeardown() {
 			continue
 		}
 		if force {
