@@ -207,9 +207,10 @@ const (
 	ServiceStopped ServiceStatus = "stopped"
 )
 
-// Live reports whether a service in this status still has a running
-// process group that teardown must signal. Every pre-terminal status
-// (starting, running, ready) counts; failed/stopped do not.
+// Live reports whether a service in this status is expected to be
+// serving. Every pre-terminal status (starting, running, ready) counts;
+// failed/stopped do not. This is a question about the service, not about
+// its process — for teardown, ask ServiceState.NeedsTeardown.
 func (s ServiceStatus) Live() bool {
 	switch s {
 	case ServiceStarting, ServiceRunning, ServiceReady:
@@ -232,6 +233,15 @@ type ServiceState struct {
 	LogPath   string        `json:"log_path,omitempty"`
 	StartedAt *time.Time    `json:"started_at,omitempty"`
 	ExitedAt  *time.Time    `json:"exited_at,omitempty"`
+}
+
+// NeedsTeardown reports whether this service still has a process group
+// that teardown must signal. Every status except Stopped counts —
+// Failed included, because a service that failed its readiness probe
+// usually still has a live pane process holding its port. Skipping it
+// would leak that process and its port past the end of the track.
+func (s ServiceState) NeedsTeardown() bool {
+	return s.Status != ServiceStopped && s.PGID > 0
 }
 
 // PRRef is one pull request a track opened. Tracks routinely produce

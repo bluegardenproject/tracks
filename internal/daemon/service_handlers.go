@@ -17,8 +17,11 @@ import (
 // dependencies) for a track. Each service runs in its own tmux pane in the
 // track window and *owns* its process (see startServicePane); the call returns
 // as soon as the panes are opened — dependency install and the server come up
-// live in the pane, not behind a blocking wait. The stable-port proxy (if the
-// service declares proxy_port) is pointed at this track immediately.
+// live in the pane, not behind a blocking wait. A service that declares a
+// readiness probe is left in `starting` for watchServiceReady to resolve, so
+// the call stays fast without the dashboard claiming the server is up. The
+// stable-port proxy (if the service declares proxy_port) is pointed at this
+// track immediately.
 func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p ServiceUpParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -92,14 +95,18 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		return fail("resolve service order: " + err.Error())
 	}
 
-	// Open each service's pane in dependency order, skipping those already live.
+	// Open each service's pane in dependency order, skipping those that
+	// already hold a process. immediate counts the ones with nothing left
+	// to wait for, so the notification below doesn't claim a server is up
+	// before its probe has passed.
+	immediate := 0
 	for _, name := range order {
 		fresh, ok := s.store.Get(p.TrackID)
 		if !ok {
 			return fail("track disappeared mid-start")
 		}
-		if serviceLive(fresh.Services, name) {
-			emit(name + ": already running")
+		if occupied, why := serviceOccupied(fresh.Services, name); occupied {
+			emit(name + ": " + why)
 			continue
 		}
 
@@ -110,7 +117,12 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		if err != nil {
 			return fail(fmt.Sprintf("start %s: %v", name, err))
 		}
-		emit(fmt.Sprintf("%s launched on :%d (installing deps + starting in its pane)", name, st.Port))
+		if st.Status == state.ServiceStarting {
+			emit(fmt.Sprintf("%s launched on :%d (installing deps, then waiting for it to come up)", name, st.Port))
+		} else {
+			immediate++
+			emit(fmt.Sprintf("%s launched on :%d (installing deps + starting in its pane)", name, st.Port))
+		}
 	}
 
 	// Point each explicitly-requested service's stable proxy at this track.
@@ -137,24 +149,24 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		}
 	}
 
-	// Single-service call: notify with its URL and return its port/log so the
-	// CLI can print them. Start-all: a brief notification, no single port.
+	// Notify only about services with nothing left to wait for. The ones
+	// being watched announce themselves from watchServiceReady once their
+	// probe passes — telling the user a server is up while it is still
+	// installing dependencies is the thing this replaced.
 	if p.ServiceName != "" {
 		port := t.Ports[p.ServiceName]
-		body := fmt.Sprintf("%s — http://localhost:%d", p.ServiceName, port)
-		if mgr != nil {
-			if e := mgr.Entry(p.ServiceName); e != nil && e.Upstream() != "" {
-				body = fmt.Sprintf("%s — stable: http://localhost:%d  track: http://localhost:%d",
-					p.ServiceName, e.PublicPort, port)
-			}
+		if immediate > 0 {
+			s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started",
+				p.ServiceName+" — "+s.serviceURLs(p.ServiceName, port))
 		}
-		s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started", body)
 		logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
 		return ok(ServiceUpResult{Port: port, LogPath: logPath})
 	}
 
-	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev servers started",
-		fmt.Sprintf("%d service(s) launching in their panes", len(order)))
+	if immediate > 0 {
+		s.notifyEvent(string(notify.EventServiceReady), "tracks: dev servers started",
+			fmt.Sprintf("%d service(s) launching in their panes", immediate))
+	}
 	return ok(ServiceUpResult{})
 }
 
@@ -179,7 +191,10 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 			break
 		}
 	}
-	if svcState == nil || !svcState.Status.Live() {
+	// NeedsTeardown rather than Live: a service that failed its readiness
+	// probe still owns its pane process, and `tracks down` is exactly how
+	// the user reclaims it.
+	if svcState == nil || !svcState.NeedsTeardown() {
 		return fail(fmt.Sprintf("service %q is not running", p.ServiceName))
 	}
 
@@ -260,12 +275,21 @@ func (s *Server) handleServices(raw json.RawMessage) Response {
 	})
 }
 
-// serviceLive reports whether the named service is in a live state in svcs.
-func serviceLive(svcs []state.ServiceState, name string) bool {
+// serviceOccupied reports whether the named service still holds a pane
+// process, and how to describe that to the user. A failed service counts:
+// its probe gave up, but the pane is still there (see failService), so
+// starting a second one would fight the first for the port.
+func serviceOccupied(svcs []state.ServiceState, name string) (bool, string) {
 	for _, ss := range svcs {
-		if ss.Name == name && ss.Status.Live() {
-			return true
+		if ss.Name != name {
+			continue
+		}
+		switch {
+		case ss.Status == state.ServiceFailed && ss.NeedsTeardown():
+			return true, "failed its readiness check but its pane is still running — `tracks down " + name + "` first"
+		case ss.Status.Live():
+			return true, "already running"
 		}
 	}
-	return false
+	return false, ""
 }

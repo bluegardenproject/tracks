@@ -60,6 +60,11 @@ type Server struct {
 	// true in tests where there is no tmux session to gate on.
 	NoTmuxWatch bool
 
+	// readyTimeout bounds how long a service readiness probe polls before
+	// the service is marked failed. Zero means services.DefaultReadyTimeout;
+	// tests shorten it so the failure path doesn't cost a minute.
+	readyTimeout time.Duration
+
 	socketDir  string
 	socketPath string
 	lockPath   string

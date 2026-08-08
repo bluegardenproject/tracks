@@ -92,9 +92,10 @@ type Notify struct {
 	// /dev/tty). tmux turns this into a status-line activity
 	// marker on the window that fires.
 	Bell bool `yaml:"bell"`
-	// Events lists which transitions emit a notification. Valid
-	// values: waiting, done, errored, pr_opened, pr_state_changed.
-	// Empty defaults to the full set.
+	// Events lists which transitions emit a notification. Valid values
+	// are the notify.Event constants: track_created, waiting, done,
+	// errored, pr_opened, pr_state_changed, service_ready,
+	// service_failed. Empty defaults to the full set.
 	Events []string `yaml:"events,omitempty"`
 }
 
