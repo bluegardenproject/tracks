@@ -1279,53 +1279,6 @@ func (s *Server) handlePruneCompleted() Response {
 	return ok(PruneCompletedResult{Removed: removed})
 }
 
-func (s *Server) handlePendingPrompts() Response {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]PendingPrompt, 0, len(s.pendingPrompts))
-	for _, p := range s.pendingPrompts {
-		out = append(out, p.prompt)
-	}
-	return ok(PendingPromptsResult{Prompts: out})
-}
-
-func (s *Server) handleAnswerPrompt(raw json.RawMessage) Response {
-	var p AnswerPromptParams
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return fail(err.Error())
-	}
-	s.mu.Lock()
-	pc, found := s.pendingPrompts[p.ID]
-	if found {
-		delete(s.pendingPrompts, p.ID)
-	}
-	s.mu.Unlock()
-	if !found {
-		return fail("prompt not found: " + p.ID)
-	}
-	pc.reply <- p.Allow
-	close(pc.reply)
-	return ok(nil)
-}
-
-// RegisterPrompt blocks until a CLI/dashboard caller answers. The
-// custom permission-prompt-tool (step 7) calls this from inside
-// Claude's flow.
-func (s *Server) RegisterPrompt(trackID, tool, detail string) bool {
-	id, err := randomID(8)
-	if err != nil {
-		return false
-	}
-	reply := make(chan bool, 1)
-	s.mu.Lock()
-	s.pendingPrompts[id] = promptCh{
-		prompt: PendingPrompt{ID: id, TrackID: trackID, Tool: tool, Detail: detail},
-		reply:  reply,
-	}
-	s.mu.Unlock()
-	return <-reply
-}
-
 // primaryPathFor looks up a configured repo's primary checkout path
 // by name. Returns "" for unknown repos.
 func (s *Server) primaryPathFor(name string) string {

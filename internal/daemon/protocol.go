@@ -47,13 +47,6 @@ const (
 	// Claude in it with edit permissions.
 	MethodPromote Method = "promote"
 
-	// MethodPendingPrompts lists outstanding permission prompts the
-	// daemon is holding open on behalf of Claude.
-	MethodPendingPrompts Method = "pending_prompts"
-
-	// MethodAnswerPrompt answers a pending prompt with allow/deny.
-	MethodAnswerPrompt Method = "answer_prompt"
-
 	// MethodShutdown asks the daemon to exit. Used when the tmux
 	// session is being torn down explicitly.
 	MethodShutdown Method = "shutdown"
@@ -251,25 +244,6 @@ type PromoteParams struct {
 type PromoteResult struct {
 	Branch     string `json:"branch"`
 	WindowName string `json:"window_name"`
-}
-
-// PendingPrompt describes one outstanding permission request.
-type PendingPrompt struct {
-	ID      string `json:"id"`
-	TrackID string `json:"track_id"`
-	Tool    string `json:"tool"`
-	Detail  string `json:"detail"`
-}
-
-// PendingPromptsResult is returned by MethodPendingPrompts.
-type PendingPromptsResult struct {
-	Prompts []PendingPrompt `json:"prompts"`
-}
-
-// AnswerPromptParams answers one pending prompt.
-type AnswerPromptParams struct {
-	ID    string `json:"id"`
-	Allow bool   `json:"allow"`
 }
 
 // ForgetParams selects which track to drop from state.

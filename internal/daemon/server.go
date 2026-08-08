@@ -65,7 +65,6 @@ type Server struct {
 	lockPath   string
 
 	mu              sync.Mutex
-	pendingPrompts  map[string]promptCh
 	supervisors     map[string]*supervisor
 	proxyMgr        *proxy.Manager
 	listener        net.Listener
@@ -80,11 +79,6 @@ type Server struct {
 	shuttingDown atomic.Bool
 }
 
-type promptCh struct {
-	prompt PendingPrompt
-	reply  chan bool
-}
-
 // NewServer constructs a Server. The actual sockets are not opened
 // until Start. The version string is included in ping responses and
 // in the daemon log line.
@@ -96,7 +90,6 @@ func NewServer(cfg config.Config, store state.Store, version string) *Server {
 			MacOS: cfg.Notify.MacOS,
 			Bell:  cfg.Notify.Bell,
 		}),
-		pendingPrompts: make(map[string]promptCh),
 	}
 	// Snapshot the running binary's path + mtime once, at startup, so a
 	// later rebuild (which overwrites the file in place) doesn't change
@@ -451,10 +444,6 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleAddRepo(ctx, req.Params, emit)
 	case MethodPromote:
 		return s.handlePromote(ctx, req.Params, emit)
-	case MethodPendingPrompts:
-		return s.handlePendingPrompts()
-	case MethodAnswerPrompt:
-		return s.handleAnswerPrompt(req.Params)
 	case MethodShutdown:
 		return ok(nil)
 	case MethodForget:
