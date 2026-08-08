@@ -7,6 +7,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tui/menu"
 	"github.com/bluegardenproject/tracks/internal/update"
 	"github.com/spf13/cobra"
@@ -97,7 +98,11 @@ func runUpdateFromMenu(cfg config.Config) error {
 	}
 	if rel.AssetURL == "" {
 		fmt.Printf("tracks %s is out, but the release has no %s binary.\n", rel.Version, update.AssetName())
-		fmt.Println(update.ReleasesPage)
+		page := rel.PageURL
+		if page == "" {
+			page = update.ReleasesPage
+		}
+		fmt.Println(page)
 		waitForKey()
 		return nil
 	}
@@ -120,8 +125,11 @@ func runUpdateFromMenu(cfg config.Config) error {
 }
 
 // liveTrackCount is how many tracks the daemon restart would interrupt.
-// A daemon we can't reach reports none — the count only sharpens the
-// warning, it isn't worth failing the update over.
+// The predicate mirrors the daemon's own shutdown sweep (sweepable in
+// internal/daemon/recovery.go), so the number matches what the warning
+// claims: a pr-open track is re-adopted on the next start, not
+// interrupted. A daemon we can't reach reports none — the count only
+// sharpens the warning, it isn't worth failing the update over.
 func liveTrackCount(cfg config.Config) int {
 	tracks, err := daemon.NewClient(cfg).Ls()
 	if err != nil {
@@ -129,7 +137,7 @@ func liveTrackCount(cfg config.Config) int {
 	}
 	n := 0
 	for _, t := range tracks {
-		if menu.ActiveOnly(t) {
+		if !t.Status.IsTerminal() && t.Status != state.StatusDraft && t.Status != state.StatusPROpen {
 			n++
 		}
 	}
