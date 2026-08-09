@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -249,4 +250,94 @@ func mustPort(t *testing.T, rawURL string) int {
 		t.Fatalf("port of %s: %v", rawURL, err)
 	}
 	return p
+}
+
+// A port change on a *serving* service must not leave the track behind a
+// dead stable port: the upstream moves to the new listener.
+func TestSyncCarriesTheUpstreamAcrossARebuild(t *testing.T) {
+	oldPort := freePort(t)
+	newPort := freePort(t)
+	upstream := freePort(t)
+	m := NewManager()
+	m.Register(Registration{ServiceName: "metro", PublicPort: oldPort})
+	if err := m.Switch("metro", upstream); err != nil {
+		t.Fatalf("Switch: %v", err)
+	}
+	defer m.Stop()
+
+	m.Sync([]Registration{{ServiceName: "metro", PublicPort: newPort}})
+
+	e := m.Entry("metro")
+	if got, want := e.Upstream(), fmt.Sprintf("localhost:%d", upstream); got != want {
+		t.Errorf("upstream = %q after the port moved, want %q", got, want)
+	}
+	if canBind(newPort) {
+		t.Errorf("new port %d not bound — the service is serving but unreachable through the proxy", newPort)
+	}
+	if !canBind(oldPort) {
+		t.Errorf("old port %d still held", oldPort)
+	}
+}
+
+// Flipping proxy_bind_all mid-session is the same rebuild path.
+func TestSyncCarriesTheUpstreamAcrossABindChange(t *testing.T) {
+	port := freePort(t)
+	upstream := freePort(t)
+	m := NewManager()
+	m.Register(Registration{ServiceName: "metro", PublicPort: port})
+	if err := m.Switch("metro", upstream); err != nil {
+		t.Fatalf("Switch: %v", err)
+	}
+	defer m.Stop()
+
+	m.Sync([]Registration{{ServiceName: "metro", PublicPort: port, BindAll: true}})
+
+	e := m.Entry("metro")
+	if !e.BindAll {
+		t.Error("BindAll not applied")
+	}
+	if got, want := e.Upstream(), fmt.Sprintf("localhost:%d", upstream); got != want {
+		t.Errorf("upstream = %q, want %q — flipping the switch dropped a live upstream", got, want)
+	}
+}
+
+// A config reload racing `tracks up` must not bind a port on an entry
+// that is no longer registered — nothing could ever release it. Run under
+// -race; the leak shows up as a port still held after Stop.
+func TestSyncRacingSwitchDoesNotLeakAListener(t *testing.T) {
+	ports := make([]int, 8)
+	for i := range ports {
+		ports[i] = freePort(t)
+	}
+	m := NewManager()
+	m.Register(Registration{ServiceName: "metro", PublicPort: ports[0]})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Upstreams are reserved up front: freePort calls t.Fatalf, which does
+	// not fail a test properly from a spawned goroutine.
+	upstreams := make([]int, 40)
+	for i := range upstreams {
+		upstreams[i] = freePort(t)
+	}
+	go func() {
+		defer wg.Done()
+		for _, up := range upstreams {
+			_ = m.Switch("metro", up)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range 40 {
+			m.Sync([]Registration{{ServiceName: "metro", PublicPort: ports[i%len(ports)]}})
+		}
+	}()
+	wg.Wait()
+
+	m.Stop()
+	for _, p := range ports {
+		if !canBind(p) {
+			t.Errorf("port %d still held after Stop — an orphaned listener leaked", p)
+		}
+	}
 }

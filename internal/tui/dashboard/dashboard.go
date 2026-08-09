@@ -1026,7 +1026,10 @@ func renderIdle(t state.Track) string {
 func svcCounts(t state.Track) (live, total int) {
 	total = max(len(t.Ports), len(t.Services))
 	for _, s := range t.Services {
-		if s.Status.Live() {
+		// Active, not Live: a service that failed its readiness probe still
+		// holds its pane and its port, and hiding it is exactly when the
+		// user needs to see it.
+		if s.Active() {
 			live++
 		}
 	}

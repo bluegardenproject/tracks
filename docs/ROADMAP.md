@@ -357,6 +357,34 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 
 Move completed items here with a date, then delete once the dust settles.
 
+- **2026-08-09 — 1.0 hardening pass, part 1 (P0 review findings).** Seven
+  branches off the codebase review. **LICENSE** (MIT) and the removal of code
+  left dead by earlier rewrites (`internal/services/runner.go`,
+  `dashboard.renderChanges`). **Daemon log file**: the daemon runs under
+  `tmux run-shell -b`, which discards stderr, so every diagnostic it emitted
+  was lost — `internal/dlog` writes them to `<state_dir>/logs/daemon.log`
+  (`tracks ping` prints the path), and the fourteen store writes that
+  discarded their error now log it through `s.persist` / `s.update` /
+  `s.forget`. **Permission prompts removed**: nothing ever called
+  `RegisterPrompt`, so the `pending_prompts` / `answer_prompt` methods and the
+  dashboard's APPROVAL banner were unreachable — and its advertised `y/n
+  approve` keys collided with the destructive-action modal. **Readiness is
+  real**: `ready:` and `post_start` were configured, validated, editable in
+  Settings, and never run; `watchServiceReady` now drives
+  `starting → ready/failed` in the background (so `tracks up` stays
+  non-blocking) and `service_ready` fires when the server binds rather than
+  when the pane opens. A failed service keeps its pane process and stays in
+  `NeedsTeardown`, so it can't leak; watchers are tied to their instance's
+  PGID so a restart inside the probe window can't fail its own replacement.
+  **Proxy**: stable ports now bind `127.0.0.1` — a **behaviour change**, opt
+  back out per service with `proxy_bind_all: true` (needed for a phone
+  reaching Metro) — and `Manager.Sync` follows config reloads instead of
+  being a startup-only snapshot, carrying a live upstream across a port or
+  bind change. **Supervisor race**: the observation fields (`lastUsageSig`
+  and friends) were written by both the pane watcher and the PR watcher on
+  the stacked-PR path; they're behind a leaf mutex now, with a regression
+  test that reports `DATA RACE` against the old code.
+
 - **2026-08-06 — Per-PR track state + remove confirmation.** `Track.PRs` is now
   a list (schema v3, old flat `pr_*` fields migrated on load), so a track that
   opens a stack of PRs has each one polled and shown separately. Statuses:

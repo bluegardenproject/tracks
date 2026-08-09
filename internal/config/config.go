@@ -384,6 +384,13 @@ func validateServices(repoName string, services []Service) error {
 		if svc.Ready.Port != "" && svc.Ready.LogRegex != "" {
 			return fmt.Errorf("repos[%s].services[%s].ready: set at most one of port or log_regex", repoName, svc.Name)
 		}
+		// proxy_bind_all only means anything for a service that has a
+		// stable port to expose; on its own it reads as "expose this" and
+		// silently does nothing, which is the wrong way for a setting
+		// about network exposure to fail.
+		if svc.ProxyBindAll && svc.ProxyPort == 0 {
+			return fmt.Errorf("repos[%s].services[%s].proxy_bind_all needs proxy_port to be set", repoName, svc.Name)
+		}
 		for _, dep := range svc.DependsOn {
 			if dep == svc.Name {
 				return fmt.Errorf("repos[%s].services[%s] depends on itself", repoName, svc.Name)

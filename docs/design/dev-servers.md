@@ -224,8 +224,13 @@ Build:
 - [x] Generalize supervisor: track N **daemon-owned** service processes per
       track (PID + PGID each), not just Claude. Services die on `done`/`kill`.
       *(PRs #15, #17)*
-- [x] Readiness probe: port-listen and log-regex variants. *(PR #16)*
-- [x] Hook runner: `pre_start` / `post_start` / `pre_stop`. *(PR #16)*
+- [x] Readiness probe: port-listen and log-regex variants. *(PR #16 wrote
+      `services.WaitReady`, but nothing ever called it — the pane rewrite
+      landed without it, so `ready:` was accepted and silently ignored until
+      `watchServiceReady`, 2026-08-09.)*
+- [x] Hook runner: `pre_start` / `post_start` / `pre_stop`. *(PR #16. Same
+      gap: `pre_start` and `pre_stop` ran, `post_start` never did until
+      2026-08-09.)*
 - [x] tmux **viewer pane** per service: `tail -f` the service log in a pane in
       the right column of the track window (see Window layout). Cosmetic only —
       the daemon still owns the process.

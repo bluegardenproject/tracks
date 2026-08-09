@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/proxy"
 	"github.com/bluegardenproject/tracks/internal/services"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
@@ -100,7 +102,7 @@ func TestWatchServiceReadyMarksReady(t *testing.T) {
 
 	svc := config.Service{Name: "web"}
 	probe := services.Probe{Port: strconv.Itoa(port)}
-	srv.watchServiceReady(sup, tr.ID, svc, probe, t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": port})
+	srv.watchServiceReady(sup, tr.ID, svc, probe, t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": port}, 1)
 
 	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceReady {
 		t.Errorf("status = %q, want ready", got)
@@ -116,7 +118,7 @@ func TestWatchServiceReadyMarksFailedOnTimeout(t *testing.T) {
 
 	// Port 1 is not bound by anything we can reach, so the probe times out.
 	srv.watchServiceReady(sup, tr.ID, config.Service{Name: "web"}, services.Probe{Port: "1"},
-		t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": 1})
+		t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": 1}, 1)
 
 	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceFailed {
 		t.Errorf("status = %q, want failed", got)
@@ -141,7 +143,7 @@ func TestWatchServiceReadyLeavesStatusOnTeardown(t *testing.T) {
 		close(done)
 	}()
 	srv.watchServiceReady(sup, tr.ID, config.Service{Name: "web"}, services.Probe{Port: "1"},
-		t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": 1})
+		t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": 1}, 1)
 
 	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceStarting {
 		t.Errorf("status = %q, want it left at starting for teardown", got)
@@ -160,7 +162,7 @@ func TestWatchServiceReadyRunsPostStartHooks(t *testing.T) {
 
 	svc := config.Service{Name: "web", PostStart: []string{"touch " + marker}}
 	srv.watchServiceReady(sup, tr.ID, svc, services.Probe{Port: strconv.Itoa(port)},
-		dir, filepath.Join(dir, "web.log"), map[string]int{"web": port})
+		dir, filepath.Join(dir, "web.log"), map[string]int{"web": port}, 1)
 
 	if _, err := os.Stat(marker); err != nil {
 		t.Errorf("post_start hook did not run: %v", err)
@@ -181,7 +183,7 @@ func TestWatchServiceReadyFailsWhenPostStartFails(t *testing.T) {
 
 	svc := config.Service{Name: "web", PostStart: []string{"exit 3"}}
 	srv.watchServiceReady(sup, tr.ID, svc, services.Probe{Port: strconv.Itoa(port)},
-		dir, filepath.Join(dir, "web.log"), map[string]int{"web": port})
+		dir, filepath.Join(dir, "web.log"), map[string]int{"web": port}, 1)
 
 	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceFailed {
 		t.Errorf("status = %q, want failed", got)
@@ -196,7 +198,7 @@ func TestMarkServiceWillNotResurrectAStoppedService(t *testing.T) {
 		Name: "web", Status: state.ServiceStopped, PGID: 1,
 	})
 
-	if srv.markService(tr.ID, "web", state.ServiceReady) {
+	if srv.markService(tr.ID, "web", 1, state.ServiceReady) {
 		t.Error("markService reported a change on a stopped service")
 	}
 	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceStopped {
@@ -210,7 +212,7 @@ func TestMarkServiceSetsExitedAtOnFailure(t *testing.T) {
 		Name: "web", Status: state.ServiceStarting, PGID: 1,
 	})
 
-	if !srv.markService(tr.ID, "web", state.ServiceFailed) {
+	if !srv.markService(tr.ID, "web", 1, state.ServiceFailed) {
 		t.Fatal("markService did not apply the failure")
 	}
 	got, _ := srv.store.Get(tr.ID)
@@ -261,4 +263,135 @@ func TestServiceOccupied(t *testing.T) {
 			}
 		})
 	}
+}
+
+// `tracks down web` then `tracks up web` inside the probe window leaves
+// the first watcher polling for an instance that is gone. It must not be
+// able to mark the *replacement* — which owns the name now — as failed.
+func TestMarkServiceIgnoresAStaleInstance(t *testing.T) {
+	srv := newReadinessTestServer(t)
+	const oldPGID, newPGID = 4001, 4002
+	tr := trackWithService(t, srv, "trk-restart", state.ServiceState{
+		Name: "web", Status: state.ServiceStarting, PGID: newPGID,
+	})
+
+	if srv.markService(tr.ID, "web", oldPGID, state.ServiceFailed) {
+		t.Error("a watcher from the previous instance was allowed to mark the new one")
+	}
+	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceStarting {
+		t.Errorf("status = %q, want the new instance left starting", got)
+	}
+	// The watcher that actually owns this instance still can.
+	if !srv.markService(tr.ID, "web", newPGID, state.ServiceReady) {
+		t.Error("the owning watcher could not mark its own instance")
+	}
+}
+
+// Same scenario end to end: the stale watcher's probe times out while a
+// replacement instance is starting.
+func TestWatchServiceReadyDoesNotFailAReplacementInstance(t *testing.T) {
+	srv := newReadinessTestServer(t)
+	tr := trackWithService(t, srv, "trk-replaced", state.ServiceState{
+		Name: "web", Status: state.ServiceStarting, PGID: 5002, Port: 1,
+	})
+	sup := &supervisor{trackID: tr.ID, done: make(chan struct{})}
+
+	// Watcher for the *previous* instance (5001), whose probe will time out.
+	srv.watchServiceReady(sup, tr.ID, config.Service{Name: "web"}, services.Probe{Port: "1"},
+		t.TempDir(), filepath.Join(t.TempDir(), "web.log"), map[string]int{"web": 1}, 5001)
+
+	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceStarting {
+		t.Errorf("status = %q, want starting — a dead instance's watcher failed its replacement", got)
+	}
+}
+
+// `tracks down` is how a user reclaims a service that failed its probe,
+// so the handler must accept one (Live() would refuse it).
+func TestHandleServiceDownStopsAFailedService(t *testing.T) {
+	srv := newReadinessTestServer(t)
+	pgid := spawnGroup(t, "sleep 60")
+	tr := trackWithService(t, srv, "trk-down-failed", state.ServiceState{
+		Name: "web", Status: state.ServiceFailed, PGID: pgid, Port: 1,
+	})
+
+	resp := srv.handleServiceDown(t.Context(), mustJSON(t, ServiceDownParams{
+		TrackID: tr.ID, ServiceName: "web",
+	}), func(string) {})
+
+	if !resp.Ok {
+		t.Fatalf("handleServiceDown refused a failed service: %s", resp.Error)
+	}
+	if got := serviceStatus(t, srv, tr.ID, "web"); got != state.ServiceStopped {
+		t.Errorf("status = %q, want stopped", got)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if groupAlive(pgid) {
+		t.Error("the failed service's process group survived `tracks down`")
+	}
+}
+
+func TestHandleServiceDownRejectsAnAlreadyStoppedService(t *testing.T) {
+	srv := newReadinessTestServer(t)
+	tr := trackWithService(t, srv, "trk-down-stopped", state.ServiceState{
+		Name: "web", Status: state.ServiceStopped, PGID: 1,
+	})
+
+	resp := srv.handleServiceDown(t.Context(), mustJSON(t, ServiceDownParams{
+		TrackID: tr.ID, ServiceName: "web",
+	}), func(string) {})
+
+	if resp.Ok {
+		t.Error("stopping an already-stopped service should fail")
+	}
+}
+
+// syncProxies is the config → proxy.Registration translation; nothing
+// else checks that proxy_bind_all actually reaches the proxy entry.
+func TestSyncProxiesTranslatesConfig(t *testing.T) {
+	srv := newReadinessTestServer(t)
+	mgr := proxy.NewManager()
+	srv.mu.Lock()
+	srv.proxyMgr = mgr
+	srv.mu.Unlock()
+
+	cfg := config.Default()
+	cfg.Repos = []config.Repo{{
+		Name: "app", Path: "/tmp/app", Base: "main",
+		Services: []config.Service{
+			{Name: "metro", Cmd: "x", ProxyPort: 8081, ProxyBindAll: true},
+			{Name: "api", Cmd: "x", ProxyPort: 9000},
+			{Name: "worker", Cmd: "x"}, // no proxy_port — no registration
+		},
+	}}
+	srv.syncProxies(cfg)
+
+	metro := mgr.Entry("metro")
+	if metro == nil {
+		t.Fatal("metro not registered")
+	}
+	if metro.PublicPort != 8081 || !metro.BindAll {
+		t.Errorf("metro = {port %d, bindAll %v}, want {8081, true}", metro.PublicPort, metro.BindAll)
+	}
+	if api := mgr.Entry("api"); api == nil || api.BindAll {
+		t.Errorf("api = %+v, want registered on loopback", api)
+	}
+	if mgr.Entry("worker") != nil {
+		t.Error("a service without proxy_port must not get a proxy")
+	}
+
+	// A service dropped from the config loses its registration.
+	cfg.Repos[0].Services = cfg.Repos[0].Services[:1]
+	srv.syncProxies(cfg)
+	if mgr.Entry("api") != nil {
+		t.Error("api still registered after it left the config")
+	}
+}
+
+func mustJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	return b
 }
