@@ -33,7 +33,9 @@ func (m *model) proxyRows() []proxyRow {
 	var rows []proxyRow
 	for _, t := range m.tracks {
 		for _, sv := range t.Services {
-			if !sv.Status.Live() {
+			// Active includes a failed-but-still-running service: it holds
+			// the port, so it must stay selectable here.
+			if !sv.Active() {
 				continue
 			}
 			r := proxyRow{

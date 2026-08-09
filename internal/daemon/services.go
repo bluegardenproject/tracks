@@ -101,7 +101,7 @@ func (s *Server) startServicePane(sup *supervisor, t state.Track, svc config.Ser
 		return state.ServiceState{}, err
 	}
 	if status == state.ServiceStarting {
-		go s.watchServiceReady(sup, t.ID, svc, probe, worktree, logPath, t.Ports)
+		go s.watchServiceReady(sup, t.ID, svc, probe, worktree, logPath, t.Ports, panePID)
 	}
 	return st, nil
 }
@@ -129,7 +129,7 @@ func renderProbe(p config.ReadyProbe, data services.TemplateData) (services.Prob
 // a perfectly healthy start look broken. The probe is what makes the
 // difference between "the pane opened" and "the server is answering", so
 // nothing here is on the request path.
-func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.Service, probe services.Probe, worktree, logPath string, ports map[string]int) {
+func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.Service, probe services.Probe, worktree, logPath string, ports map[string]int, pgid int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Give up the moment the track ends or the daemon shuts down. In that
@@ -147,7 +147,7 @@ func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.S
 		if ctx.Err() != nil {
 			return // torn down while waiting; teardown owns the status
 		}
-		s.failService(trackID, svc.Name, "never became ready", err, logPath)
+		s.failService(trackID, svc.Name, pgid, "never became ready", err, logPath)
 		return
 	}
 	if len(svc.PostStart) > 0 {
@@ -156,12 +156,12 @@ func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.S
 			if ctx.Err() != nil {
 				return
 			}
-			s.failService(trackID, svc.Name, "post_start hooks failed", err, logPath)
+			s.failService(trackID, svc.Name, pgid, "post_start hooks failed", err, logPath)
 			return
 		}
 	}
-	if !s.markService(trackID, svc.Name, state.ServiceReady) {
-		return // stopped or gone while we waited — nothing to announce
+	if !s.markService(trackID, svc.Name, pgid, state.ServiceReady) {
+		return // stopped, replaced, or gone while we waited — nothing to announce
 	}
 	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server ready",
 		svc.Name+" — "+s.serviceURLs(svc.Name, ports[svc.Name]))
@@ -181,9 +181,9 @@ func (s *Server) probeTimeout() time.Duration {
 // readiness deadline may still be coming up, and killing it would throw
 // away the log the user needs. It stays in NeedsTeardown, so the track's
 // teardown still reclaims the process and its port.
-func (s *Server) failService(trackID, name, what string, cause error, logPath string) {
+func (s *Server) failService(trackID, name string, pgid int, what string, cause error, logPath string) {
 	dlog.Printf("service %s on track %s: %s: %v", name, trackID, what, cause)
-	if !s.markService(trackID, name, state.ServiceFailed) {
+	if !s.markService(trackID, name, pgid, state.ServiceFailed) {
 		return
 	}
 	s.notifyEvent(string(notify.EventServiceFailed), "tracks: dev server problem",
@@ -191,15 +191,29 @@ func (s *Server) failService(trackID, name, what string, cause error, logPath st
 }
 
 // markService moves one of a track's services to a new status, reporting
-// whether the change was applied. A service that is no longer live (the
-// user ran `tracks down`, or the track ended) is left alone: a probe that
-// finishes afterwards must not resurrect it as ready.
-func (s *Server) markService(trackID, name string, status state.ServiceStatus) bool {
+// whether the change was applied.
+//
+// pgid identifies the instance the caller is speaking for. A service is
+// only a name in the state file, but `tracks down web` followed by
+// `tracks up web` inside the probe window produces two watchers for that
+// one name — and the first one, still polling the port its dead instance
+// never opened, would otherwise mark the *new* instance failed (or re-run
+// its post_start hooks). Matching on the process group makes a watcher
+// unable to speak for an instance it didn't start. Pass 0 to skip the
+// check when there is no instance to tie the change to.
+//
+// A service that is no longer live (stopped by the user, or torn down
+// with the track) is likewise left alone: a probe that finishes
+// afterwards must not resurrect it as ready.
+func (s *Server) markService(trackID, name string, pgid int, status state.ServiceStatus) bool {
 	applied := false
 	s.update(trackID, "service status", func(t *state.Track) bool {
 		for i := range t.Services {
 			if t.Services[i].Name != name {
 				continue
+			}
+			if pgid != 0 && t.Services[i].PGID != pgid {
+				return false // a later instance owns this name now
 			}
 			if !t.Services[i].Status.Live() || t.Services[i].Status == status {
 				return false

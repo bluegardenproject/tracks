@@ -235,6 +235,16 @@ type ServiceState struct {
 	ExitedAt  *time.Time    `json:"exited_at,omitempty"`
 }
 
+// Active reports whether the service still occupies its name from the
+// user's point of view: it is live, or it failed its readiness probe but
+// still holds the pane process (and therefore the port). This is the
+// predicate the UI and the "is it already running?" checks want — a
+// failed-but-still-running service is exactly the one the user needs to
+// see and act on, and Live() alone hides it.
+func (s ServiceState) Active() bool {
+	return s.Status.Live() || s.NeedsTeardown()
+}
+
 // NeedsTeardown reports whether this service still has a process group
 // that teardown must signal. Every status except Stopped counts —
 // Failed included, because a service that failed its readiness probe

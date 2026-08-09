@@ -138,6 +138,10 @@ func TestValidateRejectsBadServices(t *testing.T) {
 		"unknown dep":      {{Name: "a", Cmd: "x", DependsOn: []string{"ghost"}}},
 		"self dep":         {{Name: "a", Cmd: "x", DependsOn: []string{"a"}}},
 		"dependency cycle": {{Name: "a", Cmd: "x", DependsOn: []string{"b"}}, {Name: "b", Cmd: "y", DependsOn: []string{"a"}}},
+		// A setting about network exposure must not fail silently: without
+		// proxy_port there is nothing to expose, so it reads as "expose
+		// this" while doing nothing.
+		"bind_all without proxy_port": {{Name: "a", Cmd: "x", ProxyBindAll: true}},
 	}
 	for name, svcs := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -199,8 +199,26 @@ func (m *Manager) Register(r Registration) {
 // An entry that survives unchanged keeps its live listener and upstream,
 // so reloading the config never interrupts a track that is serving.
 func (m *Manager) Sync(regs []Registration) {
+	// replacement pairs a rebuilt entry with the one it supersedes, so the
+	// old listener can be released before the new one binds (they may want
+	// the same port) and a live upstream can be carried across.
+	type replacement struct{ old, new *Entry }
+
+	// The lock is held for the whole body, releases and binds included.
+	// Doing that work after the unlock let a concurrent Switch land in
+	// between: Switch would bind the new entry and set the upstream for the
+	// track the user just started, and the replacement loop below would then
+	// overwrite it with the *old* upstream — the stable port quietly serving
+	// the previous track's server after a `tracks up` that reported success.
+	// Safe because no Entry method reaches back for m.mu, so the order is
+	// always m.mu → e.mu and never the reverse; neither net.Listen nor
+	// Server.Close blocks on a request handler.
 	m.mu.Lock()
-	stale := make([]*Entry, 0)
+	defer m.mu.Unlock()
+	var (
+		stale        []*Entry
+		replacements []replacement
+	)
 	want := make(map[string]bool, len(regs))
 	for _, r := range regs {
 		want[r.ServiceName] = true
@@ -208,13 +226,14 @@ func (m *Manager) Sync(regs []Registration) {
 		if ok && cur.PublicPort == r.PublicPort && cur.BindAll == r.BindAll {
 			continue
 		}
-		if ok {
-			stale = append(stale, cur)
-		}
-		m.entries[r.ServiceName] = &Entry{
+		next := &Entry{
 			ServiceName: r.ServiceName,
 			PublicPort:  r.PublicPort,
 			BindAll:     r.BindAll,
+		}
+		m.entries[r.ServiceName] = next
+		if ok {
+			replacements = append(replacements, replacement{old: cur, new: next})
 		}
 	}
 	for name, e := range m.entries {
@@ -223,13 +242,27 @@ func (m *Manager) Sync(regs []Registration) {
 			delete(m.entries, name)
 		}
 	}
-	m.mu.Unlock()
-
-	// Released outside the lock: release closes a listener, and the Serve
-	// goroutine it unblocks has no business waiting on the manager.
 	for _, e := range stale {
 		e.SetUpstream("")
 		e.release()
+	}
+	// A service whose port or bind changed while it was serving keeps
+	// serving. Dropping the upstream here would leave a track that is up
+	// and running behind a dead stable port, with nothing said about it —
+	// the user's only clue would be a 503 the next time they hit it.
+	for _, r := range replacements {
+		upstream := r.old.Upstream()
+		r.old.SetUpstream("")
+		r.old.release()
+		if upstream == "" {
+			continue
+		}
+		r.new.SetUpstream(upstream)
+		if err := r.new.ensureBound(); err != nil {
+			dlog.Printf("proxy %s: config moved it to :%d but that port will not bind (%v) — upstream %s is unreachable through the proxy until the next `tracks up`",
+				r.new.ServiceName, r.new.PublicPort, err, upstream)
+			r.new.SetUpstream("")
+		}
 	}
 }
 
@@ -251,10 +284,19 @@ func (m *Manager) Stop() {
 // the active upstream at "localhost:<port>" (the track's allocated service
 // port). Returns an error if the service has no registered proxy or the
 // port cannot be bound.
+// The manager lock is held for the whole call, not just the map lookup.
+// Releasing it before ensureBound let a concurrent Sync swap the entry out
+// from under us, after which we bound the *old* entry's port — an entry no
+// longer in m.entries, so neither Clear nor Stop could ever release it, and
+// the replacement never got its upstream. maybeReloadConfig runs at the top
+// of every dispatch and each connection is its own goroutine, so two
+// clients are enough to hit it. ensureBound only does a net.Listen, so the
+// lock is held briefly; Sync never takes an entry lock while holding m.mu,
+// so there is no cycle.
 func (m *Manager) Switch(serviceName string, port int) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	e, ok := m.entries[serviceName]
-	m.mu.Unlock()
 	if !ok {
 		return fmt.Errorf("no proxy registered for service %q", serviceName)
 	}

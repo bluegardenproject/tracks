@@ -285,7 +285,7 @@ func serviceOccupied(svcs []state.ServiceState, name string) (bool, string) {
 			continue
 		}
 		switch {
-		case ss.Status == state.ServiceFailed && ss.NeedsTeardown():
+		case ss.Status == state.ServiceFailed && ss.Active():
 			return true, "failed its readiness check but its pane is still running — `tracks down " + name + "` first"
 		case ss.Status.Live():
 			return true, "already running"

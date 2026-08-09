@@ -42,7 +42,11 @@ func init() {
 				return fmt.Errorf("open state store: %w", err)
 			}
 			server := daemon.NewServer(cfg, store, Version)
-			dlog.Printf("tracks daemon %s starting (pid %d, log %s)", Version, os.Getpid(), logPath)
+			if logPath == "" {
+				dlog.Printf("tracks daemon %s starting (pid %d, no log file)", Version, os.Getpid())
+			} else {
+				dlog.Printf("tracks daemon %s starting (pid %d, log %s)", Version, os.Getpid(), logPath)
+			}
 			return server.Start(c.Context())
 		},
 	})
