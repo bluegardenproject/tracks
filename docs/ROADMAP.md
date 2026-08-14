@@ -319,6 +319,109 @@ Self-contained improvements/fixes. Add new ones here; tick + delete when done.
 
 ---
 
+## 1.0 readiness — code review backlog  ⭐
+
+From the whole-codebase review on 2026-08-08, sorted by impact. The P0 tier
+shipped as PRs #59–#65 (see Recently shipped, 2026-08-09); everything below is
+what's left. Re-verified against `main` on 2026-08-14 — every box here is
+still genuinely open.
+
+### Structural (P1) — breaking changes are cheap now, expensive after 1.0
+
+- [ ] **Schema v4: kind sub-structs, drop `LogPath`.** `Track` is a 67-field
+      union across five kinds; the kind-specific fields (`DocPath`, `Candor`,
+      `DocSkip*`) ride on every track and their rules live in handler prose.
+      Move them into `Review` / `Doc` sub-structs with a v3→v4 migration. Same
+      PR drops `Track.LogPath` — computed, persisted, never written to or read
+      — and fixes the menu's Attach fallback, which opens a window running the
+      nonexistent `tracks log <id>` (`cmd/menu.go:96`).
+- [ ] **Per-kind behaviour table.** `Kind.Worktreeless()` / `== KindDoc`
+      branches are scattered across handlers, supervisor, claude spawn and the
+      dashboard. One table (needsWorktree, permissionMode, promptSuffix,
+      promotable, diffable) collapses ~10 sites; today a sixth kind means
+      hunting for all of them.
+- [ ] **Protocol error codes.** `Response` carries only `{ok, error string}`,
+      so callers string-match daemon prose and the TUI shows it raw. Add a
+      `code` (not_found / conflict / invalid_params / auth / internal) and
+      replace `authHintPrefix`'s substring-grepping of git stderr
+      (`internal/daemon/handlers.go`) with a typed error from the git layer.
+      Also document the `Ok=false` + `Result` shape `handleNew` returns, which
+      contradicts `Response`'s own doc comment.
+- [ ] **Shared helpers.** `shellQuote` exists in 3 files with 2 different
+      escaping policies, `expandHome` in 2, plus four truncate/shortID/lastN/
+      padRight variants. `cmd/menu.go` repeats the same
+      `ErrCancelled`/`ErrNoTracks` block 11 times.
+- [ ] **tmux seam.** `tmux.Client` is concrete and constructed via
+      `tmux.New()` at 11 sites inside the daemon, so no track-lifecycle path is
+      testable without a real tmux server (package coverage: daemon 40%, tmux
+      26%). Compare `git.Runner`, which has the seam and gets 60%. Injecting a
+      `Tmux` interface also unblocks the one test deferred out of #62 — the
+      `handleServiceUp` notification gate.
+- [ ] **Extract a track orchestrator from `Server`.** `handlers.go` is 1323
+      lines mixing wire decoding, config resolution, git provisioning, port
+      allocation, tmux windows, state transitions and notifications;
+      `handleNew` alone is ~250. Move Create/End/Promote/Resume onto a domain
+      type over narrow interfaces, leaving handlers as decode → call → encode.
+
+### Release readiness (P2)
+
+- [ ] **README documents no configuration.** `config.yaml` is never mentioned,
+      yet `repos`, `provision`, `services`, `proxy_port` are the surface every
+      user must configure. Highest-value doc for 1.0.
+- [ ] **Release note for the loopback change.** PR #63 shipped without a
+      `BREAKING CHANGE:` footer, so the generated changelog won't mention it.
+      The 1.0 notes need: *stable proxy ports now bind loopback only; set
+      `proxy_bind_all: true` on a service to reach it from another device.*
+      Failure mode is silent — the proxy binds fine, the phone just can't
+      reach it.
+- [ ] **ROADMAP links three design docs that don't exist:**
+      `worktree-provisioning.md`, `argent-spike.md`, `new-track-flow.md`.
+      (`argent-spike.md` does exist untracked in the primary checkout — it was
+      never committed.)
+- [ ] **No in-repo contributor conventions.** Commit format, branch naming and
+      review flow live only in the maintainer's personal global `CLAUDE.md`; a
+      contributor sees nothing. No `CONTRIBUTING.md`, no repo `AGENTS.md`.
+- [ ] **Committed artifacts:** `.claude/scheduled_tasks.lock` is tracked;
+      `scripts/spike-worktree.sh` self-describes as "delete once v1 ships".
+- [ ] **CI has no linter beyond `go vet`** — no `golangci-lint`/`staticcheck`
+      (either would have caught the ~420 lines of dead code #59 removed), and
+      no coverage floor. Both runners have tmux, so one e2e smoke test (boot a
+      session → create a track against a stub `claude` → assert dashboard
+      state) would cover what unit tests structurally can't.
+- [ ] **Pricing table is hardcoded** (`internal/usage/pricing.go`, "cached
+      2026-06-04") and an unknown model silently costs **$0.00** rather than
+      reading as unknown.
+
+### Polish (P3)
+
+- [ ] Tuning constants scattered across six files (2s poll, 6s idle, 5-tick
+      usage refresh, 60s PR poll, 3s git timeout, 50-branch collision cap, 5s
+      grace); none configurable, none co-located.
+- [ ] Stale build-plan archaeology in comments — `handlers.go` still says
+      "stubs in step 5 … filled in step 7", `protocol.go` says "in v1+".
+- [ ] Scaling ceiling, not a problem yet: `flushLocked` rewrites the whole
+      `state.json` on every field change (2s cadence × N running tracks), and
+      `Store.All()` deep-copies every track on each 1s dashboard poll.
+- [ ] `resolveBranchCollision` does one `git` call per candidate per repo, up
+      to 50.
+- [ ] `proxy.Register` is first-wins but `Sync` is last-wins for a duplicate
+      service name across repos; it will also rebuild the entry on every config
+      reload if that ever happens.
+
+### Upstream (stac-man, not tracks)
+
+Both reproduced across five restack cycles during this work, and both hit
+tracks hardest because every agent here runs in a linked worktree:
+
+- [ ] `sm sync` is unusable from a linked worktree — it runs `git checkout
+      main`, which git refuses while the primary checkout holds `main`.
+      Fast-forwarding trunk first does not help; the checkout is the blocker.
+- [ ] `sm restack` **silently no-ops and reports `✓ stack is up to date`** when
+      the stack is rooted on a superseded trunk. Trusting it would have
+      resubmitted PRs containing duplicates of already-merged commits.
+
+---
+
 ## Ideas / parking lot
 
 Raw, uncommitted thoughts — promote to a section above when they firm up.
