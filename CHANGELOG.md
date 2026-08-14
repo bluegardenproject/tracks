@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.6.0](https://github.com/bluegardenproject/tracks/compare/v0.5.0...v0.6.0) (2026-08-14)
+
+
+### Features
+
+* **daemon:** write the daemon log to a file ([5be2459](https://github.com/bluegardenproject/tracks/commit/5be2459b097d2e84e573d08aed10a44c98b0b224))
+* **menu:** check for updates and self-install a newer release ([a2c246d](https://github.com/bluegardenproject/tracks/commit/a2c246d495d710c3cc67877aa2bcee3e28930fa0))
+* **services:** make the ready probe and post_start hooks real ([64fe38b](https://github.com/bluegardenproject/tracks/commit/64fe38b83db9f41727e2f6091e0778086fad91ad))
+
+
+### Bug Fixes
+
+* **daemon:** guard the supervisor's observation state with its own lock ([5032f81](https://github.com/bluegardenproject/tracks/commit/5032f815a6483fb1fb820e0bcdf4a5e5daaaf963))
+* **daemon:** log the state writes that used to fail silently ([21602c2](https://github.com/bluegardenproject/tracks/commit/21602c2e092b6f57e97e7b305d179f2b07a863e0))
+* **proxy:** bind stable ports to loopback, and follow config reloads ([a842810](https://github.com/bluegardenproject/tracks/commit/a842810974bd99125a86ca84c278acc7839f727f))
+* remove the permission-prompt path that nothing fed ([160c5f0](https://github.com/bluegardenproject/tracks/commit/160c5f06c89ff21b789c57eab4226fd97b08f815))
+* **update:** count only the tracks the restart actually interrupts ([faf9081](https://github.com/bluegardenproject/tracks/commit/faf9081364c2d5d2b9cdb3cf534382fd1683c514))
+* **update:** state the real cost of the next tracks run ([e521a50](https://github.com/bluegardenproject/tracks/commit/e521a50eff0e55f4bae3a447cc9b0a174b8ae0de))
+
+
+### Code Refactoring
+
+* drop code left dead by earlier rewrites ([bf25d2f](https://github.com/bluegardenproject/tracks/commit/bf25d2fad6f3bfaf49fced21a6a518c05262a974))
+
+
+### Miscellaneous
+
+* add MIT LICENSE ([cace206](https://github.com/bluegardenproject/tracks/commit/cace206076344fedec9a1d79e4f97d1ded15a4ff))
+
 ## [0.5.0](https://github.com/bluegardenproject/tracks/compare/v0.4.1...v0.5.0) (2026-08-07)
 
 
