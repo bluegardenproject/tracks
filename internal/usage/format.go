@@ -2,6 +2,8 @@ package usage
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -44,4 +46,30 @@ func FormatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh%dm", h, m)
 	}
 	return fmt.Sprintf("%dm", m)
+}
+
+// modelDateSuffix matches the release-date tail some model ids carry,
+// in either separator style and with Bedrock's trailing version:
+// claude-haiku-4-5-20251001, claude-opus-4@20250514 (Vertex),
+// anthropic.claude-opus-4-20250514-v1:0 (Bedrock).
+var modelDateSuffix = regexp.MustCompile(`[-@]\d{8}(-v\d+:\d+)?$`)
+
+// ShortModel renders a model id for a narrow column: the vendor prefix
+// and any release-date suffix come off, so `claude-haiku-4-5-20251001`
+// reads as `haiku-4-5` and `claude-opus-5` as `opus-5`. Gateway-hosted
+// ids shorten to the same thing as their direct equivalents —
+// `anthropic.claude-opus-4-20250514-v1:0` and `claude-opus-4@20250514`
+// both give `opus-4` — so a Bedrock user's column stays as legible as
+// anyone else's instead of every row reading `anthropic.…`.
+//
+// An unrecognised id is returned trimmed but otherwise untouched:
+// better to show something odd than to show nothing.
+func ShortModel(id string) string {
+	s := strings.TrimSpace(id)
+	if s == "" {
+		return ""
+	}
+	s = strings.TrimPrefix(s, "anthropic.") // Bedrock
+	s = strings.TrimPrefix(s, "claude-")
+	return modelDateSuffix.ReplaceAllString(s, "")
 }

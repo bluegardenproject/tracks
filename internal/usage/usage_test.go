@@ -24,10 +24,11 @@ func TestParse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	u, err := Parse(path)
+	tot, err := Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	u := tot.Usage
 
 	if u.InputTokens != 3_000_000 {
 		t.Errorf("InputTokens = %d, want 3000000", u.InputTokens)
@@ -49,10 +50,11 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseMissingFileIsZero(t *testing.T) {
-	u, err := Parse(filepath.Join(t.TempDir(), "nope.jsonl"))
+	tot, err := Parse(filepath.Join(t.TempDir(), "nope.jsonl"))
 	if err != nil {
 		t.Fatalf("missing file should not error, got %v", err)
 	}
+	u := tot.Usage
 	if !u.IsZero() {
 		t.Errorf("missing file should yield zero usage, got %+v", u)
 	}
