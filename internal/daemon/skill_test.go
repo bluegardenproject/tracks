@@ -47,11 +47,27 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 				"contradicted",
 				"unverified",
 				"## Candor level",
-				// The brief the daemon renders (claude.docReviewBrief) uses
-				// exactly these keys; the agent has to recognise them.
+				// Brief keys the agent must recognise. claude.docReviewBrief
+				// already emits Candor / Opinion / Claim check; Goal, Skip
+				// slides, and Web research are documented ahead of the
+				// daemon wiring (a follow-up) so the agent honours them the
+				// moment the brief starts sending them.
 				"`Candor level: N/10`",
 				"`Opinion section: ON|OFF`",
 				"`Claim check: ON|OFF`",
+				"`Skip slides: <list>`",
+				"`Web research: ON|OFF`",
+				"`Goal: <text>`",
+				// The two multi-line inline-code spans are the only
+				// backtick escapes in the template that a compile can't
+				// catch — an unbalanced one would still build but render
+				// wrong. Pin both across their embedded newline.
+				"`Goal: convince shareholders to fund feature A` or `Goal: present\n  midterm numbers to the finance team`",
+				"the brief's `Skip\n     slides` list names",
+				// Distinctive lines from the two behaviours the pass added,
+				// guarding their presence in the template.
+				"### 1 · slide 12 (block)",
+				"Simulate the audience",
 			},
 		},
 	}
@@ -102,7 +118,7 @@ func TestDocsReviewerGatesOptionalSections(t *testing.T) {
 		"repo, GitHub, or Jira lookups",
 		// Both switches can be off at once, so findings must come from a
 		// step no switch gates — otherwise that review has no source.
-		"*(Always — this is the section no switch turns\n   off.)*",
+		"*(Always — the section no switch turns off.)*",
 	} {
 		if !strings.Contains(docsReviewerAgentTemplate, want) {
 			t.Errorf("docs reviewer template missing %q", want)
