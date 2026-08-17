@@ -49,6 +49,7 @@ type styles struct {
 	deletions  lipgloss.Style
 	count      lipgloss.Style
 	cost       lipgloss.Style
+	model      lipgloss.Style
 	ok         lipgloss.Style
 	warn       lipgloss.Style
 	fail       lipgloss.Style
@@ -104,9 +105,12 @@ func defaultStyles() styles {
 		deletions:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		count:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 		cost:       lipgloss.NewStyle().Foreground(lipgloss.Color("78")),
-		ok:         lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		warn:       lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-		fail:       lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		// Muted blue — the model is context, not a signal to act on, so it
+		// must not compete with the status and cost columns beside it.
+		model: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "117"}),
+		ok:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		warn:  lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		fail:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		panel: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("14")).
@@ -676,11 +680,14 @@ func (m *model) View() string {
 	} else if len(m.tracks) == 0 {
 		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
 	} else {
-		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-15s  %-7s  %-28s  %-26s  %-*s  %-22s  %-5s  %-8s",
-			"ID", "KIND", "BRANCH", "SLUG", statusColWidth, "STATUS", "CHANGES", "SVC", "COST")))
+		cols := layoutFor(width)
+		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+			idColWidth, "ID", kindColWidth, "KIND", cols.branch, "BRANCH", cols.slug, "SLUG",
+			statusColWidth, "STATUS", changesColWidth, "CHANGES", svcColWidth, "SVC",
+			modelColWidth, "MODEL", costColWidth, "COST")))
 		// The header consumes one row of the budget; the rest is the
 		// scrolling window of track rows.
-		if rows := m.renderRows(rowsBudget - 1); rows != "" {
+		if rows := m.renderRows(rowsBudget-1, cols); rows != "" {
 			lines = append(lines, strings.Split(rows, "\n")...)
 		}
 	}
@@ -704,7 +711,7 @@ func (m *model) View() string {
 // always keeps the selected row visible, fitting within budget lines
 // (including any "↑ N more" / "↓ N more" indicator lines). Callers
 // pass the space left after the fixed chrome.
-func (m *model) renderRows(budget int) string {
+func (m *model) renderRows(budget int, cols colLayout) string {
 	n := len(m.tracks)
 	if n == 0 {
 		return ""
@@ -717,7 +724,7 @@ func (m *model) renderRows(budget int) string {
 	if n <= budget {
 		rows := make([]string, 0, n)
 		for i, t := range m.tracks {
-			rows = append(rows, m.renderRow(i, t))
+			rows = append(rows, m.renderRow(i, t, cols))
 		}
 		return strings.Join(rows, "\n")
 	}
@@ -749,7 +756,7 @@ func (m *model) renderRows(budget int) string {
 		rows = append(rows, m.styles.dim.Render(fmt.Sprintf("  ↑ %d more", start)))
 	}
 	for i := start; i < end; i++ {
-		rows = append(rows, m.renderRow(i, m.tracks[i]))
+		rows = append(rows, m.renderRow(i, m.tracks[i], cols))
 	}
 	if end < n {
 		rows = append(rows, m.styles.dim.Render(fmt.Sprintf("  ↓ %d more", n-end)))
@@ -789,21 +796,22 @@ const statusColWidth = 11
 // renderRow renders a single track row. The row at the cursor gets the
 // highlight background threaded through every cell (see the inline note
 // below); all others render plainly.
-func (m *model) renderRow(i int, t state.Track) string {
+func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 	branch := t.Branch
 	if branch == "" {
 		branch = "—"
 	}
 	if i != m.cursor {
-		return fmt.Sprintf("  %-15s  %s  %s  %s  %s  %s  %s  %s",
-			shortID(t.ID),
-			padRendered(m.renderKind(t), 7),
-			padRendered(m.styles.branch.Render(truncate(branch, 28)), 28),
-			padRendered(m.styles.slug.Render(truncate(t.Slug, 26)), 26),
+		return fmt.Sprintf("  %-*s  %s  %s  %s  %s  %s  %s  %s  %s",
+			idColWidth, shortID(t.ID),
+			padRendered(m.renderKind(t), kindColWidth),
+			padRendered(m.styles.branch.Render(truncate(branch, cols.branch)), cols.branch),
+			padRendered(m.styles.slug.Render(truncate(t.Slug, cols.slug)), cols.slug),
 			m.styles.status[t.Status].Render(padRight(t.StatusLabel(), statusColWidth)),
-			padRendered(m.renderChangesColored(t.Changes), 22),
-			padRendered(m.renderServices(t), 5),
-			padRendered(m.renderCost(t.Usage), 8),
+			padRendered(m.renderChangesColored(t.Changes), changesColWidth),
+			padRendered(m.renderServices(t), svcColWidth),
+			padRendered(m.renderModel(t), modelColWidth),
+			padRendered(m.renderCost(t.Usage), costColWidth),
 		)
 	}
 
@@ -848,6 +856,14 @@ func (m *model) renderRow(i int, t state.Track) string {
 			addBg(m.styles.dim).Render(fmt.Sprintf("(%d)", t.Changes.Files))
 	}
 
+	// MODEL: same treatment, so the cell stays lit across the row.
+	var modelStr string
+	if short := usage.ShortModel(t.Model); short == "" {
+		modelStr = addBg(m.styles.dim).Render("—")
+	} else {
+		modelStr = addBg(m.styles.model).Render(truncate(short, modelColWidth))
+	}
+
 	// COST: apply bg to the inner style so the value text is highlighted.
 	var costStr string
 	if t.Usage.IsZero() {
@@ -867,14 +883,15 @@ func (m *model) renderRow(i int, t state.Track) string {
 		}
 	}
 
-	return m.styles.rowActive.Render(fmt.Sprintf("  %-15s", shortID(t.ID))) +
-		sep + pad(kindStr, 7) +
-		sep + pad(addBg(m.styles.branch).Render(truncate(branch, 28)), 28) +
-		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, 26)), 26) +
+	return m.styles.rowActive.Render(fmt.Sprintf("  %-*s", idColWidth, shortID(t.ID))) +
+		sep + pad(kindStr, kindColWidth) +
+		sep + pad(addBg(m.styles.branch).Render(truncate(branch, cols.branch)), cols.branch) +
+		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, cols.slug)), cols.slug) +
 		sep + addBg(m.styles.status[t.Status]).Render(padRight(t.StatusLabel(), statusColWidth)) +
-		sep + pad(changesStr, 22) +
-		sep + pad(svcStr, 5) +
-		sep + pad(costStr, 8)
+		sep + pad(changesStr, changesColWidth) +
+		sep + pad(svcStr, svcColWidth) +
+		sep + pad(modelStr, modelColWidth) +
+		sep + pad(costStr, costColWidth)
 }
 
 // clampLines truncates s to at most max newline-separated lines. A
@@ -931,6 +948,99 @@ func (m *model) renderChangesColored(c state.Changes) string {
 	return m.styles.insertions.Render(fmt.Sprintf("+%d", c.Insertions)) +
 		" " + m.styles.deletions.Render(fmt.Sprintf("-%d", c.Deletions)) +
 		" " + m.styles.dim.Render(fmt.Sprintf("(%d)", c.Files))
+}
+
+// Column widths. Everything except BRANCH and SLUG is fixed: their
+// content is bounded (an id, a kind, a status, three numbers) so extra
+// terminal width buys nothing. BRANCH and SLUG are the two columns whose
+// content genuinely varies and routinely overflows, so they absorb
+// whatever the terminal has spare.
+const (
+	idColWidth      = 15
+	kindColWidth    = 7
+	changesColWidth = 22
+	svcColWidth     = 5
+	costColWidth    = 8
+
+	branchMinWidth = 28
+	slugMinWidth   = 26
+	// Caps, so a very wide terminal doesn't strand the right-hand columns
+	// off in the distance. Sized from real branch/slug lengths.
+	branchMaxWidth = 52
+	slugMaxWidth   = 36
+	// Floors, used when the terminal cannot even hold the minimums. The
+	// alternative is what MaxWidth does on its own: silently amputate the
+	// rightmost columns. A shortened branch name is a far better trade
+	// than a COST column that has vanished without explanation.
+	branchFloorWidth = 16
+	slugFloorWidth   = 10
+)
+
+// colLayout is the per-frame width of the two flexible columns.
+type colLayout struct{ branch, slug int }
+
+// fixedColsWidth is every column except BRANCH and SLUG, including the
+// leading indent and all the two-space separators.
+const fixedColsWidth = 2 + idColWidth + 2 + kindColWidth + 2 + /* branch */ 2 + /* slug */ 2 +
+	statusColWidth + 2 + changesColWidth + 2 + svcColWidth + 2 + modelColWidth + 2 + costColWidth
+
+// layoutFor divides the terminal width between BRANCH and SLUG, the two
+// columns whose content actually varies.
+//
+// Spare width goes to BRANCH first: it is the longer content and the
+// better identifier of the two. When the terminal is too narrow even for
+// the minimums the same two columns give width back, down to their
+// floors, so the fixed right-hand columns (STATUS, CHANGES, SVC, MODEL,
+// COST) stay on screen. Narrower still and the frame's MaxWidth clips the
+// row, as it always has.
+func layoutFor(width int) colLayout {
+	l := colLayout{branch: branchMinWidth, slug: slugMinWidth}
+	// Width is unknown until the first WindowSizeMsg; View renders that one
+	// frame unclamped rather than guessing, so hand it the minimums instead
+	// of the most squeezed layout available.
+	if width <= 0 {
+		return l
+	}
+	spare := width - (fixedColsWidth + branchMinWidth + slugMinWidth)
+	switch {
+	case spare > 0:
+		grow := min(spare, branchMaxWidth-branchMinWidth)
+		l.branch += grow
+		spare -= grow
+		if spare > 0 {
+			l.slug += min(spare, slugMaxWidth-slugMinWidth)
+		}
+	case spare < 0:
+		// Shrink SLUG first — it's an optional human label, where BRANCH
+		// is the thing the user greps for.
+		deficit := -spare
+		shrink := min(deficit, slugMinWidth-slugFloorWidth)
+		l.slug -= shrink
+		deficit -= shrink
+		if deficit > 0 {
+			l.branch -= min(deficit, branchMinWidth-branchFloorWidth)
+		}
+	}
+	return l
+}
+
+// modelColWidth is the MODEL column's width. It has to fit the longest
+// shortened id actually in circulation — "sonnet-4-6" is 10 — with room
+// for a two-digit point release, because truncation here is worse than
+// useless: "sonnet-4…" cannot be told apart from "sonnet-4-5".
+// TestKnownModelsFitTheColumn pins this against the current id set.
+// Shared by the header and both row renderers so they can't drift apart.
+const modelColWidth = 11
+
+// renderModel renders the track's current model for the MODEL column.
+// Dim placeholder until the first assistant turn names one — the model
+// is read from the transcript, so it isn't known before then.
+func (m *model) renderModel(t state.Track) string {
+	short := usage.ShortModel(t.Model)
+	if short == "" {
+		return m.styles.dim.Render("—")
+	}
+	return m.styles.model.Render(truncate(short, modelColWidth))
 }
 
 // renderCost renders a track's USD cost for the COST column. Dim

@@ -411,6 +411,18 @@ type Track struct {
 	// turn lands.
 	Usage Usage `json:"usage,omitempty"`
 
+	// Model is the model id of the track's most recent main-chain
+	// assistant turn, read from the same transcript as Usage. It follows
+	// a `/model` switch inside the pane without tracks being told, and
+	// deliberately ignores sub-agent turns. Empty until the first turn.
+	//
+	// Added without a schema bump, unlike the fields above: Model is
+	// *derived*, not authoritative. An older binary drops the key on its
+	// next write and a newer one re-derives it from the transcript on the
+	// next refresh, so a downgrade round-trip is self-healing and there is
+	// nothing for a migration to preserve.
+	Model string `json:"model,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 

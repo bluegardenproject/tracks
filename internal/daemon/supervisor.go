@@ -399,18 +399,29 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		return
 	}
 
-	u, err := usage.ParseFiles(paths)
+	tot, err := usage.ParseFiles(paths)
 	if err != nil {
 		return
 	}
-	// Persist via an atomic update so we only ever touch the Usage field
-	// and never clobber a concurrent write from the pane poll or a
-	// service start.
+	// Persist via an atomic update so we only ever touch the fields this
+	// scan owns and never clobber a concurrent write from the pane poll
+	// or a service start.
 	s.update(sup.trackID, "token usage", func(t *state.Track) bool {
-		if u == t.Usage {
+		// Neither field is blanked by a scan that came up empty: an
+		// unreadable or half-written transcript must not erase a cost or a
+		// model an earlier pass established. finalizeTrack applies the same
+		// rule, so both paths agree.
+		newModel := tot.Model != "" && tot.Model != t.Model
+		newUsage := !tot.Usage.IsZero() && tot.Usage != t.Usage
+		if !newUsage && !newModel {
 			return false
 		}
-		t.Usage = u
+		if newUsage {
+			t.Usage = tot.Usage
+		}
+		if newModel {
+			t.Model = tot.Model
+		}
 		return true
 	})
 }
@@ -816,11 +827,14 @@ func (s *Server) finalizeTrack(trackID string) {
 	// figure and the notification both reflect the whole session. This
 	// read is done outside the atomic update to keep the store lock held
 	// only for the write.
-	var settled state.Usage
+	var settled usage.Totals
 	var haveSettled bool
 	if len(t.Repos) > 0 {
-		if u, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil && !u.IsZero() {
-			settled, haveSettled = u, true
+		// Gated on either signal: a session that billed nothing can still
+		// have named a model, and vice versa.
+		if tot, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil &&
+			(!tot.Usage.IsZero() || tot.Model != "") {
+			settled, haveSettled = tot, true
 		}
 	}
 	now := time.Now().UTC()
@@ -835,7 +849,12 @@ func (s *Server) finalizeTrack(trackID string) {
 		// parse pane_dead_status via tmux.)
 		t.Status = terminalStatusFor(*t)
 		if haveSettled {
-			t.Usage = settled
+			if !settled.Usage.IsZero() {
+				t.Usage = settled.Usage
+			}
+			if settled.Model != "" {
+				t.Model = settled.Model
+			}
 		}
 		finalized = true
 		return true

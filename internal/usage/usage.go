@@ -35,9 +35,14 @@ const maxLineBytes = 16 << 20 // 16 MiB
 // deliberately decode only these and ignore the rest so the parser
 // tolerates schema churn.
 type logLine struct {
-	Type      string `json:"type"`
-	RequestID string `json:"requestId"`
-	Message   struct {
+	Type string `json:"type"`
+	// IsSidechain marks a sub-agent (Task tool) turn. Those share the
+	// session id and land in the same transcript, so they count toward
+	// cost but must not be mistaken for the session's own model.
+	IsSidechain bool   `json:"isSidechain"`
+	Timestamp   string `json:"timestamp"`
+	RequestID   string `json:"requestId"`
+	Message     struct {
 		Model string     `json:"model"`
 		Usage *usageJSON `json:"usage"`
 	} `json:"message"`
@@ -58,11 +63,24 @@ type usageJSON struct {
 	} `json:"cache_creation"`
 }
 
+// Totals is everything one transcript scan yields.
+type Totals struct {
+	// Usage is the billed token spend and cost.
+	Usage state.Usage
+
+	// Model is the model id of the most recent main-chain assistant turn
+	// — i.e. whatever `/model` last selected, without tracks having to be
+	// told. Sub-agent turns are skipped: a Haiku reviewer subagent must
+	// not make the session look like it switched to Haiku. Empty until
+	// the first assistant turn lands.
+	Model string
+}
+
 // ForTrack locates and parses the transcript(s) for a track, returning
-// the aggregated usage. A missing transcript is not an error — it
-// yields a zero Usage (the track may not have produced any assistant
+// the aggregated totals. A missing transcript is not an error — it
+// yields zero totals (the track may not have produced any assistant
 // turns yet, or Claude hasn't flushed the file).
-func ForTrack(sessionID, cwd string) (state.Usage, error) {
+func ForTrack(sessionID, cwd string) (Totals, error) {
 	return ParseFiles(Locate(sessionID, cwd))
 }
 
@@ -116,25 +134,38 @@ func sanitizeCWD(cwd string) string { return cwdSanitizer.Replace(cwd) }
 // ParseFiles sums usage across several transcript files, deduping
 // repeated API calls by request id so a line that appears twice can't
 // be double-counted.
-func ParseFiles(paths []string) (state.Usage, error) {
-	var total state.Usage
+func ParseFiles(paths []string) (Totals, error) {
+	var total Totals
+	// latest is the timestamp of the main-chain turn Model came from.
+	// Transcript timestamps are fixed-precision UTC
+	// (YYYY-MM-DDTHH:MM:SS.mmmZ), so lexical order is chronological order
+	// and a string compare is enough. It has to be a comparison rather
+	// than "last line wins" because Locate can return several files and
+	// scans them in glob order, not chronological order. If the format
+	// ever gains a numeric offset or variable-width fractions, this
+	// misorders silently — parse with time.RFC3339 at that point.
+	// Equal timestamps resolve to the later line within a file and to
+	// glob order across files; sub-second stamps make that tie rare
+	// enough not to engineer around.
+	var latest string
 	seen := map[string]struct{}{}
 	for _, p := range paths {
-		if err := accumulate(p, &total, seen); err != nil {
+		if err := accumulate(p, &total, &latest, seen); err != nil {
 			return total, err
 		}
 	}
 	return total, nil
 }
 
-// Parse totals the usage in a single transcript file.
-func Parse(path string) (state.Usage, error) {
-	var total state.Usage
-	err := accumulate(path, &total, map[string]struct{}{})
+// Parse totals a single transcript file.
+func Parse(path string) (Totals, error) {
+	var total Totals
+	var latest string
+	err := accumulate(path, &total, &latest, map[string]struct{}{})
 	return total, err
 }
 
-func accumulate(path string, total *state.Usage, seen map[string]struct{}) error {
+func accumulate(path string, total *Totals, latest *string, seen map[string]struct{}) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -151,7 +182,14 @@ func accumulate(path string, total *state.Usage, seen map[string]struct{}) error
 		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
 			continue // tolerate a malformed/partial line
 		}
-		if line.Type != "assistant" || line.Message.Usage == nil {
+		if line.Type != "assistant" {
+			continue
+		}
+		if !line.IsSidechain && isRealModel(line.Message.Model) && line.Timestamp >= *latest {
+			*latest = line.Timestamp
+			total.Model = line.Message.Model
+		}
+		if line.Message.Usage == nil {
 			continue
 		}
 		if line.RequestID != "" {
@@ -160,9 +198,24 @@ func accumulate(path string, total *state.Usage, seen map[string]struct{}) error
 			}
 			seen[line.RequestID] = struct{}{}
 		}
-		addMessage(total, line.Message.Model, line.Message.Usage)
+		addMessage(&total.Usage, line.Message.Model, line.Message.Usage)
 	}
 	return sc.Err()
+}
+
+// isRealModel reports whether a transcript's model field names an actual
+// model. Claude Code writes placeholders like "<synthetic>" on an
+// interrupt or an API error; those lines are main-chain and carry a real
+// timestamp, so without this check one of them becomes the track's
+// reported model until the next genuine turn lands.
+//
+// Placeholders are rejected by their shape rather than real ids being
+// allow-listed by a "claude-" prefix: gateway-hosted ids don't carry it
+// (Bedrock uses anthropic.claude-…, Vertex claude-…@…), and an
+// allow-list would show them as "no model" forever.
+func isRealModel(model string) bool {
+	m := strings.TrimSpace(model)
+	return m != "" && !strings.HasPrefix(m, "<")
 }
 
 // addMessage folds one assistant message's usage into the running
