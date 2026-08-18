@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/bluegardenproject/tracks/compare/v0.6.0...v0.7.0) (2026-08-18)
+
+
+### Features
+
+* **proxy:** user-defined stable ports, decoupled from service config ([c5a8fdb](https://github.com/bluegardenproject/tracks/commit/c5a8fdb5d848622cf70a5296d24384eeb9cc1d55))
+* **review:** sharpen the doc reviewer's opinions and findings ([f27d0d8](https://github.com/bluegardenproject/tracks/commit/f27d0d87cb046b774d88b080b0ea9edcac3428b9))
+
 ## [0.6.0](https://github.com/bluegardenproject/tracks/compare/v0.5.0...v0.6.0) (2026-08-14)
 
 
