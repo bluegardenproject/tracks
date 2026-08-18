@@ -19,9 +19,9 @@ import (
 // as soon as the panes are opened — dependency install and the server come up
 // live in the pane, not behind a blocking wait. A service that declares a
 // readiness probe is left in `starting` for watchServiceReady to resolve, so
-// the call stays fast without the dashboard claiming the server is up. The
-// stable-port proxy (if the service declares proxy_port) is pointed at this
-// track immediately.
+// the call stays fast without the dashboard claiming the server is up. Any
+// stable port the user previously linked to a starting service is re-applied
+// immediately.
 func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p ServiceUpParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -125,26 +125,27 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		}
 	}
 
-	// Point each explicitly-requested service's stable proxy at this track.
-	// We switch only the targets, not their pulled-in dependencies: a bare
-	// `tracks up dep-having-service` should not silently hijack a
-	// dependency's stable port from another track that is serving it. For
-	// start-all, targets is every service, so all proxies get switched. The
-	// upstream 503s until the server binds, then self-heals.
-	s.mu.Lock()
-	mgr := s.proxyMgr
-	s.mu.Unlock()
+	// Re-apply any stable port the user previously linked to one of these
+	// starting services. Ports are user-defined and no longer tied to a
+	// service name, so we only re-bind a port whose persisted upstream is
+	// exactly this (track, service) — starting a server never hijacks a
+	// port the user pointed somewhere else. The upstream 503s until the
+	// server binds, then self-heals.
+	mgr := s.proxyManager()
 	if mgr != nil {
+		targetSet := make(map[string]bool, len(targets))
 		for _, name := range targets {
-			entry := mgr.Entry(name)
-			if entry == nil {
+			targetSet[name] = true
+		}
+		for _, b := range s.store.AllProxies() {
+			if b.UpstreamTrackID != t.ID || !targetSet[b.UpstreamService] {
 				continue
 			}
-			port := t.Ports[name]
-			if err := mgr.Switch(name, port); err == nil {
-				emit(fmt.Sprintf("proxy :%d → %s (localhost:%d)", entry.PublicPort, name, port))
+			port := t.Ports[b.UpstreamService]
+			if err := mgr.Switch(b.PublicPort, port, t.ID, b.UpstreamService); err == nil {
+				emit(fmt.Sprintf("proxy :%d → %s (localhost:%d)", b.PublicPort, b.UpstreamService, port))
 			} else {
-				emit(fmt.Sprintf("proxy :%d unavailable (%v) — use the track port http://localhost:%d directly", entry.PublicPort, err, port))
+				emit(fmt.Sprintf("proxy :%d unavailable (%v) — use the track port http://localhost:%d directly", b.PublicPort, err, port))
 			}
 		}
 	}
@@ -157,7 +158,7 @@ func (s *Server) handleServiceUp(ctx context.Context, raw json.RawMessage, emit 
 		port := t.Ports[p.ServiceName]
 		if immediate > 0 {
 			s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server started",
-				p.ServiceName+" — "+s.serviceURLs(p.ServiceName, port))
+				p.ServiceName+" — "+s.serviceURLs(p.TrackID, p.ServiceName, port))
 		}
 		logPath, _ := s.serviceLogPath(t.ID, p.ServiceName)
 		return ok(ServiceUpResult{Port: port, LogPath: logPath})
@@ -245,12 +246,15 @@ func (s *Server) handleServiceDown(ctx context.Context, raw json.RawMessage, emi
 		s.closeServerPane(sup, p.ServiceName)
 	}
 
-	// Clear the stable-port proxy upstream for this service.
-	s.mu.Lock()
-	mgr := s.proxyMgr
-	s.mu.Unlock()
-	if mgr != nil {
-		mgr.Clear(p.ServiceName)
+	// Free any stable port currently forwarding to this stopped service,
+	// but keep the binding's persisted upstream so starting the server again
+	// (or a daemon restart) re-links the port automatically.
+	if mgr := s.proxyManager(); mgr != nil {
+		for _, b := range s.store.AllProxies() {
+			if b.UpstreamTrackID == p.TrackID && b.UpstreamService == p.ServiceName {
+				mgr.Clear(b.PublicPort)
+			}
+		}
 	}
 
 	emit(p.ServiceName + " stopped")

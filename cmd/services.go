@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -170,10 +172,10 @@ func init() {
 					fmt.Fprintf(os.Stderr, "warning: service %s is not running (status: %s)\n", svcName, ss.Status)
 				}
 			}
-			// Also show the stable proxy URL if this service has one active.
+			// Also show the stable proxy URL if a port forwards to this service.
 			if proxyStatus, err := cl.ProxyStatus(); err == nil {
 				for _, p := range proxyStatus.Proxies {
-					if p.ServiceName == svcName && p.Upstream != "" {
+					if p.ActiveService == svcName && p.ActiveTrackID == id {
 						fmt.Printf("stable:  http://localhost:%d\n", p.PublicPort)
 					}
 				}
@@ -185,17 +187,18 @@ func init() {
 	urlCmd.Flags().String("track", "", "track ID (defaults to $TRACKS_ID)")
 	register(urlCmd)
 
-	// tracks proxy [switch <service> [track-id]]
-	//
-	// tracks proxy          — show status of all stable-port proxies
-	// tracks proxy switch <service> [track-id|off]
-	//                       — flip a proxy's upstream to a track (or clear it)
+	// tracks proxy                            — show every defined stable port
+	// tracks proxy add <port> [--bind-all]    — define a new stable port
+	// tracks proxy rm <port>                  — delete a stable port
+	// tracks proxy switch <port> [track|off] [service]
+	//                                         — link a port to a running server
 	proxyCmd := &cobra.Command{
 		Use:   "proxy",
-		Short: "manage stable-port reverse proxies for dev-server services",
-		Long: "Show and control the stable-port proxy that always listens on a fixed port " +
-			"(e.g. :3000) and forwards to whichever track's service is currently active. " +
-			"Your Wallet app stays pointed at the fixed port; you flip the upstream instead of patching manifests.",
+		Short: "manage stable-port reverse proxies for dev servers",
+		Long: "Show and control the stable ports that always listen on a fixed port " +
+			"(e.g. :3000) and forward to whichever running dev server you link them to. " +
+			"Your app stays pointed at the fixed port; you flip the upstream instead of patching manifests. " +
+			"Ports are user-defined runtime state — add and remove them here.",
 		RunE: func(c *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
@@ -207,61 +210,123 @@ func init() {
 				return fmt.Errorf("daemon: %w", err)
 			}
 			if len(result.Proxies) == 0 {
-				fmt.Println("no proxy_port configured in any service (add proxy_port: <N> to a service in config.yaml)")
+				fmt.Println("no stable ports defined — add one with `tracks proxy add <port>`")
 				return nil
 			}
 			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "SERVICE\tFIXED PORT\tUPSTREAM\tACTIVE TRACK")
+			fmt.Fprintln(tw, "PORT\tUPSTREAM\tTRACK\tSERVICE\tBIND")
 			for _, p := range result.Proxies {
 				upstream := p.Upstream
 				if upstream == "" {
 					upstream = "(none — returns 503)"
 				}
-				trackID := p.ActiveTrackID
-				if trackID == "" && p.Upstream != "" {
-					trackID = "(unknown track)"
+				bind := "loopback"
+				if p.BindAll {
+					bind = "all"
 				}
-				fmt.Fprintf(tw, "%s\t:%d\t%s\t%s\n", p.ServiceName, p.PublicPort, upstream, trackID)
+				fmt.Fprintf(tw, ":%d\t%s\t%s\t%s\t%s\n", p.PublicPort, upstream, p.ActiveTrackID, p.ActiveService, bind)
 			}
 			return tw.Flush()
 		},
 	}
 
-	proxySwitchCmd := &cobra.Command{
-		Use:   "switch <service> [track-id|off]",
-		Short: "switch a proxy's upstream to a track's service, or clear it",
-		Long: "Set the active upstream for a service's stable-port proxy. " +
-			"Passing a track ID routes the fixed port to that track's allocated service port. " +
-			"Passing 'off' (or no argument) clears the upstream so the proxy returns 503.",
-		Args: cobra.RangeArgs(1, 2),
+	var addBindAll bool
+	proxyAddCmd := &cobra.Command{
+		Use:   "add <port>",
+		Short: "define a new stable port",
+		Long: "Define a stable port. It does not bind until you link it to a running dev " +
+			"server with `tracks proxy switch`. Pass --bind-all to expose it on every " +
+			"network interface (needed for a physical device; off by default).",
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			svcName := args[0]
-			trackID := ""
-			if len(args) == 2 {
-				trackID = args[1]
-			} else {
-				// Default to current track if inside one.
-				if id := os.Getenv("TRACKS_ID"); id != "" {
-					trackID = id
-				}
+			port, err := parsePort(args[0])
+			if err != nil {
+				return err
 			}
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
-			cl := daemon.NewClient(cfg)
-			if err := cl.ProxySwitch(svcName, trackID); err != nil {
+			if err := daemon.NewClient(cfg).ProxyAdd(port, addBindAll); err != nil {
+				return fmt.Errorf("daemon: %w", err)
+			}
+			fmt.Printf("stable port :%d defined — link it with `tracks proxy switch %d <track>`\n", port, port)
+			return nil
+		},
+	}
+	proxyAddCmd.Flags().BoolVar(&addBindAll, "bind-all", false, "expose the port on every network interface (default loopback only)")
+
+	proxyRmCmd := &cobra.Command{
+		Use:     "rm <port>",
+		Aliases: []string{"remove"},
+		Short:   "delete a stable port",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			port, err := parsePort(args[0])
+			if err != nil {
+				return err
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			if err := daemon.NewClient(cfg).ProxyRemove(port); err != nil {
+				return fmt.Errorf("daemon: %w", err)
+			}
+			fmt.Printf("stable port :%d removed\n", port)
+			return nil
+		},
+	}
+
+	proxySwitchCmd := &cobra.Command{
+		Use:   "switch <port> [track-id|off] [service]",
+		Short: "link a stable port to a running server, or clear it",
+		Long: "Point a stable port at a running dev server. Passing a track ID routes the " +
+			"fixed port to that track's service (any service, of any name). When the track " +
+			"runs a single service the name may be omitted. Passing 'off' (or no track) " +
+			"clears the port so it returns 503.",
+		Args: cobra.RangeArgs(1, 3),
+		RunE: func(c *cobra.Command, args []string) error {
+			port, err := parsePort(args[0])
+			if err != nil {
+				return err
+			}
+			trackID := ""
+			service := ""
+			if len(args) >= 2 {
+				trackID = args[1]
+			} else if id := os.Getenv("TRACKS_ID"); id != "" {
+				trackID = id // default to current track if inside one
+			}
+			if len(args) == 3 {
+				service = args[2]
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			if err := daemon.NewClient(cfg).ProxySwitch(port, trackID, service); err != nil {
 				return fmt.Errorf("daemon: %w", err)
 			}
 			if trackID == "" || trackID == "off" {
-				fmt.Printf("proxy for %s cleared (returning 503)\n", svcName)
+				fmt.Printf("proxy :%d cleared (returning 503)\n", port)
 			} else {
-				fmt.Printf("proxy for %s → track %s\n", svcName, trackID)
+				fmt.Printf("proxy :%d → track %s\n", port, trackID)
 			}
 			return nil
 		},
 	}
 
-	proxyCmd.AddCommand(proxySwitchCmd)
+	proxyCmd.AddCommand(proxyAddCmd, proxyRmCmd, proxySwitchCmd)
 	register(proxyCmd)
+}
+
+// parsePort parses a port argument, tolerating a leading colon (":3000").
+func parsePort(s string) (int, error) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), ":")
+	p, err := strconv.Atoi(s)
+	if err != nil || p < 1 || p > 65535 {
+		return 0, fmt.Errorf("invalid port %q: want a number between 1 and 65535", s)
+	}
+	return p, nil
 }

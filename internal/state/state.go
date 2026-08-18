@@ -31,9 +31,13 @@ import (
 //
 // v2 adds Track.Kind. v3 replaces the single-PR fields (pr_url,
 // pr_state, …) with Track.PRs and renames the "pr" status to "pr open".
+// v4 adds the top-level State.Proxies list — user-defined stable ports
+// and their chosen upstream, previously declared per-service in config
+// as proxy_port and held only in the daemon's memory.
 // Older tracks are migrated on load (see Track.UnmarshalJSON and
-// migrateTrack).
-const CurrentSchemaVersion = 3
+// migrateTrack). A v3 file simply carries no Proxies, which loads as an
+// empty list.
+const CurrentSchemaVersion = 4
 
 // Kind is the type of a track. It decides whether the track owns
 // worktrees and how Claude is launched.
@@ -734,8 +738,33 @@ func windowLabel(s string) string {
 
 // State is the entire on-disk payload.
 type State struct {
-	SchemaVersion int     `json:"schema_version"`
-	Tracks        []Track `json:"tracks"`
+	SchemaVersion int            `json:"schema_version"`
+	Tracks        []Track        `json:"tracks"`
+	Proxies       []ProxyBinding `json:"proxies,omitempty"`
+}
+
+// ProxyBinding is one user-defined stable port and, optionally, the
+// upstream it currently forwards to. It is the persisted form of a
+// proxy: the daemon materialises a live listener from it and re-applies
+// the upstream on restart when the target server is still running.
+//
+// Keyed by PublicPort. An empty upstream (UpstreamTrackID == "") means
+// the port is free — the proxy returns 503 and the port is released, so
+// an idle daemon holds no proxy ports.
+type ProxyBinding struct {
+	// PublicPort is the fixed port the app points at (e.g. 3000).
+	PublicPort int `json:"public_port"`
+
+	// BindAll listens on every interface instead of loopback. Off by
+	// default; turn it on for a port a physical device must reach.
+	BindAll bool `json:"bind_all,omitempty"`
+
+	// UpstreamTrackID / UpstreamService identify the running dev server
+	// this port forwards to. Both empty means free. The target may be a
+	// service of any name on any track — the binding is not tied to a
+	// service name the way the old per-service proxy_port was.
+	UpstreamTrackID string `json:"upstream_track_id,omitempty"`
+	UpstreamService string `json:"upstream_service,omitempty"`
 }
 
 // Store is the interface the daemon uses to talk to persistent state.
@@ -765,6 +794,27 @@ type Store interface {
 
 	// Delete removes a track. Returns false if it didn't exist.
 	Delete(id string) (bool, error)
+
+	// AllProxies returns a snapshot of every proxy binding, sorted by
+	// PublicPort ascending. The returned slice is owned by the caller.
+	AllProxies() []ProxyBinding
+
+	// GetProxy returns the binding for a port, if defined.
+	GetProxy(port int) (ProxyBinding, bool)
+
+	// PutProxy inserts or updates a binding, keyed by PublicPort, and
+	// persists. A PublicPort of zero is rejected.
+	PutProxy(b ProxyBinding) error
+
+	// DeleteProxy removes the binding for a port. Returns false if none
+	// existed.
+	DeleteProxy(port int) (bool, error)
+
+	// UpdateProxy atomically read-modify-writes the binding for a port
+	// under the store's own lock. mutate reports whether it changed
+	// anything worth persisting. An unknown port is (zero, false, nil)
+	// and mutate is not called.
+	UpdateProxy(port int, mutate func(*ProxyBinding) bool) (ProxyBinding, bool, error)
 }
 
 // FileStore is a Store backed by <state_dir>/state.json.
@@ -775,8 +825,9 @@ type Store interface {
 type FileStore struct {
 	path string
 
-	mu     sync.RWMutex
-	tracks map[string]Track
+	mu      sync.RWMutex
+	tracks  map[string]Track
+	proxies map[int]ProxyBinding
 }
 
 // OpenFileStore loads (or creates) the state file at
@@ -788,8 +839,9 @@ func OpenFileStore(stateDir string) (*FileStore, error) {
 		return nil, fmt.Errorf("mkdir state dir: %w", err)
 	}
 	fs := &FileStore{
-		path:   filepath.Join(stateDir, "state.json"),
-		tracks: make(map[string]Track),
+		path:    filepath.Join(stateDir, "state.json"),
+		tracks:  make(map[string]Track),
+		proxies: make(map[int]ProxyBinding),
 	}
 	if err := fs.load(); err != nil {
 		return nil, err
@@ -821,6 +873,11 @@ func (fs *FileStore) load() error {
 	for _, t := range s.Tracks {
 		migrateTrack(&t)
 		fs.tracks[t.ID] = t
+	}
+	for _, b := range s.Proxies {
+		if b.PublicPort > 0 {
+			fs.proxies[b.PublicPort] = b
+		}
 	}
 	return nil
 }
@@ -955,6 +1012,75 @@ func (fs *FileStore) Delete(id string) (bool, error) {
 	return true, nil
 }
 
+// AllProxies returns every binding, sorted by PublicPort ascending.
+func (fs *FileStore) AllProxies() []ProxyBinding {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return sortedProxies(fs.proxies)
+}
+
+// GetProxy returns the binding for a port, if defined.
+func (fs *FileStore) GetProxy(port int) (ProxyBinding, bool) {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	b, ok := fs.proxies[port]
+	return b, ok
+}
+
+// PutProxy upserts a binding by PublicPort and flushes to disk.
+func (fs *FileStore) PutProxy(b ProxyBinding) error {
+	if b.PublicPort <= 0 {
+		return errors.New("ProxyBinding.PublicPort must be positive")
+	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.proxies[b.PublicPort] = b
+	return fs.flushLocked()
+}
+
+// DeleteProxy removes a binding and flushes. Returns whether it existed.
+func (fs *FileStore) DeleteProxy(port int) (bool, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	if _, ok := fs.proxies[port]; !ok {
+		return false, nil
+	}
+	delete(fs.proxies, port)
+	if err := fs.flushLocked(); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// UpdateProxy read-modify-writes a binding atomically under fs.mu and
+// flushes when mutate reports a change. See Store.UpdateProxy.
+func (fs *FileStore) UpdateProxy(port int, mutate func(*ProxyBinding) bool) (ProxyBinding, bool, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	b, ok := fs.proxies[port]
+	if !ok {
+		return ProxyBinding{}, false, nil
+	}
+	if mutate(&b) {
+		fs.proxies[port] = b
+		if err := fs.flushLocked(); err != nil {
+			return b, true, err
+		}
+	}
+	return b, true, nil
+}
+
+// sortedProxies returns the bindings ordered by PublicPort ascending so
+// the on-disk file and every snapshot are stable.
+func sortedProxies(m map[int]ProxyBinding) []ProxyBinding {
+	out := make([]ProxyBinding, 0, len(m))
+	for _, b := range m {
+		out = append(out, b)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PublicPort < out[j].PublicPort })
+	return out
+}
+
 // flushLocked writes the current in-memory state to disk atomically.
 // Caller must hold fs.mu.Lock().
 func (fs *FileStore) flushLocked() error {
@@ -968,6 +1094,7 @@ func (fs *FileStore) flushLocked() error {
 	payload := State{
 		SchemaVersion: CurrentSchemaVersion,
 		Tracks:        tracks,
+		Proxies:       sortedProxies(fs.proxies),
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -997,13 +1124,17 @@ func (fs *FileStore) flushLocked() error {
 // MemoryStore is an in-process Store for tests. It implements the
 // same interface as FileStore but never touches disk.
 type MemoryStore struct {
-	mu     sync.RWMutex
-	tracks map[string]Track
+	mu      sync.RWMutex
+	tracks  map[string]Track
+	proxies map[int]ProxyBinding
 }
 
 // NewMemoryStore returns an empty in-memory Store.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{tracks: make(map[string]Track)}
+	return &MemoryStore{
+		tracks:  make(map[string]Track),
+		proxies: make(map[int]ProxyBinding),
+	}
 }
 
 func (m *MemoryStore) All() []Track {
@@ -1066,6 +1197,52 @@ func (m *MemoryStore) Delete(id string) (bool, error) {
 	}
 	delete(m.tracks, id)
 	return true, nil
+}
+
+func (m *MemoryStore) AllProxies() []ProxyBinding {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return sortedProxies(m.proxies)
+}
+
+func (m *MemoryStore) GetProxy(port int) (ProxyBinding, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	b, ok := m.proxies[port]
+	return b, ok
+}
+
+func (m *MemoryStore) PutProxy(b ProxyBinding) error {
+	if b.PublicPort <= 0 {
+		return errors.New("ProxyBinding.PublicPort must be positive")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.proxies[b.PublicPort] = b
+	return nil
+}
+
+func (m *MemoryStore) DeleteProxy(port int) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.proxies[port]; !ok {
+		return false, nil
+	}
+	delete(m.proxies, port)
+	return true, nil
+}
+
+func (m *MemoryStore) UpdateProxy(port int, mutate func(*ProxyBinding) bool) (ProxyBinding, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.proxies[port]
+	if !ok {
+		return ProxyBinding{}, false, nil
+	}
+	if mutate(&b) {
+		m.proxies[port] = b
+	}
+	return b, true, nil
 }
 
 // Compile-time interface checks.

@@ -191,36 +191,86 @@ func (s *Server) maybeReloadConfig() {
 	s.cfg.Store(&newCfg)
 	s.cfgModTime = fi.ModTime()
 	s.cfgSize = fi.Size()
-	// Proxy registrations follow the config: a service added (or given a
-	// proxy_port) through Settings gets its stable port here rather than
-	// on the next daemon restart.
-	s.syncProxies(newCfg)
+	// Proxy ports are user-defined runtime state now, not config, so a
+	// config reload doesn't touch them: add/remove already register and
+	// release entries directly against the live manager.
 	dlog.Printf("reloaded config (%d repos)", len(newCfg.Repos))
 }
 
-// syncProxies reconciles the proxy manager's registrations with the
-// services cfg declares. No-op before the manager exists (Start hasn't
-// reached it yet).
-func (s *Server) syncProxies(cfg config.Config) {
-	s.mu.Lock()
-	mgr := s.proxyMgr
-	s.mu.Unlock()
+// syncProxies reconciles the proxy manager's registrations with the ports
+// defined in state. No-op before the manager exists (Start hasn't reached
+// it yet). Called at startup; runtime add/remove mutate the manager directly.
+func (s *Server) syncProxies() {
+	mgr := s.proxyManager()
 	if mgr == nil {
 		return
 	}
 	var regs []proxy.Registration
-	for _, repo := range cfg.Repos {
-		for _, svc := range repo.Services {
-			if svc.ProxyPort > 0 {
-				regs = append(regs, proxy.Registration{
-					ServiceName: svc.Name,
-					PublicPort:  svc.ProxyPort,
-					BindAll:     svc.ProxyBindAll,
-				})
-			}
-		}
+	for _, b := range s.store.AllProxies() {
+		regs = append(regs, proxyRegistration(b))
 	}
 	mgr.Sync(regs)
+}
+
+// seedLegacyProxyPorts imports any proxy_port still declared in the config
+// file into state, once, when state has no ports of its own. It preserves a
+// user's pre-existing stable ports across the move from config-declared to
+// state-owned proxies. Migration-only: remove once every state file has
+// been upgraded.
+func (s *Server) seedLegacyProxyPorts() {
+	if len(s.store.AllProxies()) > 0 {
+		return
+	}
+	legacy := config.LegacyProxyPorts()
+	for _, l := range legacy {
+		if l.Port <= 0 {
+			continue
+		}
+		if err := s.store.PutProxy(state.ProxyBinding{PublicPort: l.Port, BindAll: l.BindAll}); err != nil {
+			dlog.Printf("seed legacy proxy_port :%d: %v", l.Port, err)
+			continue
+		}
+		dlog.Printf("imported legacy proxy_port :%d into state (source: config %q)", l.Port, l.Service)
+	}
+}
+
+// reapplyProxyUpstreams re-establishes each binding's persisted upstream on
+// startup, but only when the target track's service is currently running.
+// A binding whose target is gone is reset to free so status never advertises
+// a dead link.
+func (s *Server) reapplyProxyUpstreams() {
+	mgr := s.proxyManager()
+	if mgr == nil {
+		return
+	}
+	for _, b := range s.store.AllProxies() {
+		if b.UpstreamTrackID == "" {
+			continue
+		}
+		t, found := s.store.Get(b.UpstreamTrackID)
+		if !found || !serviceRunning(t, b.UpstreamService) {
+			s.persistProxyUpstream(b.PublicPort, "", "")
+			continue
+		}
+		if err := mgr.Switch(b.PublicPort, t.Ports[b.UpstreamService], b.UpstreamTrackID, b.UpstreamService); err != nil {
+			dlog.Printf("re-apply proxy :%d → %s/%s: %v", b.PublicPort, b.UpstreamTrackID, b.UpstreamService, err)
+			s.persistProxyUpstream(b.PublicPort, "", "")
+		}
+	}
+}
+
+// serviceRunning reports whether the named service on a track is currently
+// active (holds its port).
+func serviceRunning(t state.Track, service string) bool {
+	if _, ok := t.Ports[service]; !ok {
+		return false
+	}
+	for _, sv := range t.Services {
+		if sv.Name == service {
+			return sv.Active()
+		}
+	}
+	return false
 }
 
 // SocketPath returns the absolute path to the Unix socket. Useful for
@@ -298,16 +348,18 @@ func (s *Server) Start(ctx context.Context) error {
 		dlog.Printf("install global helpers: %v", err)
 	}
 
-	// Register the stable-port proxy manager. Every service with a
-	// proxy_port is registered, but no port is bound now: listeners are
-	// claimed lazily on the first `tracks up` (Switch) and released on
-	// `tracks down` (Clear). This keeps an idle daemon off well-known
-	// ports like Metro's 8081 so a manual dev server can bind them.
+	// Register the stable-port proxy manager. Every user-defined port is
+	// registered, but no port is bound now: listeners are claimed lazily
+	// when a port is linked to an upstream and released when it is freed.
+	// This keeps an idle daemon off well-known ports like Metro's 8081 so a
+	// manual dev server can bind them.
 	mgr := proxy.NewManager()
 	s.mu.Lock()
 	s.proxyMgr = mgr
 	s.mu.Unlock()
-	s.syncProxies(s.config())
+	s.seedLegacyProxyPorts()
+	s.syncProxies()
+	s.reapplyProxyUpstreams()
 
 	tmuxCtx, cancelTmux := context.WithCancel(ctx)
 	s.mu.Lock()
@@ -484,6 +536,10 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleServiceDown(ctx, req.Params, emit)
 	case MethodServices:
 		return s.handleServices(req.Params)
+	case MethodProxyAdd:
+		return s.handleProxyAdd(req.Params)
+	case MethodProxyRemove:
+		return s.handleProxyRemove(req.Params)
 	case MethodProxySwitch:
 		return s.handleProxySwitch(req.Params)
 	case MethodProxyStatus:

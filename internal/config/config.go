@@ -195,22 +195,6 @@ type Service struct {
 	// DependsOn lists other services (same repo) that must be ready
 	// before this one starts. A simple ordered wait, not a DAG.
 	DependsOn []string `yaml:"depends_on,omitempty"`
-
-	// ProxyPort, when non-zero, tells the daemon to run a stable-port
-	// reverse proxy on this fixed port. The proxy forwards to whichever
-	// track's service is currently "active" (set via `tracks proxy switch`).
-	// This sidesteps the per-track port-wiring problem: the Wallet app
-	// always points at the fixed ProxyPort, and you flip the upstream
-	// instead of patching manifests.
-	ProxyPort int `yaml:"proxy_port,omitempty"`
-
-	// ProxyBindAll exposes that stable port on every network interface
-	// instead of loopback only. Off by default, because the proxy fronts a
-	// dev server running against your own checkout and 0.0.0.0 offers it
-	// to everyone on the network. Turn it on for a service a physical
-	// device has to reach — a phone loading a Metro bundle — and only on
-	// networks you trust.
-	ProxyBindAll bool `yaml:"proxy_bind_all,omitempty"`
 }
 
 // ReadyProbe is how a service signals readiness. At most one field set.
@@ -384,13 +368,6 @@ func validateServices(repoName string, services []Service) error {
 		if svc.Ready.Port != "" && svc.Ready.LogRegex != "" {
 			return fmt.Errorf("repos[%s].services[%s].ready: set at most one of port or log_regex", repoName, svc.Name)
 		}
-		// proxy_bind_all only means anything for a service that has a
-		// stable port to expose; on its own it reads as "expose this" and
-		// silently does nothing, which is the wrong way for a setting
-		// about network exposure to fail.
-		if svc.ProxyBindAll && svc.ProxyPort == 0 {
-			return fmt.Errorf("repos[%s].services[%s].proxy_bind_all needs proxy_port to be set", repoName, svc.Name)
-		}
 		for _, dep := range svc.DependsOn {
 			if dep == svc.Name {
 				return fmt.Errorf("repos[%s].services[%s] depends on itself", repoName, svc.Name)
@@ -452,6 +429,52 @@ func Path() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".config", "tracks", "config.yaml"), nil
+}
+
+// LegacyProxyEntry is a proxy_port declaration recovered from an older
+// config file, used only to seed state on the one-time migration to
+// state-owned proxies.
+type LegacyProxyEntry struct {
+	Service string
+	Port    int
+	BindAll bool
+}
+
+// LegacyProxyPorts re-parses the config file for the now-removed
+// repos[].services[].proxy_port declarations. Returns nothing when the file
+// is missing or carries none. Migration-only: the proxy_port field no longer
+// exists on Service, so this tolerant re-read is the only place it is still
+// seen. Remove once every state file has been upgraded.
+func LegacyProxyPorts() []LegacyProxyEntry {
+	p, err := Path()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	var raw struct {
+		Repos []struct {
+			Services []struct {
+				Name         string `yaml:"name"`
+				ProxyPort    int    `yaml:"proxy_port"`
+				ProxyBindAll bool   `yaml:"proxy_bind_all"`
+			} `yaml:"services"`
+		} `yaml:"repos"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var out []LegacyProxyEntry
+	for _, repo := range raw.Repos {
+		for _, svc := range repo.Services {
+			if svc.ProxyPort > 0 {
+				out = append(out, LegacyProxyEntry{Service: svc.Name, Port: svc.ProxyPort, BindAll: svc.ProxyBindAll})
+			}
+		}
+	}
+	return out
 }
 
 // Load reads the config file at Path() and merges it onto Default().

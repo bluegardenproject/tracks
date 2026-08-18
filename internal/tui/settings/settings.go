@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -765,9 +764,6 @@ func pickServiceIndex(svcs []config.Service, title string) (int, error) {
 	opts := make([]huh.Option[int], 0, len(svcs))
 	for i, svc := range svcs {
 		label := fmt.Sprintf("%s  cmd: %s", svc.Name, truncate(svc.Cmd, 40))
-		if svc.ProxyPort != 0 {
-			label += fmt.Sprintf("  [proxy :%d]", svc.ProxyPort)
-		}
 		opts = append(opts, huh.NewOption(label, i))
 	}
 	var idx int
@@ -790,9 +786,12 @@ func pickServiceIndex(svcs []config.Service, title string) (int, error) {
 }
 
 // serviceForm shows a multi-group form for adding or editing a service.
-// Groups: (1) identity, (2) env & proxy, (3) readiness, (4) lifecycle.
+// Groups: (1) identity, (2) env, (3) readiness, (4) lifecycle.
 // When editing, origName is captured before the form to allow keeping
 // the same name while still catching collisions with other services.
+//
+// Stable proxy ports are no longer configured per service — they are
+// user-defined runtime state managed from the Proxy screen.
 func serviceForm(existingSvcs []config.Service, svc *config.Service, editing bool) error {
 	origName := svc.Name
 
@@ -800,12 +799,6 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 	cmd := svc.Cmd
 
 	envText := envToText(svc.Env)
-
-	proxyBindAll := svc.ProxyBindAll
-	proxyPortStr := ""
-	if svc.ProxyPort != 0 {
-		proxyPortStr = strconv.Itoa(svc.ProxyPort)
-	}
 
 	readyPort := svc.Ready.Port
 	readyLogRegex := svc.Ready.LogRegex
@@ -850,39 +843,16 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 				}).
 				Value(&cmd),
 		),
-		// Group 2 — env & proxy
+		// Group 2 — env
 		huh.NewGroup(
 			huh.NewNote().
-				Title("Environment & stable-port proxy").
-				Description("Extra env vars (merged onto the daemon's environment) and an optional fixed proxy port."),
+				Title("Environment").
+				Description("Extra env vars, merged onto the daemon's environment."),
 			huh.NewText().
 				Title("Environment variables (KEY=VALUE, one per line)").
 				Description("Values are templated. Blank lines are ignored.").
 				Placeholder("PORT={{.Port \"live-app\"}}\nNODE_ENV=development").
 				Value(&envText),
-			huh.NewInput().
-				Title("Stable proxy port").
-				Description("If set, a reverse proxy on this fixed port always points to the active track's service. Leave empty to disable.").
-				Placeholder("3000").
-				Validate(func(v string) error {
-					v = strings.TrimSpace(v)
-					if v == "" {
-						return nil
-					}
-					p, err := strconv.Atoi(v)
-					if err != nil {
-						return errors.New("must be a number between 1 and 65535")
-					}
-					if p < 1 || p > 65535 {
-						return errors.New("must be between 1 and 65535")
-					}
-					return nil
-				}).
-				Value(&proxyPortStr),
-			huh.NewConfirm().
-				Title("Expose the stable port on the network?").
-				Description("No keeps it on localhost. Yes lets other devices reach it — needed for a phone loading a Metro bundle, but it also offers your dev server to everyone else on that network.").
-				Value(&proxyBindAll),
 		),
 		// Group 3 — readiness probe
 		huh.NewGroup(
@@ -940,16 +910,9 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 		return ErrCancelled
 	}
 
-	var proxyPort int
-	if v := strings.TrimSpace(proxyPortStr); v != "" {
-		proxyPort, _ = strconv.Atoi(v) // already validated in the form
-	}
-
 	svc.Name = strings.TrimSpace(name)
 	svc.Cmd = strings.TrimSpace(cmd)
 	svc.Env = env
-	svc.ProxyPort = proxyPort
-	svc.ProxyBindAll = proxyBindAll && proxyPort != 0
 	svc.Ready = config.ReadyProbe{
 		Port:     strings.TrimSpace(readyPort),
 		LogRegex: strings.TrimSpace(readyLogRegex),

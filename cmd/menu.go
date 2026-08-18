@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"text/tabwriter"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -14,6 +13,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tui/menu"
 	"github.com/bluegardenproject/tracks/internal/tui/newtrack"
+	"github.com/bluegardenproject/tracks/internal/tui/proxymgr"
 	"github.com/bluegardenproject/tracks/internal/tui/settings"
 	"github.com/spf13/cobra"
 )
@@ -281,34 +281,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		return nil
 
 	case menu.ActionProxy:
-		result, err := cl.ProxyStatus()
-		if err != nil {
-			fmt.Println("daemon:", err)
-			waitForKey()
-			return nil
-		}
-		if len(result.Proxies) == 0 {
-			fmt.Println("no proxy_port configured in any service")
-			fmt.Println("add proxy_port: <N> to a service in ~/.config/tracks/config.yaml")
-			waitForKey()
-			return nil
-		}
-		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "SERVICE\tFIXED PORT\tUPSTREAM\tACTIVE TRACK")
-		for _, p := range result.Proxies {
-			upstream := p.Upstream
-			if upstream == "" {
-				upstream = "(none — 503)"
-			}
-			trackID := p.ActiveTrackID
-			if trackID == "" && p.Upstream != "" {
-				trackID = "(unknown)"
-			}
-			fmt.Fprintf(tw, "%s\t:%d\t%s\t%s\n", p.ServiceName, p.PublicPort, upstream, trackID)
-		}
-		_ = tw.Flush()
-		waitForKey()
-		return nil
+		return proxymgr.Run(cfg)
 
 	case menu.ActionSettings:
 		// Load config WITH its error so settings.Run can back up a

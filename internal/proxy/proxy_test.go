@@ -38,10 +38,15 @@ func canBind(port int) bool {
 	return true
 }
 
+// switchTo is a test shorthand for Switch with placeholder labels.
+func switchTo(m *Manager, port, upstream int) error {
+	return m.Switch(port, upstream, "trk", "svc")
+}
+
 func TestRegisterDoesNotBind(t *testing.T) {
 	port := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: port})
+	m.Register(Registration{PublicPort: port})
 	if !canBind(port) {
 		t.Fatalf("port %d was bound by Register; expected it to stay free until Switch", port)
 	}
@@ -51,23 +56,26 @@ func TestSwitchBindsAndClearReleases(t *testing.T) {
 	proxyPort := freePort(t)
 	upstream := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: proxyPort})
+	m.Register(Registration{PublicPort: proxyPort})
 
-	if err := m.Switch("metro", upstream); err != nil {
+	if err := switchTo(m, proxyPort, upstream); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 	if canBind(proxyPort) {
 		t.Fatalf("port %d still free after Switch; expected the proxy to hold it", proxyPort)
 	}
-	if got := m.Entry("metro").Upstream(); got != fmt.Sprintf("localhost:%d", upstream) {
+	if got := m.Entry(proxyPort).Upstream(); got != fmt.Sprintf("localhost:%d", upstream) {
 		t.Fatalf("upstream = %q, want localhost:%d", got, upstream)
 	}
+	if tID, svc := m.Entry(proxyPort).UpstreamTarget(); tID != "trk" || svc != "svc" {
+		t.Fatalf("upstream target = %q/%q, want trk/svc", tID, svc)
+	}
 
-	m.Clear("metro")
+	m.Clear(proxyPort)
 	if !canBind(proxyPort) {
 		t.Fatalf("port %d still held after Clear; expected it released for a manual dev server", proxyPort)
 	}
-	if got := m.Entry("metro").Upstream(); got != "" {
+	if got := m.Entry(proxyPort).Upstream(); got != "" {
 		t.Fatalf("upstream = %q after Clear, want empty", got)
 	}
 }
@@ -75,23 +83,23 @@ func TestSwitchBindsAndClearReleases(t *testing.T) {
 func TestSwitchRebindsAfterClear(t *testing.T) {
 	proxyPort := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: proxyPort})
+	m.Register(Registration{PublicPort: proxyPort})
 
 	for i := 0; i < 3; i++ {
-		if err := m.Switch("metro", freePort(t)); err != nil {
+		if err := switchTo(m, proxyPort, freePort(t)); err != nil {
 			t.Fatalf("Switch #%d: %v", i, err)
 		}
-		m.Clear("metro")
+		m.Clear(proxyPort)
 		if !canBind(proxyPort) {
 			t.Fatalf("port %d not released after Clear #%d", proxyPort, i)
 		}
 	}
 }
 
-func TestSwitchUnknownService(t *testing.T) {
+func TestSwitchUnknownPort(t *testing.T) {
 	m := NewManager()
-	if err := m.Switch("nope", 1234); err == nil {
-		t.Fatal("Switch on unregistered service: want error, got nil")
+	if err := switchTo(m, 65000, 1234); err == nil {
+		t.Fatal("Switch on unregistered port: want error, got nil")
 	}
 }
 
@@ -106,17 +114,33 @@ func TestSwitchBindFailureSurfaces(t *testing.T) {
 	defer blocker.Close()
 
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: port})
-	if err := m.Switch("metro", freePort(t)); err == nil {
+	m.Register(Registration{PublicPort: port})
+	if err := switchTo(m, port, freePort(t)); err == nil {
 		t.Fatal("Switch onto an occupied port: want bind error, got nil")
+	}
+}
+
+func TestRemoveReleasesPort(t *testing.T) {
+	proxyPort := freePort(t)
+	m := NewManager()
+	m.Register(Registration{PublicPort: proxyPort})
+	if err := switchTo(m, proxyPort, freePort(t)); err != nil {
+		t.Fatalf("Switch: %v", err)
+	}
+	m.Remove(proxyPort)
+	if !canBind(proxyPort) {
+		t.Fatalf("port %d still held after Remove", proxyPort)
+	}
+	if m.Entry(proxyPort) != nil {
+		t.Fatal("entry still registered after Remove")
 	}
 }
 
 func TestStopReleasesBoundPorts(t *testing.T) {
 	proxyPort := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: proxyPort})
-	if err := m.Switch("metro", freePort(t)); err != nil {
+	m.Register(Registration{PublicPort: proxyPort})
+	if err := switchTo(m, proxyPort, freePort(t)); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 	m.Stop()
@@ -126,7 +150,7 @@ func TestStopReleasesBoundPorts(t *testing.T) {
 }
 
 func TestListenAddrDefaultsToLoopback(t *testing.T) {
-	e := &Entry{ServiceName: "metro", PublicPort: 8081}
+	e := &Entry{PublicPort: 8081}
 	if got := e.listenAddr(); got != "127.0.0.1:8081" {
 		t.Errorf("listenAddr = %q, want 127.0.0.1:8081 — a dev server must not be offered to the whole network by default", got)
 	}
@@ -136,7 +160,25 @@ func TestListenAddrDefaultsToLoopback(t *testing.T) {
 	}
 }
 
-// The loopback default must still serve the machine's own browser.
+// ActivePortFor finds the public port forwarding to a given track/service.
+func TestActivePortFor(t *testing.T) {
+	proxyPort := freePort(t)
+	m := NewManager()
+	m.Register(Registration{PublicPort: proxyPort})
+	if err := m.Switch(proxyPort, freePort(t), "trkA", "dev"); err != nil {
+		t.Fatalf("Switch: %v", err)
+	}
+	defer m.Stop()
+	if got, ok := m.ActivePortFor("trkA", "dev"); !ok || got != proxyPort {
+		t.Fatalf("ActivePortFor(trkA, dev) = %d,%v; want %d,true", got, ok, proxyPort)
+	}
+	if _, ok := m.ActivePortFor("trkB", "dev"); ok {
+		t.Fatal("ActivePortFor(trkB, dev) matched a different track")
+	}
+}
+
+// The loopback default must still serve the machine's own browser, and a
+// port can forward to a service of any name (cross-service targeting).
 func TestSwitchServesOverLoopback(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("from upstream"))
@@ -146,8 +188,10 @@ func TestSwitchServesOverLoopback(t *testing.T) {
 
 	proxyPort := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: proxyPort})
-	if err := m.Switch("metro", upstreamPort); err != nil {
+	m.Register(Registration{PublicPort: proxyPort})
+	// A port named for one thing (3000) fronting a service called
+	// "swap-dev" — the binding is not tied to the service name.
+	if err := m.Switch(proxyPort, upstreamPort, "trk", "swap-dev"); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 	defer m.Stop()
@@ -163,78 +207,58 @@ func TestSwitchServesOverLoopback(t *testing.T) {
 	}
 }
 
-func TestSyncRegistersNewServices(t *testing.T) {
+func TestSyncRegistersNewPorts(t *testing.T) {
 	m := NewManager()
-	m.Sync([]Registration{{ServiceName: "metro", PublicPort: 8081}})
-	if m.Entry("metro") == nil {
-		t.Fatal("metro not registered by Sync")
+	m.Sync([]Registration{{PublicPort: 8081}})
+	if m.Entry(8081) == nil {
+		t.Fatal("8081 not registered by Sync")
 	}
-	// A service added to the config later shows up without a restart.
+	// A port added later shows up without a restart.
 	m.Sync([]Registration{
-		{ServiceName: "metro", PublicPort: 8081},
-		{ServiceName: "api", PublicPort: 9000},
+		{PublicPort: 8081},
+		{PublicPort: 9000},
 	})
-	if m.Entry("api") == nil {
-		t.Error("api added by a later Sync was not registered")
+	if m.Entry(9000) == nil {
+		t.Error("9000 added by a later Sync was not registered")
 	}
 }
 
 func TestSyncKeepsAServingEntryUntouched(t *testing.T) {
 	proxyPort := freePort(t)
 	m := NewManager()
-	reg := Registration{ServiceName: "metro", PublicPort: proxyPort}
+	reg := Registration{PublicPort: proxyPort}
 	m.Register(reg)
-	if err := m.Switch("metro", freePort(t)); err != nil {
+	if err := switchTo(m, proxyPort, freePort(t)); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 	defer m.Stop()
-	want := m.Entry("metro").Upstream()
+	want := m.Entry(proxyPort).Upstream()
 
 	m.Sync([]Registration{reg})
 
-	if got := m.Entry("metro").Upstream(); got != want {
-		t.Errorf("upstream = %q after Sync, want %q — a config reload must not interrupt a serving track", got, want)
+	if got := m.Entry(proxyPort).Upstream(); got != want {
+		t.Errorf("upstream = %q after Sync, want %q — a reconcile must not interrupt a serving port", got, want)
 	}
 	if canBind(proxyPort) {
-		t.Error("proxy released its port during an unrelated config reload")
+		t.Error("proxy released its port during an unrelated reconcile")
 	}
 }
 
-func TestSyncReleasesRemovedServices(t *testing.T) {
+func TestSyncReleasesRemovedPorts(t *testing.T) {
 	proxyPort := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: proxyPort})
-	if err := m.Switch("metro", freePort(t)); err != nil {
+	m.Register(Registration{PublicPort: proxyPort})
+	if err := switchTo(m, proxyPort, freePort(t)); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 
-	m.Sync(nil) // service deleted from the config
+	m.Sync(nil) // port removed from state
 
-	if m.Entry("metro") != nil {
-		t.Error("metro still registered after it left the config")
+	if m.Entry(proxyPort) != nil {
+		t.Error("port still registered after it left state")
 	}
 	if !canBind(proxyPort) {
-		t.Errorf("port %d still held after the service left the config", proxyPort)
-	}
-}
-
-func TestSyncRebuildsOnPortChange(t *testing.T) {
-	oldPort := freePort(t)
-	newPort := freePort(t)
-	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: oldPort})
-	if err := m.Switch("metro", freePort(t)); err != nil {
-		t.Fatalf("Switch: %v", err)
-	}
-
-	m.Sync([]Registration{{ServiceName: "metro", PublicPort: newPort}})
-	defer m.Stop()
-
-	if got := m.Entry("metro").PublicPort; got != newPort {
-		t.Errorf("PublicPort = %d, want %d", got, newPort)
-	}
-	if !canBind(oldPort) {
-		t.Errorf("old port %d still held after the config moved the service", oldPort)
+		t.Errorf("port %d still held after it left state", proxyPort)
 	}
 }
 
@@ -252,65 +276,42 @@ func mustPort(t *testing.T, rawURL string) int {
 	return p
 }
 
-// A port change on a *serving* service must not leave the track behind a
-// dead stable port: the upstream moves to the new listener.
-func TestSyncCarriesTheUpstreamAcrossARebuild(t *testing.T) {
-	oldPort := freePort(t)
-	newPort := freePort(t)
-	upstream := freePort(t)
-	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: oldPort})
-	if err := m.Switch("metro", upstream); err != nil {
-		t.Fatalf("Switch: %v", err)
-	}
-	defer m.Stop()
-
-	m.Sync([]Registration{{ServiceName: "metro", PublicPort: newPort}})
-
-	e := m.Entry("metro")
-	if got, want := e.Upstream(), fmt.Sprintf("localhost:%d", upstream); got != want {
-		t.Errorf("upstream = %q after the port moved, want %q", got, want)
-	}
-	if canBind(newPort) {
-		t.Errorf("new port %d not bound — the service is serving but unreachable through the proxy", newPort)
-	}
-	if !canBind(oldPort) {
-		t.Errorf("old port %d still held", oldPort)
-	}
-}
-
-// Flipping proxy_bind_all mid-session is the same rebuild path.
+// Flipping BindAll mid-session is a rebuild path: a live upstream must
+// survive it, else the serving track drops behind a dead stable port.
 func TestSyncCarriesTheUpstreamAcrossABindChange(t *testing.T) {
 	port := freePort(t)
 	upstream := freePort(t)
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: port})
-	if err := m.Switch("metro", upstream); err != nil {
+	m.Register(Registration{PublicPort: port})
+	if err := m.Switch(port, upstream, "trk", "svc"); err != nil {
 		t.Fatalf("Switch: %v", err)
 	}
 	defer m.Stop()
 
-	m.Sync([]Registration{{ServiceName: "metro", PublicPort: port, BindAll: true}})
+	m.Sync([]Registration{{PublicPort: port, BindAll: true}})
 
-	e := m.Entry("metro")
+	e := m.Entry(port)
 	if !e.BindAll {
 		t.Error("BindAll not applied")
 	}
 	if got, want := e.Upstream(), fmt.Sprintf("localhost:%d", upstream); got != want {
 		t.Errorf("upstream = %q, want %q — flipping the switch dropped a live upstream", got, want)
 	}
+	if tID, svc := e.UpstreamTarget(); tID != "trk" || svc != "svc" {
+		t.Errorf("upstream target = %q/%q after rebuild, want trk/svc", tID, svc)
+	}
 }
 
-// A config reload racing `tracks up` must not bind a port on an entry
-// that is no longer registered — nothing could ever release it. Run under
-// -race; the leak shows up as a port still held after Stop.
+// A reconcile racing a Switch must not bind a port on an entry that is no
+// longer registered — nothing could ever release it. Run under -race; the
+// leak shows up as a port still held after Stop.
 func TestSyncRacingSwitchDoesNotLeakAListener(t *testing.T) {
 	ports := make([]int, 8)
 	for i := range ports {
 		ports[i] = freePort(t)
 	}
 	m := NewManager()
-	m.Register(Registration{ServiceName: "metro", PublicPort: ports[0]})
+	m.Register(Registration{PublicPort: ports[0]})
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -323,13 +324,13 @@ func TestSyncRacingSwitchDoesNotLeakAListener(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for _, up := range upstreams {
-			_ = m.Switch("metro", up)
+			_ = m.Switch(ports[0], up, "trk", "svc")
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := range 40 {
-			m.Sync([]Registration{{ServiceName: "metro", PublicPort: ports[i%len(ports)]}})
+			m.Sync([]Registration{{PublicPort: ports[i%len(ports)]}})
 		}
 	}()
 	wg.Wait()
