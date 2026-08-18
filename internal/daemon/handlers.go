@@ -600,6 +600,14 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 		s.persist(t, "stopped dev servers")
 	}
 
+	// Free any stable ports pointing at this track and forget the intent:
+	// the worktree is about to be removed, so re-applying it would only ever
+	// dangle. Without this the listener stays bound forwarding to a dead
+	// port (502) and status keeps advertising the gone track until the next
+	// daemon restart. Mirrors handleServiceDown, but drops the persisted
+	// upstream too since the target is going away for good.
+	s.releaseTrackProxies(t.ID)
+
 	// Close the track's tmux window. When a supervisor was alive the
 	// Stop/Kill above already did this, but a track that finished on
 	// its own keeps its pane alive as a shell with no supervisor left

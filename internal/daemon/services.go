@@ -164,7 +164,7 @@ func (s *Server) watchServiceReady(sup *supervisor, trackID string, svc config.S
 		return // stopped, replaced, or gone while we waited — nothing to announce
 	}
 	s.notifyEvent(string(notify.EventServiceReady), "tracks: dev server ready",
-		svc.Name+" — "+s.serviceURLs(svc.Name, ports[svc.Name]))
+		svc.Name+" — "+s.serviceURLs(trackID, svc.Name, ports[svc.Name]))
 }
 
 // probeTimeout is how long a readiness probe may take before the service
@@ -232,14 +232,11 @@ func (s *Server) markService(trackID, name string, pgid int, status state.Servic
 }
 
 // serviceURLs renders the address(es) a ready service is reachable at:
-// the track's own port, plus the stable proxy port when one is bound.
-func (s *Server) serviceURLs(name string, port int) string {
-	s.mu.Lock()
-	mgr := s.proxyMgr
-	s.mu.Unlock()
-	if mgr != nil {
-		if e := mgr.Entry(name); e != nil && e.Upstream() != "" {
-			return fmt.Sprintf("stable: http://localhost:%d  track: http://localhost:%d", e.PublicPort, port)
+// the track's own port, plus the stable proxy port when one forwards to it.
+func (s *Server) serviceURLs(trackID, name string, port int) string {
+	if mgr := s.proxyManager(); mgr != nil {
+		if publicPort, ok := mgr.ActivePortFor(trackID, name); ok {
+			return fmt.Sprintf("stable: http://localhost:%d  track: http://localhost:%d", publicPort, port)
 		}
 	}
 	return fmt.Sprintf("http://localhost:%d", port)

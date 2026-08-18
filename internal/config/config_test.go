@@ -138,10 +138,6 @@ func TestValidateRejectsBadServices(t *testing.T) {
 		"unknown dep":      {{Name: "a", Cmd: "x", DependsOn: []string{"ghost"}}},
 		"self dep":         {{Name: "a", Cmd: "x", DependsOn: []string{"a"}}},
 		"dependency cycle": {{Name: "a", Cmd: "x", DependsOn: []string{"b"}}, {Name: "b", Cmd: "y", DependsOn: []string{"a"}}},
-		// A setting about network exposure must not fail silently: without
-		// proxy_port there is nothing to expose, so it reads as "expose
-		// this" while doing nothing.
-		"bind_all without proxy_port": {{Name: "a", Cmd: "x", ProxyBindAll: true}},
 	}
 	for name, svcs := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -313,5 +309,69 @@ func TestRepoByName(t *testing.T) {
 	}
 	if _, ok := c.RepoByName("b"); ok {
 		t.Error("unexpectedly found")
+	}
+}
+
+// A config carrying the removed proxy_port field still loads (unknown keys
+// are ignored) and validates — the field is gone but old files don't break.
+func TestConfigWithLegacyProxyPortStillLoads(t *testing.T) {
+	dir := withXDGConfig(t)
+	writeConfigYAML(t, dir, ""+
+		"repos:\n"+
+		"  - name: buy-sell\n"+
+		"    path: /tmp/bs\n"+
+		"    base: main\n"+
+		"    services:\n"+
+		"      - name: dev\n"+
+		"        cmd: pnpm dev\n"+
+		"        proxy_port: 3000\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("config with legacy proxy_port must still load: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+}
+
+// LegacyProxyPorts recovers proxy_port declarations from an older config so
+// the daemon can seed them into state once.
+func TestLegacyProxyPorts(t *testing.T) {
+	dir := withXDGConfig(t)
+	writeConfigYAML(t, dir, ""+
+		"repos:\n"+
+		"  - name: buy-sell\n"+
+		"    path: /tmp/bs\n"+
+		"    base: main\n"+
+		"    services:\n"+
+		"      - name: dev\n"+
+		"        cmd: pnpm dev\n"+
+		"        proxy_port: 3000\n"+
+		"      - name: metro\n"+
+		"        cmd: pnpm start\n"+
+		"        proxy_port: 8081\n"+
+		"        proxy_bind_all: true\n"+
+		"      - name: worker\n"+
+		"        cmd: pnpm work\n")
+	got := LegacyProxyPorts()
+	if len(got) != 2 {
+		t.Fatalf("got %d legacy ports, want 2: %+v", len(got), got)
+	}
+	if got[0].Port != 3000 || got[0].Service != "dev" || got[0].BindAll {
+		t.Errorf("entry[0] = %+v, want dev :3000 loopback", got[0])
+	}
+	if got[1].Port != 8081 || !got[1].BindAll {
+		t.Errorf("entry[1] = %+v, want metro :8081 bind-all", got[1])
+	}
+}
+
+func writeConfigYAML(t *testing.T, xdgDir, body string) {
+	t.Helper()
+	dir := filepath.Join(xdgDir, "tracks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

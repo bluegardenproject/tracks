@@ -1,16 +1,22 @@
 // Package proxy implements the stable-port reverse proxy for dev-server
-// services. One proxy listener per service with a proxy_port configured;
-// the upstream (a per-track service port) can be switched atomically
-// without restarting the listener.
+// services. One proxy listener per user-defined public port; the upstream
+// (a running track service, of any name on any track) can be switched
+// atomically without restarting the listener.
 //
-// Listeners are bound lazily: a proxy port is only claimed while a track
-// is actively routing through it (from Switch until Clear). An idle
-// daemon holds no proxy ports, so a proxy_port that shadows a well-known
+// Listeners are bound lazily: a public port is only claimed while it is
+// actively routing to an upstream (from Switch until Clear). An idle
+// daemon holds no proxy ports, so a public port that shadows a well-known
 // default (e.g. Metro's 8081) stays free for a manual dev server whenever
 // no track is using it.
 //
 // The proxy handles both plain HTTP and WebSocket upgrade requests, so
 // HMR (hot-module replacement) works through it without extra wiring.
+//
+// Ports are user-defined runtime state (persisted in state.json), not a
+// per-service config field. The manager is the live view of that state:
+// it knows which ports exist and, for each, the upstream it currently
+// forwards to. The trackID/service that upstream belongs to are carried
+// as labels so status can name the target without a reverse lookup.
 package proxy
 
 import (
@@ -26,22 +32,23 @@ import (
 )
 
 // Entry is one managed proxy: a fixed public port forwarding to an
-// optional upstream. All fields except ServiceName, PublicPort and
-// BindAll are guarded by mu.
+// optional upstream. All fields except PublicPort and BindAll are guarded
+// by mu.
 type Entry struct {
-	ServiceName string
-	PublicPort  int
+	PublicPort int
 
 	// BindAll listens on every interface instead of loopback. Off by
 	// default: the proxy fronts a dev server running against the user's
 	// own checkout, and binding 0.0.0.0 hands it to anyone on the
 	// network — a coffee-shop Wi-Fi away from a stranger's browser.
-	// Services that must be reachable from a physical device (a phone
-	// loading a Metro bundle) opt in via `proxy_bind_all: true`.
+	// Ports that must be reachable from a physical device (a phone
+	// loading a Metro bundle) opt in via BindAll.
 	BindAll bool
 
 	mu       sync.RWMutex
 	upstream string                 // "host:port" or "" for inactive
+	trackID  string                 // owning track of the upstream; "" when inactive
+	service  string                 // service name on that track; "" when inactive
 	rp       *httputil.ReverseProxy // cached proxy for the current upstream; nil when inactive
 	server   *http.Server           // nil when the listener is not bound
 	ln       net.Listener           // nil when the listener is not bound
@@ -62,14 +69,27 @@ func (e *Entry) Upstream() string {
 	return e.upstream
 }
 
-// SetUpstream replaces the active upstream atomically and rebuilds the cached
-// reverse proxy. An empty string disables forwarding (new requests get 503
-// until a new upstream is set).
-func (e *Entry) SetUpstream(upstream string) {
+// UpstreamTarget returns the trackID and service the active upstream
+// belongs to, or two empty strings when the entry is inactive.
+func (e *Entry) UpstreamTarget() (trackID, service string) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.trackID, e.service
+}
+
+// setUpstream replaces the active upstream atomically and rebuilds the cached
+// reverse proxy. An empty upstream disables forwarding (new requests get 503
+// until a new upstream is set); trackID/service are the labels for that
+// upstream and are cleared alongside it.
+func (e *Entry) setUpstream(upstream, trackID, service string) {
 	e.mu.Lock()
 	e.upstream = upstream
+	e.trackID = trackID
+	e.service = service
 	if upstream == "" {
 		e.rp = nil
+		e.trackID = ""
+		e.service = ""
 	} else {
 		target := &url.URL{Scheme: "http", Host: upstream}
 		rp := httputil.NewSingleHostReverseProxy(target)
@@ -107,11 +127,11 @@ func (e *Entry) ensureBound() error {
 		// while still releasing abandoned connections.
 		IdleTimeout: 60 * time.Second,
 	}
-	go func(srv *http.Server, l net.Listener, name string) {
+	go func(srv *http.Server, l net.Listener, port int) {
 		if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {
-			dlog.Printf("proxy %s: %v", name, err)
+			dlog.Printf("proxy :%d: %v", port, err)
 		}
-	}(e.server, ln, e.ServiceName)
+	}(e.server, ln, e.PublicPort)
 	return nil
 }
 
@@ -141,7 +161,7 @@ func (e *Entry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.mu.RUnlock()
 
 	if rp == nil || upstream == "" {
-		http.Error(w, "no active upstream — run `tracks proxy switch` to activate one", http.StatusServiceUnavailable)
+		http.Error(w, "no active upstream — link this port to a running dev server", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -150,58 +170,66 @@ func (e *Entry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rp.ServeHTTP(w, r)
 }
 
-// Manager supervises multiple proxy entries (one per service with a proxy_port).
-// It is safe to use from multiple goroutines.
+// Manager supervises multiple proxy entries, one per user-defined public
+// port. It is safe to use from multiple goroutines.
 type Manager struct {
 	mu      sync.Mutex
-	entries map[string]*Entry // service name -> entry
+	entries map[int]*Entry // public port -> entry
 }
 
 // NewManager creates a Manager with no registered entries.
 func NewManager() *Manager {
 	return &Manager{
-		entries: make(map[string]*Entry),
+		entries: make(map[int]*Entry),
 	}
 }
 
-// Registration is one service's stable-port declaration, as it appears
-// in the user's config.
+// Registration is one public-port declaration, as persisted in state.
 type Registration struct {
-	ServiceName string
-	PublicPort  int
-	BindAll     bool
+	PublicPort int
+	BindAll    bool
 }
 
-// Register declares a proxy entry for the named service. Registration
-// does not bind the port — that happens lazily on the first Switch.
-// Idempotent: a second call for the same serviceName is silently ignored
-// (the first registration wins).
+// Register declares a proxy entry for a public port. Registration does not
+// bind the port — that happens lazily on the first Switch. Idempotent: a
+// second call for the same port is silently ignored (the first wins).
 func (m *Manager) Register(r Registration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.entries[r.ServiceName]; !ok {
-		m.entries[r.ServiceName] = &Entry{
-			ServiceName: r.ServiceName,
-			PublicPort:  r.PublicPort,
-			BindAll:     r.BindAll,
+	if _, ok := m.entries[r.PublicPort]; !ok {
+		m.entries[r.PublicPort] = &Entry{
+			PublicPort: r.PublicPort,
+			BindAll:    r.BindAll,
 		}
 	}
 }
 
-// Sync reconciles the registered entries against the set the config now
-// declares: new services are registered, ones whose port or bind changed
-// are rebuilt, and ones that disappeared release their port.
-//
-// Without this the registrations were a startup-only snapshot, so a
-// service added through Settings — which the daemon otherwise picks up on
-// its next config reload — had no proxy until the daemon was restarted.
+// Remove clears any upstream, releases the port, and drops the entry.
+// No-op if the port has no registered proxy.
+func (m *Manager) Remove(port int) {
+	m.mu.Lock()
+	e, ok := m.entries[port]
+	if ok {
+		delete(m.entries, port)
+	}
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+	e.setUpstream("", "", "")
+	e.release()
+}
+
+// Sync reconciles the registered entries against the set state now
+// declares: new ports are registered, ones whose bind changed are rebuilt,
+// and ones that disappeared release their port.
 //
 // An entry that survives unchanged keeps its live listener and upstream,
-// so reloading the config never interrupts a track that is serving.
+// so a reconciliation never interrupts a port that is serving.
 func (m *Manager) Sync(regs []Registration) {
 	// replacement pairs a rebuilt entry with the one it supersedes, so the
-	// old listener can be released before the new one binds (they may want
-	// the same port) and a live upstream can be carried across.
+	// old listener can be released before the new one binds (they share a
+	// port) and a live upstream can be carried across.
 	type replacement struct{ old, new *Entry }
 
 	// The lock is held for the whole body, releases and binds included.
@@ -209,7 +237,7 @@ func (m *Manager) Sync(regs []Registration) {
 	// between: Switch would bind the new entry and set the upstream for the
 	// track the user just started, and the replacement loop below would then
 	// overwrite it with the *old* upstream — the stable port quietly serving
-	// the previous track's server after a `tracks up` that reported success.
+	// the previous track's server after a change that reported success.
 	// Safe because no Entry method reaches back for m.mu, so the order is
 	// always m.mu → e.mu and never the reverse; neither net.Listen nor
 	// Server.Close blocks on a request handler.
@@ -219,49 +247,49 @@ func (m *Manager) Sync(regs []Registration) {
 		stale        []*Entry
 		replacements []replacement
 	)
-	want := make(map[string]bool, len(regs))
+	want := make(map[int]bool, len(regs))
 	for _, r := range regs {
-		want[r.ServiceName] = true
-		cur, ok := m.entries[r.ServiceName]
-		if ok && cur.PublicPort == r.PublicPort && cur.BindAll == r.BindAll {
+		want[r.PublicPort] = true
+		cur, ok := m.entries[r.PublicPort]
+		if ok && cur.BindAll == r.BindAll {
 			continue
 		}
 		next := &Entry{
-			ServiceName: r.ServiceName,
-			PublicPort:  r.PublicPort,
-			BindAll:     r.BindAll,
+			PublicPort: r.PublicPort,
+			BindAll:    r.BindAll,
 		}
-		m.entries[r.ServiceName] = next
+		m.entries[r.PublicPort] = next
 		if ok {
 			replacements = append(replacements, replacement{old: cur, new: next})
 		}
 	}
-	for name, e := range m.entries {
-		if !want[name] {
+	for port, e := range m.entries {
+		if !want[port] {
 			stale = append(stale, e)
-			delete(m.entries, name)
+			delete(m.entries, port)
 		}
 	}
 	for _, e := range stale {
-		e.SetUpstream("")
+		e.setUpstream("", "", "")
 		e.release()
 	}
-	// A service whose port or bind changed while it was serving keeps
-	// serving. Dropping the upstream here would leave a track that is up
-	// and running behind a dead stable port, with nothing said about it —
-	// the user's only clue would be a 503 the next time they hit it.
+	// A port whose bind changed while it was serving keeps serving. Dropping
+	// the upstream here would leave a track that is up and running behind a
+	// dead stable port, with nothing said about it — the user's only clue
+	// would be a 503 the next time they hit it.
 	for _, r := range replacements {
 		upstream := r.old.Upstream()
-		r.old.SetUpstream("")
+		trackID, service := r.old.UpstreamTarget()
+		r.old.setUpstream("", "", "")
 		r.old.release()
 		if upstream == "" {
 			continue
 		}
-		r.new.SetUpstream(upstream)
+		r.new.setUpstream(upstream, trackID, service)
 		if err := r.new.ensureBound(); err != nil {
-			dlog.Printf("proxy %s: config moved it to :%d but that port will not bind (%v) — upstream %s is unreachable through the proxy until the next `tracks up`",
-				r.new.ServiceName, r.new.PublicPort, err, upstream)
-			r.new.SetUpstream("")
+			dlog.Printf("proxy :%d: bind after a bind-mode change failed (%v) — upstream %s is unreachable through the proxy until it is re-linked",
+				r.new.PublicPort, err, upstream)
+			r.new.setUpstream("", "", "")
 		}
 	}
 }
@@ -280,44 +308,43 @@ func (m *Manager) Stop() {
 	}
 }
 
-// Switch binds the service's public port if it isn't already, then points
-// the active upstream at "localhost:<port>" (the track's allocated service
-// port). Returns an error if the service has no registered proxy or the
-// port cannot be bound.
+// Switch binds the public port if it isn't already, then points the active
+// upstream at "localhost:<upstreamPort>" (the track's allocated service
+// port), labelling it with the owning trackID/service. Returns an error if
+// the port has no registered proxy or cannot be bound.
+//
 // The manager lock is held for the whole call, not just the map lookup.
 // Releasing it before ensureBound let a concurrent Sync swap the entry out
 // from under us, after which we bound the *old* entry's port — an entry no
 // longer in m.entries, so neither Clear nor Stop could ever release it, and
-// the replacement never got its upstream. maybeReloadConfig runs at the top
-// of every dispatch and each connection is its own goroutine, so two
-// clients are enough to hit it. ensureBound only does a net.Listen, so the
-// lock is held briefly; Sync never takes an entry lock while holding m.mu,
-// so there is no cycle.
-func (m *Manager) Switch(serviceName string, port int) error {
+// the replacement never got its upstream. ensureBound only does a
+// net.Listen, so the lock is held briefly; Sync never takes an entry lock
+// while holding m.mu, so there is no cycle.
+func (m *Manager) Switch(port, upstreamPort int, trackID, service string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	e, ok := m.entries[serviceName]
+	e, ok := m.entries[port]
 	if !ok {
-		return fmt.Errorf("no proxy registered for service %q", serviceName)
+		return fmt.Errorf("no proxy registered for port %d", port)
 	}
 	if err := e.ensureBound(); err != nil {
-		return fmt.Errorf("proxy %s: bind :%d: %w", serviceName, e.PublicPort, err)
+		return fmt.Errorf("proxy :%d: bind: %w", port, err)
 	}
-	e.SetUpstream(fmt.Sprintf("localhost:%d", port))
+	e.setUpstream(fmt.Sprintf("localhost:%d", upstreamPort), trackID, service)
 	return nil
 }
 
-// Clear removes the active upstream for the named service and releases its
-// public port so an idle daemon holds no proxy ports. No-op if the service
-// has no registered proxy.
-func (m *Manager) Clear(serviceName string) {
+// Clear removes the active upstream for a port and releases it so an idle
+// daemon holds no proxy ports. The entry stays registered. No-op if the
+// port has no registered proxy.
+func (m *Manager) Clear(port int) {
 	m.mu.Lock()
-	e, ok := m.entries[serviceName]
+	e, ok := m.entries[port]
 	m.mu.Unlock()
 	if !ok {
 		return
 	}
-	e.SetUpstream("")
+	e.setUpstream("", "", "")
 	e.release()
 }
 
@@ -327,10 +354,13 @@ func (m *Manager) Status() []EntryStatus {
 	defer m.mu.Unlock()
 	out := make([]EntryStatus, 0, len(m.entries))
 	for _, e := range m.entries {
+		trackID, service := e.UpstreamTarget()
 		out = append(out, EntryStatus{
-			ServiceName: e.ServiceName,
-			PublicPort:  e.PublicPort,
-			Upstream:    e.Upstream(),
+			PublicPort:      e.PublicPort,
+			BindAll:         e.BindAll,
+			Upstream:        e.Upstream(),
+			UpstreamTrackID: trackID,
+			UpstreamService: service,
 		})
 	}
 	return out
@@ -339,16 +369,32 @@ func (m *Manager) Status() []EntryStatus {
 // EntryStatus is a point-in-time snapshot of one proxy entry, returned
 // by Status and used in the protocol result.
 type EntryStatus struct {
-	ServiceName string `json:"service_name"`
-	PublicPort  int    `json:"public_port"`
+	PublicPort int  `json:"public_port"`
+	BindAll    bool `json:"bind_all"`
 	// Upstream is "host:port" of the active upstream, or "" for inactive.
-	Upstream string `json:"upstream"`
+	Upstream        string `json:"upstream"`
+	UpstreamTrackID string `json:"upstream_track_id"`
+	UpstreamService string `json:"upstream_service"`
 }
 
-// Entry returns the proxy entry for a service, or nil if not registered.
-// Callers use this to check if a service has a configured proxy_port.
-func (m *Manager) Entry(serviceName string) *Entry {
+// Entry returns the proxy entry for a port, or nil if not registered.
+func (m *Manager) Entry(port int) *Entry {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.entries[serviceName]
+	return m.entries[port]
+}
+
+// ActivePortFor returns the public port currently forwarding to the given
+// track/service, if any. Used to render the stable URL of a running
+// service without a reverse lookup on the caller's side.
+func (m *Manager) ActivePortFor(trackID, service string) (int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for port, e := range m.entries {
+		tID, svc := e.UpstreamTarget()
+		if tID == trackID && svc == service && e.Upstream() != "" {
+			return port, true
+		}
+	}
+	return 0, false
 }

@@ -345,45 +345,42 @@ func TestHandleServiceDownRejectsAnAlreadyStoppedService(t *testing.T) {
 	}
 }
 
-// syncProxies is the config → proxy.Registration translation; nothing
-// else checks that proxy_bind_all actually reaches the proxy entry.
-func TestSyncProxiesTranslatesConfig(t *testing.T) {
+// syncProxies materialises the ports defined in state onto the proxy
+// manager, carrying BindAll, and drops registrations for ports removed from
+// state.
+func TestSyncProxiesFromState(t *testing.T) {
 	srv := newReadinessTestServer(t)
 	mgr := proxy.NewManager()
 	srv.mu.Lock()
 	srv.proxyMgr = mgr
 	srv.mu.Unlock()
 
-	cfg := config.Default()
-	cfg.Repos = []config.Repo{{
-		Name: "app", Path: "/tmp/app", Base: "main",
-		Services: []config.Service{
-			{Name: "metro", Cmd: "x", ProxyPort: 8081, ProxyBindAll: true},
-			{Name: "api", Cmd: "x", ProxyPort: 9000},
-			{Name: "worker", Cmd: "x"}, // no proxy_port — no registration
-		},
-	}}
-	srv.syncProxies(cfg)
+	if err := srv.store.PutProxy(state.ProxyBinding{PublicPort: 8081, BindAll: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.store.PutProxy(state.ProxyBinding{PublicPort: 9000}); err != nil {
+		t.Fatal(err)
+	}
+	srv.syncProxies()
 
-	metro := mgr.Entry("metro")
+	metro := mgr.Entry(8081)
 	if metro == nil {
-		t.Fatal("metro not registered")
+		t.Fatal(":8081 not registered")
 	}
 	if metro.PublicPort != 8081 || !metro.BindAll {
-		t.Errorf("metro = {port %d, bindAll %v}, want {8081, true}", metro.PublicPort, metro.BindAll)
+		t.Errorf("8081 = {port %d, bindAll %v}, want {8081, true}", metro.PublicPort, metro.BindAll)
 	}
-	if api := mgr.Entry("api"); api == nil || api.BindAll {
-		t.Errorf("api = %+v, want registered on loopback", api)
-	}
-	if mgr.Entry("worker") != nil {
-		t.Error("a service without proxy_port must not get a proxy")
+	if api := mgr.Entry(9000); api == nil || api.BindAll {
+		t.Errorf(":9000 = %+v, want registered on loopback", api)
 	}
 
-	// A service dropped from the config loses its registration.
-	cfg.Repos[0].Services = cfg.Repos[0].Services[:1]
-	srv.syncProxies(cfg)
-	if mgr.Entry("api") != nil {
-		t.Error("api still registered after it left the config")
+	// A port dropped from state loses its registration.
+	if _, err := srv.store.DeleteProxy(9000); err != nil {
+		t.Fatal(err)
+	}
+	srv.syncProxies()
+	if mgr.Entry(9000) != nil {
+		t.Error(":9000 still registered after it left state")
 	}
 }
 

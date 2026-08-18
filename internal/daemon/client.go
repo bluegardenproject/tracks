@@ -280,16 +280,28 @@ func (c *Client) Services(trackID string) (ServicesResult, error) {
 	return r, c.callMethod(MethodServices, ServicesParams{TrackID: trackID}, &r)
 }
 
-// ProxySwitch sets the active upstream for a service's stable-port proxy to
-// the given track's service port. Pass trackID="" or "off" to clear.
-func (c *Client) ProxySwitch(serviceName, trackID string) error {
+// ProxyAdd defines a new stable port. It does not bind until linked.
+func (c *Client) ProxyAdd(port int, bindAll bool) error {
+	return c.callMethod(MethodProxyAdd, ProxyAddParams{PublicPort: port, BindAll: bindAll}, nil)
+}
+
+// ProxyRemove deletes a stable port, clearing its upstream and releasing it.
+func (c *Client) ProxyRemove(port int) error {
+	return c.callMethod(MethodProxyRemove, ProxyRemoveParams{PublicPort: port}, nil)
+}
+
+// ProxySwitch points a stable port at the given track's service as its
+// upstream. Pass trackID="" or "off" to clear. service may be "" when the
+// track has exactly one running service.
+func (c *Client) ProxySwitch(port int, trackID, service string) error {
 	return c.callMethod(MethodProxySwitch, ProxySwitchParams{
-		ServiceName: serviceName,
-		TrackID:     trackID,
+		PublicPort: port,
+		TrackID:    trackID,
+		Service:    service,
 	}, nil)
 }
 
-// ProxyStatus returns a snapshot of all registered stable-port proxies.
+// ProxyStatus returns a snapshot of all defined stable-port proxies.
 func (c *Client) ProxyStatus() (ProxyStatusResult, error) {
 	var r ProxyStatusResult
 	return r, c.callMethod(MethodProxyStatus, nil, &r)

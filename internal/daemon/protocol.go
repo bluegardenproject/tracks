@@ -76,11 +76,19 @@ const (
 	// ports for a track.
 	MethodServices Method = "services"
 
-	// MethodProxySwitch sets the active upstream for a service's stable-port
-	// proxy to a specific track's service, or clears it.
+	// MethodProxyAdd defines a new stable port (persisted in state). It does
+	// not bind until a Switch points it at an upstream.
+	MethodProxyAdd Method = "proxy_add"
+
+	// MethodProxyRemove deletes a stable port: clears its upstream, releases
+	// the port, and drops it from state.
+	MethodProxyRemove Method = "proxy_remove"
+
+	// MethodProxySwitch points a stable port at a specific track's service
+	// as its upstream, or clears it (503).
 	MethodProxySwitch Method = "proxy_switch"
 
-	// MethodProxyStatus returns the current state of all registered proxies.
+	// MethodProxyStatus returns the current state of all defined proxies.
 	MethodProxyStatus Method = "proxy_status"
 
 	// MethodResume re-opens a finished (done / errored / interrupted)
@@ -287,12 +295,25 @@ type ServicesResult struct {
 	Ports    map[string]int       `json:"ports"`
 }
 
-// ProxySwitchParams is the payload for MethodProxySwitch.
-// Set TrackID to activate that track's service as the upstream; leave it
-// empty (or set it to "off") to clear the proxy (returns 503).
+// ProxyAddParams is the payload for MethodProxyAdd.
+type ProxyAddParams struct {
+	PublicPort int  `json:"public_port"`
+	BindAll    bool `json:"bind_all,omitempty"`
+}
+
+// ProxyRemoveParams is the payload for MethodProxyRemove.
+type ProxyRemoveParams struct {
+	PublicPort int `json:"public_port"`
+}
+
+// ProxySwitchParams is the payload for MethodProxySwitch. Set TrackID (and
+// optionally Service) to point the port at that track's running service;
+// leave TrackID empty (or "off") to clear the port (returns 503). Service
+// may be omitted when the track has exactly one running service.
 type ProxySwitchParams struct {
-	ServiceName string `json:"service_name"`
-	TrackID     string `json:"track_id"` // "" or "off" to clear
+	PublicPort int    `json:"public_port"`
+	TrackID    string `json:"track_id"` // "" or "off" to clear
+	Service    string `json:"service,omitempty"`
 }
 
 // ProxyStatusResult is returned by MethodProxyStatus.
@@ -348,13 +369,14 @@ type LaunchParams struct {
 	ID string `json:"id"`
 }
 
-// ProxyEntryStatus describes one proxy entry.
+// ProxyEntryStatus describes one proxy entry (a defined stable port).
 type ProxyEntryStatus struct {
-	ServiceName string `json:"service_name"`
-	PublicPort  int    `json:"public_port"`
+	PublicPort int  `json:"public_port"`
+	BindAll    bool `json:"bind_all,omitempty"`
 	// Upstream is "host:port" when active, "" when inactive (503).
 	Upstream string `json:"upstream"`
-	// ActiveTrackID is the track whose service port is the current upstream,
-	// derived by reverse-lookup against live track service ports.
+	// ActiveTrackID / ActiveService name the running dev server this port
+	// forwards to. Empty when the port is free.
 	ActiveTrackID string `json:"active_track_id,omitempty"`
+	ActiveService string `json:"active_service,omitempty"`
 }
