@@ -408,6 +408,38 @@ still genuinely open.
       service name across repos; it will also rebuild the entry on every config
       reload if that ever happens.
 
+### Port-centric proxy (from the 2026-08-18 review of `c5a8fdb`)
+
+Reviewed after the rework landed; none is urgent, all are open. The
+migration, the startup ordering (reconcile → seed → sync → re-apply), the
+loopback default and the manager's lock discipline were all checked and
+are sound — these are the gaps.
+
+- [ ] **`tracks proxy add` on a port that already exists silently breaks a
+      live forwarding.** `handleProxyAdd` calls `PutProxy` with a freshly
+      built binding, which overwrites the stored one and wipes
+      `UpstreamTrackID`/`UpstreamService`; `Manager.Register` is first-wins,
+      so the live listener keeps forwarding. `tracks proxy status` reads the
+      manager and still shows it active while state says free, the
+      forwarding vanishes at the next daemon restart, and re-adding with
+      `bind_all` flipped silently does nothing. Reject a duplicate port, or
+      make add an explicit update that goes through the manager.
+- [ ] **Port range is validated in the clients, not at the daemon.**
+      `internal/tui/proxymgr` and `cmd/services.go` each check 1–65535;
+      `handleProxyAdd` only checks `<= 0`, so any other client — or a stale
+      CLI — can persist `:99999` into `state.json`, where it can never bind.
+      Same class as the protocol error-codes item above: validation belongs
+      at the API boundary.
+- [ ] **`internal/tui/proxymgr` is 471 lines at 0% coverage.** It is the
+      primary UI for the feature and holds real logic — `flattenServers`,
+      `parsePort`, cursor clamping, `currentUpstreamRow` — all pure and
+      testable without a TTY.
+- [ ] **A service that fails its readiness probe leaves its stable port
+      pointing at a dead server.** `tracks down` and track teardown both
+      clear proxies correctly; `failService` doesn't, so the port 502s until
+      someone re-switches. Possibly deliberate — the server may still be
+      coming up — but worth an explicit decision.
+
 ### Upstream (stac-man, not tracks)
 
 Both reproduced across five restack cycles during this work, and both hit
