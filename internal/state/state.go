@@ -424,24 +424,36 @@ type Track struct {
 	// turn lands.
 	Usage Usage `json:"usage,omitempty"`
 
-	// Model is the model id of the track's most recent main-chain
-	// assistant turn, read from the same transcript as Usage. It follows
-	// a `/model` switch inside the pane without tracks being told, and
-	// deliberately ignores sub-agent turns. Empty until the first turn.
+	// ObservedModel is the model id of the track's most recent
+	// main-chain assistant turn, read from the same transcript as Usage.
+	// It is what actually ran — it follows a `/model` switch inside the
+	// pane without tracks being told, and so is the model to price and
+	// display. Deliberately ignores sub-agent turns. Empty until the
+	// first turn.
 	//
-	// Added without a schema bump, unlike the fields above: Model is
+	// "Observed" distinguishes it from a model the user *asked* for at
+	// creation; the two can disagree, and when they do this one is the
+	// truth.
+	//
+	// Added without a schema bump, unlike the fields above: it is
 	// *derived*, not authoritative. An older binary drops the key on its
 	// next write and a newer one re-derives it from the transcript on the
 	// next refresh, so a downgrade round-trip is self-healing and there is
 	// nothing for a migration to preserve.
-	Model string `json:"model,omitempty"`
+	//
+	// The rename from "model" is nonetheless handled in UnmarshalJSON
+	// rather than left to re-derivation: a track that already finished
+	// never refreshes again, so it would have kept an empty cell for
+	// good.
+	ObservedModel string `json:"observed_model,omitempty"`
 
-	// SubagentModel is the model of the track's most recent sub-agent
-	// turn, read from the same transcript. Kept apart from Model because
-	// the pair is the point: a track can run Opus itself while its
-	// reviewer subagent runs Haiku. Derived and schema-exempt for the same
-	// reason as Model. Empty until a sub-agent takes a turn.
-	SubagentModel string `json:"subagent_model,omitempty"`
+	// ObservedSubagentModel is the model of the track's most recent
+	// sub-agent turn, read from the same transcript. Kept apart from
+	// ObservedModel because the pair is the point: a track can run Opus
+	// itself while its reviewer subagent runs Haiku. Derived and
+	// schema-exempt for the same reason. Empty until a sub-agent takes a
+	// turn.
+	ObservedSubagentModel string `json:"observed_subagent_model,omitempty"`
 
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
@@ -1021,6 +1033,10 @@ func migrateTrack(t *Track) {
 //   - pre-v3: the single-PR fields (pr_url, pr_state, …) become PRs[0].
 //   - pre-v5: the flat review/doc fields (candor, doc_path,
 //     doc_skip_claim_check, doc_skip_opinion) become Review and Doc.
+//   - the renamed observed-model keys (model, subagent_model) become
+//     ObservedModel and ObservedSubagentModel. No schema bump went with
+//     that rename — the fields are derived, so the only thing at stake
+//     is a finished track's display, which this fold preserves.
 //
 // Done here rather than in migrateTrack because none of those fields
 // exists on Track any more — decode time is the only place they are
@@ -1041,6 +1057,9 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 		LegacyDocPath        string `json:"doc_path"`
 		LegacyDocSkipClaim   bool   `json:"doc_skip_claim_check"`
 		LegacyDocSkipOpinion bool   `json:"doc_skip_opinion"`
+
+		LegacyModel         string `json:"model"`
+		LegacySubagentModel string `json:"subagent_model"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -1067,6 +1086,17 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 			SkipClaimCheck: aux.LegacyDocSkipClaim,
 			SkipOpinion:    aux.LegacyDocSkipOpinion,
 		}
+	}
+	// The observed-model keys were renamed. Both are derived, so a live
+	// track would re-derive them on its next refresh — but a track that
+	// already reached a terminal status never refreshes again
+	// (finalizeTrack returns early on one), and would lose its model
+	// display permanently. Carry the old keys across instead.
+	if t.ObservedModel == "" {
+		t.ObservedModel = aux.LegacyModel
+	}
+	if t.ObservedSubagentModel == "" {
+		t.ObservedSubagentModel = aux.LegacySubagentModel
 	}
 	t.ensureReviewSpec()
 	return nil

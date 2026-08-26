@@ -938,3 +938,47 @@ func TestLegacyWindowNameKeepsTheOldCap(t *testing.T) {
 		t.Errorf("WindowLabel() = %q, want the wider cap for new names", got)
 	}
 }
+
+// The observed-model keys were renamed. Both fields are derived, so a
+// running track would simply re-derive them — but a track that already
+// reached a terminal status never refreshes again, so without the
+// carry-across in UnmarshalJSON its MODEL cell would go blank for good
+// the moment the user upgraded.
+func TestUnmarshalCarriesTheRenamedModelKeys(t *testing.T) {
+	const finished = `{
+		"id": "abc123",
+		"slug": "old-track",
+		"status": "done",
+		"model": "claude-opus-4-8",
+		"subagent_model": "claude-haiku-4-5"
+	}`
+	var tr Track
+	if err := json.Unmarshal([]byte(finished), &tr); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if tr.ObservedModel != "claude-opus-4-8" {
+		t.Errorf("ObservedModel = %q, want the legacy \"model\" key carried across", tr.ObservedModel)
+	}
+	if tr.ObservedSubagentModel != "claude-haiku-4-5" {
+		t.Errorf("ObservedSubagentModel = %q, want the legacy key carried across", tr.ObservedSubagentModel)
+	}
+}
+
+// A file written by the current binary must not be second-guessed by
+// the legacy key, in the one case where a downgrade-upgrade round trip
+// leaves both present and disagreeing.
+func TestUnmarshalPrefersTheCurrentModelKey(t *testing.T) {
+	const both = `{
+		"id": "abc123",
+		"slug": "t",
+		"model": "claude-opus-4-8",
+		"observed_model": "claude-opus-5"
+	}`
+	var tr Track
+	if err := json.Unmarshal([]byte(both), &tr); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if tr.ObservedModel != "claude-opus-5" {
+		t.Errorf("ObservedModel = %q, want the current key to win", tr.ObservedModel)
+	}
+}
