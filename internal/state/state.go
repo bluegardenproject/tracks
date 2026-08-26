@@ -42,6 +42,11 @@ import (
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
 // empty list; a v4 file's flat review fields are folded in at decode
 // time.
+// Two on-disk changes since v5 deliberately did NOT bump this, both
+// documented at their fields: the observed-model keys were renamed
+// (derived data, refolded on decode), and RequestedModel was added
+// (absent reads as "no preference"). A bump stops an older binary
+// starting at all, which is the heavier cost of the two.
 const CurrentSchemaVersion = 5
 
 // Kind is the type of a track. It decides whether the track owns
@@ -455,6 +460,42 @@ type Track struct {
 	// turn.
 	ObservedSubagentModel string `json:"observed_subagent_model,omitempty"`
 
+	// RequestedModel is the model explicitly picked when the track was
+	// created, passed to the CLI as --model.
+	//
+	// Empty means the user expressed no preference — NOT that no model
+	// applies. The configured default for the track's kind is resolved
+	// at spawn time instead (see claude.BuildOptions), deliberately
+	// rather than being baked in here: promote flips an ask/plan track
+	// to KindWork and re-spawns it, and a default frozen at creation
+	// would run the promoted work session on the ask model.
+	//
+	// Kept for the two paths that re-spawn rather than resume:
+	// promoting, and relaunching a draft. Both start a fresh session, so
+	// without this an explicit pick would silently revert to the
+	// default. Resume needs nothing from it — a resumed session restores
+	// its own model, and deliberately keeps a mid-session `/model`
+	// switch.
+	//
+	// Diverges from ObservedModel whenever the user switches models in
+	// the pane, and when a name the CLI doesn't recognise quietly
+	// resolves to a different model. ObservedModel is the truth; this is
+	// the intent.
+	//
+	// Added without a schema bump, unlike Review/Doc. This one is
+	// authoritative rather than derived, so an older binary drops it on
+	// write and the choice is lost. A bump is still the worse trade: a
+	// v5 binary refuses to load a store written at v6 (see
+	// FileStore.load) and so won't start at all until the file is put
+	// back — the tracks survive, but access to all of them doesn't,
+	// which beats losing one optional field on each.
+	//
+	// Note this is a different case from the v5 bump, which moved
+	// authoritative fields that could not be reconstructed if dropped.
+	// An absent RequestedModel is indistinguishable from "no preference",
+	// which is a valid state with a sensible behaviour.
+	RequestedModel string `json:"requested_model,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 
@@ -542,6 +583,10 @@ type DraftSpec struct {
 	Candor            int      `json:"candor,omitempty"`
 	DocSkipClaimCheck bool     `json:"doc_skip_claim_check,omitempty"`
 	DocSkipOpinion    bool     `json:"doc_skip_opinion,omitempty"`
+
+	// Model is the model picked at creation, so a relaunch runs the same
+	// one rather than the current default.
+	Model string `json:"model,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses —

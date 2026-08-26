@@ -375,3 +375,85 @@ func writeConfigYAML(t *testing.T, xdgDir, body string) {
 		t.Fatal(err)
 	}
 }
+
+func TestModelForPrefersThePerKindOverride(t *testing.T) {
+	c := Claude{
+		Model:       "claude-opus-5",
+		ModelByKind: map[string]string{"doc": "haiku", "review": "  "},
+	}
+	if got := c.ModelFor("doc"); got != "haiku" {
+		t.Errorf("ModelFor(doc) = %q, want the override", got)
+	}
+	if got := c.ModelFor("work"); got != "claude-opus-5" {
+		t.Errorf("ModelFor(work) = %q, want the global default", got)
+	}
+	// A blank override is not a choice — it must not shadow the default
+	// with an empty string, which would drop the flag entirely.
+	if got := c.ModelFor("review"); got != "claude-opus-5" {
+		t.Errorf("ModelFor(review) = %q, want a whitespace override ignored", got)
+	}
+}
+
+func TestModelForEmptyWhenNothingConfigured(t *testing.T) {
+	if got := (Claude{}).ModelFor("work"); got != "" {
+		t.Errorf("ModelFor = %q, want empty so no --model flag is passed", got)
+	}
+}
+
+// The built-in list is aliases only: a pinned id baked into the binary
+// goes stale, an alias does not.
+func TestDefaultChoicesAreAliasesOnly(t *testing.T) {
+	// The known family aliases. A hyphen test would be a proxy for this
+	// and would fire on a legitimate hyphenated alias.
+	aliases := map[string]bool{"opus": true, "sonnet": true, "haiku": true, "fable": true, "mythos": true}
+	for _, c := range (Claude{}).Choices() {
+		if !aliases[c.Model] {
+			t.Errorf("built-in choice %q is not a family alias; a pinned id in the binary goes stale", c.Model)
+		}
+		if c.Label == "" {
+			t.Errorf("built-in choice %q has no label", c.Model)
+		}
+	}
+}
+
+func TestChoicesUsesTheConfiguredListWhenSet(t *testing.T) {
+	c := Claude{ModelChoices: []ModelChoice{{Label: "Opus 4.8", Model: "claude-opus-4-8"}}}
+	got := c.Choices()
+	if len(got) != 1 || got[0].Model != "claude-opus-4-8" {
+		t.Errorf("Choices() = %+v, want only the configured entry", got)
+	}
+}
+
+func TestValidateRejectsAnUnknownKindKey(t *testing.T) {
+	cfg := Default()
+	cfg.Repos = []Repo{{Name: "demo", Path: "/tmp/demo", Base: "main"}}
+	cfg.Claude.ModelByKind = map[string]string{"docs": "haiku"} // "doc", not "docs"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("a mistyped kind key was accepted; it would be silently inert")
+	}
+	if !strings.Contains(err.Error(), "docs") {
+		t.Errorf("error should name the offending key, got: %v", err)
+	}
+}
+
+func TestValidateAcceptsEveryRealKind(t *testing.T) {
+	cfg := Default()
+	cfg.Repos = []Repo{{Name: "demo", Path: "/tmp/demo", Base: "main"}}
+	cfg.Claude.ModelByKind = map[string]string{}
+	for _, k := range ModelKinds() {
+		cfg.Claude.ModelByKind[k] = "haiku"
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("all real kinds should validate, got: %v", err)
+	}
+}
+
+func TestValidateRejectsAChoiceWithNoModel(t *testing.T) {
+	cfg := Default()
+	cfg.Repos = []Repo{{Name: "demo", Path: "/tmp/demo", Base: "main"}}
+	cfg.Claude.ModelChoices = []ModelChoice{{Label: "Mystery", Model: "  "}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("an empty model was accepted; the picker would show a second indistinguishable Default")
+	}
+}

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -145,7 +144,7 @@ func TestInstallGlobalHelpersWritesBothAgents(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	s := NewServer(config.Default(), state.NewMemoryStore(), "test")
+	s := NewServer(testConfig(t), state.NewMemoryStore(), "test")
 	if err := s.InstallGlobalHelpers(); err != nil {
 		t.Fatalf("InstallGlobalHelpers: %v", err)
 	}

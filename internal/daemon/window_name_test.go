@@ -16,7 +16,7 @@ func newWindowTestServer(t *testing.T) *Server {
 	t.Helper()
 	srv := newReadinessTestServer(t)
 	cfg := srv.config()
-	cfg.Tmux.SessionName = "tracks-test-" + t.Name()
+	cfg.Tmux.SessionName = testSessionName(t)
 	srv.cfg.Store(&cfg)
 	return srv
 }

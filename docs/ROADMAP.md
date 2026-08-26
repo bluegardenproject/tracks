@@ -297,6 +297,10 @@ Self-contained improvements/fixes. Add new ones here; tick + delete when done.
 
 - [ ] **`tracks doctor`** — preflight: tmux / claude / git on PATH, config
       sanity, socket health, (for mobile) Xcode + simulator availability.
+      Should also probe each configured model once and flag any where the
+      served model differs from the requested one: the CLI accepts a
+      plausible-looking typo silently (`opus4.8` runs Sonnet 4.6), so a bad
+      name in `claude.model*` cannot be caught at spawn.
 
 - [ ] **Ergonomics:** attach-by-slug + fuzzy attach (don't need the long ID);
       shell completions (zsh/bash/fish) incl. completing track slugs / repo

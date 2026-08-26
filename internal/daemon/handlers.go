@@ -244,17 +244,29 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	// that dies mid-network-drop, a port clash, or a spawn error then
 	// shows up in the dashboard, where the preserved prompt makes it easy
 	// to retry and the message makes it easy to debug.
+
+	// Only an explicit pick is stored. "No preference" stays empty on
+	// purpose, so BuildOptions resolves the default for the track's kind
+	// at spawn time rather than freezing one here.
+	//
+	// That distinction is load-bearing for promote: it flips an ask/plan
+	// track to KindWork and re-spawns, so a default resolved at creation
+	// would pin the promoted work session to the *ask* model — the exact
+	// opposite of what a per-kind default is for.
+	requestedModel := strings.TrimSpace(p.Model)
+
 	t := state.Track{
-		ID:         trackID,
-		Branch:     branch,
-		Slug:       slug,
-		Kind:       kind,
-		Status:     state.StatusPending,
-		Review:     reviewSpec,
-		Doc:        docSpec,
-		TaskPrompt: p.TaskPrompt,
-		SessionID:  sessionID,
-		CreatedAt:  time.Now().UTC(),
+		ID:             trackID,
+		Branch:         branch,
+		Slug:           slug,
+		Kind:           kind,
+		Status:         state.StatusPending,
+		Review:         reviewSpec,
+		Doc:            docSpec,
+		TaskPrompt:     p.TaskPrompt,
+		SessionID:      sessionID,
+		RequestedModel: requestedModel,
+		CreatedAt:      time.Now().UTC(),
 	}
 	// draft captures exactly what the user entered so a failed creation
 	// can be saved and relaunched without re-typing anything. Stored on
@@ -285,6 +297,9 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		Candor:            draftCandor,
 		DocSkipClaimCheck: draftSkipClaim,
 		DocSkipOpinion:    draftSkipOpinion,
+		// Resolved, like DocPath: a relaunch should rerun the model the
+		// user picked, not whatever the default has become since.
+		Model: requestedModel,
 	}
 	// failCreate persists the in-progress track as errored (with the
 	// reason and the draft spec) and returns the wire error, so the
@@ -1230,6 +1245,7 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 		Candor:            t.Draft.Candor,
 		DocSkipClaimCheck: t.Draft.DocSkipClaimCheck,
 		DocSkipOpinion:    t.Draft.DocSkipOpinion,
+		Model:             t.Draft.Model,
 	}
 	rawNew, err := json.Marshal(params)
 	if err != nil {

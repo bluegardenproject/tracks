@@ -39,10 +39,11 @@ Starts the tmux session, launches the dashboard, brings up the daemon.
 
 Inside the session, press `<prefix>+t` to open the menu:
 
-- **New track** — pick a track type, then repos → task prompt. A **Work**
-  track spawns Claude in a fresh worktree on `<type>/<auto-slug>`; the slug is
-  derived from the task prompt (a Jira-style ticket like `ABC-123` becomes the
-  prefix, followed by the first few descriptive words). **Ask** and **Plan**
+- **New track** — pick a track type, then repos → slug → model → task
+  prompt. A **Work** track spawns Claude in a fresh worktree on
+  `<type>/<auto-slug>`; the slug is derived from the task prompt (a
+  Jira-style ticket like `ABC-123` becomes the prefix, followed by the
+  first few descriptive words). **Ask** and **Plan**
   are read-only against your primary checkout and can be promoted to a
   worktree later. **Review** checks a PR or branch out detached and diffs it.
   **Doc review** points at a file on disk — a spec, one-pager, or deck

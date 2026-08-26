@@ -20,7 +20,7 @@ import (
 func makeServer(t *testing.T) (*Server, *Client, func()) {
 	t.Helper()
 	dir := t.TempDir()
-	cfg := config.Default()
+	cfg := testConfig(t)
 	cfg.Paths.SocketDir = dir
 	// Isolate StateDir too: Start() runs reconcileOnStartup ->
 	// gcOrphanedWorktrees, which rm -rf's every worktree dir under the
@@ -87,7 +87,7 @@ func TestCancelRootContextShutsDownDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	cfg := config.Default()
+	cfg := testConfig(t)
 	cfg.Paths.SocketDir = dir
 	// Isolate StateDir so Start()'s startup GC operates on this temp dir,
 	// not the user's real ~/.local/state/tracks worktrees. See makeServer.
@@ -217,7 +217,7 @@ func newServerWithConfigFile(t *testing.T, cfg config.Config) *Server {
 }
 
 func TestMaybeReloadConfigPicksUpNewRepo(t *testing.T) {
-	cfg := config.Default()
+	cfg := testConfig(t)
 	cfg.Repos = []config.Repo{{Name: "demo", Path: "/x/demo", Base: "main"}}
 	srv := newServerWithConfigFile(t, cfg)
 
@@ -269,7 +269,7 @@ func TestMaybeReloadConfigPreservesInfra(t *testing.T) {
 }
 
 func TestMaybeReloadConfigKeepsPreviousOnParseError(t *testing.T) {
-	cfg := config.Default()
+	cfg := testConfig(t)
 	cfg.Repos = []config.Repo{{Name: "demo", Path: "/x/demo", Base: "main"}}
 	srv := newServerWithConfigFile(t, cfg)
 
