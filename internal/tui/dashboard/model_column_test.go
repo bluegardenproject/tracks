@@ -94,7 +94,7 @@ func TestHighlightedRowRendersTheModel(t *testing.T) {
 
 func TestModelIsDashedBeforeTheFirstTurn(t *testing.T) {
 	m := modelWith(state.Track{ID: "t1", Status: state.StatusPending})
-	if got := stripStyles(m.renderModel(m.tracks[0])); strings.TrimSpace(got) != "—" {
+	if got := stripStyles(m.renderModel(m.tracks[0], modelMinWidth)); strings.TrimSpace(got) != "—" {
 		t.Errorf("renderModel with no model = %q, want the em-dash placeholder", got)
 	}
 }
@@ -102,7 +102,7 @@ func TestModelIsDashedBeforeTheFirstTurn(t *testing.T) {
 // knownModelIDs are the model ids actually in circulation. The MODEL
 // column exists to tell them apart, so truncating one defeats the
 // column: "sonnet-4…" is indistinguishable from sonnet-4-5. Add new ids
-// here when they appear — a failure means modelColWidth needs raising,
+// here when they appear — a failure means modelMinWidth needs raising,
 // not that the id should be shortened further.
 var knownModelIDs = []string{
 	"claude-opus-5",
@@ -117,9 +117,11 @@ var knownModelIDs = []string{
 func TestKnownModelsFitTheColumn(t *testing.T) {
 	for _, id := range knownModelIDs {
 		short := usage.ShortModel(id)
-		if len(short) > modelColWidth {
-			t.Errorf("ShortModel(%q) = %q (%d chars) exceeds modelColWidth=%d — it would render truncated",
-				id, short, len(short), modelColWidth)
+		// The minimum is what a narrow terminal gives the column, and a
+		// track's own model must be legible even there.
+		if len(short) > modelMinWidth {
+			t.Errorf("ShortModel(%q) = %q (%d chars) exceeds modelMinWidth=%d — it would render truncated",
+				id, short, len(short), modelMinWidth)
 		}
 	}
 }
@@ -129,9 +131,84 @@ func TestKnownModelsFitTheColumn(t *testing.T) {
 // column produces.
 func TestSimilarModelsStayDistinguishable(t *testing.T) {
 	m := modelWith(state.Track{ID: "t"})
-	a := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-5"}))
-	b := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-6"}))
+	a := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-5"}, modelMaxWidth))
+	b := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-6"}, modelMaxWidth))
 	if strings.TrimSpace(a) == strings.TrimSpace(b) {
 		t.Errorf("sonnet-4-5 and sonnet-4-6 both render as %q", strings.TrimSpace(a))
+	}
+}
+
+func TestTrackModelPairsMainAndSubagent(t *testing.T) {
+	cases := []struct {
+		name      string
+		main, sub string
+		width     int
+		want      string
+	}{
+		{"main only", "claude-opus-5", "", modelMaxWidth, "opus-5"},
+		{"main and subagent", "claude-opus-5", "claude-opus-4-8", modelMaxWidth, "opus-5 (opus-4-8)"},
+		// Shown even when identical: the parentheses mean "a sub-agent ran",
+		// which is information whether or not the models differ.
+		{"same model both", "claude-opus-5", "claude-opus-5", modelMaxWidth, "opus-5 (opus-5)"},
+		{"neither", "", "", modelMaxWidth, ""},
+		{"subagent before any main turn", "", "claude-haiku-4-5", modelMaxWidth, "(haiku-4-5)"},
+		// The solo parenthetical obeys the same width rule as the pair:
+		// "(sonnet-4-…" names a model that doesn't exist.
+		{"solo too wide for the column", "", "claude-sonnet-4-6", modelMinWidth, ""},
+		// Too narrow for both: drop the sub-agent's whole rather than cut it,
+		// since "opus-5 (opus-4…" reads as a model that doesn't exist.
+		{"narrow drops the parenthetical", "claude-opus-5", "claude-opus-4-8", modelMinWidth, "opus-5"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := trackModel(state.Track{Model: tc.main, SubagentModel: tc.sub}, tc.width)
+			if got != tc.want {
+				t.Errorf("trackModel = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The widest pair the column can be asked to show must fit its cap.
+//
+// Measured from the raw ids, NOT from trackModel's output: trackModel
+// drops the parenthetical when it wouldn't fit, so asking it for the
+// widest cell can only ever return something within the cap — the
+// assertion would hold no matter how narrow the column got. Adding
+// "claude-sonnet-4-10" (pair: 24 chars) must fail this test, because
+// that combination's sub-agent model would be invisible at every
+// terminal width.
+func TestWidestModelPairFitsTheCap(t *testing.T) {
+	widest, widestPair := 0, ""
+	for _, a := range knownModelIDs {
+		for _, b := range knownModelIDs {
+			// main + " (" + sub + ")"
+			n := len(usage.ShortModel(a)) + 2 + len(usage.ShortModel(b)) + 1
+			if n > widest {
+				widest, widestPair = n, usage.ShortModel(a)+" ("+usage.ShortModel(b)+")"
+			}
+		}
+	}
+	if widest > modelMaxWidth {
+		t.Errorf("widest pair %q is %d chars, exceeds modelMaxWidth=%d — that pair's sub-agent model would never be shown",
+			widestPair, widest, modelMaxWidth)
+	}
+	t.Logf("widest pair: %q (%d chars, cap %d)", widestPair, widest, modelMaxWidth)
+}
+
+// Both row renderers must show the pair — the highlighted row builds its
+// cell separately.
+func TestBothRowsRenderTheSubagentModel(t *testing.T) {
+	m := modelWith(
+		state.Track{ID: "t1", Status: state.StatusRunning, Model: "claude-opus-5", SubagentModel: "claude-haiku-4-5"},
+		state.Track{ID: "t2", Status: state.StatusRunning, Model: "claude-sonnet-5", SubagentModel: "claude-opus-4-8"},
+	)
+	m.width, m.height = 250, 40
+	m.cursor = 0
+	out := stripStyles(m.View())
+	for _, want := range []string{"opus-5 (haiku-4-5)", "sonnet-5 (opus-4-8)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
 	}
 }

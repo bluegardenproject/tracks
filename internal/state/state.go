@@ -423,6 +423,13 @@ type Track struct {
 	// nothing for a migration to preserve.
 	Model string `json:"model,omitempty"`
 
+	// SubagentModel is the model of the track's most recent sub-agent
+	// turn, read from the same transcript. Kept apart from Model because
+	// the pair is the point: a track can run Opus itself while its
+	// reviewer subagent runs Haiku. Derived and schema-exempt for the same
+	// reason as Model. Empty until a sub-agent takes a turn.
+	SubagentModel string `json:"subagent_model,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 

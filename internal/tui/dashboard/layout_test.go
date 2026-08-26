@@ -10,7 +10,7 @@ import (
 
 // At exactly the width that fits the minimums, nothing is scaled.
 func TestLayoutUsesMinimumsWhenExactlyFitting(t *testing.T) {
-	got := layoutFor(fixedColsWidth + branchMinWidth + slugMinWidth)
+	got := layoutFor(fixedColsWidth+branchMinWidth+slugMinWidth+modelMinWidth, true)
 	if got.branch != branchMinWidth || got.slug != slugMinWidth {
 		t.Errorf("layoutFor(exact fit) = %+v, want the minimums (%d/%d)", got, branchMinWidth, slugMinWidth)
 	}
@@ -20,9 +20,9 @@ func TestLayoutUsesMinimumsWhenExactlyFitting(t *testing.T) {
 // right-hand columns stay on screen — SLUG first, since BRANCH is the
 // column people actually scan.
 func TestLayoutShrinksToKeepTheRightHandColumns(t *testing.T) {
-	exact := fixedColsWidth + branchMinWidth + slugMinWidth
+	exact := fixedColsWidth + branchMinWidth + slugMinWidth + modelMinWidth
 
-	got := layoutFor(exact - 6)
+	got := layoutFor(exact-6, true)
 	if got.slug != slugMinWidth-6 {
 		t.Errorf("slug = %d, want %d — SLUG should absorb the deficit first", got.slug, slugMinWidth-6)
 	}
@@ -31,7 +31,7 @@ func TestLayoutShrinksToKeepTheRightHandColumns(t *testing.T) {
 	}
 
 	// Deep enough to exhaust SLUG and eat into BRANCH.
-	deep := layoutFor(exact - (slugMinWidth - slugFloorWidth) - 5)
+	deep := layoutFor(exact-(slugMinWidth-slugFloorWidth)-5, true)
 	if deep.slug != slugFloorWidth {
 		t.Errorf("slug = %d, want the floor %d", deep.slug, slugFloorWidth)
 	}
@@ -44,31 +44,46 @@ func TestLayoutShrinksToKeepTheRightHandColumns(t *testing.T) {
 // frame clips, which is what it always did.
 func TestLayoutNeverGoesBelowTheFloors(t *testing.T) {
 	for _, w := range []int{0, 20, 40, 80, 100} {
-		got := layoutFor(w)
+		got := layoutFor(w, true)
 		if got.branch < branchFloorWidth || got.slug < slugFloorWidth {
 			t.Errorf("layoutFor(%d) = %+v, below the floors (%d/%d)", w, got, branchFloorWidth, slugFloorWidth)
 		}
 	}
 }
 
-// BRANCH is the better identifier of the two, so spare width goes there
-// before SLUG sees any.
-func TestLayoutGrowsBranchFirst(t *testing.T) {
-	base := fixedColsWidth + branchMinWidth + slugMinWidth
-	got := layoutFor(base + 4)
-	if got.branch != branchMinWidth+4 {
-		t.Errorf("branch = %d, want %d — spare width should reach BRANCH first", got.branch, branchMinWidth+4)
+// Spare width is served MODEL first — its extra buys a whole piece of
+// information (the sub-agent's model), where BRANCH and SLUG degrade a
+// character at a time — then BRANCH, then SLUG.
+func TestLayoutGrowthPriority(t *testing.T) {
+	base := fixedColsWidth + branchMinWidth + slugMinWidth + modelMinWidth
+
+	// A little spare: MODEL takes it, nothing else moves.
+	got := layoutFor(base+4, true)
+	if got.model != modelMinWidth+4 {
+		t.Errorf("model = %d, want %d — MODEL should be served first", got.model, modelMinWidth+4)
+	}
+	if got.branch != branchMinWidth || got.slug != slugMinWidth {
+		t.Errorf("branch/slug = %d/%d, want them untouched until MODEL is full", got.branch, got.slug)
+	}
+
+	// Enough to fill MODEL and start on BRANCH.
+	got = layoutFor(base+(modelMaxWidth-modelMinWidth)+5, true)
+	if got.model != modelMaxWidth {
+		t.Errorf("model = %d, want the cap %d", got.model, modelMaxWidth)
+	}
+	if got.branch != branchMinWidth+5 {
+		t.Errorf("branch = %d, want %d", got.branch, branchMinWidth+5)
 	}
 	if got.slug != slugMinWidth {
 		t.Errorf("slug = %d, want it untouched until BRANCH is full", got.slug)
 	}
 }
 
-func TestLayoutCapsBothColumns(t *testing.T) {
-	got := layoutFor(10_000)
-	if got.branch != branchMaxWidth || got.slug != slugMaxWidth {
-		t.Errorf("layoutFor(huge) = %+v, want the caps (%d/%d) so the right-hand columns stay reachable",
-			got, branchMaxWidth, slugMaxWidth)
+func TestLayoutCapsEveryColumn(t *testing.T) {
+	got := layoutFor(10_000, true)
+	if got.branch != branchMaxWidth || got.slug != slugMaxWidth || got.model != modelMaxWidth {
+		t.Errorf("layoutFor(huge) = %+v, want the caps (%d/%d/%d) so the right-hand columns stay reachable",
+			got, branchMaxWidth, slugMaxWidth, modelMaxWidth)
 	}
 }
 
@@ -94,42 +109,90 @@ func TestWideTerminalShowsTheWholeBranch(t *testing.T) {
 // the row must be as wide as the layout intends, which is only true when
 // nothing is being clipped.
 func TestRowWidthMatchesTheLayout(t *testing.T) {
-	maxTotal := fixedColsWidth + branchMaxWidth + slugMaxWidth
-	for _, w := range []int{130, 138, 145, 151, 160, 185, 250, 319} {
-		m := modelWith(state.Track{
-			ID: "20260817-101530-aa11bb", Branch: strings.Repeat("b", 80),
-			Slug: strings.Repeat("s", 60), Status: state.StatusInterrupted,
-			Kind: state.KindWork, Model: "claude-sonnet-4-6",
-			Usage: state.Usage{CostUSD: 3.45},
-		})
-		m.width, m.height = w, 40
-		cols := layoutFor(w)
-		want := min(fixedColsWidth+cols.branch+cols.slug, w)
-		if want > maxTotal {
-			want = maxTotal
+	maxTotal := fixedColsWidth + branchMaxWidth + slugMaxWidth + modelMaxWidth
+	// Both column-sizing regimes: a table with a sub-agent to show (MODEL
+	// widens) and one without (MODEL stays at its minimum).
+	for _, withSub := range []bool{true, false} {
+		sub := ""
+		if withSub {
+			sub = "claude-haiku-4-5"
 		}
-		var row string
-		for _, l := range strings.Split(m.View(), "\n") {
-			if strings.Contains(stripStyles(l), "aa11bb") {
-				row = l
-				break
+		for _, w := range []int{130, 138, 145, 151, 160, 185, 250, 319} {
+			m := modelWith(state.Track{
+				ID: "20260817-101530-aa11bb", Branch: strings.Repeat("b", 80),
+				Slug: strings.Repeat("s", 60), Status: state.StatusInterrupted,
+				Kind: state.KindWork, Model: "claude-sonnet-4-6", SubagentModel: sub,
+				Usage: state.Usage{CostUSD: 3.45},
+			})
+			m.width, m.height = w, 40
+			cols := layoutFor(w, withSub)
+			want := min(fixedColsWidth+cols.branch+cols.slug+cols.model, w)
+			if want > maxTotal {
+				want = maxTotal
 			}
-		}
-		if row == "" {
-			t.Fatalf("terminal %d: no track row rendered", w)
-		}
-		if got := lipgloss.Width(row); got != want {
-			t.Errorf("terminal %d: row is %d wide, want %d — columns are being clipped", w, got, want)
-		}
-		// COST is the rightmost column and the first casualty of a clip.
-		if !strings.Contains(stripStyles(row), "$3.45") {
-			t.Errorf("terminal %d: COST was clipped off the row: %q", w, stripStyles(row))
+			var row string
+			for _, l := range strings.Split(m.View(), "\n") {
+				if strings.Contains(stripStyles(l), "aa11bb") {
+					row = l
+					break
+				}
+			}
+			if row == "" {
+				t.Fatalf("subagent=%v terminal %d: no track row rendered", withSub, w)
+			}
+			if got := lipgloss.Width(row); got != want {
+				t.Errorf("subagent=%v terminal %d: row is %d wide, want %d — columns are being clipped",
+					withSub, w, got, want)
+			}
+			// COST is the rightmost column and the first casualty of a clip.
+			if !strings.Contains(stripStyles(row), "$3.45") {
+				t.Errorf("subagent=%v terminal %d: COST was clipped off the row: %q", withSub, w, stripStyles(row))
+			}
 		}
 	}
 }
 
-// Whatever the layout picks, the frame must not overflow the terminal —
-// bubbletea garbles a frame wider than the window.
+// A table with no sub-agent anywhere must not pay for the wider column.
+func TestModelColumnStaysNarrowWithoutSubagents(t *testing.T) {
+	if got := layoutFor(10_000, false); got.model != modelMinWidth {
+		t.Errorf("model = %d on a huge terminal with no sub-agents, want the minimum %d", got.model, modelMinWidth)
+	}
+	if got := layoutFor(10_000, true); got.model != modelMaxWidth {
+		t.Errorf("model = %d with a sub-agent to show, want the cap %d", got.model, modelMaxWidth)
+	}
+}
+
+// MODEL is never shrunk: its minimum is exactly one model id, and
+// truncating an id is the failure the column exists to avoid.
+func TestLayoutNeverShrinksModel(t *testing.T) {
+	for _, w := range []int{0, 20, 60, 100, 130, 151} {
+		for _, withSub := range []bool{true, false} {
+			if got := layoutFor(w, withSub); got.model != modelMinWidth {
+				t.Errorf("layoutFor(%d, %v).model = %d, want it pinned at %d",
+					w, withSub, got.model, modelMinWidth)
+			}
+		}
+	}
+}
+
+func TestAnyTrackHasSubagent(t *testing.T) {
+	if anyTrackHasSubagent(nil) {
+		t.Error("no tracks should mean no sub-agent")
+	}
+	if anyTrackHasSubagent([]state.Track{{Model: "claude-opus-5"}}) {
+		t.Error("a track with no sub-agent model should not widen the column")
+	}
+	if !anyTrackHasSubagent([]state.Track{{Model: "claude-opus-5"}, {SubagentModel: "claude-haiku-4-5"}}) {
+		t.Error("one track with a sub-agent should widen the column")
+	}
+}
+
+// Whatever the layout picks, no line of the frame may overflow the
+// terminal — bubbletea garbles a frame wider than the window. Broader
+// than TestRowWidthMatchesTheLayout: that one checks a single track row
+// at usable widths, this one checks every line (header, footer, detail
+// panel, rows) right down to 60 columns. The distinction matters now
+// that column widths respond to track content, not just terminal size.
 func TestRowsNeverExceedTerminalWidth(t *testing.T) {
 	long := state.Track{
 		ID: "20260817-101530-aa11bb", Branch: strings.Repeat("x", 80),
@@ -138,12 +201,17 @@ func TestRowsNeverExceedTerminalWidth(t *testing.T) {
 		Changes: state.Changes{Files: 3567, Insertions: 148204, Deletions: 175786},
 		Usage:   state.Usage{CostUSD: 1234.56},
 	}
-	for _, w := range []int{60, 120, 152, 200, 319} {
-		m := modelWith(long, long)
-		m.width, m.height = w, 40
-		for _, line := range strings.Split(m.View(), "\n") {
-			if got := lipgloss.Width(line); got > w {
-				t.Errorf("terminal %d: rendered line is %d wide:\n%q", w, got, line)
+	withSub := long
+	withSub.SubagentModel = "claude-haiku-4-5"
+
+	for _, tracks := range [][]state.Track{{long, long}, {long, withSub}} {
+		for _, w := range []int{60, 120, 152, 200, 319} {
+			m := modelWith(tracks...)
+			m.width, m.height = w, 40
+			for _, line := range strings.Split(m.View(), "\n") {
+				if got := lipgloss.Width(line); got > w {
+					t.Errorf("terminal %d: rendered line is %d wide:\n%q", w, got, line)
+				}
 			}
 		}
 	}
