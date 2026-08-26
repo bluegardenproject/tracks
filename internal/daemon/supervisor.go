@@ -412,8 +412,9 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		// model an earlier pass established. finalizeTrack applies the same
 		// rule, so both paths agree.
 		newModel := tot.Model != "" && tot.Model != t.Model
+		newSubagent := tot.SubagentModel != "" && tot.SubagentModel != t.SubagentModel
 		newUsage := !tot.Usage.IsZero() && tot.Usage != t.Usage
-		if !newUsage && !newModel {
+		if !newUsage && !newModel && !newSubagent {
 			return false
 		}
 		if newUsage {
@@ -421,6 +422,9 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		}
 		if newModel {
 			t.Model = tot.Model
+		}
+		if newSubagent {
+			t.SubagentModel = tot.SubagentModel
 		}
 		return true
 	})
@@ -833,7 +837,7 @@ func (s *Server) finalizeTrack(trackID string) {
 		// Gated on either signal: a session that billed nothing can still
 		// have named a model, and vice versa.
 		if tot, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil &&
-			(!tot.Usage.IsZero() || tot.Model != "") {
+			(!tot.Usage.IsZero() || tot.Model != "" || tot.SubagentModel != "") {
 			settled, haveSettled = tot, true
 		}
 	}
@@ -854,6 +858,9 @@ func (s *Server) finalizeTrack(trackID string) {
 			}
 			if settled.Model != "" {
 				t.Model = settled.Model
+			}
+			if settled.SubagentModel != "" {
+				t.SubagentModel = settled.SubagentModel
 			}
 		}
 		finalized = true

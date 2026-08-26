@@ -70,10 +70,20 @@ type Totals struct {
 
 	// Model is the model id of the most recent main-chain assistant turn
 	// — i.e. whatever `/model` last selected, without tracks having to be
-	// told. Sub-agent turns are skipped: a Haiku reviewer subagent must
+	// told. Sub-agent turns are excluded: a Haiku reviewer subagent must
 	// not make the session look like it switched to Haiku. Empty until
 	// the first assistant turn lands.
 	Model string
+
+	// SubagentModel is the model of the most recent *sub-agent* turn (a
+	// Task tool sidechain). Reported separately rather than folded in,
+	// because "the track is on Opus but its subagents run Haiku" is the
+	// interesting fact and either half alone hides it. Empty when no
+	// sub-agent has taken a turn.
+	//
+	// Both fields are last-one-wins: a session that switched models
+	// mid-flight reports what it is on now, not what it started on.
+	SubagentModel string
 }
 
 // ForTrack locates and parses the transcript(s) for a track, returning
@@ -134,38 +144,73 @@ func sanitizeCWD(cwd string) string { return cwdSanitizer.Replace(cwd) }
 // ParseFiles sums usage across several transcript files, deduping
 // repeated API calls by request id so a line that appears twice can't
 // be double-counted.
-func ParseFiles(paths []string) (Totals, error) {
-	var total Totals
-	// latest is the timestamp of the main-chain turn Model came from.
-	// Transcript timestamps are fixed-precision UTC
-	// (YYYY-MM-DDTHH:MM:SS.mmmZ), so lexical order is chronological order
-	// and a string compare is enough. It has to be a comparison rather
-	// than "last line wins" because Locate can return several files and
-	// scans them in glob order, not chronological order. If the format
-	// ever gains a numeric offset or variable-width fractions, this
-	// misorders silently — parse with time.RFC3339 at that point.
-	// Equal timestamps resolve to the later line within a file and to
-	// glob order across files; sub-second stamps make that tie rare
-	// enough not to engineer around.
-	var latest string
+func ParseFiles(paths []string) (total Totals, _ error) {
+	// models carries the newest turn found on each chain so far; see
+	// latestModels.observe for how "newest" is decided.
+	var models latestModels
+	// Only total is named — the defer needs it. Leaving the error result
+	// unnamed keeps the `if err := accumulate(...)` below from shadowing a
+	// named result, which is the silent no-op this defer invites.
+	//
+	// Deferred so a mid-scan error returns the same shape as success:
+	// whatever was accumulated, models included. Assigning after the loop
+	// instead would hand an erroring caller partial Usage with the models
+	// blanked — a trap, since the Usage half is accumulated in place and
+	// looks complete.
+	defer func() { total.Model, total.SubagentModel = models.main, models.sub }()
 	seen := map[string]struct{}{}
 	for _, p := range paths {
-		if err := accumulate(p, &total, &latest, seen); err != nil {
+		if err := accumulate(p, &total, &models, seen); err != nil {
 			return total, err
 		}
 	}
 	return total, nil
 }
 
-// Parse totals a single transcript file.
-func Parse(path string) (Totals, error) {
-	var total Totals
-	var latest string
-	err := accumulate(path, &total, &latest, map[string]struct{}{})
-	return total, err
+// latestModels is the newest model seen on each chain during one scan,
+// with the timestamp it came from so later files can't lose to earlier
+// ones.
+type latestModels struct {
+	main, mainAt string
+	sub, subAt   string
 }
 
-func accumulate(path string, total *Totals, latest *string, seen map[string]struct{}) error {
+// observe folds one assistant turn into the tracker, per chain.
+//
+// Transcript timestamps are fixed-precision UTC
+// (YYYY-MM-DDTHH:MM:SS.mmmZ), so lexical order is chronological order and
+// a string compare is enough. It has to be a comparison rather than "last
+// line wins" because Locate can return several files and scans them in
+// glob order, not chronological order. If the format ever gains a numeric
+// offset or variable-width fractions, this misorders silently — parse
+// with time.RFC3339 at that point. Equal timestamps resolve to the later
+// line within a file and to glob order across files; sub-second stamps
+// make that tie rare enough not to engineer around.
+//
+// The two chains are compared only against themselves, so a sub-agent
+// turn can never advance the main model however late it lands.
+// Placeholders are ignored on both (see isRealModel).
+func (l *latestModels) observe(model, timestamp string, sidechain bool) {
+	if !isRealModel(model) {
+		return
+	}
+	if sidechain {
+		if timestamp >= l.subAt {
+			l.subAt, l.sub = timestamp, model
+		}
+		return
+	}
+	if timestamp >= l.mainAt {
+		l.mainAt, l.main = timestamp, model
+	}
+}
+
+// Parse totals a single transcript file.
+func Parse(path string) (Totals, error) {
+	return ParseFiles([]string{path})
+}
+
+func accumulate(path string, total *Totals, models *latestModels, seen map[string]struct{}) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -185,10 +230,7 @@ func accumulate(path string, total *Totals, latest *string, seen map[string]stru
 		if line.Type != "assistant" {
 			continue
 		}
-		if !line.IsSidechain && isRealModel(line.Message.Model) && line.Timestamp >= *latest {
-			*latest = line.Timestamp
-			total.Model = line.Message.Model
-		}
+		models.observe(line.Message.Model, line.Timestamp, line.IsSidechain)
 		if line.Message.Usage == nil {
 			continue
 		}

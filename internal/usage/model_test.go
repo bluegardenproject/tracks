@@ -163,3 +163,88 @@ func TestParseReportsGatewayModelIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestParseReportsSubagentModelSeparately(t *testing.T) {
+	path := writeTranscript(t, "s.jsonl",
+		line("2026-08-18T10:00:00.000Z", "claude-opus-5", false),
+		line("2026-08-18T10:05:00.000Z", "claude-haiku-4-5", true),
+	)
+
+	tot, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot.Model != "claude-opus-5" {
+		t.Errorf("Model = %q, want the main-chain model", tot.Model)
+	}
+	if tot.SubagentModel != "claude-haiku-4-5" {
+		t.Errorf("SubagentModel = %q, want the sidechain model", tot.SubagentModel)
+	}
+}
+
+// Last one wins on both chains independently.
+func TestParseSubagentModelIsTheMostRecent(t *testing.T) {
+	path := writeTranscript(t, "s.jsonl",
+		line("2026-08-18T10:00:00.000Z", "claude-sonnet-5", false),
+		line("2026-08-18T10:01:00.000Z", "claude-haiku-4-5", true),
+		line("2026-08-18T10:02:00.000Z", "claude-opus-4-8", true),
+		line("2026-08-18T10:03:00.000Z", "claude-opus-5", false),
+	)
+
+	tot, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot.Model != "claude-opus-5" {
+		t.Errorf("Model = %q, want the last main-chain turn", tot.Model)
+	}
+	if tot.SubagentModel != "claude-opus-4-8" {
+		t.Errorf("SubagentModel = %q, want the last sidechain turn", tot.SubagentModel)
+	}
+}
+
+// A later sub-agent turn must not advance the main model, and vice
+// versa — the two chains are tracked independently.
+func TestParseChainsDoNotInterfere(t *testing.T) {
+	path := writeTranscript(t, "s.jsonl",
+		line("2026-08-18T10:00:00.000Z", "claude-opus-5", false),
+		line("2026-08-18T11:00:00.000Z", "claude-haiku-4-5", true),
+	)
+
+	tot, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot.Model != "claude-opus-5" {
+		t.Errorf("Model = %q — a later sub-agent turn advanced the main model", tot.Model)
+	}
+}
+
+func TestParseNoSubagentLeavesItEmpty(t *testing.T) {
+	path := writeTranscript(t, "s.jsonl", line("2026-08-18T10:00:00.000Z", "claude-opus-5", false))
+
+	tot, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot.SubagentModel != "" {
+		t.Errorf("SubagentModel = %q, want empty when no sub-agent ran", tot.SubagentModel)
+	}
+}
+
+// Placeholders are rejected on the sidechain too.
+func TestParseIgnoresSyntheticSubagentModels(t *testing.T) {
+	path := writeTranscript(t, "s.jsonl",
+		line("2026-08-18T10:00:00.000Z", "claude-opus-5", false),
+		line("2026-08-18T10:01:00.000Z", "claude-haiku-4-5", true),
+		line("2026-08-18T10:02:00.000Z", "<synthetic>", true),
+	)
+
+	tot, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot.SubagentModel != "claude-haiku-4-5" {
+		t.Errorf("SubagentModel = %q, want the last real sub-agent model", tot.SubagentModel)
+	}
+}

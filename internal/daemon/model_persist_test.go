@@ -126,3 +126,41 @@ func TestRefreshUsageDoesNotBlankAKnownModel(t *testing.T) {
 		t.Errorf("InputTokens = %d, want 20 — the synthetic turn still bills", after.Usage.InputTokens)
 	}
 }
+
+// A sub-agent turn arriving in a later scan updates only that field —
+// the track's own model and its usage are left alone.
+func TestRefreshUsageRecordsTheSubagentModel(t *testing.T) {
+	const session = "aaaaaaaa-0000-4000-8000-000000000004"
+	path := transcriptFixture(t, session)
+	writeLines(t, path, turn("2026-08-18T10:00:00.000Z", "claude-opus-5"))
+
+	srv := newReadinessTestServer(t)
+	tr, sup := trackFor(t, srv, session)
+	srv.refreshUsage(sup)
+
+	before, _ := srv.store.Get(tr.ID)
+	if before.SubagentModel != "" {
+		t.Fatalf("SubagentModel = %q before any sub-agent ran", before.SubagentModel)
+	}
+
+	writeLines(t, path,
+		turn("2026-08-18T10:00:00.000Z", "claude-opus-5")+
+			sidechainTurn("2026-08-18T10:05:00.000Z", "claude-haiku-4-5"))
+	srv.refreshUsage(sup)
+
+	after, _ := srv.store.Get(tr.ID)
+	if after.SubagentModel != "claude-haiku-4-5" {
+		t.Errorf("SubagentModel = %q, want the sub-agent's model", after.SubagentModel)
+	}
+	if after.Model != "claude-opus-5" {
+		t.Errorf("Model = %q — the sub-agent turn changed the track's own model", after.Model)
+	}
+}
+
+// sidechainTurn is an assistant line from a Task sub-agent: it bills
+// tokens like any other, but must not be mistaken for the main chain.
+func sidechainTurn(ts, model string) string {
+	return `{"type":"assistant","isSidechain":true,"timestamp":"` + ts +
+		`","requestId":"sc-` + ts + `","message":{"model":"` + model +
+		`","usage":{"input_tokens":10,"output_tokens":5}}}` + "\n"
+}

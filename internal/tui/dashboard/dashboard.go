@@ -680,11 +680,11 @@ func (m *model) View() string {
 	} else if len(m.tracks) == 0 {
 		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
 	} else {
-		cols := layoutFor(width)
+		cols := layoutFor(width, anyTrackHasSubagent(m.tracks))
 		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 			idColWidth, "ID", kindColWidth, "KIND", cols.branch, "BRANCH", cols.slug, "SLUG",
 			statusColWidth, "STATUS", changesColWidth, "CHANGES", svcColWidth, "SVC",
-			modelColWidth, "MODEL", costColWidth, "COST")))
+			cols.model, "MODEL", costColWidth, "COST")))
 		// The header consumes one row of the budget; the rest is the
 		// scrolling window of track rows.
 		if rows := m.renderRows(rowsBudget-1, cols); rows != "" {
@@ -810,7 +810,7 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 			m.styles.status[t.Status].Render(padRight(t.StatusLabel(), statusColWidth)),
 			padRendered(m.renderChangesColored(t.Changes), changesColWidth),
 			padRendered(m.renderServices(t), svcColWidth),
-			padRendered(m.renderModel(t), modelColWidth),
+			padRendered(m.renderModel(t, cols.model), cols.model),
 			padRendered(m.renderCost(t.Usage), costColWidth),
 		)
 	}
@@ -858,10 +858,10 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 
 	// MODEL: same treatment, so the cell stays lit across the row.
 	var modelStr string
-	if short := usage.ShortModel(t.Model); short == "" {
+	if cell := trackModel(t, cols.model); cell == "" {
 		modelStr = addBg(m.styles.dim).Render("—")
 	} else {
-		modelStr = addBg(m.styles.model).Render(truncate(short, modelColWidth))
+		modelStr = addBg(m.styles.model).Render(truncate(cell, cols.model))
 	}
 
 	// COST: apply bg to the inner style so the value text is highlighted.
@@ -890,7 +890,7 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 		sep + addBg(m.styles.status[t.Status]).Render(padRight(t.StatusLabel(), statusColWidth)) +
 		sep + pad(changesStr, changesColWidth) +
 		sep + pad(svcStr, svcColWidth) +
-		sep + pad(modelStr, modelColWidth) +
+		sep + pad(modelStr, cols.model) +
 		sep + pad(costStr, costColWidth)
 }
 
@@ -950,11 +950,11 @@ func (m *model) renderChangesColored(c state.Changes) string {
 		" " + m.styles.dim.Render(fmt.Sprintf("(%d)", c.Files))
 }
 
-// Column widths. Everything except BRANCH and SLUG is fixed: their
-// content is bounded (an id, a kind, a status, three numbers) so extra
-// terminal width buys nothing. BRANCH and SLUG are the two columns whose
-// content genuinely varies and routinely overflows, so they absorb
-// whatever the terminal has spare.
+// Column widths. ID, KIND, STATUS, CHANGES, SVC and COST are fixed:
+// their content is bounded (an id, a kind, a status, three numbers) so
+// extra terminal width buys nothing. BRANCH, SLUG and MODEL are the
+// columns whose content varies and routinely overflows, so they absorb
+// whatever the terminal has spare — see layoutFor for the order.
 const (
 	idColWidth      = 15
 	kindColWidth    = 7
@@ -964,6 +964,10 @@ const (
 
 	branchMinWidth = 28
 	slugMinWidth   = 26
+	// MODEL holds just the track's own model at its minimum; the extra
+	// buys room for the sub-agent's in parentheses.
+	modelMinWidth = 11
+	modelMaxWidth = 23
 	// Caps, so a very wide terminal doesn't strand the right-hand columns
 	// off in the distance. Sized from real branch/slug lengths.
 	branchMaxWidth = 52
@@ -976,35 +980,69 @@ const (
 	slugFloorWidth   = 10
 )
 
-// colLayout is the per-frame width of the two flexible columns.
-type colLayout struct{ branch, slug int }
+// anyTrackHasSubagent reports whether any track would render a
+// sub-agent model, i.e. whether the wider MODEL column would show
+// anything. The column width is global but the pair is per row, so this
+// asks the question for the table as a whole.
+func anyTrackHasSubagent(tracks []state.Track) bool {
+	for _, t := range tracks {
+		if t.SubagentModel != "" {
+			return true
+		}
+	}
+	return false
+}
 
-// fixedColsWidth is every column except BRANCH and SLUG, including the
-// leading indent and all the two-space separators.
+// colLayout is the per-frame width of the flexible columns.
+type colLayout struct{ branch, slug, model int }
+
+// fixedColsWidth is every column except the flexible three, including
+// the leading indent and all the two-space separators.
 const fixedColsWidth = 2 + idColWidth + 2 + kindColWidth + 2 + /* branch */ 2 + /* slug */ 2 +
-	statusColWidth + 2 + changesColWidth + 2 + svcColWidth + 2 + modelColWidth + 2 + costColWidth
+	statusColWidth + 2 + changesColWidth + 2 + svcColWidth + 2 + /* model */ 2 + costColWidth
 
-// layoutFor divides the terminal width between BRANCH and SLUG, the two
-// columns whose content actually varies.
+// layoutFor divides the terminal width between the three columns whose
+// content varies: BRANCH, SLUG and MODEL.
 //
-// Spare width goes to BRANCH first: it is the longer content and the
-// better identifier of the two. When the terminal is too narrow even for
-// the minimums the same two columns give width back, down to their
-// floors, so the fixed right-hand columns (STATUS, CHANGES, SVC, MODEL,
-// COST) stay on screen. Narrower still and the frame's MaxWidth clips the
-// row, as it always has.
-func layoutFor(width int) colLayout {
-	l := colLayout{branch: branchMinWidth, slug: slugMinWidth}
+// Spare width goes to MODEL first, but only when some track has a
+// sub-agent model to show (wantModelPair): its extra buys a whole piece of
+// information — the parenthetical is shown or it isn't — where BRANCH and
+// SLUG improve a character at a time. With no pair to show, MODEL stays at
+// its minimum so a user whose tracks never delegate doesn't pay for a
+// column of whitespace. BRANCH is served next, being the better
+// identifier, then SLUG.
+//
+// That gate makes the layout depend on track content, not just terminal
+// size, so the table can reflow mid-session: between 152 and 196 columns,
+// the first sub-agent to appear anywhere in the list takes width back from
+// BRANCH. Judged worth it — a column of whitespace is a permanent cost, a
+// reflow is a one-off — and at 197+ everything is capped and nothing
+// moves.
+//
+// When the terminal is too narrow even for the minimums, BRANCH and SLUG
+// give width back down to their floors so the fixed right-hand columns
+// (STATUS, CHANGES, SVC, COST) stay on screen. MODEL never shrinks: its
+// minimum is exactly one model id, and truncating an id is the failure
+// this column exists to avoid. Narrower still and the frame's MaxWidth
+// clips the row, as it always has.
+func layoutFor(width int, wantModelPair bool) colLayout {
+	l := colLayout{branch: branchMinWidth, slug: slugMinWidth, model: modelMinWidth}
 	// Width is unknown until the first WindowSizeMsg; View renders that one
 	// frame unclamped rather than guessing, so hand it the minimums instead
 	// of the most squeezed layout available.
 	if width <= 0 {
 		return l
 	}
-	spare := width - (fixedColsWidth + branchMinWidth + slugMinWidth)
+	spare := width - (fixedColsWidth + branchMinWidth + slugMinWidth + modelMinWidth)
 	switch {
 	case spare > 0:
-		grow := min(spare, branchMaxWidth-branchMinWidth)
+		grow := 0
+		if wantModelPair {
+			grow = min(spare, modelMaxWidth-modelMinWidth)
+			l.model += grow
+			spare -= grow
+		}
+		grow = min(spare, branchMaxWidth-branchMinWidth)
 		l.branch += grow
 		spare -= grow
 		if spare > 0 {
@@ -1024,23 +1062,49 @@ func layoutFor(width int) colLayout {
 	return l
 }
 
-// modelColWidth is the MODEL column's width. It has to fit the longest
-// shortened id actually in circulation — "sonnet-4-6" is 10 — with room
-// for a two-digit point release, because truncation here is worse than
-// useless: "sonnet-4…" cannot be told apart from "sonnet-4-5".
-// TestKnownModelsFitTheColumn pins this against the current id set.
-// Shared by the header and both row renderers so they can't drift apart.
-const modelColWidth = 11
+// trackModel is the MODEL cell's text: the track's own model, with the
+// most recent sub-agent's in parentheses when one has run —
+// "opus-5 (haiku-4-5)". The pair is shown even when both are the same,
+// so the parentheses reliably mean "a sub-agent took a turn" rather than
+// only ever appearing on a mismatch. Empty when no turn has named a
+// model yet.
+func trackModel(t state.Track, width int) string {
+	main := usage.ShortModel(t.Model)
+	sub := usage.ShortModel(t.SubagentModel)
+	switch {
+	case main == "" && sub == "":
+		return ""
+	case main == "":
+		// A sub-agent turn landed before the main chain's first — near
+		// unreachable, since the turn that spawns a Task precedes it. Show
+		// it anyway, but under the same width rule as the pair: a clipped
+		// "(sonnet-4-…" names a model that doesn't exist, so an unclipped
+		// nothing is better.
+		if solo := "(" + sub + ")"; len(solo) <= width {
+			return solo
+		}
+		return ""
+	case sub == "":
+		return main
+	}
+	// A clipped parenthetical reads as a different model, so on a terminal
+	// too narrow for both the sub-agent's is dropped whole rather than cut.
+	full := main + " (" + sub + ")"
+	if len(full) > width {
+		return main
+	}
+	return full
+}
 
-// renderModel renders the track's current model for the MODEL column.
-// Dim placeholder until the first assistant turn names one — the model
-// is read from the transcript, so it isn't known before then.
-func (m *model) renderModel(t state.Track) string {
-	short := usage.ShortModel(t.Model)
-	if short == "" {
+// renderModel renders the track's model(s) for the MODEL column. Dim
+// placeholder until the first assistant turn names one — the model is
+// read from the transcript, so it isn't known before then.
+func (m *model) renderModel(t state.Track, width int) string {
+	cell := trackModel(t, width)
+	if cell == "" {
 		return m.styles.dim.Render("—")
 	}
-	return m.styles.model.Render(truncate(short, modelColWidth))
+	return m.styles.model.Render(truncate(cell, width))
 }
 
 // renderCost renders a track's USD cost for the COST column. Dim
