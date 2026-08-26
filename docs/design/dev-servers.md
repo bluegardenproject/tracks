@@ -298,7 +298,7 @@ Prereqs: macOS + Xcode, Node 20.11+. Install: `npx @swmansion/argent init`.
 
 Goal: autonomous verify loop. Claude starts servers → drives the running app →
 asserts → reviews (`tracks-reviewer`) → opens PR. Dashboard gains a "verified"
-signal next to `Changes`. Bolts onto the same services/ports/readiness
+signal next to the track's status. Bolts onto the same services/ports/readiness
 primitives — autonomous drivers are just another consumer of "server up on
 port X".
 

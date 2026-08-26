@@ -681,9 +681,9 @@ func (m *model) View() string {
 		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
 	} else {
 		cols := layoutFor(width, anyTrackHasSubagent(m.tracks))
-		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+		lines = append(lines, m.styles.header.Render(fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 			idColWidth, "ID", kindColWidth, "KIND", cols.branch, "BRANCH", cols.slug, "SLUG",
-			statusColWidth, "STATUS", changesColWidth, "CHANGES", svcColWidth, "SVC",
+			statusColWidth, "STATUS", svcColWidth, "SVC",
 			cols.model, "MODEL", costColWidth, "COST")))
 		// The header consumes one row of the budget; the rest is the
 		// scrolling window of track rows.
@@ -802,13 +802,12 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 		branch = "—"
 	}
 	if i != m.cursor {
-		return fmt.Sprintf("  %-*s  %s  %s  %s  %s  %s  %s  %s  %s",
+		return fmt.Sprintf("  %-*s  %s  %s  %s  %s  %s  %s  %s",
 			idColWidth, shortID(t.ID),
 			padRendered(m.renderKind(t), kindColWidth),
 			padRendered(m.styles.branch.Render(truncate(branch, cols.branch)), cols.branch),
 			padRendered(m.styles.slug.Render(truncate(t.Slug, cols.slug)), cols.slug),
 			m.styles.status[t.Status].Render(padRight(t.StatusLabel(), statusColWidth)),
-			padRendered(m.renderChangesColored(t.Changes), changesColWidth),
 			padRendered(m.renderServices(t), svcColWidth),
 			padRendered(m.renderModel(t, cols.model), cols.model),
 			padRendered(m.renderCost(t.Usage), costColWidth),
@@ -846,16 +845,6 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 	}
 	kindStr := lipgloss.NewStyle().Foreground(kColor).Background(activeBg).Render(string(k))
 
-	// CHANGES: each sub-segment needs bg so inter-segment spaces stay lit.
-	var changesStr string
-	if !t.Changes.IsZero() {
-		changesStr = addBg(m.styles.insertions).Render(fmt.Sprintf("+%d", t.Changes.Insertions)) +
-			addBg(lipgloss.NewStyle()).Render(" ") +
-			addBg(m.styles.deletions).Render(fmt.Sprintf("-%d", t.Changes.Deletions)) +
-			addBg(lipgloss.NewStyle()).Render(" ") +
-			addBg(m.styles.dim).Render(fmt.Sprintf("(%d)", t.Changes.Files))
-	}
-
 	// MODEL: same treatment, so the cell stays lit across the row.
 	var modelStr string
 	if cell := trackModel(t, cols.model); cell == "" {
@@ -888,7 +877,6 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 		sep + pad(addBg(m.styles.branch).Render(truncate(branch, cols.branch)), cols.branch) +
 		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, cols.slug)), cols.slug) +
 		sep + addBg(m.styles.status[t.Status]).Render(padRight(t.StatusLabel(), statusColWidth)) +
-		sep + pad(changesStr, changesColWidth) +
 		sep + pad(svcStr, svcColWidth) +
 		sep + pad(modelStr, cols.model) +
 		sep + pad(costStr, costColWidth)
@@ -939,28 +927,16 @@ func (m *model) renderKind(t state.Track) string {
 	return lipgloss.NewStyle().Foreground(color).Render(string(k))
 }
 
-// renderChangesColored is the dashboard-styled variant: green
-// insertions, red deletions, yellow file count. Empty when zero.
-func (m *model) renderChangesColored(c state.Changes) string {
-	if c.IsZero() {
-		return ""
-	}
-	return m.styles.insertions.Render(fmt.Sprintf("+%d", c.Insertions)) +
-		" " + m.styles.deletions.Render(fmt.Sprintf("-%d", c.Deletions)) +
-		" " + m.styles.dim.Render(fmt.Sprintf("(%d)", c.Files))
-}
-
-// Column widths. ID, KIND, STATUS, CHANGES, SVC and COST are fixed:
-// their content is bounded (an id, a kind, a status, three numbers) so
-// extra terminal width buys nothing. BRANCH, SLUG and MODEL are the
+// Column widths. ID, KIND, STATUS, SVC and COST are fixed:
+// their content is bounded (an id, a kind, a status, a live/total count,
+// a cost) so extra terminal width buys nothing. BRANCH, SLUG and MODEL are the
 // columns whose content varies and routinely overflows, so they absorb
 // whatever the terminal has spare — see layoutFor for the order.
 const (
-	idColWidth      = 15
-	kindColWidth    = 7
-	changesColWidth = 22
-	svcColWidth     = 5
-	costColWidth    = 8
+	idColWidth   = 15
+	kindColWidth = 7
+	svcColWidth  = 5
+	costColWidth = 8
 
 	branchMinWidth = 28
 	slugMinWidth   = 26
@@ -999,7 +975,7 @@ type colLayout struct{ branch, slug, model int }
 // fixedColsWidth is every column except the flexible three, including
 // the leading indent and all the two-space separators.
 const fixedColsWidth = 2 + idColWidth + 2 + kindColWidth + 2 + /* branch */ 2 + /* slug */ 2 +
-	statusColWidth + 2 + changesColWidth + 2 + svcColWidth + 2 + /* model */ 2 + costColWidth
+	statusColWidth + 2 + svcColWidth + 2 + /* model */ 2 + costColWidth
 
 // layoutFor divides the terminal width between the three columns whose
 // content varies: BRANCH, SLUG and MODEL.
@@ -1013,15 +989,15 @@ const fixedColsWidth = 2 + idColWidth + 2 + kindColWidth + 2 + /* branch */ 2 + 
 // identifier, then SLUG.
 //
 // That gate makes the layout depend on track content, not just terminal
-// size, so the table can reflow mid-session: between 152 and 196 columns,
+// size, so the table can reflow mid-session: between 128 and 172 columns,
 // the first sub-agent to appear anywhere in the list takes width back from
 // BRANCH. Judged worth it — a column of whitespace is a permanent cost, a
-// reflow is a one-off — and at 197+ everything is capped and nothing
+// reflow is a one-off — and at 173+ everything is capped and nothing
 // moves.
 //
 // When the terminal is too narrow even for the minimums, BRANCH and SLUG
 // give width back down to their floors so the fixed right-hand columns
-// (STATUS, CHANGES, SVC, COST) stay on screen. MODEL never shrinks: its
+// (STATUS, SVC, COST) stay on screen. MODEL never shrinks: its
 // minimum is exactly one model id, and truncating an id is the failure
 // this column exists to avoid. Narrower still and the frame's MaxWidth
 // clips the row, as it always has.

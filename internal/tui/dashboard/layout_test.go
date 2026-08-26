@@ -117,7 +117,7 @@ func TestRowWidthMatchesTheLayout(t *testing.T) {
 		if withSub {
 			sub = "claude-haiku-4-5"
 		}
-		for _, w := range []int{130, 138, 145, 151, 160, 185, 250, 319} {
+		for _, w := range []int{110, 127, 138, 151, 160, 173, 185, 250, 319} {
 			m := modelWith(state.Track{
 				ID: "20260817-101530-aa11bb", Branch: strings.Repeat("b", 80),
 				Slug: strings.Repeat("s", 60), Status: state.StatusInterrupted,
@@ -165,7 +165,11 @@ func TestModelColumnStaysNarrowWithoutSubagents(t *testing.T) {
 // MODEL is never shrunk: its minimum is exactly one model id, and
 // truncating an id is the failure the column exists to avoid.
 func TestLayoutNeverShrinksModel(t *testing.T) {
-	for _, w := range []int{0, 20, 60, 100, 130, 151} {
+	// Derived, not hardcoded: at the exact fit nothing grows, below it
+	// nothing may shrink MODEL, and the exact fit itself moves whenever a
+	// column is added or removed.
+	exact := fixedColsWidth + branchMinWidth + slugMinWidth + modelMinWidth
+	for _, w := range []int{0, 20, exact / 2, exact - 10, exact} {
 		for _, withSub := range []bool{true, false} {
 			if got := layoutFor(w, withSub); got.model != modelMinWidth {
 				t.Errorf("layoutFor(%d, %v).model = %d, want it pinned at %d",
@@ -198,8 +202,7 @@ func TestRowsNeverExceedTerminalWidth(t *testing.T) {
 		ID: "20260817-101530-aa11bb", Branch: strings.Repeat("x", 80),
 		Slug: strings.Repeat("y", 60), Status: state.StatusInterrupted,
 		Kind: state.KindWork, Model: "claude-sonnet-4-6",
-		Changes: state.Changes{Files: 3567, Insertions: 148204, Deletions: 175786},
-		Usage:   state.Usage{CostUSD: 1234.56},
+		Usage: state.Usage{CostUSD: 1234.56},
 	}
 	withSub := long
 	withSub.SubagentModel = "claude-haiku-4-5"
@@ -212,6 +215,69 @@ func TestRowsNeverExceedTerminalWidth(t *testing.T) {
 				if got := lipgloss.Width(line); got > w {
 					t.Errorf("terminal %d: rendered line is %d wide:\n%q", w, got, line)
 				}
+			}
+		}
+	}
+}
+
+// The header, the plain row and the highlighted row are three parallel
+// format strings. Equal total width isn't enough — labels can sit over
+// the wrong cells while every width check still passes — so this pins
+// each label to the column offset of the value beneath it.
+func TestHeaderLabelsSitOverTheirCells(t *testing.T) {
+	// Values chosen to be unique in the rendered frame, so Index finds the
+	// cell and not some other text.
+	tr := state.Track{
+		ID: "20260817-101530-zqzqzq", Branch: "zbranchz", Slug: "zslugz",
+		Status: state.StatusRunning, Kind: state.KindWork,
+		Model: "claude-opus-5", Usage: state.Usage{CostUSD: 9.99},
+		Ports: map[string]int{"web": 1},
+	}
+	cells := []struct{ header, value string }{
+		// shortID trims to the last 15 chars, so compare the rendered value.
+		{"ID", shortID("20260817-101530-zqzqzq")},
+		{"KIND", "work"},
+		{"BRANCH", "zbranchz"},
+		{"SLUG", "zslugz"},
+		{"STATUS", "running"},
+		{"SVC", "0/1"},
+		{"MODEL", "opus-5"},
+		{"COST", "$9.99"},
+	}
+
+	// cursor 0 highlights the first row, so both renderers are exercised.
+	m := modelWith(tr, tr)
+	m.width, m.height = 200, 40
+	m.cursor = 0
+
+	var header string
+	var rows []string
+	for _, l := range strings.Split(stripStyles(m.View()), "\n") {
+		switch {
+		case strings.Contains(l, "BRANCH") && strings.Contains(l, "COST"):
+			header = l
+		case strings.Contains(l, "zqzqzq"):
+			rows = append(rows, l)
+		}
+	}
+	if header == "" || len(rows) != 2 {
+		t.Fatalf("expected a header and 2 rows, got header=%q rows=%d", header, len(rows))
+	}
+
+	for _, c := range cells {
+		want := strings.Index(header, c.header)
+		if want < 0 {
+			t.Errorf("header has no %q label: %q", c.header, header)
+			continue
+		}
+		for i, row := range rows {
+			kind := "plain"
+			if i == 0 {
+				kind = "highlighted"
+			}
+			if got := strings.Index(row, c.value); got != want {
+				t.Errorf("%s row: %s cell starts at %d but its header label is at %d\n  header: %q\n  row:    %q",
+					kind, c.header, got, want, header, row)
 			}
 		}
 	}
