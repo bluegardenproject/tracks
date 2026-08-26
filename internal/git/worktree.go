@@ -134,7 +134,8 @@ func (c *WorktreeClient) UnsavedWork(ctx context.Context) (string, error) {
 
 // ShortStat counts the files / insertions / deletions in the diff
 // between base..HEAD and the working tree's uncommitted changes
-// combined. Used by the dashboard's CHANGES column.
+// combined. Feeds state.Changes, which the dashboard's detail panel
+// renders for the selected track.
 //
 // Implemented via two calls:
 //   - `git diff --shortstat <base>..HEAD` for committed changes

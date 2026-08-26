@@ -156,9 +156,9 @@ type TrackRepo struct {
 	Branch string `json:"branch,omitempty"`
 }
 
-// Changes is the diff summary the dashboard shows in the CHANGES
-// column. Summed across all worktrees the track owns, so a
-// cross-repo change reads as one row in the dashboard.
+// Changes is the diff summary the dashboard's detail panel shows for
+// the selected track. Summed across all worktrees the track owns, so a
+// cross-repo change reads as one figure.
 type Changes struct {
 	Files      int `json:"files,omitempty"`
 	Insertions int `json:"insertions,omitempty"`
@@ -166,8 +166,8 @@ type Changes struct {
 }
 
 // IsZero reports whether this Changes value carries no signal
-// (every field is zero). Used by the dashboard to decide whether
-// to render the CHANGES column for a track.
+// (every field is zero). Used by the detail panel to decide whether
+// there is a diff worth rendering.
 func (c Changes) IsZero() bool {
 	return c.Files == 0 && c.Insertions == 0 && c.Deletions == 0
 }

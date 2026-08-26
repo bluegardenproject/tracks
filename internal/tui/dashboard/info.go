@@ -24,8 +24,8 @@ type detail struct {
 
 // gatherDetail walks the track's worktrees and pulls the changed
 // files + commit log for each. Fast enough to run on every poll
-// tick (~2s); the supervisor's poll picks up the same data into
-// state.Changes for the table column, so we don't pay twice.
+// tick (~2s). The supervisor's own poll keeps state.Changes current
+// independently; this panel is the only place either is shown.
 func gatherDetail(cfg config.Config, t state.Track) detail {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
