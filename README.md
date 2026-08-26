@@ -58,8 +58,8 @@ Inside the session, press `<prefix>+t` to open the menu:
 - **Reopen interrupted tracks** — brings back everything that was still
   running when tracks was last quit (see below).
 - **List / Attach… / End… / Kill…** — manage tracks.
-- **Settings** — add, edit, or remove repos via a guided form (no YAML
-  editing).
+- **Settings** — add, edit, or remove repos, and choose which model tracks
+  run, via a guided form (no YAML editing).
 - **Check for updates…** — compares your version against the latest GitHub
   release and, after a confirm, installs it over the binary you're running.
 - **Quit session** — kills tmux and the daemon; running Claudes get SIGTERM.
