@@ -388,9 +388,13 @@ still genuinely open.
       no coverage floor. Both runners have tmux, so one e2e smoke test (boot a
       session → create a track against a stub `claude` → assert dashboard
       state) would cover what unit tests structurally can't.
-- [ ] **Pricing table is hardcoded** (`internal/usage/pricing.go`, "cached
-      2026-06-04") and an unknown model silently costs **$0.00** rather than
-      reading as unknown.
+- [ ] **Pricing table is still hardcoded** (`internal/usage/pricing.go`) —
+      making it configurable is what's left. *(Half done: entries are now
+      version-specific and resolved by longest match — a family substring
+      priced Sonnet 5 at Sonnet 4.6's rate, 50% over — and a model from a
+      known family falls back to that family's current price rather than
+      costing $0.00. Prices re-checked 2026-08-26. A model from an unknown
+      family still reads as $0.00.)
 
 ### Polish (P3)
 
