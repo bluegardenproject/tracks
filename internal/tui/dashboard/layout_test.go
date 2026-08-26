@@ -121,7 +121,7 @@ func TestRowWidthMatchesTheLayout(t *testing.T) {
 			m := modelWith(state.Track{
 				ID: "20260817-101530-aa11bb", Branch: strings.Repeat("b", 80),
 				Slug: strings.Repeat("s", 60), Status: state.StatusInterrupted,
-				Kind: state.KindWork, Model: "claude-sonnet-4-6", SubagentModel: sub,
+				Kind: state.KindWork, ObservedModel: "claude-sonnet-4-6", ObservedSubagentModel: sub,
 				Usage: state.Usage{CostUSD: 3.45},
 			})
 			m.width, m.height = w, 40
@@ -183,10 +183,10 @@ func TestAnyTrackHasSubagent(t *testing.T) {
 	if anyTrackHasSubagent(nil) {
 		t.Error("no tracks should mean no sub-agent")
 	}
-	if anyTrackHasSubagent([]state.Track{{Model: "claude-opus-5"}}) {
+	if anyTrackHasSubagent([]state.Track{{ObservedModel: "claude-opus-5"}}) {
 		t.Error("a track with no sub-agent model should not widen the column")
 	}
-	if !anyTrackHasSubagent([]state.Track{{Model: "claude-opus-5"}, {SubagentModel: "claude-haiku-4-5"}}) {
+	if !anyTrackHasSubagent([]state.Track{{ObservedModel: "claude-opus-5"}, {ObservedSubagentModel: "claude-haiku-4-5"}}) {
 		t.Error("one track with a sub-agent should widen the column")
 	}
 }
@@ -201,11 +201,11 @@ func TestRowsNeverExceedTerminalWidth(t *testing.T) {
 	long := state.Track{
 		ID: "20260817-101530-aa11bb", Branch: strings.Repeat("x", 80),
 		Slug: strings.Repeat("y", 60), Status: state.StatusInterrupted,
-		Kind: state.KindWork, Model: "claude-sonnet-4-6",
+		Kind: state.KindWork, ObservedModel: "claude-sonnet-4-6",
 		Usage: state.Usage{CostUSD: 1234.56},
 	}
 	withSub := long
-	withSub.SubagentModel = "claude-haiku-4-5"
+	withSub.ObservedSubagentModel = "claude-haiku-4-5"
 
 	for _, tracks := range [][]state.Track{{long, long}, {long, withSub}} {
 		for _, w := range []int{60, 120, 152, 200, 319} {
@@ -230,7 +230,7 @@ func TestHeaderLabelsSitOverTheirCells(t *testing.T) {
 	tr := state.Track{
 		ID: "20260817-101530-zqzqzq", Branch: "zbranchz", Slug: "zslugz",
 		Status: state.StatusRunning, Kind: state.KindWork,
-		Model: "claude-opus-5", Usage: state.Usage{CostUSD: 9.99},
+		ObservedModel: "claude-opus-5", Usage: state.Usage{CostUSD: 9.99},
 		Ports: map[string]int{"web": 1},
 	}
 	cells := []struct{ header, value string }{

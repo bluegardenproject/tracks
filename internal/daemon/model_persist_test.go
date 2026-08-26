@@ -68,8 +68,8 @@ func TestRefreshUsageRecordsTheModel(t *testing.T) {
 	srv.refreshUsage(sup)
 
 	got, _ := srv.store.Get(tr.ID)
-	if got.Model != "claude-opus-5" {
-		t.Errorf("Model = %q, want claude-opus-5", got.Model)
+	if got.ObservedModel != "claude-opus-5" {
+		t.Errorf("Model = %q, want claude-opus-5", got.ObservedModel)
 	}
 	if got.Usage.InputTokens != 10 {
 		t.Errorf("InputTokens = %d, want 10", got.Usage.InputTokens)
@@ -94,8 +94,8 @@ func TestRefreshUsageFollowsAModelSwitchWithUnchangedUsage(t *testing.T) {
 	srv.refreshUsage(sup)
 
 	after, _ := srv.store.Get(tr.ID)
-	if after.Model != "claude-haiku-4-5" {
-		t.Errorf("Model = %q, want the switched-to model", after.Model)
+	if after.ObservedModel != "claude-haiku-4-5" {
+		t.Errorf("Model = %q, want the switched-to model", after.ObservedModel)
 	}
 	if after.Usage != before.Usage {
 		t.Errorf("Usage changed (%+v → %+v) — the model-only line must not bill", before.Usage, after.Usage)
@@ -119,8 +119,8 @@ func TestRefreshUsageDoesNotBlankAKnownModel(t *testing.T) {
 	srv.refreshUsage(sup)
 
 	after, _ := srv.store.Get(tr.ID)
-	if after.Model != "claude-opus-5" {
-		t.Errorf("Model = %q, want the last real model to survive", after.Model)
+	if after.ObservedModel != "claude-opus-5" {
+		t.Errorf("Model = %q, want the last real model to survive", after.ObservedModel)
 	}
 	if after.Usage.InputTokens != 20 {
 		t.Errorf("InputTokens = %d, want 20 — the synthetic turn still bills", after.Usage.InputTokens)
@@ -139,8 +139,8 @@ func TestRefreshUsageRecordsTheSubagentModel(t *testing.T) {
 	srv.refreshUsage(sup)
 
 	before, _ := srv.store.Get(tr.ID)
-	if before.SubagentModel != "" {
-		t.Fatalf("SubagentModel = %q before any sub-agent ran", before.SubagentModel)
+	if before.ObservedSubagentModel != "" {
+		t.Fatalf("SubagentModel = %q before any sub-agent ran", before.ObservedSubagentModel)
 	}
 
 	writeLines(t, path,
@@ -149,11 +149,11 @@ func TestRefreshUsageRecordsTheSubagentModel(t *testing.T) {
 	srv.refreshUsage(sup)
 
 	after, _ := srv.store.Get(tr.ID)
-	if after.SubagentModel != "claude-haiku-4-5" {
-		t.Errorf("SubagentModel = %q, want the sub-agent's model", after.SubagentModel)
+	if after.ObservedSubagentModel != "claude-haiku-4-5" {
+		t.Errorf("SubagentModel = %q, want the sub-agent's model", after.ObservedSubagentModel)
 	}
-	if after.Model != "claude-opus-5" {
-		t.Errorf("Model = %q — the sub-agent turn changed the track's own model", after.Model)
+	if after.ObservedModel != "claude-opus-5" {
+		t.Errorf("Model = %q — the sub-agent turn changed the track's own model", after.ObservedModel)
 	}
 }
 

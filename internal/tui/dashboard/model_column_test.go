@@ -63,7 +63,7 @@ func TestHeaderCarriesTheModelColumn(t *testing.T) {
 
 func TestRowRendersTheShortenedModel(t *testing.T) {
 	m := modelWith(state.Track{
-		ID: "t1", Status: state.StatusRunning, Model: "claude-haiku-4-5-20251001",
+		ID: "t1", Status: state.StatusRunning, ObservedModel: "claude-haiku-4-5-20251001",
 	})
 	out := stripStyles(m.View())
 	if !strings.Contains(out, "haiku-4-5") {
@@ -78,8 +78,8 @@ func TestRowRendersTheShortenedModel(t *testing.T) {
 // its own assertion — this is where a forgotten cell shows up.
 func TestHighlightedRowRendersTheModel(t *testing.T) {
 	m := modelWith(
-		state.Track{ID: "t1", Status: state.StatusRunning, Model: "claude-opus-5"},
-		state.Track{ID: "t2", Status: state.StatusRunning, Model: "claude-sonnet-5"},
+		state.Track{ID: "t1", Status: state.StatusRunning, ObservedModel: "claude-opus-5"},
+		state.Track{ID: "t2", Status: state.StatusRunning, ObservedModel: "claude-sonnet-5"},
 	)
 	m.cursor = 0 // t1 is highlighted, t2 is plain
 	out := stripStyles(m.View())
@@ -131,8 +131,8 @@ func TestKnownModelsFitTheColumn(t *testing.T) {
 // column produces.
 func TestSimilarModelsStayDistinguishable(t *testing.T) {
 	m := modelWith(state.Track{ID: "t"})
-	a := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-5"}, modelMaxWidth))
-	b := stripStyles(m.renderModel(state.Track{Model: "claude-sonnet-4-6"}, modelMaxWidth))
+	a := stripStyles(m.renderModel(state.Track{ObservedModel: "claude-sonnet-4-5"}, modelMaxWidth))
+	b := stripStyles(m.renderModel(state.Track{ObservedModel: "claude-sonnet-4-6"}, modelMaxWidth))
 	if strings.TrimSpace(a) == strings.TrimSpace(b) {
 		t.Errorf("sonnet-4-5 and sonnet-4-6 both render as %q", strings.TrimSpace(a))
 	}
@@ -161,7 +161,7 @@ func TestTrackModelPairsMainAndSubagent(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := trackModel(state.Track{Model: tc.main, SubagentModel: tc.sub}, tc.width)
+			got := trackModel(state.Track{ObservedModel: tc.main, ObservedSubagentModel: tc.sub}, tc.width)
 			if got != tc.want {
 				t.Errorf("trackModel = %q, want %q", got, tc.want)
 			}
@@ -200,8 +200,8 @@ func TestWidestModelPairFitsTheCap(t *testing.T) {
 // cell separately.
 func TestBothRowsRenderTheSubagentModel(t *testing.T) {
 	m := modelWith(
-		state.Track{ID: "t1", Status: state.StatusRunning, Model: "claude-opus-5", SubagentModel: "claude-haiku-4-5"},
-		state.Track{ID: "t2", Status: state.StatusRunning, Model: "claude-sonnet-5", SubagentModel: "claude-opus-4-8"},
+		state.Track{ID: "t1", Status: state.StatusRunning, ObservedModel: "claude-opus-5", ObservedSubagentModel: "claude-haiku-4-5"},
+		state.Track{ID: "t2", Status: state.StatusRunning, ObservedModel: "claude-sonnet-5", ObservedSubagentModel: "claude-opus-4-8"},
 	)
 	m.width, m.height = 250, 40
 	m.cursor = 0
