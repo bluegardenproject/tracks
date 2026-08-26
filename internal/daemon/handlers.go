@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/dlog"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/ports"
@@ -351,6 +352,15 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	t.Branch = resolvedBranch
 	t.Repos = trackRepos
 	t.Ports = allocatedPorts
+	// Settle the window name last, immediately before the track becomes
+	// visible in the store, so the reservation is held for microseconds
+	// rather than across the minutes of fetching and provisioning above.
+	// A creation that failed before this point persists with an empty
+	// Window and falls back to the id-suffixed form, which is unique and
+	// points at no window — exactly right for a track that never opened
+	// one.
+	t.Window = s.claimWindowName(t)
+	defer s.releaseWindowName(t.Window)
 	if err := s.store.Put(t); err != nil {
 		rollback()
 		return fail("persist state: " + err.Error())
@@ -808,10 +818,12 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 	}
 
 	// Stop the read-only session and close its window before re-spawning.
-	// Capture the window name BEFORE promotePrompt rewrites TaskPrompt:
-	// the re-spawn must reuse the same window, which holds as long as
-	// WindowName() stays stable across the prompt change (it prefers
-	// Slug, and promotePrompt keeps the original text first).
+	// The re-spawn reuses this window. For a track created since Window
+	// was stored, the name simply cannot drift. A track created before it
+	// still derives its name from TaskPrompt via legacyWindowName, so for
+	// those the old constraint stands: promotePrompt must keep the
+	// original text first, or the derived name changes and the re-spawn
+	// loses the window.
 	oldWindow := t.WindowName()
 	s.mu.Lock()
 	sup, alive := s.supervisors[t.ID]
@@ -1343,4 +1355,93 @@ func generateSessionID() (string, error) {
 	b[6] = (b[6] & 0x0f) | 0x40 // version 4
 	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+// windowNameMaxAttempts bounds the -2/-3 disambiguation. Reaching it
+// means dozens of live tracks share one label; the track falls back to
+// the id-suffixed form, and that unreadable tab is the user-visible
+// signal (the reason is only in the daemon log).
+const windowNameMaxAttempts = 50
+
+// claimWindowName picks the tmux window name for a new track and holds
+// it against concurrent creations until releaseWindowName is called.
+//
+// The name is the track's human label, with "-2", "-3" … appended only
+// when something already answers to the plain form. Three things can
+// already hold a name: a live tmux window, another track's stored name,
+// and — the one that needs the reservation — a creation still in
+// flight. handleNew runs in its own goroutine per connection and does
+// minutes of work (fetch, worktree add, submodules, deps) before the new
+// track reaches the store, so without a reservation two `tracks new`
+// calls sharing a slug would both pick the plain label and end up
+// sharing a window. Killing either would then kill the other's Claude,
+// which is the whole failure the old id suffix existed to prevent.
+//
+// The tmux listing is gathered before the lock — it shells out, and
+// s.mu also guards the supervisor map. A listing error is treated as
+// "nothing is taken": the store half is the durable check, and the
+// common error is simply that no session exists yet on the very first
+// `tracks new`. Erring the other way would burn all 50 attempts and give
+// every first track an ugly name. The residual risk is narrow — a track
+// forgotten while its window is still open, at the same moment tmux
+// fails.
+func (s *Server) claimWindowName(t state.Track) string {
+	label := t.WindowLabel()
+	if label == "" {
+		// Nothing readable to build from; the id-suffixed form is unique
+		// by construction and needs no reservation.
+		return t.LegacyFallbackWindowName()
+	}
+
+	open, _ := tmux.New().WindowNames(s.config().Tmux.SessionName)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	taken := make(map[string]bool, len(open))
+	for _, name := range open {
+		taken[name] = true
+	}
+	// A draft has never been launched and never will be under this name —
+	// handleLaunch replays it through handleNew with a fresh id and
+	// forgets the record — so its name is dead data, not a reservation.
+	// Every other status reserves, Done included: a done track keeps its
+	// pane until it is closed and can be resumed, and resumeTrackSession
+	// kills the window by name before respawning.
+	for _, other := range s.store.All() {
+		if other.Status == state.StatusDraft {
+			continue
+		}
+		taken[other.WindowName()] = true
+	}
+	for name := range s.pendingWindows {
+		taken[name] = true
+	}
+
+	for n := 1; n <= windowNameMaxAttempts; n++ {
+		candidate := label
+		if n > 1 {
+			candidate = fmt.Sprintf("%s-%d", label, n)
+		}
+		if taken[candidate] {
+			continue
+		}
+		s.pendingWindows[candidate] = true
+		return candidate
+	}
+	// Names only free up when a track is closed and forgotten (or pruned),
+	// so a label reused this many times has genuinely run out of room.
+	dlog.Printf("window name %q and %d suffixed variants are all taken; falling back to the id-suffixed form",
+		label, windowNameMaxAttempts-1)
+	return t.LegacyFallbackWindowName()
+}
+
+// releaseWindowName drops an in-flight reservation. Safe to call with a
+// name that was never reserved (the no-label fallback), and safe to call
+// twice. Once the track is in the store the store half of the check
+// covers it, so the reservation is only needed until then.
+func (s *Server) releaseWindowName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.pendingWindows, name)
 }

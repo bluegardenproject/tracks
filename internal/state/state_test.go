@@ -883,3 +883,58 @@ func TestReviewSpecInvariantAcrossKinds(t *testing.T) {
 		})
 	}
 }
+
+func TestWindowNamePrefersTheStoredName(t *testing.T) {
+	tr := Track{ID: "20260818-101530-abcdef", Slug: "swap tooltip", Window: "swap-tooltip"}
+	if got := tr.WindowName(); got != "swap-tooltip" {
+		t.Errorf("WindowName() = %q, want the stored name with no id suffix", got)
+	}
+}
+
+// A track created before Window existed must keep resolving to the name
+// its window was actually opened under, or the daemon loses track of it.
+func TestWindowNameFallsBackForOlderTracks(t *testing.T) {
+	tr := Track{ID: "20260818-101530-abcdef", Slug: "swap tooltip"}
+	if got := tr.WindowName(); got != "swap-tooltip-abcdef" {
+		t.Errorf("WindowName() = %q, want the legacy id-suffixed form", got)
+	}
+}
+
+func TestWindowLabelForPrefersSlugThenPrompt(t *testing.T) {
+	if got := (Track{Slug: "My Slug", TaskPrompt: "some prompt"}).WindowLabel(); got != "my-slug" {
+		t.Errorf("label = %q, want the slug", got)
+	}
+	if got := (Track{TaskPrompt: "Fix the swap rate tooltip"}).WindowLabel(); got != "fix-the-swap-rate-tooltip" {
+		t.Errorf("label = %q, want it derived from the prompt", got)
+	}
+	if got := (Track{}).WindowLabel(); got != "" {
+		t.Errorf("label = %q, want empty when there is no usable text", got)
+	}
+}
+
+// The cap went up when the id suffix stopped being appended; a label
+// that used to lose its last word should now survive.
+func TestWindowLabelCapFitsARealisticPrompt(t *testing.T) {
+	got := windowLabel("swap reset after multi step flow")
+	if len(got) > windowLabelMaxLen {
+		t.Fatalf("label %q is %d chars, over the %d cap", got, len(got), windowLabelMaxLen)
+	}
+	if !strings.HasPrefix(got, "swap-reset-after-multi-step") {
+		t.Errorf("label = %q, want more of the prompt than the old 24-char cap allowed", got)
+	}
+}
+
+// The legacy cap is load-bearing: a pre-Window track's window was opened
+// under the 24-char form, and WindowName() must keep producing exactly
+// that string or the daemon targets a window that isn't there.
+func TestLegacyWindowNameKeepsTheOldCap(t *testing.T) {
+	tr := Track{ID: "20260818-101530-a1b2c3", TaskPrompt: "investigate the rate spike on swap"}
+	const want = "investigate-the-rate-spi-a1b2c3"
+	if got := tr.WindowName(); got != want {
+		t.Errorf("WindowName() = %q, want %q — widening the cap repoints existing tracks at nonexistent windows", got, want)
+	}
+	// A new track built from the same prompt gets the wider label.
+	if got := tr.WindowLabel(); got != "investigate-the-rate-spike-on-sw" {
+		t.Errorf("WindowLabel() = %q, want the wider cap for new names", got)
+	}
+}

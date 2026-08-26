@@ -321,6 +321,20 @@ type Track struct {
 	// the field blank.
 	Slug string `json:"slug,omitempty"`
 
+	// Window is the tmux window name this track owns, chosen once at
+	// creation and never recomputed. Persisting it is what lets the name
+	// be a bare human label: uniqueness is settled once, against what
+	// already exists, instead of being guaranteed on every call by
+	// stapling the track id on. Empty on tracks created before this
+	// existed — see WindowName, which falls back to the old derived form
+	// so their windows stay reachable.
+	//
+	// Added without a schema bump: an older binary ignores the key and
+	// falls back to that derived name, which carries the id tail and so
+	// is unique. The downgrade fails safe as "window not found" rather
+	// than targeting somebody else's window.
+	Window string `json:"window,omitempty"`
+
 	// Kind is the track type (work/review/ask/plan/doc). Empty in v1
 	// files; migrated to KindWork on load. Drives worktree handling and
 	// how Claude is launched.
@@ -665,9 +679,17 @@ func (t Track) Duration() time.Duration {
 }
 
 // windowLabelMaxLen caps the human part of a tmux window name so the
-// status bar tab stays readable. The unique ID suffix is appended on
-// top of this.
-const windowLabelMaxLen = 24
+// status-bar tab stays readable. Raised from 24 once the id suffix
+// stopped being appended: names that read "swap-reset-after-multi-s"
+// were losing their last word to a suffix nobody read.
+const windowLabelMaxLen = 32
+
+// legacyWindowLabelMaxLen is frozen at the old value and must stay
+// there. It only feeds legacyWindowName, which has to reproduce — byte
+// for byte — the name a pre-Window track's window was actually opened
+// under. Widening it would silently repoint every one of those tracks
+// at a window that does not exist.
+const legacyWindowLabelMaxLen = 24
 
 // DocDir returns the directory Claude needs access to in order to read
 // the track's document: the path itself when it's a directory, its
@@ -739,28 +761,37 @@ func CandorLabel(level int) string {
 
 // WindowName is the tmux window name for this track. It's the single
 // source of truth: the daemon opens the window under this name and
-// every selector/killer (CLI, dashboard, supervisor) targets it by
-// the same name, so they must all agree.
+// every selector/killer (CLI, dashboard, supervisor) targets it by the
+// same name, so they must all agree.
 //
-// The name reads as <label>-<id-tail>:
+// Normally that's Window, chosen once at creation (see
+// Server.claimWindowName) and stored — a bare human label like
+// "swap-rate-tooltip", with a "-2" appended only if something already
+// answered to the plain form.
 //
-//   - <label> is a slugified human hint — the user's Slug if they set
-//     one, otherwise the opening words of the task prompt — so the tab
-//     in tmux's status bar means something at a glance.
-//   - <id-tail> is the trailing 6 characters of the track ID, always
-//     appended so two tracks sharing a slug never collide on a name
-//     (which would make the daemon kill or select the wrong window).
-//
-// When there's no usable label (no slug, empty prompt) it falls back
-// to the historical "t-<id-tail>" form.
+// A track created before Window existed has none, and falls back to the
+// name it was actually opened under: <label>-<id-tail>, where the id
+// tail was stapled on unconditionally to keep two tracks sharing a slug
+// from colliding — which would have made the daemon kill or select the
+// wrong window. Those windows keep their old names for life; only new
+// tracks get clean ones.
 func (t Track) WindowName() string {
+	if t.Window != "" {
+		return t.Window
+	}
+	return t.legacyWindowName()
+}
+
+// legacyWindowName is the pre-Window derived form, kept so tracks that
+// predate the field still resolve to the window they were opened under.
+func (t Track) legacyWindowName() string {
 	suffix := t.ID
 	if len(t.ID) > 6 {
 		suffix = t.ID[len(t.ID)-6:]
 	}
-	label := windowLabel(t.Slug)
+	label := windowLabelCapped(t.Slug, legacyWindowLabelMaxLen)
 	if label == "" {
-		label = windowLabel(t.TaskPrompt)
+		label = windowLabelCapped(t.TaskPrompt, legacyWindowLabelMaxLen)
 	}
 	if label == "" {
 		return "t-" + suffix
@@ -768,21 +799,41 @@ func (t Track) WindowName() string {
 	return label + "-" + suffix
 }
 
+// LegacyFallbackWindowName is the id-suffixed form, exported so the
+// daemon can fall back to it for a track with no usable label, or when
+// every variant of a label is already spoken for. Unique by
+// construction, at the cost of being unreadable.
+func (t Track) LegacyFallbackWindowName() string { return t.legacyWindowName() }
+
+// WindowLabel is the human part of a window name for a track: the
+// user's slug if they set one, otherwise the opening words of the task
+// prompt, otherwise "" — the caller decides what to do with a track
+// that offers no usable text (see Server.claimWindowName).
+func (t Track) WindowLabel() string {
+	if l := windowLabel(t.Slug); l != "" {
+		return l
+	}
+	return windowLabel(t.TaskPrompt)
+}
+
 // windowLabel slugifies s into a tmux-safe token: lowercase ASCII
 // alphanumerics, with every other run collapsed to a single hyphen.
 // This deliberately strips ":" and "." (tmux target separators) and
 // whitespace (which would break the status-bar tab). The result is
-// capped at windowLabelMaxLen on a hyphen boundary so a long prompt
-// doesn't produce a giant tab. Returns "" when s carries no usable
-// characters.
-func windowLabel(s string) string {
+// truncated at maxLen so a long prompt doesn't produce a giant tab.
+// The cut is by length, not on a word boundary, so a label can end
+// mid-word ("investigate-the-rate-spike-on-sw").
+// Returns "" when s carries no usable characters.
+func windowLabel(s string) string { return windowLabelCapped(s, windowLabelMaxLen) }
+
+func windowLabelCapped(s string, maxLen int) string {
 	var b strings.Builder
 	prevHyphen := false
 	for _, r := range strings.ToLower(s) {
 		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
 		switch {
 		case isAlnum:
-			if b.Len() >= windowLabelMaxLen {
+			if b.Len() >= maxLen {
 				// Already at the cap; stop at this word boundary.
 				return strings.TrimRight(b.String(), "-")
 			}
