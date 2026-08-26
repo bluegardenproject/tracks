@@ -92,11 +92,34 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 		window := t.WindowName()
 		exists, _ := tm.HasWindow(cfg.Tmux.SessionName, window)
 		if !exists {
-			self, _ := selfBinary()
-			cmdLine := fmt.Sprintf("%s log %s", shellQuote(self), shellQuote(t.ID))
-			if err := tm.NewWindow(cfg.Tmux.SessionName, window, cmdLine, "", true); err != nil {
-				return err
+			// The window is gone, so there is nothing to attach to. This
+			// used to open one running `tracks log <id>` — a command that
+			// has never existed, so the pane died instantly with a cobra
+			// usage error. Say what happened and name the verb that
+			// applies; every command named below is a real one.
+			//
+			// Order matters, because Resumable() is IsTerminal() &&
+			// SessionID != "" and that is true of more than just a finished
+			// track. An interrupted one is terminal, and so is a failed
+			// creation — which carries a SessionID handleNew minted before
+			// it failed, for a session Claude never opened. Both are tested
+			// first, or the user is told to resume something that cannot be
+			// resumed. A track matching none of them gets a bare statement
+			// rather than advice that errors.
+			id := lastN(t.ID, 15)
+			switch {
+			case t.Status == state.StatusInterrupted && t.SessionID != "":
+				fmt.Printf("track %s was interrupted; bring it back with `tracks reopen`.\n", id)
+			case t.CanLaunch():
+				// Launch is daemon-side only — there is no `tracks launch`.
+				fmt.Printf("track %s was never launched; press L in the dashboard to launch it.\n", id)
+			case t.Resumable():
+				fmt.Printf("track %s has no window — Claude exited. Resume it with `tracks resume %s`.\n", id, t.ID)
+			default:
+				fmt.Printf("track %s has no window — Claude exited or tracks was restarted.\n", id)
 			}
+			waitForKey()
+			return nil
 		}
 		return tm.SelectWindow(cfg.Tmux.SessionName, window)
 

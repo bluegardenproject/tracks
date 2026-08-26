@@ -1209,10 +1209,10 @@ func docSectionsOff(t state.Track) string {
 		return ""
 	}
 	var off []string
-	if t.DocSkipOpinion {
+	if t.SkipOpinion() {
 		off = append(off, "opinion")
 	}
-	if t.DocSkipClaimCheck {
+	if t.SkipClaimCheck() {
 		off = append(off, "claim-check")
 	}
 	return strings.Join(off, ",")

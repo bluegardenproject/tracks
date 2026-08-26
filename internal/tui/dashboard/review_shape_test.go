@@ -25,9 +25,8 @@ func TestDocSectionsOff(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := docSectionsOff(state.Track{
-				Kind:              tc.kind,
-				DocSkipClaimCheck: tc.claimCheck,
-				DocSkipOpinion:    tc.opinion,
+				Kind: tc.kind,
+				Doc:  &state.DocSpec{SkipClaimCheck: tc.claimCheck, SkipOpinion: tc.opinion},
 			})
 			if got != tc.want {
 				t.Errorf("docSectionsOff() = %q, want %q", got, tc.want)

@@ -163,7 +163,7 @@ func TestReopenWorktreelessTrackSkipsWorktreeRestore(t *testing.T) {
 		SessionID: "77777777-7777-7777-7777-777777777777",
 		Kind:      state.KindDoc,
 		Slug:      "q3-deck",
-		DocPath:   filepath.Join(docDir, "q3-deck.md"),
+		Doc:       &state.DocSpec{Path: filepath.Join(docDir, "q3-deck.md")},
 		// A doc track holds the primary checkout path, not a tracks
 		// worktree, and carries no branch.
 		Repos: []state.TrackRepo{{Name: "demo", Path: docDir}},

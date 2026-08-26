@@ -263,13 +263,13 @@ func docReviewBrief(t state.Track) string {
 	lines := []string{
 		fmt.Sprintf("    Candor level: %d/10 (%s). 1 = radical candor, 10 = honest but gently framed.", level, state.CandorLabel(level)),
 	}
-	if t.DocSkipOpinion {
+	if t.SkipOpinion() {
 		lines = append(lines, "    Opinion section: OFF — skip it; report findings only.")
 	} else {
 		lines = append(lines, "    Opinion section: ON — judge the argument, the reasoning, "+
 			"whether the content holds up, and how easily it reads for its audience.")
 	}
-	if t.DocSkipClaimCheck {
+	if t.SkipClaimCheck() {
 		lines = append(lines, "    Claim check: OFF — do not verify claims. No repo, GitHub, or Jira "+
 			"lookups and no claim-check table; flag a claim that looks shaky as an unverified `warn` instead.")
 	} else {
@@ -370,9 +370,11 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	// (~/Downloads/deck.pdf), so its directory has to be granted
 	// explicitly or Claude can't read it — or write the report beside it.
 	//
-	// Gated on the kind, not just on DocPath: promoting a doc track to
-	// work leaves DocPath in place as provenance, and a work session
-	// must not inherit the document's directory as a grant or a cwd.
+	// Gated on the kind, not just on the presence of a document: a work
+	// session must not inherit a document's directory as a grant or a
+	// cwd. handlePromote refuses to promote a doc track at all, so this
+	// is belt-and-braces against a work-kind record that carries a Doc
+	// spec by some other route, not a shape the daemon produces.
 	docDir := ""
 	if t.Kind == state.KindDoc {
 		docDir = t.DocDir()
@@ -395,7 +397,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	permMode := cfg.Claude.PermissionMode
 	if t.Kind == state.KindDoc {
 		permMode = docPermissionMode(permMode)
-		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath, docReviewBrief(t))
+		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath(), docReviewBrief(t))
 	} else if t.Kind.Worktreeless() {
 		permMode = "plan"
 		if len(t.Repos) > 0 {
