@@ -75,6 +75,10 @@ func Run(startingCfg config.Config, loadError error) error {
 			if err := removeRepo(&cfg); err != nil && !errors.Is(err, ErrCancelled) {
 				return err
 			}
+		case actionModels:
+			if err := editModels(&cfg); err != nil && !errors.Is(err, ErrCancelled) {
+				return err
+			}
 		}
 		// Save after every iteration. Validate() runs inside Save,
 		// so the disk is never written with invalid data.
@@ -91,6 +95,7 @@ const (
 	actionAdd    action = "add"
 	actionEdit   action = "edit"
 	actionRemove action = "remove"
+	actionModels action = "models"
 	actionBack   action = "back"
 )
 
@@ -108,6 +113,7 @@ func pickAction(cfg config.Config) (action, error) {
 					huh.NewOption("Add repo", actionAdd),
 					huh.NewOption("Edit repo", actionEdit),
 					huh.NewOption("Remove repo", actionRemove),
+					huh.NewOption(modelsMenuLabel(cfg), actionModels),
 					huh.NewOption("Back", actionBack),
 				).
 				Value(&pick),
