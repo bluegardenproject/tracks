@@ -10,7 +10,6 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 func TestResolveDocPath(t *testing.T) {
@@ -127,16 +126,11 @@ func TestResolveDocPathExpansions(t *testing.T) {
 // draft, which is the record under test.
 func newDocTestServer(t *testing.T, repos ...config.Repo) (*Server, *state.MemoryStore) {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Repos = repos
-	cfg.Tmux.SessionName = "tracks-test-" + strings.ReplaceAll(t.Name(), "/", "-")
 	// Checked, not assumed: if this name ever resolves, the spawn would
 	// succeed and open live Claude windows in somebody's session. Fail
 	// loudly instead.
-	if tmux.New().HasSession(cfg.Tmux.SessionName) {
-		t.Fatalf("test tmux session %q exists; refusing to run a spawn against a live session", cfg.Tmux.SessionName)
-	}
 	store := state.NewMemoryStore()
 	return NewServer(cfg, store, "test"), store
 }

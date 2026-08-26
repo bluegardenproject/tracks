@@ -3,12 +3,9 @@ package daemon
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 func TestHasOpenPR(t *testing.T) {
@@ -53,14 +50,9 @@ func TestHasOpenPR(t *testing.T) {
 // generated name somehow resolves, fail loudly instead of spawning.
 func newQuietServer(t *testing.T) *Server {
 	t.Helper()
-	cfg := config.Default()
+	cfg := testConfig(t)
 	cfg.Notify.MacOS = false
 	cfg.Notify.Bell = false
-	cfg.Paths.StateDir = t.TempDir()
-	cfg.Tmux.SessionName = "tracks-test-" + strings.ReplaceAll(t.Name(), "/", "-")
-	if tmux.New().HasSession(cfg.Tmux.SessionName) {
-		t.Fatalf("test tmux session %q exists; refusing to run against a live session", cfg.Tmux.SessionName)
-	}
 	return NewServer(cfg, state.NewMemoryStore(), "test")
 }
 

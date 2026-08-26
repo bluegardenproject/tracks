@@ -68,6 +68,12 @@ type SpawnOptions struct {
 	// existing conversation rather than starting a new one.
 	Resume bool
 
+	// Model is passed as --model. Empty omits the flag, leaving
+	// Claude's own default. Never set for a resume: a resumed session
+	// restores the model it was last using, and forcing the flag there
+	// would silently undo a mid-session `/model` switch.
+	Model string
+
 	// SentinelPath is the path to a file the shell wrapper touches
 	// the instant Claude exits, so the supervisor can finalize the
 	// track without depending on pid death. Empty means no shell
@@ -431,6 +437,14 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		cwd = home
 	}
 
+	// The track's own choice wins; the per-kind default is only
+	// consulted for a record created before the picker existed, or by a
+	// caller that didn't set one.
+	model := t.RequestedModel
+	if model == "" {
+		model = cfg.Claude.ModelFor(string(t.Kind))
+	}
+
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
 		PermissionMode: permMode,
@@ -441,6 +455,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		SocketDir:      socketDir,
 		SentinelPath:   sentinelPath,
 		SessionID:      t.SessionID,
+		Model:          model,
 	}, nil
 }
 
@@ -478,6 +493,11 @@ func (o SpawnOptions) ShellCommand() string {
 	}
 	if o.PermissionMode != "" {
 		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
+	}
+	// Deliberately outside the resume branch above: --resume brings its
+	// own model back with it.
+	if o.Model != "" && !o.Resume {
+		claudeArgv = append(claudeArgv, "--model", shellQuote(o.Model))
 	}
 	for _, d := range o.AddDirs {
 		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))

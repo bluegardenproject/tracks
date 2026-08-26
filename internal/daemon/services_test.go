@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -32,8 +31,7 @@ func spawnGroup(t *testing.T, script string) int {
 // state dir under a temp dir, so service logs have somewhere to land.
 func newServiceTestServer(t *testing.T) *Server {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	return NewServer(cfg, state.NewMemoryStore(), "test")
 }
 

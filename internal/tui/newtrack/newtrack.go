@@ -69,7 +69,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	// all: the target is a file on disk, and repos are attached only to
 	// fact-check what the document claims.
 	if template == TemplateDocReview {
-		params, err := runDocReview(repoOptions)
+		params, err := runDocReview(cfg, repoOptions)
 		return Result{Params: params}, err
 	}
 
@@ -78,7 +78,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}
 
 	if template == TemplateReview {
-		params, err := runReview(repoOptions)
+		params, err := runReview(cfg, repoOptions)
 		return Result{Params: params}, err
 	}
 
@@ -108,6 +108,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	var (
 		repos []string
 		slug  string
+		model string
 		task  = templatePrompts[template]
 	)
 
@@ -125,6 +126,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (Claude picks that). Leave empty to derive a tab name from the prompt.").
 					Placeholder("e.g. rate-bug-investigation").
 					Value(&slug),
+				modelField(cfg, kindFor(template), &model),
 				huh.NewText().
 					Title(taskTitle).
 					Description(taskDesc).
@@ -149,6 +151,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 		Kind:       kindFor(template),
+		Model:      model,
 	}}, nil
 }
 
@@ -322,15 +325,44 @@ func candorField(v *int) *huh.Select[int] {
 		Value(v)
 }
 
+// modelField is the creation-time model picker. The first option
+// leaves the choice alone — it sends an empty model, so the daemon
+// applies whatever default is configured for the kind, and a user who
+// never thinks about models just presses enter.
+//
+// The values are passed to the CLI verbatim. An alias ("opus") follows
+// its family's newest release; a pinned id ("claude-opus-4-8") stays
+// put. Both are the user's to configure — see config.Claude.
+func modelField(cfg config.Config, kind string, v *string) *huh.Select[string] {
+	defLabel := "Default"
+	if def := cfg.Claude.ModelFor(kind); def != "" {
+		defLabel = fmt.Sprintf("Default (%s)", def)
+	}
+	options := []huh.Option[string]{huh.NewOption(defLabel, "")}
+	for _, c := range cfg.Claude.Choices() {
+		label := strings.TrimSpace(c.Label)
+		if label == "" {
+			label = c.Model
+		}
+		options = append(options, huh.NewOption(label, c.Model))
+	}
+	return huh.NewSelect[string]().
+		Title("Model").
+		Description("Which model this track runs. A \"latest\" entry follows its family as new versions ship; a pinned version doesn't move. Add your own in the config under claude.model_choices.").
+		Options(options...).
+		Value(v)
+}
+
 // runReview is the second form for the Review template. A review
 // targets one repo and one PR/branch, so we use a single-select repo
 // and a required target field — unlike the free-form flow, where the
 // fresh placeholder branch makes the target implicit.
-func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
+func runReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	var (
 		repo      string
 		reviewRef string
 		slug      string
+		model     string
 		candor    = state.DefaultCandor
 		task      = templatePrompts[TemplateReview]
 	)
@@ -359,6 +391,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
 					Placeholder("e.g. rate-bug-review").
 					Value(&slug),
+				modelField(cfg, string(state.KindReview), &model),
 				candorField(&candor),
 				huh.NewText().
 					Title("Task prompt").
@@ -385,6 +418,7 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		TaskPrompt: strings.TrimSpace(task),
 		ReviewRef:  strings.TrimSpace(reviewRef),
 		Candor:     candor,
+		Model:      model,
 	}, nil
 }
 
@@ -396,11 +430,12 @@ func runReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 //
 // The path is validated against daemon.ResolveDocPath as it's typed, so
 // a typo or a `.pptx` is rejected here rather than after a track exists.
-func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
+func runDocReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	var (
 		docPath string
 		repos   []string
 		slug    string
+		model   string
 		candor  = state.DefaultCandor
 		// Both optional sections start selected — the useful default is a
 		// full review, and the switches exist to trim it down.
@@ -433,6 +468,7 @@ func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to use the document's filename.").
 				Placeholder("e.g. q3-architecture-deck").
 				Value(&slug),
+			modelField(cfg, string(state.KindDoc), &model),
 			candorField(&candor),
 			huh.NewMultiSelect[string]().
 				Title("Optional review sections").
@@ -480,6 +516,7 @@ func runDocReview(repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 		Candor:            candor,
 		DocSkipOpinion:    !slices.Contains(sections, docSectionOpinion),
 		DocSkipClaimCheck: !slices.Contains(sections, docSectionClaimCheck),
+		Model:             model,
 	}, nil
 }
 
