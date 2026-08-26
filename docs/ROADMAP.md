@@ -237,11 +237,11 @@ closed — two hardened helpers is still per-test discipline.
       general case: extend the same liveness-based re-adoption to `running` tracks.
 
 - [ ] **C. Tell the truth about status & logs.**
-  - `Track.LogPath` points at `<state_dir>/logs/<id>.jsonl`, which
-    `internal/usage/usage.go` documents is **never written** (Claude runs
-    interactively, not `--print`). Drop the field, or point it at the real
-    transcript (`~/.claude/projects/<cwd>/<session>.jsonl`, already computed by
-    the usage package) so `tracks doctor` / "show me the log" actually work.
+  - ~~`Track.LogPath` points at a file that is never written.~~ **Done** in
+    the schema v5 change: the field is dropped. What remains of this item is
+    the positive half — no command surfaces the *real* transcript
+    (`~/.claude/projects/<cwd>/<session>.jsonl`, already located by the usage
+    package), so "show me the log" still has no answer.
   - Distinguish clean exit vs crash vs **auth-expiry** ("Please run /login") vs
     killed, as a terminal status + exit reason. (A roadmap track auth-expired
     mid-run but showed `done`.)
@@ -328,13 +328,13 @@ still genuinely open.
 
 ### Structural (P1) — breaking changes are cheap now, expensive after 1.0
 
-- [ ] **Schema v4: kind sub-structs, drop `LogPath`.** `Track` is a 67-field
-      union across five kinds; the kind-specific fields (`DocPath`, `Candor`,
-      `DocSkip*`) ride on every track and their rules live in handler prose.
-      Move them into `Review` / `Doc` sub-structs with a v3→v4 migration. Same
-      PR drops `Track.LogPath` — computed, persisted, never written to or read
-      — and fixes the menu's Attach fallback, which opens a window running the
-      nonexistent `tracks log <id>` (`cmd/menu.go:96`).
+- [x] **Schema v5: kind sub-structs, drop `LogPath`.** *(Shipped — landed as
+      v5, not v4: the port-centric proxy took v4 for `State.Proxies` first.)*
+      The kind-specific fields (`DocPath`, `Candor`, `DocSkip*`) moved into
+      `Track.Review` / `Track.Doc`, whose nil-ness now carries the rule that
+      used to live in handler prose; `Track.LogPath` is gone; and the menu's
+      Attach fallback no longer opens a window running the nonexistent
+      `tracks log <id>`.
 - [ ] **Per-kind behaviour table.** `Kind.Worktreeless()` / `== KindDoc`
       branches are scattered across handlers, supervisor, claude spawn and the
       dashboard. One table (needsWorktree, permissionMode, promptSuffix,

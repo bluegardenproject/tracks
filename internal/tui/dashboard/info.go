@@ -138,8 +138,8 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	if repos := joinRepos(t.Repos); repos != "" {
 		meta += "  " + m.styles.dim.Render("repos ") + m.styles.repo.Render(repos)
 	}
-	if t.DocPath != "" {
-		meta += "  " + m.styles.dim.Render("doc ") + m.styles.repo.Render(t.DocPath)
+	if doc := t.DocPath(); doc != "" {
+		meta += "  " + m.styles.dim.Render("doc ") + m.styles.repo.Render(doc)
 	}
 	if t.Kind == state.KindReview || t.Kind == state.KindDoc {
 		meta += "  " + m.styles.dim.Render("candor ") + m.styles.repo.Render(fmt.Sprintf("%d/10", t.CandorLevel()))

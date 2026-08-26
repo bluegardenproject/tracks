@@ -34,10 +34,15 @@ import (
 // v4 adds the top-level State.Proxies list — user-defined stable ports
 // and their chosen upstream, previously declared per-service in config
 // as proxy_port and held only in the daemon's memory.
+// v5 moves the flat review/doc fields (candor, doc_path,
+// doc_skip_claim_check, doc_skip_opinion) into Track.Review and
+// Track.Doc, and drops Track.LogPath — a path that was computed and
+// persisted but never written to or read.
 // Older tracks are migrated on load (see Track.UnmarshalJSON and
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
-// empty list.
-const CurrentSchemaVersion = 4
+// empty list; a v4 file's flat review fields are folded in at decode
+// time.
+const CurrentSchemaVersion = 5
 
 // Kind is the type of a track. It decides whether the track owns
 // worktrees and how Claude is launched.
@@ -60,7 +65,7 @@ const (
 	KindPlan Kind = "plan"
 
 	// KindDoc is a review of a local document (markdown, PDF, image,
-	// CSV) rather than a code diff: the target is Track.DocPath, not a
+	// CSV) rather than a code diff: the target is Track.Doc.Path, not a
 	// git ref. Worktree-less — any repos on the track are attached for
 	// grounding claims, not for editing. Kept to <=7 chars so it fits
 	// the dashboard's KIND column.
@@ -321,27 +326,25 @@ type Track struct {
 	// how Claude is launched.
 	Kind Kind `json:"kind,omitempty"`
 
-	// DocPath is the absolute path of the document under review on a
-	// KindDoc track — a file, or a directory of files. Its parent
-	// directory is passed to Claude as an --add-dir so the file is
-	// readable (documents usually live outside every configured repo).
-	// Empty on every other kind.
-	DocPath string `json:"doc_path,omitempty"`
+	// Review carries the settings that only mean something when the track
+	// is reviewing something — code or a document. Non-nil on KindReview
+	// and KindDoc, nil on every other kind, so the nil check *is* the
+	// "is this a review?" question and there are no dead settings to
+	// inherit across a promotion. Migrated records are held to the same
+	// rule — see ensureReviewSpec.
+	//
+	// Replace the pointer, never write through it: Store.Get and All hand
+	// out shallow struct copies, so a spec is shared with the stored track
+	// and with every snapshot a reader is holding. Same hazard AddPR and
+	// SetPR copy-on-write around.
+	Review *ReviewSpec `json:"review,omitempty"`
 
-	// Candor dials the *delivery* of a review on KindReview / KindDoc
-	// tracks: 1 is radical candor, 10 is honest but gently framed. Zero
-	// means the user didn't pick one — read it through CandorLevel(),
-	// which supplies DefaultCandor. Never affects which findings a review
-	// reports or their severity; see claude.docReviewBrief and
-	// claude.reviewCandorSuffix for how it reaches the reviewer.
-	Candor int `json:"candor,omitempty"`
-
-	// DocSkipClaimCheck / DocSkipOpinion drop one of the optional
-	// sections of a doc review. Stored as negations so the zero value —
-	// and therefore every track written before these existed — keeps
-	// both sections on.
-	DocSkipClaimCheck bool `json:"doc_skip_claim_check,omitempty"`
-	DocSkipOpinion    bool `json:"doc_skip_opinion,omitempty"`
+	// Doc describes the document under review. Non-nil on KindDoc only.
+	// A doc track carries both this and Review: a document review *is* a
+	// review (it has a candor level) and additionally has a target and
+	// section switches. Replace the pointer, never write through it — see
+	// the note on Review.
+	Doc *DocSpec `json:"doc,omitempty"`
 
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
@@ -365,10 +368,6 @@ type Track struct {
 	// PID of the Claude process. Zero before spawn, retained after
 	// exit so post-mortems can correlate.
 	PID int `json:"pid,omitempty"`
-
-	// LogPath is the absolute path to the stream-json log file. Useful
-	// post-mortem.
-	LogPath string `json:"log_path"`
 
 	// TaskPrompt is the prompt the user typed. Stored so the dashboard
 	// can show it without re-reading the log.
@@ -459,6 +458,47 @@ type Track struct {
 	// nil once a track has been successfully created.
 	Draft *DraftSpec `json:"draft,omitempty"`
 }
+
+// ReviewSpec is how a review is delivered. Shared by code reviews
+// (KindReview) and document reviews (KindDoc).
+type ReviewSpec struct {
+	// Candor dials the *delivery* of the review: 1 is radical candor, 10
+	// is honest but gently framed. Zero means the user didn't pick one —
+	// read it through Track.CandorLevel(), which supplies DefaultCandor.
+	// Never affects which findings a review reports or their severity;
+	// see claude.docReviewBrief and claude.reviewCandorSuffix for how it
+	// reaches the reviewer.
+	Candor int `json:"candor,omitempty"`
+}
+
+// DocSpec is the document a KindDoc track reviews.
+type DocSpec struct {
+	// Path is the absolute path of the document — a file, or a directory
+	// of files. Its parent directory is passed to Claude as an --add-dir
+	// so the file is readable (documents usually live outside every
+	// configured repo).
+	Path string `json:"path"`
+
+	// SkipClaimCheck / SkipOpinion drop one of the optional sections of
+	// the review. Stored as negations so the zero value keeps both on.
+	SkipClaimCheck bool `json:"skip_claim_check,omitempty"`
+	SkipOpinion    bool `json:"skip_opinion,omitempty"`
+}
+
+// DocPath is the document under review, or "" when the track has none.
+// Nil-safe, so callers don't have to know whether Doc is set.
+func (t Track) DocPath() string {
+	if t.Doc == nil {
+		return ""
+	}
+	return t.Doc.Path
+}
+
+// SkipClaimCheck / SkipOpinion report whether the corresponding optional
+// section of a doc review is switched off. Both are false for a track
+// with no document, which is the right default: nothing is skipped.
+func (t Track) SkipClaimCheck() bool { return t.Doc != nil && t.Doc.SkipClaimCheck }
+func (t Track) SkipOpinion() bool    { return t.Doc != nil && t.Doc.SkipOpinion }
 
 // DraftSpec is the set of user-supplied parameters that a track is
 // created from. Persisted on a track (see Track.Draft) so a creation
@@ -630,20 +670,21 @@ func (t Track) Duration() time.Duration {
 const windowLabelMaxLen = 24
 
 // DocDir returns the directory Claude needs access to in order to read
-// the track's document: DocPath itself when it's a directory, its
-// parent when it's a file. Empty when the track has no DocPath.
+// the track's document: the path itself when it's a directory, its
+// parent when it's a file. Empty when the track has no document.
 //
 // Falls back to the parent when the path can't be stat'd — a document
 // deleted between track creation and a later resume shouldn't break
 // spawning; Claude reports the missing file instead.
 func (t Track) DocDir() string {
-	if t.DocPath == "" {
+	path := t.DocPath()
+	if path == "" {
 		return ""
 	}
-	if info, err := os.Stat(t.DocPath); err == nil && info.IsDir() {
-		return t.DocPath
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return path
 	}
-	return filepath.Dir(t.DocPath)
+	return filepath.Dir(path)
 }
 
 // Candor bounds. The scale runs 1 (radical candor) to 10 (honest but
@@ -659,10 +700,10 @@ const (
 // never picked one, or the track predates the setting) and any
 // out-of-range value fall back to DefaultCandor.
 func (t Track) CandorLevel() int {
-	if t.Candor < MinCandor || t.Candor > MaxCandor {
+	if t.Review == nil || t.Review.Candor < MinCandor || t.Review.Candor > MaxCandor {
 		return DefaultCandor
 	}
-	return t.Candor
+	return t.Review.Candor
 }
 
 // candorLabels is the one-phrase gloss for each level. Lives here so the
@@ -918,14 +959,23 @@ func migrateTrack(t *Track) {
 	if t.Status == statusPRLegacy {
 		t.Status = StatusPROpen
 	}
+	// Kind is only just settled for a pre-v2 record, so the review-spec
+	// invariant has to be re-checked now it's known.
+	t.ensureReviewSpec()
 }
 
-// UnmarshalJSON decodes a Track, folding the pre-v3 single-PR fields
-// (pr_url, pr_state, pr_draft, pr_review_state, pr_comments) into the
-// PRs list. Done here rather than in migrateTrack because those fields
-// no longer exist on Track — this is the only place they're still
-// visible. Tracks decoded from the daemon socket get the same treatment,
-// so an older state file needs no rewrite before it can be served.
+// UnmarshalJSON decodes a Track, folding two generations of removed
+// fields into their replacements:
+//
+//   - pre-v3: the single-PR fields (pr_url, pr_state, …) become PRs[0].
+//   - pre-v5: the flat review/doc fields (candor, doc_path,
+//     doc_skip_claim_check, doc_skip_opinion) become Review and Doc.
+//
+// Done here rather than in migrateTrack because none of those fields
+// exists on Track any more — decode time is the only place they are
+// still visible. Tracks decoded from the daemon socket get the same
+// treatment, so an older state file needs no rewrite before it can be
+// served.
 func (t *Track) UnmarshalJSON(data []byte) error {
 	type track Track // shed the method set to avoid recursing
 	var aux struct {
@@ -935,6 +985,11 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 		LegacyPRDraft       bool   `json:"pr_draft"`
 		LegacyPRReviewState string `json:"pr_review_state"`
 		LegacyPRComments    int    `json:"pr_comments"`
+
+		LegacyCandor         int    `json:"candor"`
+		LegacyDocPath        string `json:"doc_path"`
+		LegacyDocSkipClaim   bool   `json:"doc_skip_claim_check"`
+		LegacyDocSkipOpinion bool   `json:"doc_skip_opinion"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -949,7 +1004,44 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 			Comments:    aux.LegacyPRComments,
 		}}
 	}
+	// A v4 file carries the review settings flat. Only fold them in when
+	// the new field is absent, so a v5 file that legitimately has both
+	// (it never should) isn't overwritten by stale keys.
+	if t.Review == nil && aux.LegacyCandor != 0 {
+		t.Review = &ReviewSpec{Candor: aux.LegacyCandor}
+	}
+	if t.Doc == nil && aux.LegacyDocPath != "" {
+		t.Doc = &DocSpec{
+			Path:           aux.LegacyDocPath,
+			SkipClaimCheck: aux.LegacyDocSkipClaim,
+			SkipOpinion:    aux.LegacyDocSkipOpinion,
+		}
+	}
+	t.ensureReviewSpec()
 	return nil
+}
+
+// ensureReviewSpec gives a review or doc track an empty ReviewSpec when
+// it hasn't got one, so "Review != nil" really does answer "is this
+// reviewing something?" for migrated records too.
+//
+// Without it a record written before the candor dial existed — or any
+// v4 record that simply omitted the key — decodes as a review-kind track
+// with a nil Review, and the invariant the struct promises is only true
+// for tracks created from v5 on. An empty spec is the right filler:
+// CandorLevel() reads it as DefaultCandor, which is exactly what those
+// tracks resolved to before.
+//
+// Called from UnmarshalJSON (where Kind is whatever the file said) and
+// again from migrateTrack (which runs later and infers Kind for pre-v2
+// records that never had one).
+func (t *Track) ensureReviewSpec() {
+	if t.Review != nil {
+		return
+	}
+	if t.Kind == KindReview || t.Kind == KindDoc {
+		t.Review = &ReviewSpec{}
+	}
 }
 
 // Path returns the absolute path of the state file (useful for
