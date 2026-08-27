@@ -104,3 +104,38 @@ func TestDraftPRReposSelectsOnlyOptedIn(t *testing.T) {
 		t.Errorf("DraftPRRepos = %v, want [yes]", got)
 	}
 }
+
+// Line's whole reason to exist is the quoting guarantee, so it gets
+// its own tests rather than only transitive coverage from providers.
+func TestLineQuotesValuesAndNotFlags(t *testing.T) {
+	got := string(NewLine("agent").
+		Arg("it's a prompt").
+		Flag("--force").
+		Set("--model", "gpt-5.3-codex").
+		Build())
+	want := `'agent' 'it'\''s a prompt' --force --model 'gpt-5.3-codex'`
+	if got != want {
+		t.Errorf("Line built:\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// An empty value must omit the flag, not pass it empty: --model ”
+// selects a model named "".
+func TestSetIfOmitsEmptyValues(t *testing.T) {
+	got := string(NewLine("agent").SetIf("--model", "").SetIf("--mode", "plan").Build())
+	if strings.Contains(got, "--model") {
+		t.Errorf("empty value produced a flag: %s", got)
+	}
+	if !strings.Contains(got, "--mode 'plan'") {
+		t.Errorf("non-empty value was dropped: %s", got)
+	}
+}
+
+// The binary itself is quoted — it comes from config and may contain a
+// space in a path.
+func TestLineQuotesTheBinary(t *testing.T) {
+	got := string(NewLine("/Applications/My Tools/agent").Build())
+	if !strings.Contains(got, `'/Applications/My Tools/agent'`) {
+		t.Errorf("binary not quoted: %s", got)
+	}
+}

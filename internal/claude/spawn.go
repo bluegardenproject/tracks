@@ -16,7 +16,6 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/agent"
 	"github.com/bluegardenproject/tracks/internal/config"
-	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -143,26 +142,7 @@ const taskSuffix = "" +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. " +
 	"If you open several, emit one such line per PR — the dashboard " +
 	"tracks each one and rolls them up into the track's status.\n\n" +
-	"**Dev-server services.** When the user asks you to start (or run, " +
-	"boot, spin up) the dev server, do NOT run `pnpm dev` / `npm " +
-	"start` / `pnpm install` yourself, and never background a server process (`… &` / `nohup`). Run `tracks up <name>` instead: " +
-	"it opens a dedicated pane in this track and runs the configured " +
-	"start steps there (dependency install first, then the server) so " +
-	"the process is visible and does not block you. It returns " +
-	"immediately; the install and boot continue in the pane.\n\n" +
-	"`$TRACKS_ID` is already set in the environment; the `--track` flag " +
-	"is never needed.\n" +
-	"  - `tracks services` lists configured services with status, port, " +
-	"and log path. Run this first to find the service name (if it " +
-	"prints nothing, this repo has no dev server configured; tell the " +
-	"user and stop).\n" +
-	"  - `tracks up` (no arg) starts ALL the track's services, each in its own pane — use this when asked to run the dev servers; `tracks up <name>` starts just one (its " +
-	"depends_on services first)\n" +
-	"  - `tracks down <name>` stops a running service\n" +
-	"  - `tracks url <name>` prints the URL (stable proxy + track port)\n\n" +
-	"To confirm the server came up, tail/cat the log path from `tracks " +
-	"services` (the pane also tees its output there); do not assume " +
-	"success just because `tracks up` returned. If `tracks up` itself errors (command not found, daemon unreachable, unknown service, any non-zero exit), STOP and report the exact error to the user — do not fall back to starting the server yourself.\n\n" +
+	agent.DevServerContract + "\n\n" +
 	"**Jira sync** (only if your task prompt references a Jira-style " +
 	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +
 	"  1. At the start, use `Bash` to read `git config user.email`. " +
@@ -238,27 +218,9 @@ const docReviewTemplate = "" +
 	"with a `DOC REVIEW OUTCOME:` line.\n\n" +
 	"Present its report **verbatim** in the pane — do not re-summarize, " +
 	"re-rank, or soften it.\n\n" +
-	"**Then ask whether to save it.** After presenting the report, ask " +
-	"the user a single question: whether to write it to a markdown file " +
-	"next to the document (`<document-basename>.review.md`). Wait for " +
-	"the answer.\n" +
-	"  - Only write the file if they say yes. If they name a different " +
-	"path, use that instead.\n" +
-	"  - If the target file already exists, read it first and offer a " +
-	"dated name (`<basename>.review-YYYY-MM-DD.md`) rather than " +
-	"overwriting a previous review.\n" +
-	"  - The saved file is the report as presented, plus a header line " +
-	"naming the reviewed document and the date.\n\n" +
-	"**Write contract.** That report file is the ONLY file you may " +
-	"create or modify in this track. Any repos attached to this track " +
-	"are the user's PRIMARY checkouts — the working copies their editor " +
-	"watches — and are attached solely as read-only ground truth for " +
-	"checking the document's claims. Never edit them, never commit, " +
-	"never push, never open a PR, and never change a Jira ticket's " +
-	"status or assignee (this is a read-only audit).\n\n" +
-	"**Response style.** These sessions are read in a dashboard — no " +
-	"preamble, no closing summary restating the report. Lead with the " +
-	"report itself."
+	agent.DocSaveFlow + "\n\n" +
+	agent.DocWriteContract + "\n\n" +
+	agent.DocResponseStyle
 
 // docReviewBrief renders the indented block of review settings the
 // caller must forward to the docs-reviewer subagent: the candor level
@@ -441,31 +403,27 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 // Claude exits — without it, tmux would render a "[exited]" dead
 // pane and the user couldn't poke around the worktree.
 func (o SpawnOptions) ShellCommand() string {
-	claudeArgv := []string{shellx.Quote(o.CLIBinary)}
+	line := agent.NewLine(o.CLIBinary)
 	if o.Resume {
 		// --resume <sessionID> continues the existing conversation;
 		// no positional prompt and no separate --session-id.
-		claudeArgv = append(claudeArgv, "--resume", shellx.Quote(o.SessionID))
+		line.Set("--resume", o.SessionID)
 	} else {
 		if o.TaskPrompt != "" {
 			// Claude takes the prompt as a positional arg: it opens
 			// the TUI pre-filled with that prompt.
-			claudeArgv = append(claudeArgv, shellx.Quote(o.TaskPrompt))
+			line.Arg(o.TaskPrompt)
 		}
-		if o.SessionID != "" {
-			claudeArgv = append(claudeArgv, "--session-id", shellx.Quote(o.SessionID))
-		}
+		line.SetIf("--session-id", o.SessionID)
 	}
-	if o.PermissionMode != "" {
-		claudeArgv = append(claudeArgv, "--permission-mode", shellx.Quote(o.PermissionMode))
-	}
+	line.SetIf("--permission-mode", o.PermissionMode)
 	// Deliberately outside the resume branch above: --resume brings its
 	// own model back with it.
-	if o.Model != "" && !o.Resume {
-		claudeArgv = append(claudeArgv, "--model", shellx.Quote(o.Model))
+	if !o.Resume {
+		line.SetIf("--model", o.Model)
 	}
 	for _, d := range o.AddDirs {
-		claudeArgv = append(claudeArgv, "--add-dir", shellx.Quote(d))
+		line.Set("--add-dir", d)
 	}
 
 	// Everything past the flags — the env every track exports, the exit
@@ -476,7 +434,7 @@ func (o SpawnOptions) ShellCommand() string {
 		SocketDir:    o.SocketDir,
 		BinDir:       o.BinDir,
 		SentinelPath: o.SentinelPath,
-	}.Command(strings.Join(claudeArgv, " "))
+	}.Command(line.Build())
 }
 
 // BuildResumeOptions assembles SpawnOptions for continuing a finished track's
