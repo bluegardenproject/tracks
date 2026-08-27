@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/bluegardenproject/tracks/internal/shellx"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 

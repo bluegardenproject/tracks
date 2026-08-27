@@ -352,7 +352,7 @@ still genuinely open.
       Also document the `Ok=false` + `Result` shape `handleNew` returns, which
       contradicts `Response`'s own doc comment.
 - [ ] **Shared helpers.** ~~`shellQuote` exists in 3 files with 2 different
-      escaping policies~~ — done: `internal/shellx` names the two behaviours
+      escaping policies~~ — **Done**: `internal/shellx` names the two behaviours
       (`Quote` / `QuoteIfNeeded`) behind one escaping implementation, and the
       three copies are gone. Still open: `expandHome` in 2, four
       truncate/shortID/lastN/padRight variants, and the same
