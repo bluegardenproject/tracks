@@ -52,7 +52,9 @@ func TestResumeAcceptsTrackInReview(t *testing.T) {
 	if resp.Ok {
 		t.Fatal("resume succeeded; expected the spawn to fail against the test session")
 	}
-	if !strings.Contains(resp.Error, "spawn claude") {
+	// The message names the provider now, so match the stage rather than
+	// the binary — a Cursor track reaches this same path.
+	if !strings.Contains(resp.Error, "spawn ") {
 		t.Errorf("error = %q, want it to come from the spawn step — anything else means the "+
 			"track was rejected before it got there", resp.Error)
 	}

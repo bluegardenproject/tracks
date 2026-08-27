@@ -179,7 +179,9 @@ func TestReopenWorktreelessTrackSkipsWorktreeRestore(t *testing.T) {
 	if strings.Contains(err.Error(), "worktree") || strings.Contains(err.Error(), "branch") {
 		t.Errorf("error mentions worktree/branch (%v); a worktree-less track must skip that step", err)
 	}
-	if !strings.Contains(err.Error(), "spawn claude") {
+	// The message names the provider now, so match the stage rather
+	// than the binary — a Cursor track reaches this same path.
+	if !strings.Contains(err.Error(), "spawn ") {
 		t.Errorf("error = %v, want it to come from the spawn step", err)
 	}
 	if got, _ := srv.store.Get("doc-track"); got.Status != state.StatusInterrupted {

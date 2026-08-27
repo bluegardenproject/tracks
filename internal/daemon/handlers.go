@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/cursor"
 	"github.com/bluegardenproject/tracks/internal/dlog"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
@@ -105,6 +106,30 @@ func parseReviewRef(ref string) (reviewCheckout, error) {
 		return reviewCheckout{}, fmt.Errorf("not a recognizable GitHub PR URL or branch name: %q", ref)
 	}
 	return reviewCheckout{fetchRef: ref, label: ref}, nil
+}
+
+// newSessionID obtains the conversation id a track keeps for life.
+//
+// Claude's is a uuid tracks generates and passes in with --session-id.
+// Cursor has no equivalent: the chat must exist server-side first, so
+// this is a network call that can fail — and failing here is correct.
+// Launching without an id would start a conversation tracks has no
+// handle on, giving a track that works once and can never be resumed.
+func (s *Server) newSessionID(ctx context.Context, provider state.Provider) (string, error) {
+	switch provider.Resolved() {
+	case state.ProviderCursor:
+		id, err := cursor.CreateChat(ctx, s.config().Cursor.Binary)
+		if err != nil {
+			return "", fmt.Errorf("create cursor chat: %w", err)
+		}
+		return id, nil
+	default:
+		id, err := generateSessionID()
+		if err != nil {
+			return "", fmt.Errorf("generate session id: %w", err)
+		}
+		return id, nil
+	}
 }
 
 func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) Response {
@@ -213,10 +238,24 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	if err != nil {
 		return fail("generate id: " + err.Error())
 	}
-	sessionID, err := generateSessionID()
-	if err != nil {
-		return fail("generate session id: " + err.Error())
+	// Provider, unlike the model, IS resolved here. It has to be: the
+	// spawn path picks a binary from it, and the session id below is
+	// that binary's, so a track whose provider later drifted would try
+	// to resume a Cursor chat id with `claude --resume`, or the reverse.
+	provider := state.Provider(strings.TrimSpace(p.Provider))
+	if !provider.Valid() {
+		return fail(fmt.Sprintf("unknown provider %q (want one of claude, cursor)", p.Provider))
 	}
+	if provider == "" {
+		provider = state.Provider(strings.TrimSpace(s.config().Provider))
+		// The config is validated on load, but it can be edited on disk
+		// between reloads; an unknown value there must not reach a track.
+		if !provider.Valid() {
+			provider = state.ProviderClaude
+		}
+	}
+	provider = provider.Resolved()
+
 	branch := placeholderBranch(trackID)
 
 	stateDir, err := s.config().ResolveStateDir()
@@ -255,26 +294,6 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	// opposite of what a per-kind default is for.
 	requestedModel := strings.TrimSpace(p.Model)
 
-	// Provider, unlike the model, IS resolved here. It has to be: the
-	// spawn path picks a binary from it, and a track that silently
-	// changed provider because the default moved would try to resume a
-	// Cursor chat id with `claude --resume`, or the reverse. Fixing it
-	// at creation is what makes the session id meaningful for the life
-	// of the track.
-	provider := state.Provider(strings.TrimSpace(p.Provider))
-	if !provider.Valid() {
-		return fail(fmt.Sprintf("unknown provider %q (want one of claude, cursor)", p.Provider))
-	}
-	if provider == "" {
-		provider = state.Provider(strings.TrimSpace(s.config().Provider))
-		// The config is validated on load, but it can be edited on disk
-		// between reloads; an unknown value there must not reach a track.
-		if !provider.Valid() {
-			provider = state.ProviderClaude
-		}
-	}
-	provider = provider.Resolved()
-
 	t := state.Track{
 		ID:             trackID,
 		Branch:         branch,
@@ -284,7 +303,6 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		Review:         reviewSpec,
 		Doc:            docSpec,
 		TaskPrompt:     p.TaskPrompt,
-		SessionID:      sessionID,
 		RequestedModel: requestedModel,
 		Provider:       provider,
 		CreatedAt:      time.Now().UTC(),
@@ -342,6 +360,30 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		resultRaw, _ := json.Marshal(NewResult{TrackID: trackID})
 		return Response{Ok: false, Error: msg, Result: resultRaw}
 	}
+
+	// The session id is obtained here, after failCreate exists, rather
+	// than with the other ids at the top.
+	//
+	// Claude's is generated locally and cannot fail. Cursor's is a
+	// network call needing a live login — exactly the class of failure
+	// failCreate exists to absorb — and it is the one failure a user
+	// cannot retry without retyping the prompt. Fetching it before the
+	// record existed meant a dropped connection lost everything they
+	// had entered.
+	//
+	// A chat created here is orphaned server-side if provisioning later
+	// fails and the user abandons the draft; a relaunch creates a fresh
+	// one. Harmless, and not a leak to fix.
+	if provider == state.ProviderCursor {
+		// A network round trip with a 30s ceiling; without this the
+		// creation simply goes quiet.
+		emit("creating cursor chat...")
+	}
+	sessionID, err := s.newSessionID(ctx, provider)
+	if err != nil {
+		return failCreate(err.Error())
+	}
+	t.SessionID = sessionID
 
 	var (
 		trackRepos     []state.TrackRepo
@@ -403,11 +445,11 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		return fail("persist state: " + err.Error())
 	}
 
-	emit("spawning claude...")
+	emit("spawning " + t.Provider.Label() + "...")
 	if _, err := s.startSupervisor(ctx, t); err != nil {
-		return failCreate("spawn claude: " + err.Error())
+		return failCreate("spawn " + t.Provider.Label() + ": " + err.Error())
 	}
-	emit("claude running")
+	emit(t.Provider.Label() + " running")
 	switch {
 	case kind == state.KindDoc:
 		emit("reviewing " + docPath)
@@ -629,7 +671,7 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	s.mu.Unlock()
 	if ok2 {
 		if force {
-			emit("SIGKILL claude...")
+			emit("SIGKILL " + t.Provider.Label() + "...")
 			sup.Kill(s.config().Tmux.SessionName)
 		} else {
 			emit("SIGTERM claude (5s grace)...")
@@ -893,16 +935,16 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 		return fail("persist state: " + err.Error())
 	}
 
-	emit("spawning claude in worktree...")
+	emit("spawning " + t.Provider.Label() + " in worktree...")
 	if _, err := s.startSupervisor(ctx, t); err != nil {
 		t.Status = state.StatusErrored
-		t.ErrorMsg = "spawn claude: " + err.Error()
+		t.ErrorMsg = "spawn " + t.Provider.Label() + ": " + err.Error()
 		now := time.Now().UTC()
 		t.ExitedAt = &now
 		s.persist(t, "promote spawn failure")
-		return fail("spawn claude: " + err.Error())
+		return fail("spawn " + t.Provider.Label() + ": " + err.Error())
 	}
-	emit("claude running")
+	emit(t.Provider.Label() + " running")
 	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track promoted",
 		fmt.Sprintf("%s on %s", labelFor(t), resolvedBranch))
 	return ok(PromoteResult{Branch: resolvedBranch, WindowName: t.WindowName()})
@@ -1100,7 +1142,7 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	// that window by name is ambiguous. Idempotent when there's none.
 	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, t.WindowName())
 
-	emit("spawning claude (resume)...")
+	emit("spawning " + t.Provider.Label() + " (resume)...")
 	sup, err := s.startSupervisorResume(ctx, t)
 	if err != nil {
 		// An interrupted track stays interrupted and a track in review
@@ -1111,8 +1153,8 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 		if prev.Status == state.StatusInterrupted || prev.Status == state.StatusPROpen {
 			failStatus = prev.Status
 		}
-		release(failStatus, "spawn claude: "+err.Error())
-		return "", fmt.Errorf("spawn claude: %w", err)
+		release(failStatus, "spawn "+t.Provider.Label()+": "+err.Error())
+		return "", fmt.Errorf("spawn %s: %w", t.Provider.Label(), err)
 	}
 	// Re-arm the PR watch for a track resumed out of review. Nothing else
 	// would: the watcher is otherwise started only when a *new* PR URL
@@ -1121,7 +1163,7 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	if t.HasOpenPR() {
 		s.startPRWatcher(sup)
 	}
-	emit("claude running")
+	emit(t.Provider.Label() + " running")
 	// Worktree-less kinds (doc/ask/plan) have no branch, so the "on
 	// <branch>" tail is omitted rather than rendered blank — same shape
 	// handleNew uses for its own notification.
