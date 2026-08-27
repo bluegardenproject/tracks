@@ -49,6 +49,57 @@ import (
 // starting at all, which is the heavier cost of the two.
 const CurrentSchemaVersion = 5
 
+// Provider is the agent CLI a track runs on. Tracks manages the
+// worktree, session and tmux lifecycle identically for every provider;
+// the provider decides which binary is launched, how permissions are
+// granted, and where its instructions are read from.
+type Provider string
+
+const (
+	// ProviderClaude runs Claude Code (`claude`). The zero value, so a
+	// record written before providers existed reads as Claude — which
+	// is what it was.
+	ProviderClaude Provider = "claude"
+
+	// ProviderCursor runs Cursor Agent (`agent`), reaching models Claude
+	// Code cannot: GPT, Gemini, Grok, Composer.
+	ProviderCursor Provider = "cursor"
+)
+
+// Providers lists every provider a track may run on, in the order a
+// picker should offer them.
+func Providers() []Provider { return []Provider{ProviderClaude, ProviderCursor} }
+
+// Valid reports whether p names a provider this binary can launch. The
+// empty string is valid and means Claude — see ProviderClaude.
+func (p Provider) Valid() bool {
+	switch p {
+	case "", ProviderClaude, ProviderCursor:
+		return true
+	}
+	return false
+}
+
+// Resolved returns the provider to actually launch, mapping the empty
+// zero value onto the default rather than making every call site
+// remember to.
+func (p Provider) Resolved() Provider {
+	if p == "" {
+		return ProviderClaude
+	}
+	return p
+}
+
+// Label is the provider's display name.
+func (p Provider) Label() string {
+	switch p.Resolved() {
+	case ProviderCursor:
+		return "Cursor Agent"
+	default:
+		return "Claude Code"
+	}
+}
+
 // Kind is the type of a track. It decides whether the track owns
 // worktrees and how Claude is launched.
 type Kind string
@@ -496,6 +547,21 @@ type Track struct {
 	// which is a valid state with a sensible behaviour.
 	RequestedModel string `json:"requested_model,omitempty"`
 
+	// Provider is the agent CLI this track runs on, chosen at creation.
+	// Empty means Claude Code — see ProviderClaude — so every record
+	// written before providers existed reads correctly without a
+	// migration.
+	//
+	// Fixed for the life of the track. Changing it would orphan the
+	// session: SessionID is a Claude session uuid or a Cursor chat id,
+	// and neither binary can resume the other's.
+	//
+	// Added without a schema bump, for the reason given at
+	// RequestedModel: a v6 store is refused outright by a v5 binary, so
+	// a bump costs the user access to every track rather than one
+	// optional field on each.
+	Provider Provider `json:"provider,omitempty"`
+
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
 
@@ -587,6 +653,10 @@ type DraftSpec struct {
 	// Model is the model picked at creation, so a relaunch runs the same
 	// one rather than the current default.
 	Model string `json:"model,omitempty"`
+
+	// Provider is the agent CLI picked at creation, so a relaunch runs
+	// the same one rather than the current default.
+	Provider Provider `json:"provider,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses —

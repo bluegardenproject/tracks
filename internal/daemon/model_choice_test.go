@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/claude"
@@ -145,5 +146,132 @@ func TestPromotedTrackKeepsAnExplicitPick(t *testing.T) {
 	}
 	if opts.Model != "claude-sonnet-5" {
 		t.Errorf("promoted session runs %q, want the explicitly picked claude-sonnet-5", opts.Model)
+	}
+}
+
+// Provider, unlike the model, is resolved at creation: the spawn path
+// picks a binary from it, and a track whose provider drifted would try
+// to resume a Cursor chat id with `claude --resume`.
+func TestCreateResolvesTheProvider(t *testing.T) {
+	srv, store := newModelTestServer(t, config.Claude{Binary: "claude"})
+	tr := createWithParams(t, srv, store, NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work",
+		Provider: "cursor",
+	})
+	if tr.Provider != state.ProviderCursor {
+		t.Errorf("Provider = %q, want the caller's pick", tr.Provider)
+	}
+	if tr.Draft == nil || tr.Draft.Provider != state.ProviderCursor {
+		t.Errorf("draft did not preserve the provider for relaunch: %+v", tr.Draft)
+	}
+}
+
+// No pick means the configured default, materialised onto the record
+// rather than left empty — see the comment at handleNew.
+func TestCreateAppliesTheDefaultProvider(t *testing.T) {
+	srv, store := newModelTestServer(t, config.Claude{Binary: "claude"})
+	cfg := srv.config()
+	cfg.Provider = "cursor"
+	srv.cfg.Store(&cfg)
+
+	tr := createWithParams(t, srv, store, NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work",
+	})
+	if tr.Provider != state.ProviderCursor {
+		t.Errorf("Provider = %q, want the configured default applied", tr.Provider)
+	}
+}
+
+// A default of "" (or a config that never mentions providers) has to
+// come out as Claude, not as an empty provider the spawn path can't use.
+func TestCreateFallsBackToClaude(t *testing.T) {
+	srv, store := newModelTestServer(t, config.Claude{Binary: "claude"})
+	cfg := srv.config()
+	cfg.Provider = ""
+	srv.cfg.Store(&cfg)
+
+	tr := createWithParams(t, srv, store, NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work",
+	})
+	if tr.Provider != state.ProviderClaude {
+		t.Errorf("Provider = %q, want claude", tr.Provider)
+	}
+}
+
+// The design's "done when" for this phase requires the draft round
+// trip, not just that the draft holds the value. These call
+// draftLaunchParams — the function handleLaunch itself uses — rather
+// than rebuilding the mapping, which is what made the first version of
+// this test pass with the production line deleted.
+func TestDraftLaunchParamsCarriesTheProvider(t *testing.T) {
+	tr := state.Track{Draft: &state.DraftSpec{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work",
+		Provider: state.ProviderCursor, Model: "gpt-5.3-codex",
+	}}
+	got := draftLaunchParams(tr)
+	if got.Provider != string(state.ProviderCursor) {
+		t.Errorf("Provider = %q, want cursor", got.Provider)
+	}
+	if got.Model != "gpt-5.3-codex" {
+		t.Errorf("Model = %q", got.Model)
+	}
+}
+
+// A draft written before providers existed carries "". It must replay
+// as Claude — the provider it was created under — not as whatever the
+// default has become since.
+func TestLegacyDraftLaunchesAsClaude(t *testing.T) {
+	tr := state.Track{Draft: &state.DraftSpec{
+		Repos: []string{"demo"}, TaskPrompt: "old work", Kind: "work",
+	}}
+	if got := draftLaunchParams(tr).Provider; got != string(state.ProviderClaude) {
+		t.Errorf("legacy draft replays as %q, want claude — it would otherwise pick up the current default", got)
+	}
+}
+
+// The end-to-end path still has to reach handleNew; this pins that the
+// two are actually connected, which the unit tests above cannot.
+func TestRelaunchReachesCreation(t *testing.T) {
+	srv, store := newModelTestServer(t, config.Claude{Binary: "claude"})
+	tr := createWithParams(t, srv, store, NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work", Provider: "cursor",
+	})
+	raw, err := json.Marshal(LaunchParams{ID: tr.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp := srv.handleLaunch(context.Background(), raw, func(string) {}); resp.Ok {
+		t.Fatal("expected the relaunch to fail against a nonexistent repo")
+	}
+	var sawAttempt bool
+	for _, c := range store.All() {
+		if c.ErrorMsg != "" {
+			sawAttempt = true
+		}
+	}
+	if !sawAttempt {
+		t.Error("relaunch never reached creation — no track carries a failure")
+	}
+}
+
+// An unknown provider must be refused rather than persisted onto a
+// field documented as fixed for the life of the track.
+func TestCreateRejectsAnUnknownProvider(t *testing.T) {
+	srv, store := newModelTestServer(t, config.Claude{Binary: "claude"})
+	raw, err := json.Marshal(NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "do it", Kind: "work", Provider: "codex",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := srv.handleNew(context.Background(), raw, func(string) {})
+	if resp.Ok {
+		t.Fatal("an unknown provider was accepted")
+	}
+	if !strings.Contains(resp.Error, "codex") {
+		t.Errorf("error should name the offending value, got: %q", resp.Error)
+	}
+	if len(store.All()) != 0 {
+		t.Errorf("a track was persisted for a rejected provider: %+v", store.All())
 	}
 }

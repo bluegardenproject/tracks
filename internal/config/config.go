@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -35,9 +36,19 @@ type Config struct {
 	Tmux          Tmux   `yaml:"tmux,omitempty"`
 	Paths         Paths  `yaml:"paths,omitempty"`
 	Claude        Claude `yaml:"claude,omitempty"`
-	Branch        Branch `yaml:"branch,omitempty"`
-	Notify        Notify `yaml:"notify,omitempty"`
-	Repos         []Repo `yaml:"repos,omitempty"`
+	Cursor        Cursor `yaml:"cursor,omitempty"`
+
+	// Provider is the agent CLI new tracks default to. Empty means
+	// Claude Code.
+	//
+	// Read today only by the daemon, when a creation request names no
+	// provider of its own. The creation form will pre-select it and
+	// allow a per-track override once that picker exists; there is no
+	// UI for it yet.
+	Provider string `yaml:"provider,omitempty"`
+	Branch   Branch `yaml:"branch,omitempty"`
+	Notify   Notify `yaml:"notify,omitempty"`
+	Repos    []Repo `yaml:"repos,omitempty"`
 }
 
 // Tmux groups tmux-session settings.
@@ -116,6 +127,20 @@ type ModelChoice struct {
 	Model string `yaml:"model"`
 }
 
+// providers are the agent CLIs a track may run on, and defaultProvider
+// is the one new tracks get when the config says nothing.
+//
+// Duplicated from state.Provider rather than imported: internal/config
+// and internal/state are deliberately independent of each other. The
+// two lists are pinned together by a test in internal/daemon, which
+// sees both — the same arrangement as modelKinds below.
+var providers = []string{"claude", "cursor"}
+
+const defaultProvider = "claude"
+
+// Providers returns the agent CLIs a track may be created against.
+func Providers() []string { return append([]string(nil), providers...) }
+
 // modelKinds are the track kinds ModelByKind may be keyed by.
 //
 // Duplicated from state.Kind rather than imported: internal/config and
@@ -151,6 +176,48 @@ func (c Claude) Choices() []ModelChoice {
 // preferring a per-kind override over the global default. Empty means
 // "pass no --model flag".
 func (c Claude) ModelFor(kind string) string {
+	if m, ok := c.ModelByKind[kind]; ok {
+		if m = strings.TrimSpace(m); m != "" {
+			return m
+		}
+	}
+	return strings.TrimSpace(c.Model)
+}
+
+// Cursor groups settings for how `tracks` invokes the Cursor Agent
+// binary. Deliberately shaped like Claude rather than shared with it:
+// the two CLIs agree on more flags than they disagree on today, but a
+// shared struct would have to grow a union of both as they drift.
+type Cursor struct {
+	// Binary is the Cursor Agent executable. Either a bare name (PATH
+	// lookup) or an absolute path. Default: "agent".
+	Binary string `yaml:"binary,omitempty"`
+
+	// Model is passed as --model for a Cursor track that doesn't name
+	// its own. Cursor's ids are its own — "gpt-5.3-codex",
+	// "claude-opus-5-thinking-high", "composer-2.5" — and are NOT
+	// interchangeable with the Claude API ids in Claude.Model. Empty
+	// omits the flag, leaving Cursor's own default ("auto").
+	Model string `yaml:"model,omitempty"`
+
+	// ModelByKind overrides Model for one kind of track, keyed as in
+	// Claude.ModelByKind.
+	ModelByKind map[string]string `yaml:"model_by_kind,omitempty"`
+
+	// ModelChoices is what the creation picker will offer for Cursor
+	// tracks once that picker exists. Empty is intended to mean "ask the
+	// binary" — `agent --list-models` is authoritative and
+	// account-specific, so there is no useful built-in list to fall back
+	// on the way there is for Claude.
+	//
+	// Nothing reads this yet.
+	ModelChoices []ModelChoice `yaml:"model_choices,omitempty"`
+}
+
+// ModelFor returns the model a new Cursor track of the given kind
+// should run, preferring a per-kind override over the global default.
+// Empty means "pass no --model flag".
+func (c Cursor) ModelFor(kind string) string {
 	if m, ok := c.ModelByKind[kind]; ok {
 		if m = strings.TrimSpace(m); m != "" {
 			return m
@@ -335,6 +402,10 @@ func Default() Config {
 			Binary:         "claude",
 			PermissionMode: "auto",
 		},
+		Cursor: Cursor{
+			Binary: "agent",
+		},
+		Provider: defaultProvider,
 		Branch: Branch{
 			Types:       []string{"feat", "fix", "chore", "refactor", "docs", "test"},
 			DefaultType: "fix",
@@ -362,6 +433,9 @@ func (c Config) Validate() error {
 	}
 	if c.Claude.Binary == "" {
 		return errors.New("claude.binary must not be empty")
+	}
+	if c.Cursor.Binary == "" {
+		return errors.New("cursor.binary must not be empty")
 	}
 
 	// Branch types: at least one, no dupes, default must be present.
@@ -401,6 +475,20 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(ch.Model) == "" {
 			return fmt.Errorf("claude.model_choices[%d] has an empty model", i)
 		}
+	}
+	for kind := range c.Cursor.ModelByKind {
+		if _, ok := validKind[kind]; !ok {
+			return fmt.Errorf("cursor.model_by_kind has unknown kind %q (want one of %s)",
+				kind, strings.Join(modelKinds, ", "))
+		}
+	}
+	for i, ch := range c.Cursor.ModelChoices {
+		if strings.TrimSpace(ch.Model) == "" {
+			return fmt.Errorf("cursor.model_choices[%d] has an empty model", i)
+		}
+	}
+	if p := strings.TrimSpace(c.Provider); p != "" && !slices.Contains(providers, p) {
+		return fmt.Errorf("provider %q is not one of %s", p, strings.Join(providers, ", "))
 	}
 
 	// Repos: unique names, non-empty path and base.
@@ -610,6 +698,12 @@ func Load() (Config, error) {
 	}
 	if cfg.Claude.PermissionMode == "" {
 		cfg.Claude.PermissionMode = "auto"
+	}
+	if cfg.Cursor.Binary == "" {
+		cfg.Cursor.Binary = "agent"
+	}
+	if strings.TrimSpace(cfg.Provider) == "" {
+		cfg.Provider = defaultProvider
 	}
 	if len(cfg.Branch.Types) == 0 {
 		cfg.Branch.Types = Default().Branch.Types
