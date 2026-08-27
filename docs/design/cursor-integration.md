@@ -461,6 +461,75 @@ Cursor equivalent of `tracks-reviewer`, so the mandatory pre-push review
 (§10 item 4) remains genuinely open — it is the one part of the Claude
 context that cannot be ported by writing a file.
 
+## 12. Installed files must be owned, not just written
+
+**Constraint (2026-08-27):** everything needed to run tracks ships in
+the repo and is installed from it — no file a user is told to create by
+hand — and tracks must never overwrite or remove a `.md` in the user's
+home directory that it does not own.
+
+Today it can. `InstallGlobalHelpers` writes three fixed paths with a
+plain `os.WriteFile` on every daemon start:
+
+```
+~/.claude/skills/tracks-add-repo.md
+~/.claude/agents/tracks-reviewer.md
+~/.claude/agents/tracks-docs-reviewer.md
+```
+
+No `Stat`, no `O_EXCL`, no content comparison. Two consequences, both
+live in 1.0 and neither Cursor-specific:
+
+1. A user who already has a file at one of those names loses it, with
+   no message. The names are plausible enough to collide — someone who
+   wrote their own `tracks-reviewer` before installing tracks is
+   exactly the person who would.
+2. A user who *edits* tracks' own file has it reverted on the next
+   daemon start, which reads as the edit "not working".
+
+Adding `~/.cursor/rules/tracks.mdc` makes this worse in kind, because
+that directory is one users populate themselves — two hand-written
+rules already sit there on this machine.
+
+### Ownership marker
+
+Give every installed file a provenance line in its frontmatter:
+
+```yaml
+---
+name: tracks-reviewer
+description: …
+x-tracks-managed: "1"        # written by tracks; safe to replace
+---
+```
+
+Install becomes:
+
+| State on disk | Action |
+|---|---|
+| absent | write |
+| present, has the marker, content differs | overwrite (this is how upgrades land) |
+| present, has the marker, content identical | skip — don't touch mtime |
+| **present, no marker** | **never write.** Log it, and surface it once in `tracks doctor` |
+
+The no-marker case is the user's file by definition, so tracks leaves
+it alone and says so rather than guessing. Writing a `.tracks-new`
+sibling is a reasonable second step, but the non-destructive default is
+the requirement.
+
+Nothing removes these files today and nothing should start: teardown
+and `gc` operate on worktrees and the state dir, never on `~/.claude`
+or `~/.cursor`. An explicit `tracks uninstall` could remove
+marker-bearing files only — never an unmarked one.
+
+### Sequencing
+
+This lands **before** Phase 3, since Phase 3 adds a fourth installed
+file and would otherwise inherit the flaw. It is small — a helper that
+reads, checks the marker, compares, and writes — and it fixes the three
+existing files at the same time. Worth a ROADMAP entry in its own
+right: it is a 1.0 data-loss bug, narrow but real.
+
 ## Appendix: `agent --help` output (2026-08-27)
 
 ```
