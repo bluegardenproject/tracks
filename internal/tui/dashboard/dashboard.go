@@ -1058,7 +1058,17 @@ func layoutFor(width int, wantModelPair bool) colLayout {
 // only ever appearing on a mismatch. Empty when no turn has named a
 // model yet.
 func trackModel(t state.Track, width int) string {
+	// Observed wins wherever it exists: it is what the API actually
+	// served, and it follows an in-pane `/model` switch. Requested is
+	// the fallback, not a second choice — for a Cursor track there is
+	// never an observed value, because internal/usage reads Claude
+	// transcripts and Cursor writes none, so requested is all there is.
+	// For a Claude track it fills the gap before the first turn, where
+	// the alternative is an em-dash that says less than we know.
 	main := usage.ShortModel(t.ObservedModel)
+	if main == "" {
+		main = usage.ShortModel(t.RequestedModel)
+	}
 	sub := usage.ShortModel(t.ObservedSubagentModel)
 	switch {
 	case main == "" && sub == "":
