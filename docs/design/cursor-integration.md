@@ -386,13 +386,13 @@ a first working Cursor track.
 
 ## 10. Decisions still needed
 
-1. **Is provider per-track only, or also per-kind?** `model_by_kind`
-   exists; `provider_by_kind` would be symmetric (e.g. doc reviews on
-   Cursor). Cheap now, awkward to retrofit after the config ships.
-2. **`.cursor/` containment** (§5 q1, still open). Writing into the
-   worktree risks a commit; the repo's own `.gitignore` is not ours to
-   edit. A `.git/info/exclude` entry in the worktree is invisible to the
-   branch and needs no cooperation from the repo — probably the answer.
+1. ~~**Is provider per-track only, or also per-kind?**~~ — **decided
+   2026-08-27: per-track only.** Settings carries a single default
+   provider; the creation form pre-selects it and the user can override
+   per track. No `provider_by_kind` — `model_by_kind` stays the only
+   per-kind dimension.
+2. ~~**`.cursor/` containment**~~ — **dissolved 2026-08-27.** Nothing is
+   written into the worktree at all; see §11.
 3. **Auth** (§5 q2). `agent status` confirms a logged-in user here, so
    the zero-config path already works; `cursor.api_key` in tracks config
    would be the only reason to add secret handling to a file that
@@ -401,6 +401,65 @@ a first working Cursor track.
 4. **Review gate parity** (new). Claude tracks get a mandatory pre-push
    review via `taskSuffix`. Decide whether Cursor tracks get the same
    text in `tracks.mdc` or deliberately run without it.
+
+## 11. Context injection, revised — a global rule, not a per-worktree file
+
+§3c proposed writing `<worktree>/.cursor/rules/tracks.mdc` at provision
+time and deleting it at teardown. Testing showed that is unnecessary.
+
+**Measured 2026-08-27** with a probe rule containing a codeword, asking
+`agent -p` to repeat it:
+
+| Rule location | Run from | Picked up? |
+|---|---|---|
+| `~/.cursor/rules/` | a real workspace | ✅ yes |
+| `<workspace>/.cursor/rules/` | same workspace | ✅ yes |
+| `~/.cursor/rules/` | a non-workspace dir (`$TMPDIR`) | ❌ no |
+
+So the CLI honours **global user rules**, and the one negative was an
+artifact of running outside a workspace — every tracks pane runs inside
+one, so it does not apply.
+
+That means Cursor context installs exactly the way Claude's already
+does. `InstallGlobalHelpers` (`internal/daemon/skill.go`, called from
+`server.go` at daemon start) writes `~/.claude/agents/tracks-reviewer.md`
+and friends from templates embedded in the binary; it grows one more
+write:
+
+```
+~/.cursor/rules/tracks.mdc     ← new, alwaysApply: true
+```
+
+Format, taken from rules already on disk:
+
+```markdown
+---
+description: <one line>
+alwaysApply: true
+---
+```
+
+**The one constraint this imposes.** A global rule loads in *every*
+Cursor session the user runs, including their ordinary work outside
+tracks. So it must be conditional from its first line — "if the
+`TRACKS_ID` environment variable is set you are inside a tracks
+worktree; otherwise ignore this rule" — and it must stay short, because
+its cost is paid on every unrelated session too. Per-track values are
+read from the environment (§8.1) rather than baked in, which is what
+makes one static template sufficient.
+
+**What this removes from the plan:** Phase 3 is no longer "write at
+provision, delete at teardown, keep it out of git". It is one more
+template and one more `os.WriteFile` in a function that already does
+three. No worktree writes, no `.gitignore` interaction, no teardown
+path, and no risk of a stray `.cursor/` being committed.
+
+**What it does not solve.** `~/.cursor/agents/` exists but is empty and
+has no documented user-definable format; `cli-config.json` mentions an
+internal `exploreSubagentModel`, not a user surface. There is still no
+Cursor equivalent of `tracks-reviewer`, so the mandatory pre-push review
+(§10 item 4) remains genuinely open — it is the one part of the Claude
+context that cannot be ported by writing a file.
 
 ## Appendix: `agent --help` output (2026-08-27)
 
