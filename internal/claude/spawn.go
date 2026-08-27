@@ -11,6 +11,7 @@ package claude
 import (
 	"errors"
 	"fmt"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"os"
 	"strings"
 
@@ -476,53 +477,53 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 // Claude exits — without it, tmux would render a "[exited]" dead
 // pane and the user couldn't poke around the worktree.
 func (o SpawnOptions) ShellCommand() string {
-	claudeArgv := []string{shellQuote(o.CLIBinary)}
+	claudeArgv := []string{shellx.Quote(o.CLIBinary)}
 	if o.Resume {
 		// --resume <sessionID> continues the existing conversation;
 		// no positional prompt and no separate --session-id.
-		claudeArgv = append(claudeArgv, "--resume", shellQuote(o.SessionID))
+		claudeArgv = append(claudeArgv, "--resume", shellx.Quote(o.SessionID))
 	} else {
 		if o.TaskPrompt != "" {
 			// Claude takes the prompt as a positional arg: it opens
 			// the TUI pre-filled with that prompt.
-			claudeArgv = append(claudeArgv, shellQuote(o.TaskPrompt))
+			claudeArgv = append(claudeArgv, shellx.Quote(o.TaskPrompt))
 		}
 		if o.SessionID != "" {
-			claudeArgv = append(claudeArgv, "--session-id", shellQuote(o.SessionID))
+			claudeArgv = append(claudeArgv, "--session-id", shellx.Quote(o.SessionID))
 		}
 	}
 	if o.PermissionMode != "" {
-		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
+		claudeArgv = append(claudeArgv, "--permission-mode", shellx.Quote(o.PermissionMode))
 	}
 	// Deliberately outside the resume branch above: --resume brings its
 	// own model back with it.
 	if o.Model != "" && !o.Resume {
-		claudeArgv = append(claudeArgv, "--model", shellQuote(o.Model))
+		claudeArgv = append(claudeArgv, "--model", shellx.Quote(o.Model))
 	}
 	for _, d := range o.AddDirs {
-		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))
+		claudeArgv = append(claudeArgv, "--add-dir", shellx.Quote(d))
 	}
 	claudeLine := strings.Join(claudeArgv, " ")
 
 	// Build the inner shell script.
 	inner := claudeLine
 	if o.SentinelPath != "" {
-		inner += "\ntouch " + shellQuote(o.SentinelPath)
+		inner += "\ntouch " + shellx.Quote(o.SentinelPath)
 	}
 	inner += "\nexec ${SHELL:-bash} -l"
 
-	envPrefix := "TRACKS_ID=" + shellQuote(o.TrackID) +
-		" TRACKS_SOCKET_DIR=" + shellQuote(o.SocketDir)
+	envPrefix := "TRACKS_ID=" + shellx.Quote(o.TrackID) +
+		" TRACKS_SOCKET_DIR=" + shellx.Quote(o.SocketDir)
 	if o.BinDir != "" {
 		// Prepend so a bare `tracks` resolves. $PATH is expanded by the
 		// outer shell that runs this line.
-		envPrefix += " PATH=" + shellQuote(o.BinDir) + `:"$PATH"`
+		envPrefix += " PATH=" + shellx.Quote(o.BinDir) + `:"$PATH"`
 	}
 
 	// Outer sh -c "..." wrapper. We deliberately use sh (not bash)
 	// for the outer because /bin/sh is the only shell tmux relies
 	// on; the user's $SHELL is invoked only at the fallback step.
-	return envPrefix + " sh -c " + shellQuote(inner)
+	return envPrefix + " sh -c " + shellx.Quote(inner)
 }
 
 // BuildResumeOptions assembles SpawnOptions for continuing a finished track's
@@ -574,14 +575,4 @@ func BuildResumeOptions(cfg config.Config, t state.Track, socketDir, sentinelPat
 		SessionID:      t.SessionID,
 		Resume:         true,
 	}, nil
-}
-
-// shellQuote returns s wrapped in single quotes with embedded
-// single quotes escaped. Safe for inclusion in any /bin/sh command
-// line.
-func shellQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

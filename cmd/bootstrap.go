@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"os"
 	"os/exec"
 	"time"
@@ -49,7 +50,7 @@ func bootstrap(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("find self binary: %w", err)
 		}
-		dashboardCmd := fmt.Sprintf("%s dashboard", shellQuote(self))
+		dashboardCmd := fmt.Sprintf("%s dashboard", shellx.QuoteIfNeeded(self))
 		if err := tm.NewSession(cfg.Tmux.SessionName, "Dashboard", dashboardCmd, ""); err != nil {
 			return fmt.Errorf("create tmux session: %w", err)
 		}
@@ -100,7 +101,7 @@ func bootstrap(ctx context.Context) error {
 // that's unbound by default ("t" by default; configurable).
 func configureMenuKey(cfg config.Config, selfPath string) error {
 	popupCmd := fmt.Sprintf("display-popup -E -w 80%% -h 80%% %s menu",
-		shellQuote(selfPath))
+		shellx.QuoteIfNeeded(selfPath))
 	cmd := exec.Command("tmux", "bind-key", cfg.Tmux.MenuKey, popupCmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tmux bind-key: %w: %s", err, string(out))
@@ -193,7 +194,7 @@ func spawnDaemon(cl *daemon.Client) error {
 	// by the daemon's own `tmux has-session` poll, which exits when
 	// the session disappears.
 	cmd := exec.Command("tmux", "run-shell", "-b",
-		fmt.Sprintf("%s daemon", shellQuote(self)))
+		fmt.Sprintf("%s daemon", shellx.QuoteIfNeeded(self)))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("spawn daemon via tmux run-shell: %w: %s",
 			err, string(out))
