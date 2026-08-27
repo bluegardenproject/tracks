@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"os"
 	"time"
 
@@ -518,7 +519,7 @@ func ensureWindowAndSelect(cfg config.Config, tm *tmux.Client, window, command s
 	}
 	if !exists {
 		self, _ := selfBinary()
-		full := fmt.Sprintf("%s %s", shellQuote(self), command)
+		full := fmt.Sprintf("%s %s", shellx.QuoteIfNeeded(self), command)
 		if err := tm.NewWindow(cfg.Tmux.SessionName, window, full, "", true); err != nil {
 			return err
 		}

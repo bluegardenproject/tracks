@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -246,7 +247,7 @@ func (s *Server) serviceURLs(trackID, name string, port int) string {
 // runs, wrapped in a login shell (`$SHELL -lc`) so PATH carries the node/pnpm
 // that nvm/fnm put there, matching how Claude itself is spawned.
 func buildServicePaneCommand(env map[string]string, steps []string, serverCmd, logPath string) string {
-	return "exec ${SHELL:-/bin/bash} -lc " + shellQuoteSvc(buildServiceScript(env, steps, serverCmd, logPath))
+	return "exec ${SHELL:-/bin/bash} -lc " + shellx.Quote(buildServiceScript(env, steps, serverCmd, logPath))
 }
 
 // buildServiceScript is the un-wrapped shell script buildServicePaneCommand
@@ -258,7 +259,7 @@ func buildServicePaneCommand(env map[string]string, steps []string, serverCmd, l
 func buildServiceScript(env map[string]string, steps []string, serverCmd, logPath string) string {
 	var b strings.Builder
 	for _, k := range sortedKeys(env) {
-		b.WriteString("export " + k + "=" + shellQuoteSvc(env[k]) + "; ")
+		b.WriteString("export " + k + "=" + shellx.Quote(env[k]) + "; ")
 	}
 	seq := make([]string, 0, len(steps)+1)
 	for _, s := range steps {
@@ -269,7 +270,7 @@ func buildServiceScript(env map[string]string, steps []string, serverCmd, logPat
 	if strings.TrimSpace(serverCmd) != "" {
 		seq = append(seq, serverCmd)
 	}
-	b.WriteString("{ " + strings.Join(seq, " && ") + " ; } 2>&1 | tee " + shellQuoteSvc(logPath) + "; ")
+	b.WriteString("{ " + strings.Join(seq, " && ") + " ; } 2>&1 | tee " + shellx.Quote(logPath) + "; ")
 	b.WriteString("exec ${SHELL:-/bin/bash} -l")
 	return b.String()
 }
@@ -399,13 +400,4 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// shellQuoteSvc wraps s in single quotes with embedded single quotes
-// escaped — safe to embed anywhere in a /bin/sh command line.
-func shellQuoteSvc(s string) string {
-	if s == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
