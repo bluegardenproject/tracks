@@ -75,6 +75,10 @@ func Run(startingCfg config.Config, loadError error) error {
 			if err := removeRepo(&cfg); err != nil && !errors.Is(err, ErrCancelled) {
 				return err
 			}
+		case actionProvider:
+			if err := editProvider(&cfg); err != nil && !errors.Is(err, ErrCancelled) {
+				return err
+			}
 		case actionModels:
 			if err := editModels(&cfg); err != nil && !errors.Is(err, ErrCancelled) {
 				return err
@@ -92,11 +96,12 @@ func Run(startingCfg config.Config, loadError error) error {
 type action string
 
 const (
-	actionAdd    action = "add"
-	actionEdit   action = "edit"
-	actionRemove action = "remove"
-	actionModels action = "models"
-	actionBack   action = "back"
+	actionAdd      action = "add"
+	actionEdit     action = "edit"
+	actionRemove   action = "remove"
+	actionModels   action = "models"
+	actionProvider action = "provider"
+	actionBack     action = "back"
 )
 
 // pickAction shows the top-level settings menu. The label includes
@@ -113,6 +118,7 @@ func pickAction(cfg config.Config) (action, error) {
 					huh.NewOption("Add repo", actionAdd),
 					huh.NewOption("Edit repo", actionEdit),
 					huh.NewOption("Remove repo", actionRemove),
+					huh.NewOption(providerMenuLabel(cfg), actionProvider),
 					huh.NewOption(modelsMenuLabel(cfg), actionModels),
 					huh.NewOption("Back", actionBack),
 				).
