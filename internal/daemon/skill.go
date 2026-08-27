@@ -576,5 +576,8 @@ func (s *Server) InstallGlobalHelpers() error {
 		}
 	}
 
-	return nil
+	// Cursor reads its instructions from ~/.cursor/rules rather than
+	// from a subagent directory, so its context is installed the same
+	// way but to a different place. Gated on Cursor being present.
+	return s.installCursorRule(home)
 }

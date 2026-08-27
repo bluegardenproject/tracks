@@ -96,6 +96,7 @@ func TestShippedTemplatesCarryTheMarker(t *testing.T) {
 		"skillTemplate":             skillTemplate,
 		"reviewerAgentTemplate":     reviewerAgentTemplate,
 		"docsReviewerAgentTemplate": docsReviewerAgentTemplate,
+		"cursorRuleTemplate":        cursorRuleTemplate,
 	} {
 		if !hasManagedMarker([]byte(tpl)) {
 			t.Errorf("%s has no %s marker — tracks would stop updating it after the first install", name, managedMarker)
