@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/claude"
+	"github.com/bluegardenproject/tracks/internal/cursor"
+	"github.com/bluegardenproject/tracks/internal/dlog"
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/notify"
 	"github.com/bluegardenproject/tracks/internal/state"
@@ -89,8 +91,9 @@ type supervisor struct {
 // notification at this cadence is enough without spamming.
 const waitingNotifyMinInterval = 2 * time.Minute
 
-// startSupervisor opens a tmux window for the track with claude
-// running inside it and starts the watcher goroutines.
+// startSupervisor opens a tmux window for the track with its agent
+// running inside it and starts the watcher goroutines. Which agent is
+// spawnFor's decision, taken from the track's provider.
 func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*supervisor, error) {
 	sentinelPath, err := s.sentinelPathFor(t.ID)
 	if err != nil {
@@ -100,19 +103,17 @@ func (s *Server) startSupervisor(ctx context.Context, t state.Track) (*superviso
 	// would make the supervisor finalize instantly. Remove it.
 	_ = os.Remove(sentinelPath)
 
-	opts, err := claude.BuildOptions(s.config(), t, s.socketDir, sentinelPath)
+	cmd, cwd, err := s.spawnFor(t, sentinelPath, false)
 	if err != nil {
 		return nil, err
 	}
-	if s.exePath != "" {
-		opts.BinDir = filepath.Dir(s.exePath)
-	}
-	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
+	return s.spawnSupervisor(ctx, t, sentinelPath, cmd, cwd)
 }
 
-// startSupervisorResume re-opens a finished track's Claude session via
-// --resume. Identical to startSupervisor except it uses BuildResumeOptions
-// so the shell command passes --resume <sessionID> instead of a fresh prompt.
+// startSupervisorResume re-opens a finished track's session via
+// --resume. Identical to startSupervisor except it asks spawnFor for
+// the resume form, so the command carries --resume <sessionID> instead
+// of a fresh prompt.
 func (s *Server) startSupervisorResume(ctx context.Context, t state.Track) (*supervisor, error) {
 	sentinelPath, err := s.sentinelPathFor(t.ID)
 	if err != nil {
@@ -120,23 +121,83 @@ func (s *Server) startSupervisorResume(ctx context.Context, t state.Track) (*sup
 	}
 	_ = os.Remove(sentinelPath)
 
-	opts, err := claude.BuildResumeOptions(s.config(), t, s.socketDir, sentinelPath)
+	cmd, cwd, err := s.spawnFor(t, sentinelPath, true)
 	if err != nil {
 		return nil, err
 	}
-	if s.exePath != "" {
-		opts.BinDir = filepath.Dir(s.exePath)
-	}
-	return s.spawnSupervisor(ctx, t, sentinelPath, opts)
+	return s.spawnSupervisor(ctx, t, sentinelPath, cmd, cwd)
 }
 
-// spawnSupervisor opens a tmux window with the given options, registers the
-// supervisor, and starts the watcher goroutine. Called by startSupervisor and
-// startSupervisorResume after they have built their respective SpawnOptions.
-func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPath string, opts claude.SpawnOptions) (*supervisor, error) {
+// spawnFor builds the shell command and pane directory for a track,
+// dispatching on its provider.
+//
+// The provider is read off the record rather than from config: it is
+// fixed when the track is created, because SessionID is either a Claude
+// session uuid or a Cursor chat id and neither binary can resume the
+// other's. A track whose provider followed the current default would
+// eventually be handed the wrong one.
+//
+// default rather than an explicit claude case, so every record written
+// before providers existed — all of which carry an empty provider —
+// keeps working.
+func (s *Server) spawnFor(t state.Track, sentinelPath string, resume bool) (cmd, cwd string, err error) {
+	cfg := s.config()
+	binDir := ""
+	if s.exePath != "" {
+		binDir = filepath.Dir(s.exePath)
+	}
+
+	switch t.Provider.Resolved() {
+	case state.ProviderCursor:
+		build := cursor.BuildOptions
+		if resume {
+			build = cursor.BuildResumeOptions
+		}
+		opts, err := build(cfg, t, s.socketDir, sentinelPath)
+		if err != nil {
+			return "", "", err
+		}
+		opts.BinDir = binDir
+		return opts.ShellCommand(), opts.CWD, nil
+
+	case state.ProviderClaude:
+		build := claude.BuildOptions
+		if resume {
+			build = claude.BuildResumeOptions
+		}
+		opts, err := build(cfg, t, s.socketDir, sentinelPath)
+		if err != nil {
+			return "", "", err
+		}
+		opts.BinDir = binDir
+		return opts.ShellCommand(), opts.CWD, nil
+
+	default:
+		// Unreachable today: handleNew rejects unknown providers and
+		// Resolved() maps "" onto Claude. It exists for the third
+		// provider — adding one to state and forgetting this switch
+		// would otherwise launch `claude --session-id <its chat id>`,
+		// a track that starts and looks fine until it is resumed.
+		dlog.Printf("track %s has provider %q, which this binary cannot launch; falling back to Claude", t.ID, t.Provider)
+		opts, err := claude.BuildOptions(cfg, t, s.socketDir, sentinelPath)
+		if err != nil {
+			return "", "", err
+		}
+		opts.BinDir = binDir
+		return opts.ShellCommand(), opts.CWD, nil
+	}
+}
+
+// spawnSupervisor opens a tmux window running shellCmd in cwd,
+// registers the supervisor, and starts the watcher goroutine.
+//
+// Takes the command and directory rather than a provider's options
+// type: they are all it ever used, and passing them directly is what
+// lets two provider packages feed it without an interface.
+func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPath, shellCmd, cwd string) (*supervisor, error) {
 	tm := tmux.New()
 	window := t.WindowName()
-	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, opts.ShellCommand(), opts.CWD)
+	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, shellCmd, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux window: %w", err)
 	}
