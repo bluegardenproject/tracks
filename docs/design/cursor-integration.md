@@ -366,7 +366,19 @@ future provider share one dispatch point. `default` (not an explicit
   shown but answer discarded" bug for `Model`; extend it to `Provider`
   in the same pass, or the same class of bug ships again.
 
-### Phase 6 — Usage stub + dashboard (~0.5 d)
+### Phase 6 — Usage stub + dashboard (~0.5 d) — **done**
+
+Smaller than estimated, because the dashboard already renders `—` for a
+zero usage total. Gating at the source (`hasParsableTranscript`) rather
+than at the renderer therefore produced the display for free, removed
+the pointless polling for a transcript that cannot exist, and made a
+wrong number unreachable rather than merely unshown.
+
+One addition not in the original plan: the MODEL column falls back to
+`RequestedModel` when nothing was observed. A Cursor track has no
+observed model ever, so the column would otherwise have been
+permanently blank; the same fallback also fills the gap for a Claude
+track before its first turn.
 
 Cost display is explicitly out of scope (decided 2026-08-27, §5 q4).
 That makes this phase small, but **not empty**: the danger was never a

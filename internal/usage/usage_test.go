@@ -207,3 +207,33 @@ func TestFormatters(t *testing.T) {
 		t.Errorf("FormatDuration(63m) = %q", got)
 	}
 }
+
+// Cursor's model ids are its own, but several are Anthropic-branded
+// and match this table by substring. Cursor bills a subscription, not
+// per token, so a cost derived from these rates is not slightly off —
+// it is a number where there should be none.
+//
+// internal/daemon never lets a Cursor track reach this code
+// (hasParsableTranscript). This test pins the collision itself, so
+// that anyone who later adds Cursor usage parsing meets the trap here
+// rather than discovering it in the dashboard.
+func TestCursorModelNamesCollideWithTheTable(t *testing.T) {
+	collides := []string{
+		"claude-opus-5-thinking-high",
+		"claude-sonnet-5-thinking-xhigh",
+		"claude-fable-5-thinking-high",
+	}
+	for _, m := range collides {
+		if in, _ := priceFor(m); in == 0 {
+			t.Errorf("priceFor(%q) = 0; this test documents that it does NOT, so the daemon-side gate is what protects Cursor tracks", m)
+		}
+	}
+	// Cursor's own ids fall through to zero, which is why the result
+	// would be a mix of wrong numbers and blanks rather than uniformly
+	// either.
+	for _, m := range []string{"gpt-5.3-codex", "composer-2.5", "auto"} {
+		if in, _ := priceFor(m); in != 0 {
+			t.Errorf("priceFor(%q) = %v, expected no family match", m, in)
+		}
+	}
+}

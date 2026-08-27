@@ -474,6 +474,9 @@ func (s *Server) refreshUsage(sup *supervisor) {
 	if !ok {
 		return
 	}
+	if !hasParsableTranscript(t) {
+		return
+	}
 	// A worktree-less ask may have no repo; the transcript is still
 	// located by session id, so an empty cwd is fine here.
 	cwd := ""
@@ -514,6 +517,25 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		}
 		return true
 	})
+}
+
+// hasParsableTranscript reports whether a track's usage can be read at
+// all.
+//
+// internal/usage reads Claude Code's session transcript. Cursor writes
+// no equivalent, and its chat id could never match one, so polling for
+// it is work that can only ever find nothing.
+//
+// Leaving Usage at zero is also what produces the right display: the
+// dashboard already renders "—" for a zero total, so a Cursor track
+// shows a blank cost rather than a number. That is deliberate. Cursor
+// bills a subscription, not per token, and its Anthropic-branded model
+// ids ("claude-opus-5-thinking-high") match usage.priceFor by
+// substring — so a cost computed from an Anthropic rate card would be
+// confidently wrong rather than absent. Gating here, at the source,
+// means no such number can be produced in the first place.
+func hasParsableTranscript(t state.Track) bool {
+	return t.Provider.Resolved() != state.ProviderCursor
 }
 
 // transcriptSig is a cheap change-detector: path+size+mtime for each
@@ -922,7 +944,7 @@ func (s *Server) finalizeTrack(trackID string) {
 	if len(t.Repos) > 0 {
 		// Gated on either signal: a session that billed nothing can still
 		// have named a model, and vice versa.
-		if tot, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); err == nil &&
+		if tot, err := usage.ForTrack(t.SessionID, t.Repos[0].Path); hasParsableTranscript(t) && err == nil &&
 			(!tot.Usage.IsZero() || tot.Model != "" || tot.SubagentModel != "") {
 			settled, haveSettled = tot, true
 		}

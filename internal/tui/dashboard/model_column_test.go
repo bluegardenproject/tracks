@@ -212,3 +212,43 @@ func TestBothRowsRenderTheSubagentModel(t *testing.T) {
 		}
 	}
 }
+
+// A Cursor track never has an observed model — internal/usage reads
+// Claude transcripts and Cursor writes none — so the column would be
+// permanently blank without the requested-model fallback.
+func TestModelFallsBackToTheRequestedModel(t *testing.T) {
+	cursorTrack := state.Track{
+		Provider: state.ProviderCursor, RequestedModel: "gpt-5.3-codex",
+	}
+	if got := trackModel(cursorTrack, modelMaxWidth); got != "gpt-5.3-codex" {
+		t.Errorf("cursor track shows %q, want its requested model", got)
+	}
+}
+
+// Observed still wins wherever it exists: it is what actually ran, and
+// it follows an in-pane /model switch that the requested value cannot.
+func TestObservedModelBeatsRequested(t *testing.T) {
+	tr := state.Track{
+		ObservedModel:  "claude-sonnet-4-6", // the user switched mid-session
+		RequestedModel: "claude-opus-4-8",
+	}
+	if got := trackModel(tr, modelMaxWidth); got != "sonnet-4-6" {
+		t.Errorf("trackModel = %q, want the observed model to win", got)
+	}
+}
+
+// Before the first turn a Claude track now shows what it will run
+// rather than an em-dash — strictly more than we knew before.
+func TestClaudeTrackShowsItsPickBeforeTheFirstTurn(t *testing.T) {
+	tr := state.Track{RequestedModel: "claude-opus-4-8"}
+	if got := trackModel(tr, modelMaxWidth); got != "opus-4-8" {
+		t.Errorf("trackModel = %q, want the requested model before any turn", got)
+	}
+}
+
+// And with nothing at all it is still blank.
+func TestModelBlankWithNeither(t *testing.T) {
+	if got := trackModel(state.Track{}, modelMaxWidth); got != "" {
+		t.Errorf("trackModel = %q, want empty", got)
+	}
+}
