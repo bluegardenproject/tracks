@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bluegardenproject/tracks/internal/agent"
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
@@ -298,45 +299,6 @@ func reviewCandorSuffix(level int) string {
 		level, state.CandorLabel(level), level)
 }
 
-// readOnlySuffix is appended for worktree-less (ask/plan) tracks. They
-// point at the user's PRIMARY checkout (the one their editor watches),
-// so the prompt makes the read-only contract explicit as a second line
-// of defence behind plan permission mode (which is a default, not a
-// hard sandbox — see BuildOptions).
-const readOnlySuffix = "" +
-	"\n\n**This is a read-only track.** You are pointed at the user's " +
-	"primary checkout — the working copy their editor uses — NOT a " +
-	"throwaway worktree. Do not modify any files, create branches, or " +
-	"run mutating commands; investigate and answer (or produce a plan) " +
-	"only. When the user is ready to implement, the track can be " +
-	"promoted to its own worktree with `tracks promote <id>`."
-
-// draftPRRepos returns the names of the track's repos configured to
-// open pull requests as drafts by default.
-func draftPRRepos(cfg config.Config, repos []state.TrackRepo) []string {
-	var out []string
-	for _, r := range repos {
-		if cr, ok := cfg.RepoByName(r.Name); ok && cr.DraftPRs {
-			out = append(out, r.Name)
-		}
-	}
-	return out
-}
-
-// draftPRSuffix builds the prompt fragment instructing Claude to open
-// PRs as drafts. When every repo on the track wants drafts (the common
-// single-repo case) it stays generic; otherwise it names the repos so a
-// mixed-repo track only drafts the ones that opted in.
-func draftPRSuffix(draftRepos []string, totalRepos int) string {
-	if len(draftRepos) == totalRepos {
-		return "\n\nWhen you open a pull request, open it as a **draft** " +
-			"(`gh pr create --draft`) unless the user asks otherwise."
-	}
-	return "\n\nWhen you open a pull request for any of these repos, open it " +
-		"as a **draft** (`gh pr create --draft`) unless the user asks " +
-		"otherwise: " + strings.Join(draftRepos, ", ") + "."
-}
-
 // docPermissionMode clamps the configured permission mode for a
 // doc-review track.
 //
@@ -408,12 +370,12 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	} else if t.Kind.Worktreeless() {
 		permMode = "plan"
 		if len(t.Repos) > 0 {
-			prompt += readOnlySuffix
+			prompt += agent.ReadOnlySuffix
 		}
 	} else {
 		prompt += "\n\n" + taskSuffix
-		if draft := draftPRRepos(cfg, t.Repos); len(draft) > 0 {
-			prompt += draftPRSuffix(draft, len(t.Repos))
+		if draft := agent.DraftPRRepos(cfg, t.Repos); len(draft) > 0 {
+			prompt += agent.DraftPRSuffix(draft, len(t.Repos))
 		}
 		if t.Kind == state.KindReview {
 			prompt += reviewCandorSuffix(t.CandorLevel())
@@ -503,27 +465,16 @@ func (o SpawnOptions) ShellCommand() string {
 	for _, d := range o.AddDirs {
 		claudeArgv = append(claudeArgv, "--add-dir", shellx.Quote(d))
 	}
-	claudeLine := strings.Join(claudeArgv, " ")
 
-	// Build the inner shell script.
-	inner := claudeLine
-	if o.SentinelPath != "" {
-		inner += "\ntouch " + shellx.Quote(o.SentinelPath)
-	}
-	inner += "\nexec ${SHELL:-bash} -l"
-
-	envPrefix := "TRACKS_ID=" + shellx.Quote(o.TrackID) +
-		" TRACKS_SOCKET_DIR=" + shellx.Quote(o.SocketDir)
-	if o.BinDir != "" {
-		// Prepend so a bare `tracks` resolves. $PATH is expanded by the
-		// outer shell that runs this line.
-		envPrefix += " PATH=" + shellx.Quote(o.BinDir) + `:"$PATH"`
-	}
-
-	// Outer sh -c "..." wrapper. We deliberately use sh (not bash)
-	// for the outer because /bin/sh is the only shell tmux relies
-	// on; the user's $SHELL is invoked only at the fallback step.
-	return envPrefix + " sh -c " + shellx.Quote(inner)
+	// Everything past the flags — the env every track exports, the exit
+	// sentinel, the fallback login shell, the outer sh -c — is identical
+	// for every provider and lives in internal/agent.
+	return agent.Wrapper{
+		TrackID:      o.TrackID,
+		SocketDir:    o.SocketDir,
+		BinDir:       o.BinDir,
+		SentinelPath: o.SentinelPath,
+	}.Command(strings.Join(claudeArgv, " "))
 }
 
 // BuildResumeOptions assembles SpawnOptions for continuing a finished track's
