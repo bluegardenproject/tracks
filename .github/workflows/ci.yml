@@ -1,8 +1,12 @@
 name: CI
 
 on:
+  # No branches filter: it matches the PR's *base*, which would skip
+  # every pull request in a stack except the one already targeting
+  # main. It also loses the bottom PR of a stack, because retargeting
+  # to main fires `edited` (not a default activity type) while the
+  # push that preceded it was filtered out for having the old base.
   pull_request:
-    branches: [ main ]
   push:
     branches: [ main ]
 
