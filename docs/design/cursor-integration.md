@@ -398,9 +398,18 @@ a first working Cursor track.
    would be the only reason to add secret handling to a file that
    currently holds none. Recommend delegating to the user's environment
    and documenting it.
-4. **Review gate parity** (new). Claude tracks get a mandatory pre-push
-   review via `taskSuffix`. Decide whether Cursor tracks get the same
-   text in `tracks.mdc` or deliberately run without it.
+4. ~~**Review gate parity**~~ — **decided 2026-08-27: an in-conversation
+   self-review.** Cursor has no user-definable subagents (`~/.cursor/agents`
+   exists but is empty with no documented format; `exploreSubagentModel` in
+   its config is internal), so the gate cannot be delegated. `cursor.taskSuffix`
+   asks the agent to review its own diff and end with the same literal
+   `REVIEW OUTCOME:` line Claude's subagent emits, so the verdict stays
+   greppable.
+
+   This is weaker and should be recorded as such: a self-review shares the
+   blind spots of the work it reviews. Revisit if Cursor grows a subagent
+   surface. §11's global rule is the natural place to repeat the gate, since
+   a rule persists for the whole session while a prompt is sent once.
 
 ## 11. Context injection, revised — a global rule, not a per-worktree file
 
@@ -457,9 +466,9 @@ path, and no risk of a stray `.cursor/` being committed.
 **What it does not solve.** `~/.cursor/agents/` exists but is empty and
 has no documented user-definable format; `cli-config.json` mentions an
 internal `exploreSubagentModel`, not a user surface. There is still no
-Cursor equivalent of `tracks-reviewer`, so the mandatory pre-push review
-(§10 item 4) remains genuinely open — it is the one part of the Claude
-context that cannot be ported by writing a file.
+Cursor equivalent of `tracks-reviewer`. Phase 2 settled what to do about
+it — an in-conversation self-review, §10 item 4 — but the weakness is
+inherent, not a gap waiting to be filled by a file.
 
 ## 12. Installed files must be owned, not just written
 
