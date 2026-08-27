@@ -14,6 +14,7 @@ import (
 // frontmatter description is what Claude sees during skill
 // discovery, so we make it self-explanatory and trigger-worthy.
 const skillTemplate = `---
+x-tracks-managed: "1"
 name: tracks-add-repo
 description: |
   Mount another configured repository onto the current ` + "`tracks`" + ` track. Use
@@ -97,6 +98,7 @@ isn't true". That is still within the register; losing it is not.
 // strict: read-only tools, no commits, no PRs, always end with a
 // `REVIEW OUTCOME:` line so callers can grep the verdict.
 const reviewerAgentTemplate = `---
+x-tracks-managed: "1"
 name: tracks-reviewer
 description: |
   Code-review specialist. Use this agent BEFORE committing, pushing, or
@@ -179,6 +181,7 @@ commit, push, edit files, or run anything that modifies state.
 // grounding is most of this agent's value, so it inherits the session
 // toolset and the read-only contract is enforced in the body instead.
 const docsReviewerAgentTemplate = `---
+x-tracks-managed: "1"
 name: tracks-docs-reviewer
 description: |
   Document review specialist — specs, design docs, RFCs, ADRs, READMEs,
@@ -550,28 +553,27 @@ func (s *Server) InstallGlobalHelpers() error {
 	}
 	skillBody := fmt.Sprintf(skillTemplate, b.String())
 
+	// Every write goes through writeManagedFile, which will not
+	// overwrite a file that lacks the ownership marker — these paths
+	// live in a directory the user populates too.
 	skillsDir := filepath.Join(home, ".claude", "skills")
-	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir global skills dir: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "tracks-add-repo.md"), []byte(skillBody), 0o644); err != nil {
-		return fmt.Errorf("write add-repo skill: %w", err)
-	}
-
-	// Subagent: tracks-reviewer (static — same for every user).
 	agentsDir := filepath.Join(home, ".claude", "agents")
-	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir global agents dir: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(agentsDir, "tracks-reviewer.md"), []byte(reviewerAgentTemplate), 0o644); err != nil {
-		return fmt.Errorf("write reviewer agent: %w", err)
-	}
 
-	// Subagent: tracks-docs-reviewer (also static — doc reviews are
-	// repo-agnostic; grounding comes from whatever repos the track
-	// attaches at creation time).
-	if err := os.WriteFile(filepath.Join(agentsDir, "tracks-docs-reviewer.md"), []byte(docsReviewerAgentTemplate), 0o644); err != nil {
-		return fmt.Errorf("write docs reviewer agent: %w", err)
+	files := []struct {
+		path    string
+		content string
+	}{
+		{filepath.Join(skillsDir, "tracks-add-repo.md"), skillBody},
+		// Both subagents are static — the same for every user. Doc
+		// reviews are repo-agnostic; grounding comes from whatever repos
+		// the track attaches at creation time.
+		{filepath.Join(agentsDir, "tracks-reviewer.md"), reviewerAgentTemplate},
+		{filepath.Join(agentsDir, "tracks-docs-reviewer.md"), docsReviewerAgentTemplate},
+	}
+	for _, f := range files {
+		if _, err := writeManagedFile(f.path, []byte(f.content)); err != nil {
+			return err
+		}
 	}
 
 	return nil
