@@ -1,6 +1,6 @@
 # Design: Cursor CLI integration
 
-**Status:** Research complete — not yet started.
+**Status:** Research verified against the real CLI and codebase — ready to start.
 **Last updated:** 2026-08-27
 
 Goal: let users choose **Cursor Agent** (`agent`) as the AI provider when
@@ -197,6 +197,194 @@ it. Suggested order:
 5. Dashboard + usage stub
 
 ---
+
+## 7. Verification pass (2026-08-27)
+
+Everything in §2–§3 was re-checked against the installed binary
+(`agent` 2026.08.11-e8db854, logged in) and the 1.0.0 codebase rather
+than taken from the help text. Findings that change the plan:
+
+| Claim | Verdict | Detail |
+|---|---|---|
+| `agent create-chat` returns a chat id | ⚠️ **conditional** | Returns a UUID instantly **only with stdin closed**. Bare `agent create-chat` hung with no output and had to be killed at 3 min. |
+| `--list-models` can populate the picker | ✅ verified | Emits `id - Label` per line, one per model, with `auto` marked `(current, default)`. Directly parseable. |
+| Cursor uses the same model ids as the Claude API | ❌ **false** | They are Cursor-specific: `claude-opus-5-thinking-high`, `gpt-5.3-codex`, `composer-2.5`, `cursor-grok-4.6-low`. See §8.3. |
+| Status/idle detection needs work for Cursor | ❌ **not needed** | `nextLiveStatus` is driven by `observePane` diffing a `capture-pane` snapshot (`supervisor.go`), never by the transcript. Running/Waiting works for any binary in the pane, unchanged. |
+| `TRACKS_ID` env injection must be dropped | ❌ **false** | See §8.1. |
+| Spawn is a wide seam | ✅ narrow | Exactly two call sites: `supervisor.go:103` (`BuildOptions`) and `:123` (`BuildResumeOptions`). |
+
+## 8. Corrections to §3
+
+### 8.1 Keep the env injection (§3b item 4 is wrong)
+
+§3b says "No `TRACKS_ID` env injection: Cursor doesn't read `CLAUDE.md`,
+so the env vars are not picked up." That conflates two mechanisms.
+`TRACKS_ID` and `TRACKS_SOCKET_DIR` are exported by the shell wrapper
+and inherited by *every* process in the pane, whatever the agent binary
+is. They are what the in-worktree helper scripts (`tracks-add-repo`)
+read — not something Claude parses.
+
+Dropping them would break those helpers inside Cursor tracks for no
+reason. Keep the env prefix exactly as-is; what changes is only where
+the *instructions* live (`CLAUDE.md` → `.cursor/rules/tracks.mdc`).
+
+### 8.2 `create-chat` must run with stdin closed
+
+The daemon calls this during provisioning. With an inherited terminal
+stdin it blocks forever, which turns a provisioning step into a hang
+with no error and no timeout — strictly worse than a failure. Set
+`cmd.Stdin = nil` and give the command a context deadline; treat a
+timeout as a provisioning error carrying the reason.
+
+### 8.3 Cost must be gated on Provider *before* the price lookup
+
+§3d proposes a `Provider` check "in the dashboard renderer". That is too
+late. `internal/usage.priceFor` matches model ids by substring, and
+Cursor's Anthropic-branded names match it:
+
+| Cursor model | `priceFor` returns | Reality |
+|---|---|---|
+| `claude-opus-5-thinking-high` | $5 / $25 per MTok | Cursor bills subscription/credits |
+| `claude-sonnet-5-thinking-xhigh` | $2 / $10 per MTok | ” |
+| `claude-fable-5-thinking-high` | $10 / $50 per MTok | ” |
+| `gpt-5.3-codex` | $0 / $0 | ” |
+| `composer-2.5`, `auto` | $0 / $0 | ” |
+
+So a Cursor track would show a *mix* of confident-but-wrong dollar
+figures and zeroes, which is worse than a uniform blank. Gate at the
+point of computation (`addMessage` / wherever a Cursor track's usage is
+assembled) so no Anthropic rate is ever applied to a Cursor model, and
+render `—` in the COST and TOKENS columns.
+
+Note this is the same class of bug the 1.0 pricing fix addressed —
+substring matching being confidently wrong — reappearing through a new
+door.
+
+## 9. Implementation plan
+
+Six phases, each independently shippable and reviewable. Phases 1–2 get
+a Cursor track running; 3–6 make it pleasant.
+
+### Phase 1 — Provider field through the three data layers (~0.5 d)
+
+- `internal/config`: add a `Cursor` struct mirroring `Claude` (`Binary`
+  default `agent`, `Model`, `ModelByKind`, `ModelChoices`). Add
+  `Provider` to the top level or per-kind defaults — decide with §10.1.
+- `internal/state`: `Track.Provider` and `DraftSpec.Provider`, both
+  `omitempty`, empty meaning `claude`.
+  **No schema bump** — same reasoning as `RequestedModel`: a v6 store is
+  refused outright by a v5 binary, and an absent provider has a correct
+  default. Document it at the field.
+- `internal/daemon/protocol.go`: `NewParams.Provider`.
+- A `state.Provider` string type with `ProviderClaude` / `ProviderCursor`
+  constants and an `IsValid`; validate in `Config.Validate` the way
+  `model_by_kind` keys now are.
+
+**Done when:** a track can be created with `provider: cursor` recorded
+and round-tripped through the store and a draft relaunch, with existing
+records still decoding as `claude`.
+
+### Phase 2 — `internal/cursor/spawn.go` (~1 d)
+
+Mirror `internal/claude/spawn.go`, exposing the same two constructors so
+the dispatch in Phase 4 is trivial:
+
+```go
+func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath string) (SpawnOptions, error)
+func BuildResumeOptions(...) (SpawnOptions, error)
+```
+
+Differences from the Claude builder:
+- `--force` replaces `--permission-mode auto`; `--mode plan` for
+  ask/plan kinds (Cursor's read-only modes map onto the worktree-less
+  kinds cleanly).
+- `--workspace <primary worktree>`, `--add-dir` for the rest.
+- `--model` only when non-empty, exactly as the Claude builder does.
+- Keep the `TRACKS_ID` / `TRACKS_SOCKET_DIR` prefix and the sentinel
+  `touch` + `exec $SHELL -l` tail unchanged (§8.1).
+- Resume passes `--resume <chatId>` and, as with Claude, **no**
+  `--model`.
+
+Session pre-creation belongs here as `CreateChat(ctx, binary) (string, error)`:
+`exec.CommandContext`, `Stdin = nil`, deadline, trim the UUID, error on
+anything that doesn't parse as one.
+
+**Tests:** the shell-command assertions mirror `internal/claude/model_test.go`
+— flag present/absent, resume never carries `--model`, no `--model ''`
+when unset, env prefix intact. `CreateChat` gets a fake-binary test
+(a script that echoes a UUID, one that hangs → deadline error).
+
+### Phase 3 — Context injection (~0.5 d)
+
+Write `<primary worktree>/.cursor/rules/tracks.mdc` during provisioning
+with the task suffix Claude gets via `taskSuffix`, plus the literal
+`TRACKS_ID` / socket dir. Remove at teardown.
+
+`provision.Run`/`provisionOptions` (`handlers.go:509`, `:761`) is the
+seam. Gate on provider so Claude tracks don't grow a `.cursor/`
+directory.
+
+The pre-push review gate currently lives in `taskSuffix` and is
+mandatory for Claude tracks; it must be reproduced here or Cursor tracks
+silently lose it. That is a behaviour difference worth calling out in
+the PR, not a footnote.
+
+### Phase 4 — Supervisor dispatch (~0.5 d)
+
+Replace the two direct calls with a provider switch:
+
+```go
+switch t.Provider {
+case state.ProviderCursor: opts, err = cursor.BuildOptions(...)
+default:                   opts, err = claude.BuildOptions(...)
+}
+```
+
+Extract a tiny `spawnOptionsFor(t)` helper so both call sites and any
+future provider share one dispatch point. `default` (not an explicit
+`claude` case) keeps old records working.
+
+### Phase 5 — TUI provider + model picker (~1 d)
+
+- Provider select ahead of the model field in all three flows
+  (`Run`, `runReview`, `runDocReview`).
+- The model list comes from the chosen provider: config choices for
+  Claude, `agent --list-models` for Cursor, parsed as `id - Label`,
+  cached per TUI session and falling back to a bare text input if the
+  call fails or the binary is missing.
+- `TestEveryFlowWithAModelPickerSendsIt` already guards the "picker
+  shown but answer discarded" bug for `Model`; extend it to `Provider`
+  in the same pass, or the same class of bug ships again.
+
+### Phase 6 — Usage stub + dashboard (~0.5 d)
+
+- Skip transcript parsing entirely for Cursor tracks.
+- Gate cost at computation (§8.3), render `—` for COST and TOKENS.
+- MODEL keeps working: it shows `RequestedModel` for Cursor, since
+  `ObservedModel` is only ever derived from a Claude transcript. Worth a
+  comment at the renderer — otherwise the next reader "fixes" the
+  inconsistency.
+
+**Total: ~4 d**, matching §4. Phases 1, 2 and 4 are the critical path to
+a first working Cursor track.
+
+## 10. Decisions still needed
+
+1. **Is provider per-track only, or also per-kind?** `model_by_kind`
+   exists; `provider_by_kind` would be symmetric (e.g. doc reviews on
+   Cursor). Cheap now, awkward to retrofit after the config ships.
+2. **`.cursor/` containment** (§5 q1, still open). Writing into the
+   worktree risks a commit; the repo's own `.gitignore` is not ours to
+   edit. A `.git/info/exclude` entry in the worktree is invisible to the
+   branch and needs no cooperation from the repo — probably the answer.
+3. **Auth** (§5 q2). `agent status` confirms a logged-in user here, so
+   the zero-config path already works; `cursor.api_key` in tracks config
+   would be the only reason to add secret handling to a file that
+   currently holds none. Recommend delegating to the user's environment
+   and documenting it.
+4. **Review gate parity** (new). Claude tracks get a mandatory pre-push
+   review via `taskSuffix`. Decide whether Cursor tracks get the same
+   text in `tracks.mdc` or deliberately run without it.
 
 ## Appendix: `agent --help` output (2026-08-27)
 
