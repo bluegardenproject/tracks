@@ -411,8 +411,8 @@ func (s *Server) refreshUsage(sup *supervisor) {
 		// unreadable or half-written transcript must not erase a cost or a
 		// model an earlier pass established. finalizeTrack applies the same
 		// rule, so both paths agree.
-		newModel := tot.Model != "" && tot.Model != t.Model
-		newSubagent := tot.SubagentModel != "" && tot.SubagentModel != t.SubagentModel
+		newModel := tot.Model != "" && tot.Model != t.ObservedModel
+		newSubagent := tot.SubagentModel != "" && tot.SubagentModel != t.ObservedSubagentModel
 		newUsage := !tot.Usage.IsZero() && tot.Usage != t.Usage
 		if !newUsage && !newModel && !newSubagent {
 			return false
@@ -421,10 +421,10 @@ func (s *Server) refreshUsage(sup *supervisor) {
 			t.Usage = tot.Usage
 		}
 		if newModel {
-			t.Model = tot.Model
+			t.ObservedModel = tot.Model
 		}
 		if newSubagent {
-			t.SubagentModel = tot.SubagentModel
+			t.ObservedSubagentModel = tot.SubagentModel
 		}
 		return true
 	})
@@ -857,10 +857,10 @@ func (s *Server) finalizeTrack(trackID string) {
 				t.Usage = settled.Usage
 			}
 			if settled.Model != "" {
-				t.Model = settled.Model
+				t.ObservedModel = settled.Model
 			}
 			if settled.SubagentModel != "" {
-				t.SubagentModel = settled.SubagentModel
+				t.ObservedSubagentModel = settled.SubagentModel
 			}
 		}
 		finalized = true

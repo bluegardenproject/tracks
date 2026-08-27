@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -14,7 +15,6 @@ func makeTrack(id string) Track {
 		Branch:     "fix/example",
 		Repos:      []TrackRepo{{Name: "demo-repo", Path: "/tmp/" + id + "/demo-repo"}},
 		Status:     StatusRunning,
-		LogPath:    "/tmp/" + id + ".jsonl",
 		TaskPrompt: "do the thing",
 	}
 }
@@ -50,18 +50,18 @@ func TestDocDir(t *testing.T) {
 	}
 
 	if got := (Track{}).DocDir(); got != "" {
-		t.Errorf("DocDir() with no DocPath = %q, want empty", got)
+		t.Errorf("DocDir() with no document = %q, want empty", got)
 	}
-	if got := (Track{DocPath: file}).DocDir(); got != dir {
+	if got := (Track{Doc: &DocSpec{Path: file}}).DocDir(); got != dir {
 		t.Errorf("DocDir() for a file = %q, want its parent %q", got, dir)
 	}
-	if got := (Track{DocPath: dir}).DocDir(); got != dir {
+	if got := (Track{Doc: &DocSpec{Path: dir}}).DocDir(); got != dir {
 		t.Errorf("DocDir() for a directory = %q, want %q", got, dir)
 	}
 	// A document deleted after track creation must not break spawning:
 	// fall back to the parent so Claude reports the missing file itself.
 	gone := filepath.Join(dir, "vanished", "deck.pdf")
-	if got := (Track{DocPath: gone}).DocDir(); got != filepath.Dir(gone) {
+	if got := (Track{Doc: &DocSpec{Path: gone}}).DocDir(); got != filepath.Dir(gone) {
 		t.Errorf("DocDir() for a missing path = %q, want %q", got, filepath.Dir(gone))
 	}
 }
@@ -79,8 +79,8 @@ func TestCandorLevel(t *testing.T) {
 		10:  10,
 		999: DefaultCandor,
 	} {
-		if got := (Track{Candor: candor}).CandorLevel(); got != want {
-			t.Errorf("Track{Candor: %d}.CandorLevel() = %d, want %d", candor, got, want)
+		if got := (Track{Review: &ReviewSpec{Candor: candor}}).CandorLevel(); got != want {
+			t.Errorf("Review.Candor = %d → CandorLevel() = %d, want %d", candor, got, want)
 		}
 	}
 }
@@ -131,8 +131,8 @@ func TestReviewShapeRoundtrip(t *testing.T) {
 	}
 	tr := makeTrack("a")
 	tr.Kind = KindDoc
-	tr.Candor = 8
-	tr.DocSkipClaimCheck = true
+	tr.Review = &ReviewSpec{Candor: 8}
+	tr.Doc = &DocSpec{Path: "/tmp/doc.md", SkipClaimCheck: true}
 	if err := fs.Put(tr); err != nil {
 		t.Fatal(err)
 	}
@@ -141,14 +141,14 @@ func TestReviewShapeRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := fs2.Get("a")
-	if got.Candor != 8 {
-		t.Errorf("Candor = %d, want 8 after a reload", got.Candor)
+	if got.CandorLevel() != 8 {
+		t.Errorf("CandorLevel() = %d, want 8 after a reload", got.CandorLevel())
 	}
-	if !got.DocSkipClaimCheck {
-		t.Error("DocSkipClaimCheck lost across a reload")
+	if !got.SkipClaimCheck() {
+		t.Error("SkipClaimCheck lost across a reload")
 	}
-	if got.DocSkipOpinion {
-		t.Error("DocSkipOpinion set after a reload; it was never stored")
+	if got.SkipOpinion() {
+		t.Error("SkipOpinion set after a reload; it was never stored")
 	}
 }
 
@@ -706,5 +706,279 @@ func TestTrackWindowNameUniquePerID(t *testing.T) {
 	b := Track{ID: "20260624-101501-d4e5f6", Slug: "rate-bug"}
 	if a.WindowName() == b.WindowName() {
 		t.Fatalf("expected distinct window names, both were %q", a.WindowName())
+	}
+}
+
+// A v4 file carries the review settings as flat fields. They only exist
+// at decode time now, so the fold has to happen in UnmarshalJSON.
+func TestUnmarshalMigratesV4ReviewFields(t *testing.T) {
+	const v4 = `{
+		"id": "trk", "kind": "doc", "status": "done",
+		"candor": 8,
+		"doc_path": "/docs/spec.md",
+		"doc_skip_claim_check": true
+	}`
+
+	var tr Track
+	if err := json.Unmarshal([]byte(v4), &tr); err != nil {
+		t.Fatalf("unmarshal v4 track: %v", err)
+	}
+
+	if tr.Review == nil {
+		t.Fatal("Review is nil; candor was dropped")
+	}
+	if tr.Review.Candor != 8 {
+		t.Errorf("Candor = %d, want 8", tr.Review.Candor)
+	}
+	if tr.Doc == nil {
+		t.Fatal("Doc is nil; the document was dropped")
+	}
+	if tr.Doc.Path != "/docs/spec.md" {
+		t.Errorf("Doc.Path = %q, want /docs/spec.md", tr.Doc.Path)
+	}
+	if !tr.Doc.SkipClaimCheck {
+		t.Error("SkipClaimCheck lost in migration")
+	}
+	if tr.Doc.SkipOpinion {
+		t.Error("SkipOpinion set by migration; the v4 record didn't have it")
+	}
+}
+
+// A v4 doc track with no candor still becomes a review: CandorLevel
+// supplied the default before, and must keep doing so.
+func TestUnmarshalV4DocWithoutCandorStillReviews(t *testing.T) {
+	var tr Track
+	if err := json.Unmarshal([]byte(`{"id":"t","kind":"doc","doc_path":"/d.md"}`), &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Review == nil {
+		t.Fatal("a doc track must carry a ReviewSpec")
+	}
+	if got := tr.CandorLevel(); got != DefaultCandor {
+		t.Errorf("CandorLevel() = %d, want the default %d", got, DefaultCandor)
+	}
+}
+
+// A non-review v4 track gains neither spec — there was nothing to move.
+func TestUnmarshalV4WorkTrackGetsNoSpecs(t *testing.T) {
+	var tr Track
+	if err := json.Unmarshal([]byte(`{"id":"t","kind":"work","status":"running"}`), &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Review != nil || tr.Doc != nil {
+		t.Errorf("work track gained specs: review=%+v doc=%+v", tr.Review, tr.Doc)
+	}
+}
+
+// A v5 record round-trips through the same decoder untouched.
+func TestUnmarshalV5RoundTrips(t *testing.T) {
+	in := Track{
+		ID: "t", Kind: KindDoc,
+		Review: &ReviewSpec{Candor: 2},
+		Doc:    &DocSpec{Path: "/d.md", SkipOpinion: true},
+	}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Track
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Review == nil || out.Review.Candor != 2 {
+		t.Errorf("Review = %+v, want candor 2", out.Review)
+	}
+	if out.Doc == nil || out.Doc.Path != "/d.md" || !out.Doc.SkipOpinion {
+		t.Errorf("Doc = %+v, want /d.md with SkipOpinion", out.Doc)
+	}
+	// The removed fields must not reappear on the wire.
+	if s := string(data); strings.Contains(s, "doc_path") || strings.Contains(s, "log_path") {
+		t.Errorf("v5 encoding still carries removed keys: %s", s)
+	}
+}
+
+// The case that breaks the invariant if the fold is gated on candor
+// alone: a review track written before the candor dial existed has no
+// candor key at all, and must still decode as a review.
+func TestUnmarshalV4ReviewWithoutCandorStillGetsASpec(t *testing.T) {
+	var tr Track
+	if err := json.Unmarshal([]byte(`{"id":"t","kind":"review","status":"done"}`), &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Review == nil {
+		t.Fatal("review track decoded with a nil Review — `Review != nil` no longer answers 'is this a review?'")
+	}
+	if got := tr.CandorLevel(); got != DefaultCandor {
+		t.Errorf("CandorLevel() = %d, want the default %d", got, DefaultCandor)
+	}
+	if tr.Doc != nil {
+		t.Errorf("code review gained a Doc spec: %+v", tr.Doc)
+	}
+}
+
+// A pre-v2 record has no kind at all; migrateTrack infers it on load,
+// so the invariant has to be re-checked after that.
+func TestLoadInfersKindThenGivesAReviewSpec(t *testing.T) {
+	dir := t.TempDir()
+	// branch pr/* is how a v1 record is recognised as a review track.
+	raw := `{"schema_version":1,"tracks":[{"id":"old","branch":"pr/123","status":"done"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := fs.Get("old")
+	if !ok {
+		t.Fatal("track not loaded")
+	}
+	if got.Kind != KindReview {
+		t.Fatalf("Kind = %q, want review", got.Kind)
+	}
+	if got.Review == nil {
+		t.Error("v1 review track has a nil Review after load")
+	}
+}
+
+// A freshly created review track with candor 0 encodes as an empty
+// object and decodes non-nil — the shape migrated records are now held
+// to as well.
+func TestV5ReviewWithZeroCandorRoundTripsNonNil(t *testing.T) {
+	data, err := json.Marshal(Track{ID: "t", Kind: KindReview, Review: &ReviewSpec{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"review":{}`) {
+		t.Errorf("encoding = %s, want an empty review object", data)
+	}
+	var out Track
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Review == nil {
+		t.Error("empty ReviewSpec decoded to nil")
+	}
+}
+
+// Every kind, one table: the invariant stated on the struct.
+func TestReviewSpecInvariantAcrossKinds(t *testing.T) {
+	cases := map[Kind]bool{
+		KindWork:   false,
+		KindAsk:    false,
+		KindPlan:   false,
+		KindReview: true,
+		KindDoc:    true,
+	}
+	for kind, wantSpec := range cases {
+		t.Run(string(kind), func(t *testing.T) {
+			var tr Track
+			raw := `{"id":"t","kind":"` + string(kind) + `"}`
+			if err := json.Unmarshal([]byte(raw), &tr); err != nil {
+				t.Fatal(err)
+			}
+			if gotSpec := tr.Review != nil; gotSpec != wantSpec {
+				t.Errorf("kind %q: Review != nil is %v, want %v", kind, gotSpec, wantSpec)
+			}
+		})
+	}
+}
+
+func TestWindowNamePrefersTheStoredName(t *testing.T) {
+	tr := Track{ID: "20260818-101530-abcdef", Slug: "swap tooltip", Window: "swap-tooltip"}
+	if got := tr.WindowName(); got != "swap-tooltip" {
+		t.Errorf("WindowName() = %q, want the stored name with no id suffix", got)
+	}
+}
+
+// A track created before Window existed must keep resolving to the name
+// its window was actually opened under, or the daemon loses track of it.
+func TestWindowNameFallsBackForOlderTracks(t *testing.T) {
+	tr := Track{ID: "20260818-101530-abcdef", Slug: "swap tooltip"}
+	if got := tr.WindowName(); got != "swap-tooltip-abcdef" {
+		t.Errorf("WindowName() = %q, want the legacy id-suffixed form", got)
+	}
+}
+
+func TestWindowLabelForPrefersSlugThenPrompt(t *testing.T) {
+	if got := (Track{Slug: "My Slug", TaskPrompt: "some prompt"}).WindowLabel(); got != "my-slug" {
+		t.Errorf("label = %q, want the slug", got)
+	}
+	if got := (Track{TaskPrompt: "Fix the swap rate tooltip"}).WindowLabel(); got != "fix-the-swap-rate-tooltip" {
+		t.Errorf("label = %q, want it derived from the prompt", got)
+	}
+	if got := (Track{}).WindowLabel(); got != "" {
+		t.Errorf("label = %q, want empty when there is no usable text", got)
+	}
+}
+
+// The cap went up when the id suffix stopped being appended; a label
+// that used to lose its last word should now survive.
+func TestWindowLabelCapFitsARealisticPrompt(t *testing.T) {
+	got := windowLabel("swap reset after multi step flow")
+	if len(got) > windowLabelMaxLen {
+		t.Fatalf("label %q is %d chars, over the %d cap", got, len(got), windowLabelMaxLen)
+	}
+	if !strings.HasPrefix(got, "swap-reset-after-multi-step") {
+		t.Errorf("label = %q, want more of the prompt than the old 24-char cap allowed", got)
+	}
+}
+
+// The legacy cap is load-bearing: a pre-Window track's window was opened
+// under the 24-char form, and WindowName() must keep producing exactly
+// that string or the daemon targets a window that isn't there.
+func TestLegacyWindowNameKeepsTheOldCap(t *testing.T) {
+	tr := Track{ID: "20260818-101530-a1b2c3", TaskPrompt: "investigate the rate spike on swap"}
+	const want = "investigate-the-rate-spi-a1b2c3"
+	if got := tr.WindowName(); got != want {
+		t.Errorf("WindowName() = %q, want %q — widening the cap repoints existing tracks at nonexistent windows", got, want)
+	}
+	// A new track built from the same prompt gets the wider label.
+	if got := tr.WindowLabel(); got != "investigate-the-rate-spike-on-sw" {
+		t.Errorf("WindowLabel() = %q, want the wider cap for new names", got)
+	}
+}
+
+// The observed-model keys were renamed. Both fields are derived, so a
+// running track would simply re-derive them — but a track that already
+// reached a terminal status never refreshes again, so without the
+// carry-across in UnmarshalJSON its MODEL cell would go blank for good
+// the moment the user upgraded.
+func TestUnmarshalCarriesTheRenamedModelKeys(t *testing.T) {
+	const finished = `{
+		"id": "abc123",
+		"slug": "old-track",
+		"status": "done",
+		"model": "claude-opus-4-8",
+		"subagent_model": "claude-haiku-4-5"
+	}`
+	var tr Track
+	if err := json.Unmarshal([]byte(finished), &tr); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if tr.ObservedModel != "claude-opus-4-8" {
+		t.Errorf("ObservedModel = %q, want the legacy \"model\" key carried across", tr.ObservedModel)
+	}
+	if tr.ObservedSubagentModel != "claude-haiku-4-5" {
+		t.Errorf("ObservedSubagentModel = %q, want the legacy key carried across", tr.ObservedSubagentModel)
+	}
+}
+
+// A file written by the current binary must not be second-guessed by
+// the legacy key, in the one case where a downgrade-upgrade round trip
+// leaves both present and disagreeing.
+func TestUnmarshalPrefersTheCurrentModelKey(t *testing.T) {
+	const both = `{
+		"id": "abc123",
+		"slug": "t",
+		"model": "claude-opus-4-8",
+		"observed_model": "claude-opus-5"
+	}`
+	var tr Track
+	if err := json.Unmarshal([]byte(both), &tr); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if tr.ObservedModel != "claude-opus-5" {
+		t.Errorf("ObservedModel = %q, want the current key to win", tr.ObservedModel)
 	}
 }

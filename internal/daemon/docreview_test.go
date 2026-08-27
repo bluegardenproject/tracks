@@ -10,7 +10,6 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 func TestResolveDocPath(t *testing.T) {
@@ -127,16 +126,11 @@ func TestResolveDocPathExpansions(t *testing.T) {
 // draft, which is the record under test.
 func newDocTestServer(t *testing.T, repos ...config.Repo) (*Server, *state.MemoryStore) {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Repos = repos
-	cfg.Tmux.SessionName = "tracks-test-" + strings.ReplaceAll(t.Name(), "/", "-")
 	// Checked, not assumed: if this name ever resolves, the spawn would
 	// succeed and open live Claude windows in somebody's session. Fail
 	// loudly instead.
-	if tmux.New().HasSession(cfg.Tmux.SessionName) {
-		t.Fatalf("test tmux session %q exists; refusing to run a spawn against a live session", cfg.Tmux.SessionName)
-	}
 	store := state.NewMemoryStore()
 	return NewServer(cfg, store, "test"), store
 }
@@ -187,8 +181,8 @@ func TestNewDocTrackWiring(t *testing.T) {
 	if tr.Kind != state.KindDoc {
 		t.Errorf("Kind = %q, want doc even though the client sent work", tr.Kind)
 	}
-	if tr.DocPath != doc {
-		t.Errorf("DocPath = %q, want the resolved absolute %q", tr.DocPath, doc)
+	if tr.DocPath() != doc {
+		t.Errorf("DocPath() = %q, want the resolved absolute %q", tr.DocPath(), doc)
 	}
 	if tr.Slug != "architecture-review" {
 		t.Errorf("Slug = %q, want it derived from the document filename", tr.Slug)
@@ -257,14 +251,14 @@ func TestNewDocTrackCarriesReviewShape(t *testing.T) {
 		DocSkipClaimCheck: true,
 	})
 
-	if tr.Candor != 8 {
-		t.Errorf("Candor = %d, want 8", tr.Candor)
+	if tr.CandorLevel() != 8 {
+		t.Errorf("CandorLevel() = %d, want 8", tr.CandorLevel())
 	}
-	if !tr.DocSkipClaimCheck {
-		t.Error("DocSkipClaimCheck lost on the track")
+	if !tr.SkipClaimCheck() {
+		t.Error("SkipClaimCheck lost on the track")
 	}
-	if tr.DocSkipOpinion {
-		t.Error("DocSkipOpinion set when the client didn't ask for it")
+	if tr.SkipOpinion() {
+		t.Error("SkipOpinion set when the client didn't ask for it")
 	}
 	if tr.Draft == nil {
 		t.Fatal("failed creation should capture a draft")
@@ -295,9 +289,10 @@ func TestNewClearsReviewShapeOnOtherKinds(t *testing.T) {
 		t.Fatalf("expected 1 persisted track, got %d", len(tracks))
 	}
 	tr := tracks[0]
-	if tr.Candor != 0 || tr.DocSkipOpinion || tr.DocSkipClaimCheck {
-		t.Errorf("ask track kept review shape: candor=%d skipOpinion=%v skipClaimCheck=%v",
-			tr.Candor, tr.DocSkipOpinion, tr.DocSkipClaimCheck)
+	// Nil specs, not zeroed fields: on a non-review kind there is nothing
+	// for a later promotion to inherit in the first place.
+	if tr.Review != nil || tr.Doc != nil {
+		t.Errorf("ask track kept review shape: review=%+v doc=%+v", tr.Review, tr.Doc)
 	}
 }
 

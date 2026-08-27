@@ -209,6 +209,10 @@ type NewParams struct {
 	// DocSkipOpinion turns off the doc review's opinion section — the
 	// reviewer's judgement of the argument, reasoning, and readability.
 	DocSkipOpinion bool `json:"doc_skip_opinion,omitempty"`
+	// Model is the model to run this track on, passed to the CLI as
+	// --model. Empty means the caller expressed no preference and the
+	// daemon applies the configured default for the kind.
+	Model string `json:"model,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.

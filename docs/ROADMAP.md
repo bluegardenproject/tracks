@@ -237,11 +237,11 @@ closed — two hardened helpers is still per-test discipline.
       general case: extend the same liveness-based re-adoption to `running` tracks.
 
 - [ ] **C. Tell the truth about status & logs.**
-  - `Track.LogPath` points at `<state_dir>/logs/<id>.jsonl`, which
-    `internal/usage/usage.go` documents is **never written** (Claude runs
-    interactively, not `--print`). Drop the field, or point it at the real
-    transcript (`~/.claude/projects/<cwd>/<session>.jsonl`, already computed by
-    the usage package) so `tracks doctor` / "show me the log" actually work.
+  - ~~`Track.LogPath` points at a file that is never written.~~ **Done** in
+    the schema v5 change: the field is dropped. What remains of this item is
+    the positive half — no command surfaces the *real* transcript
+    (`~/.claude/projects/<cwd>/<session>.jsonl`, already located by the usage
+    package), so "show me the log" still has no answer.
   - Distinguish clean exit vs crash vs **auth-expiry** ("Please run /login") vs
     killed, as a terminal status + exit reason. (A roadmap track auth-expired
     mid-run but showed `done`.)
@@ -297,6 +297,10 @@ Self-contained improvements/fixes. Add new ones here; tick + delete when done.
 
 - [ ] **`tracks doctor`** — preflight: tmux / claude / git on PATH, config
       sanity, socket health, (for mobile) Xcode + simulator availability.
+      Should also probe each configured model once and flag any where the
+      served model differs from the requested one: the CLI accepts a
+      plausible-looking typo silently (`opus4.8` runs Sonnet 4.6), so a bad
+      name in `claude.model*` cannot be caught at spawn.
 
 - [ ] **Ergonomics:** attach-by-slug + fuzzy attach (don't need the long ID);
       shell completions (zsh/bash/fish) incl. completing track slugs / repo
@@ -328,13 +332,13 @@ still genuinely open.
 
 ### Structural (P1) — breaking changes are cheap now, expensive after 1.0
 
-- [ ] **Schema v4: kind sub-structs, drop `LogPath`.** `Track` is a 67-field
-      union across five kinds; the kind-specific fields (`DocPath`, `Candor`,
-      `DocSkip*`) ride on every track and their rules live in handler prose.
-      Move them into `Review` / `Doc` sub-structs with a v3→v4 migration. Same
-      PR drops `Track.LogPath` — computed, persisted, never written to or read
-      — and fixes the menu's Attach fallback, which opens a window running the
-      nonexistent `tracks log <id>` (`cmd/menu.go:96`).
+- [x] **Schema v5: kind sub-structs, drop `LogPath`.** *(Shipped — landed as
+      v5, not v4: the port-centric proxy took v4 for `State.Proxies` first.)*
+      The kind-specific fields (`DocPath`, `Candor`, `DocSkip*`) moved into
+      `Track.Review` / `Track.Doc`, whose nil-ness now carries the rule that
+      used to live in handler prose; `Track.LogPath` is gone; and the menu's
+      Attach fallback no longer opens a window running the nonexistent
+      `tracks log <id>`.
 - [ ] **Per-kind behaviour table.** `Kind.Worktreeless()` / `== KindDoc`
       branches are scattered across handlers, supervisor, claude spawn and the
       dashboard. One table (needsWorktree, permissionMode, promptSuffix,
@@ -388,9 +392,13 @@ still genuinely open.
       no coverage floor. Both runners have tmux, so one e2e smoke test (boot a
       session → create a track against a stub `claude` → assert dashboard
       state) would cover what unit tests structurally can't.
-- [ ] **Pricing table is hardcoded** (`internal/usage/pricing.go`, "cached
-      2026-06-04") and an unknown model silently costs **$0.00** rather than
-      reading as unknown.
+- [ ] **Pricing table is still hardcoded** (`internal/usage/pricing.go`) —
+      making it configurable is what's left. *(Half done: entries are now
+      version-specific and resolved by longest match — a family substring
+      priced Sonnet 5 at Sonnet 4.6's rate, 50% over — and a model from a
+      known family falls back to that family's current price rather than
+      costing $0.00. Prices re-checked 2026-08-26. A model from an unknown
+      family still reads as $0.00.)
 
 ### Polish (P3)
 
@@ -407,6 +415,38 @@ still genuinely open.
 - [ ] `proxy.Register` is first-wins but `Sync` is last-wins for a duplicate
       service name across repos; it will also rebuild the entry on every config
       reload if that ever happens.
+
+### Port-centric proxy (from the 2026-08-18 review of `c5a8fdb`)
+
+Reviewed after the rework landed; none is urgent, all are open. The
+migration, the startup ordering (reconcile → seed → sync → re-apply), the
+loopback default and the manager's lock discipline were all checked and
+are sound — these are the gaps.
+
+- [ ] **`tracks proxy add` on a port that already exists silently breaks a
+      live forwarding.** `handleProxyAdd` calls `PutProxy` with a freshly
+      built binding, which overwrites the stored one and wipes
+      `UpstreamTrackID`/`UpstreamService`; `Manager.Register` is first-wins,
+      so the live listener keeps forwarding. `tracks proxy status` reads the
+      manager and still shows it active while state says free, the
+      forwarding vanishes at the next daemon restart, and re-adding with
+      `bind_all` flipped silently does nothing. Reject a duplicate port, or
+      make add an explicit update that goes through the manager.
+- [ ] **Port range is validated in the clients, not at the daemon.**
+      `internal/tui/proxymgr` and `cmd/services.go` each check 1–65535;
+      `handleProxyAdd` only checks `<= 0`, so any other client — or a stale
+      CLI — can persist `:99999` into `state.json`, where it can never bind.
+      Same class as the protocol error-codes item above: validation belongs
+      at the API boundary.
+- [ ] **`internal/tui/proxymgr` is 471 lines at 0% coverage.** It is the
+      primary UI for the feature and holds real logic — `flattenServers`,
+      `parsePort`, cursor clamping, `currentUpstreamRow` — all pure and
+      testable without a TTY.
+- [ ] **A service that fails its readiness probe leaves its stable port
+      pointing at a dead server.** `tracks down` and track teardown both
+      clear proxies correctly; `failService` doesn't, so the port 502s until
+      someone re-switches. Possibly deliberate — the server may still be
+      coming up — but worth an explicit decision.
 
 ### Upstream (stac-man, not tracks)
 

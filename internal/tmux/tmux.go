@@ -56,18 +56,32 @@ func (Client) NewSession(name, initialWindowName, initialCommand, startDir strin
 	return nil
 }
 
-// HasWindow reports whether the named window exists in the session.
-// We list windows by format and grep — `tmux has-window` doesn't
-// exist as a first-class command.
-func (Client) HasWindow(session, window string) (bool, error) {
+// WindowNames lists the names of every window in the session. Used to
+// pick a name nothing already answers to; `tmux has-window` doesn't
+// exist as a first-class command, so this is the primitive both that
+// and HasWindow are built on.
+func (Client) WindowNames(session string) ([]string, error) {
 	cmd := exec.Command("tmux", "list-windows", "-t", session, "-F", "#W")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(out.String())
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
+}
+
+// HasWindow reports whether the named window exists in the session.
+func (c Client) HasWindow(session, window string) (bool, error) {
+	names, err := c.WindowNames(session)
+	if err != nil {
 		return false, err
 	}
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
-		if line == window {
+	for _, name := range names {
+		if name == window {
 			return true, nil
 		}
 	}

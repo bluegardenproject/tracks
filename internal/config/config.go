@@ -79,6 +79,84 @@ type Claude struct {
 	// "bypassPermissions" for full autonomy (be careful — Claude can
 	// then run arbitrary commands in the worktree without asking).
 	PermissionMode string `yaml:"permission_mode,omitempty"`
+
+	// Model is passed as --model for a track that doesn't name its own.
+	// Either an alias, which floats to the newest release in its family
+	// ("opus", "sonnet", "haiku", "fable"), or a pinned id
+	// ("claude-opus-4-8"), which does not. Empty omits the flag
+	// entirely and leaves Claude on its own default.
+	//
+	// Note that a name the CLI doesn't recognise is not necessarily
+	// rejected: "opus4.8" runs, silently, on a different model. Prefer
+	// the picker or `tracks doctor` over typing an id here by hand.
+	Model string `yaml:"model,omitempty"`
+
+	// ModelByKind overrides Model for one kind of track, keyed by kind
+	// ("work", "review", "ask", "plan", "doc") — a doc review rarely
+	// needs the model a refactor does. An entry not naming a real kind
+	// is inert.
+	ModelByKind map[string]string `yaml:"model_by_kind,omitempty"`
+
+	// ModelChoices is what the model picker offers at creation. Empty
+	// falls back to DefaultModelChoices.
+	//
+	// The built-in list is aliases only, on purpose: an alias stays
+	// correct as models come and go, while a pinned id in the binary
+	// goes stale the way the price table does. Pins belong here, in the
+	// user's own config, where they can be a deliberate choice.
+	ModelChoices []ModelChoice `yaml:"model_choices,omitempty"`
+}
+
+// ModelChoice is one entry in the creation-time model picker.
+type ModelChoice struct {
+	// Label is what the picker shows. Empty falls back to Model.
+	Label string `yaml:"label,omitempty"`
+
+	// Model is the value passed to --model.
+	Model string `yaml:"model"`
+}
+
+// modelKinds are the track kinds ModelByKind may be keyed by.
+//
+// Duplicated from state.Kind rather than imported: internal/config and
+// internal/state are deliberately independent of each other. The two
+// lists are pinned together by a test in internal/daemon, which sees
+// both.
+var modelKinds = []string{"work", "review", "ask", "plan", "doc"}
+
+// ModelKinds returns the kinds a per-kind model override may name.
+func ModelKinds() []string { return append([]string(nil), modelKinds...) }
+
+// DefaultModelChoices is the built-in picker list: one alias per
+// family, each of which follows that family's newest release.
+func DefaultModelChoices() []ModelChoice {
+	return []ModelChoice{
+		{Label: "Opus (latest)", Model: "opus"},
+		{Label: "Sonnet (latest)", Model: "sonnet"},
+		{Label: "Haiku (latest)", Model: "haiku"},
+		{Label: "Fable (latest)", Model: "fable"},
+	}
+}
+
+// Choices returns the configured picker entries, or the built-in list
+// when none are set.
+func (c Claude) Choices() []ModelChoice {
+	if len(c.ModelChoices) == 0 {
+		return DefaultModelChoices()
+	}
+	return c.ModelChoices
+}
+
+// ModelFor returns the model a new track of the given kind should run,
+// preferring a per-kind override over the global default. Empty means
+// "pass no --model flag".
+func (c Claude) ModelFor(kind string) string {
+	if m, ok := c.ModelByKind[kind]; ok {
+		if m = strings.TrimSpace(m); m != "" {
+			return m
+		}
+	}
+	return strings.TrimSpace(c.Model)
 }
 
 // Notify controls how the daemon reaches out when a track wants
@@ -303,6 +381,25 @@ func (c Config) Validate() error {
 	if c.Branch.DefaultType != "" {
 		if _, ok := seen[c.Branch.DefaultType]; !ok {
 			return fmt.Errorf("branch.default_type %q not in branch.types", c.Branch.DefaultType)
+		}
+	}
+
+	// Model settings. A mistyped kind key ("docs" for "doc") is
+	// otherwise inert and silent, and a choice with no model shows up in
+	// the picker as a second, indistinguishable "Default" entry.
+	validKind := make(map[string]struct{}, len(modelKinds))
+	for _, k := range modelKinds {
+		validKind[k] = struct{}{}
+	}
+	for kind := range c.Claude.ModelByKind {
+		if _, ok := validKind[kind]; !ok {
+			return fmt.Errorf("claude.model_by_kind has unknown kind %q (want one of %s)",
+				kind, strings.Join(modelKinds, ", "))
+		}
+	}
+	for i, ch := range c.Claude.ModelChoices {
+		if strings.TrimSpace(ch.Model) == "" {
+			return fmt.Errorf("claude.model_choices[%d] has an empty model", i)
 		}
 	}
 

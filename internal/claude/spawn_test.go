@@ -125,7 +125,7 @@ func TestBuildOptionsDocReview(t *testing.T) {
 		t.Fatalf("write doc: %v", err)
 	}
 	tr := baseTrack(state.KindDoc)
-	tr.DocPath = doc
+	tr.Doc = &state.DocSpec{Path: doc}
 
 	opts, err := BuildOptions(cfg, tr, "/sock", "")
 	if err != nil {
@@ -160,7 +160,7 @@ func TestBuildOptionsDocReview(t *testing.T) {
 }
 
 // docTrack is a doc-review track pointed at a real (empty) file, since
-// BuildOptions stats DocPath to decide the --add-dir grant.
+// BuildOptions stats the document path to decide the --add-dir grant.
 func docTrack(t *testing.T) state.Track {
 	t.Helper()
 	dir := t.TempDir()
@@ -169,7 +169,7 @@ func docTrack(t *testing.T) state.Track {
 		t.Fatalf("write doc: %v", err)
 	}
 	tr := baseTrack(state.KindDoc)
-	tr.DocPath = doc
+	tr.Doc = &state.DocSpec{Path: doc}
 	return tr
 }
 
@@ -196,9 +196,9 @@ func TestBuildOptionsDocReviewBriefDefaults(t *testing.T) {
 
 func TestBuildOptionsDocReviewBriefHonoursPicks(t *testing.T) {
 	tr := docTrack(t)
-	tr.Candor = 9
-	tr.DocSkipOpinion = true
-	tr.DocSkipClaimCheck = true
+	tr.Review = &state.ReviewSpec{Candor: 9}
+	tr.Doc.SkipOpinion = true
+	tr.Doc.SkipClaimCheck = true
 
 	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
 	if err != nil {
@@ -222,7 +222,7 @@ func TestBuildOptionsDocReviewBriefHonoursPicks(t *testing.T) {
 // before the setting existed) must not leak into the prompt as-is.
 func TestBuildOptionsDocReviewBriefClampsCandor(t *testing.T) {
 	tr := docTrack(t)
-	tr.Candor = 42
+	tr.Review = &state.ReviewSpec{Candor: 42}
 
 	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
 	if err != nil {
@@ -240,7 +240,7 @@ func TestBuildOptionsDocReviewBriefClampsCandor(t *testing.T) {
 // a work track's prompt has no review subagent to brief.
 func TestBuildOptionsReviewCarriesCandor(t *testing.T) {
 	tr := baseTrack(state.KindReview)
-	tr.Candor = 7
+	tr.Review = &state.ReviewSpec{Candor: 7}
 
 	opts, err := BuildOptions(config.Default(), tr, "/sock", "")
 	if err != nil {
@@ -276,7 +276,7 @@ func TestBuildOptionsDocReviewAllowsNoRepos(t *testing.T) {
 	}
 	tr := baseTrack(state.KindDoc)
 	tr.Repos = nil
-	tr.DocPath = doc
+	tr.Doc = &state.DocSpec{Path: doc}
 
 	opts, err := BuildOptions(cfg, tr, "/sock", "")
 	if err != nil {
@@ -300,7 +300,7 @@ func TestBuildOptionsDocReviewClampsPermissiveModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := baseTrack(state.KindDoc)
-	tr.DocPath = doc
+	tr.Doc = &state.DocSpec{Path: doc}
 
 	for configured, want := range map[string]string{
 		"acceptEdits":       "default",
@@ -321,7 +321,7 @@ func TestBuildOptionsDocReviewClampsPermissiveModes(t *testing.T) {
 	}
 }
 
-// Promotion turns a doc track into a work track but leaves DocPath on
+// Promotion turns a doc track into a work track but leaves Doc on
 // the record as provenance. The work session must not inherit the
 // document's directory — as a cwd or as an --add-dir grant — or it ends
 // up running the commit/push workflow from inside the primary checkout
@@ -333,8 +333,8 @@ func TestBuildOptionsPromotedDocTrackIgnoresDocPath(t *testing.T) {
 	if err := os.WriteFile(doc, []byte("# spec\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tr := baseTrack(state.KindWork) // promoted: kind flipped, DocPath kept
-	tr.DocPath = doc
+	tr := baseTrack(state.KindWork) // promoted: kind flipped, Doc kept
+	tr.Doc = &state.DocSpec{Path: doc}
 
 	opts, err := BuildOptions(cfg, tr, "/sock", "")
 	if err != nil {
@@ -361,7 +361,7 @@ func TestBuildResumeOptionsDocReviewClampsMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := baseTrack(state.KindDoc)
-	tr.DocPath = doc
+	tr.Doc = &state.DocSpec{Path: doc}
 	tr.SessionID = "sess-1"
 
 	cfg := config.Default()

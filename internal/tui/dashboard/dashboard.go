@@ -962,7 +962,7 @@ const (
 // asks the question for the table as a whole.
 func anyTrackHasSubagent(tracks []state.Track) bool {
 	for _, t := range tracks {
-		if t.SubagentModel != "" {
+		if t.ObservedSubagentModel != "" {
 			return true
 		}
 	}
@@ -1045,8 +1045,8 @@ func layoutFor(width int, wantModelPair bool) colLayout {
 // only ever appearing on a mismatch. Empty when no turn has named a
 // model yet.
 func trackModel(t state.Track, width int) string {
-	main := usage.ShortModel(t.Model)
-	sub := usage.ShortModel(t.SubagentModel)
+	main := usage.ShortModel(t.ObservedModel)
+	sub := usage.ShortModel(t.ObservedSubagentModel)
 	switch {
 	case main == "" && sub == "":
 		return ""
@@ -1209,10 +1209,10 @@ func docSectionsOff(t state.Track) string {
 		return ""
 	}
 	var off []string
-	if t.DocSkipOpinion {
+	if t.SkipOpinion() {
 		off = append(off, "opinion")
 	}
-	if t.DocSkipClaimCheck {
+	if t.SkipClaimCheck() {
 		off = append(off, "claim-check")
 	}
 	return strings.Join(off, ",")

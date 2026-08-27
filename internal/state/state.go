@@ -34,10 +34,20 @@ import (
 // v4 adds the top-level State.Proxies list — user-defined stable ports
 // and their chosen upstream, previously declared per-service in config
 // as proxy_port and held only in the daemon's memory.
+// v5 moves the flat review/doc fields (candor, doc_path,
+// doc_skip_claim_check, doc_skip_opinion) into Track.Review and
+// Track.Doc, and drops Track.LogPath — a path that was computed and
+// persisted but never written to or read.
 // Older tracks are migrated on load (see Track.UnmarshalJSON and
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
-// empty list.
-const CurrentSchemaVersion = 4
+// empty list; a v4 file's flat review fields are folded in at decode
+// time.
+// Two on-disk changes since v5 deliberately did NOT bump this, both
+// documented at their fields: the observed-model keys were renamed
+// (derived data, refolded on decode), and RequestedModel was added
+// (absent reads as "no preference"). A bump stops an older binary
+// starting at all, which is the heavier cost of the two.
+const CurrentSchemaVersion = 5
 
 // Kind is the type of a track. It decides whether the track owns
 // worktrees and how Claude is launched.
@@ -60,7 +70,7 @@ const (
 	KindPlan Kind = "plan"
 
 	// KindDoc is a review of a local document (markdown, PDF, image,
-	// CSV) rather than a code diff: the target is Track.DocPath, not a
+	// CSV) rather than a code diff: the target is Track.Doc.Path, not a
 	// git ref. Worktree-less — any repos on the track are attached for
 	// grounding claims, not for editing. Kept to <=7 chars so it fits
 	// the dashboard's KIND column.
@@ -316,32 +326,44 @@ type Track struct {
 	// the field blank.
 	Slug string `json:"slug,omitempty"`
 
+	// Window is the tmux window name this track owns, chosen once at
+	// creation and never recomputed. Persisting it is what lets the name
+	// be a bare human label: uniqueness is settled once, against what
+	// already exists, instead of being guaranteed on every call by
+	// stapling the track id on. Empty on tracks created before this
+	// existed — see WindowName, which falls back to the old derived form
+	// so their windows stay reachable.
+	//
+	// Added without a schema bump: an older binary ignores the key and
+	// falls back to that derived name, which carries the id tail and so
+	// is unique. The downgrade fails safe as "window not found" rather
+	// than targeting somebody else's window.
+	Window string `json:"window,omitempty"`
+
 	// Kind is the track type (work/review/ask/plan/doc). Empty in v1
 	// files; migrated to KindWork on load. Drives worktree handling and
 	// how Claude is launched.
 	Kind Kind `json:"kind,omitempty"`
 
-	// DocPath is the absolute path of the document under review on a
-	// KindDoc track — a file, or a directory of files. Its parent
-	// directory is passed to Claude as an --add-dir so the file is
-	// readable (documents usually live outside every configured repo).
-	// Empty on every other kind.
-	DocPath string `json:"doc_path,omitempty"`
+	// Review carries the settings that only mean something when the track
+	// is reviewing something — code or a document. Non-nil on KindReview
+	// and KindDoc, nil on every other kind, so the nil check *is* the
+	// "is this a review?" question and there are no dead settings to
+	// inherit across a promotion. Migrated records are held to the same
+	// rule — see ensureReviewSpec.
+	//
+	// Replace the pointer, never write through it: Store.Get and All hand
+	// out shallow struct copies, so a spec is shared with the stored track
+	// and with every snapshot a reader is holding. Same hazard AddPR and
+	// SetPR copy-on-write around.
+	Review *ReviewSpec `json:"review,omitempty"`
 
-	// Candor dials the *delivery* of a review on KindReview / KindDoc
-	// tracks: 1 is radical candor, 10 is honest but gently framed. Zero
-	// means the user didn't pick one — read it through CandorLevel(),
-	// which supplies DefaultCandor. Never affects which findings a review
-	// reports or their severity; see claude.docReviewBrief and
-	// claude.reviewCandorSuffix for how it reaches the reviewer.
-	Candor int `json:"candor,omitempty"`
-
-	// DocSkipClaimCheck / DocSkipOpinion drop one of the optional
-	// sections of a doc review. Stored as negations so the zero value —
-	// and therefore every track written before these existed — keeps
-	// both sections on.
-	DocSkipClaimCheck bool `json:"doc_skip_claim_check,omitempty"`
-	DocSkipOpinion    bool `json:"doc_skip_opinion,omitempty"`
+	// Doc describes the document under review. Non-nil on KindDoc only.
+	// A doc track carries both this and Review: a document review *is* a
+	// review (it has a candor level) and additionally has a target and
+	// section switches. Replace the pointer, never write through it — see
+	// the note on Review.
+	Doc *DocSpec `json:"doc,omitempty"`
 
 	// Repos lists the participating worktrees, in the order they were
 	// added (initial selection first, mid-session add-repo calls
@@ -365,10 +387,6 @@ type Track struct {
 	// PID of the Claude process. Zero before spawn, retained after
 	// exit so post-mortems can correlate.
 	PID int `json:"pid,omitempty"`
-
-	// LogPath is the absolute path to the stream-json log file. Useful
-	// post-mortem.
-	LogPath string `json:"log_path"`
 
 	// TaskPrompt is the prompt the user typed. Stored so the dashboard
 	// can show it without re-reading the log.
@@ -411,24 +429,72 @@ type Track struct {
 	// turn lands.
 	Usage Usage `json:"usage,omitempty"`
 
-	// Model is the model id of the track's most recent main-chain
-	// assistant turn, read from the same transcript as Usage. It follows
-	// a `/model` switch inside the pane without tracks being told, and
-	// deliberately ignores sub-agent turns. Empty until the first turn.
+	// ObservedModel is the model id of the track's most recent
+	// main-chain assistant turn, read from the same transcript as Usage.
+	// It is what actually ran — it follows a `/model` switch inside the
+	// pane without tracks being told, and so is the model to price and
+	// display. Deliberately ignores sub-agent turns. Empty until the
+	// first turn.
 	//
-	// Added without a schema bump, unlike the fields above: Model is
+	// "Observed" distinguishes it from a model the user *asked* for at
+	// creation; the two can disagree, and when they do this one is the
+	// truth.
+	//
+	// Added without a schema bump, unlike the fields above: it is
 	// *derived*, not authoritative. An older binary drops the key on its
 	// next write and a newer one re-derives it from the transcript on the
 	// next refresh, so a downgrade round-trip is self-healing and there is
 	// nothing for a migration to preserve.
-	Model string `json:"model,omitempty"`
+	//
+	// The rename from "model" is nonetheless handled in UnmarshalJSON
+	// rather than left to re-derivation: a track that already finished
+	// never refreshes again, so it would have kept an empty cell for
+	// good.
+	ObservedModel string `json:"observed_model,omitempty"`
 
-	// SubagentModel is the model of the track's most recent sub-agent
-	// turn, read from the same transcript. Kept apart from Model because
-	// the pair is the point: a track can run Opus itself while its
-	// reviewer subagent runs Haiku. Derived and schema-exempt for the same
-	// reason as Model. Empty until a sub-agent takes a turn.
-	SubagentModel string `json:"subagent_model,omitempty"`
+	// ObservedSubagentModel is the model of the track's most recent
+	// sub-agent turn, read from the same transcript. Kept apart from
+	// ObservedModel because the pair is the point: a track can run Opus
+	// itself while its reviewer subagent runs Haiku. Derived and
+	// schema-exempt for the same reason. Empty until a sub-agent takes a
+	// turn.
+	ObservedSubagentModel string `json:"observed_subagent_model,omitempty"`
+
+	// RequestedModel is the model explicitly picked when the track was
+	// created, passed to the CLI as --model.
+	//
+	// Empty means the user expressed no preference — NOT that no model
+	// applies. The configured default for the track's kind is resolved
+	// at spawn time instead (see claude.BuildOptions), deliberately
+	// rather than being baked in here: promote flips an ask/plan track
+	// to KindWork and re-spawns it, and a default frozen at creation
+	// would run the promoted work session on the ask model.
+	//
+	// Kept for the two paths that re-spawn rather than resume:
+	// promoting, and relaunching a draft. Both start a fresh session, so
+	// without this an explicit pick would silently revert to the
+	// default. Resume needs nothing from it — a resumed session restores
+	// its own model, and deliberately keeps a mid-session `/model`
+	// switch.
+	//
+	// Diverges from ObservedModel whenever the user switches models in
+	// the pane, and when a name the CLI doesn't recognise quietly
+	// resolves to a different model. ObservedModel is the truth; this is
+	// the intent.
+	//
+	// Added without a schema bump, unlike Review/Doc. This one is
+	// authoritative rather than derived, so an older binary drops it on
+	// write and the choice is lost. A bump is still the worse trade: a
+	// v5 binary refuses to load a store written at v6 (see
+	// FileStore.load) and so won't start at all until the file is put
+	// back — the tracks survive, but access to all of them doesn't,
+	// which beats losing one optional field on each.
+	//
+	// Note this is a different case from the v5 bump, which moved
+	// authoritative fields that could not be reconstructed if dropped.
+	// An absent RequestedModel is indistinguishable from "no preference",
+	// which is a valid state with a sensible behaviour.
+	RequestedModel string `json:"requested_model,omitempty"`
 
 	// CreatedAt is when the track entry was written.
 	CreatedAt time.Time `json:"created_at"`
@@ -460,6 +526,47 @@ type Track struct {
 	Draft *DraftSpec `json:"draft,omitempty"`
 }
 
+// ReviewSpec is how a review is delivered. Shared by code reviews
+// (KindReview) and document reviews (KindDoc).
+type ReviewSpec struct {
+	// Candor dials the *delivery* of the review: 1 is radical candor, 10
+	// is honest but gently framed. Zero means the user didn't pick one —
+	// read it through Track.CandorLevel(), which supplies DefaultCandor.
+	// Never affects which findings a review reports or their severity;
+	// see claude.docReviewBrief and claude.reviewCandorSuffix for how it
+	// reaches the reviewer.
+	Candor int `json:"candor,omitempty"`
+}
+
+// DocSpec is the document a KindDoc track reviews.
+type DocSpec struct {
+	// Path is the absolute path of the document — a file, or a directory
+	// of files. Its parent directory is passed to Claude as an --add-dir
+	// so the file is readable (documents usually live outside every
+	// configured repo).
+	Path string `json:"path"`
+
+	// SkipClaimCheck / SkipOpinion drop one of the optional sections of
+	// the review. Stored as negations so the zero value keeps both on.
+	SkipClaimCheck bool `json:"skip_claim_check,omitempty"`
+	SkipOpinion    bool `json:"skip_opinion,omitempty"`
+}
+
+// DocPath is the document under review, or "" when the track has none.
+// Nil-safe, so callers don't have to know whether Doc is set.
+func (t Track) DocPath() string {
+	if t.Doc == nil {
+		return ""
+	}
+	return t.Doc.Path
+}
+
+// SkipClaimCheck / SkipOpinion report whether the corresponding optional
+// section of a doc review is switched off. Both are false for a track
+// with no document, which is the right default: nothing is skipped.
+func (t Track) SkipClaimCheck() bool { return t.Doc != nil && t.Doc.SkipClaimCheck }
+func (t Track) SkipOpinion() bool    { return t.Doc != nil && t.Doc.SkipOpinion }
+
 // DraftSpec is the set of user-supplied parameters that a track is
 // created from. Persisted on a track (see Track.Draft) so a creation
 // that failed — or was deliberately saved before launch — can be
@@ -476,6 +583,10 @@ type DraftSpec struct {
 	Candor            int      `json:"candor,omitempty"`
 	DocSkipClaimCheck bool     `json:"doc_skip_claim_check,omitempty"`
 	DocSkipOpinion    bool     `json:"doc_skip_opinion,omitempty"`
+
+	// Model is the model picked at creation, so a relaunch runs the same
+	// one rather than the current default.
+	Model string `json:"model,omitempty"`
 }
 
 // IsTerminal reports whether s is one of the end-state statuses —
@@ -625,25 +736,34 @@ func (t Track) Duration() time.Duration {
 }
 
 // windowLabelMaxLen caps the human part of a tmux window name so the
-// status bar tab stays readable. The unique ID suffix is appended on
-// top of this.
-const windowLabelMaxLen = 24
+// status-bar tab stays readable. Raised from 24 once the id suffix
+// stopped being appended: names that read "swap-reset-after-multi-s"
+// were losing their last word to a suffix nobody read.
+const windowLabelMaxLen = 32
+
+// legacyWindowLabelMaxLen is frozen at the old value and must stay
+// there. It only feeds legacyWindowName, which has to reproduce — byte
+// for byte — the name a pre-Window track's window was actually opened
+// under. Widening it would silently repoint every one of those tracks
+// at a window that does not exist.
+const legacyWindowLabelMaxLen = 24
 
 // DocDir returns the directory Claude needs access to in order to read
-// the track's document: DocPath itself when it's a directory, its
-// parent when it's a file. Empty when the track has no DocPath.
+// the track's document: the path itself when it's a directory, its
+// parent when it's a file. Empty when the track has no document.
 //
 // Falls back to the parent when the path can't be stat'd — a document
 // deleted between track creation and a later resume shouldn't break
 // spawning; Claude reports the missing file instead.
 func (t Track) DocDir() string {
-	if t.DocPath == "" {
+	path := t.DocPath()
+	if path == "" {
 		return ""
 	}
-	if info, err := os.Stat(t.DocPath); err == nil && info.IsDir() {
-		return t.DocPath
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return path
 	}
-	return filepath.Dir(t.DocPath)
+	return filepath.Dir(path)
 }
 
 // Candor bounds. The scale runs 1 (radical candor) to 10 (honest but
@@ -659,10 +779,10 @@ const (
 // never picked one, or the track predates the setting) and any
 // out-of-range value fall back to DefaultCandor.
 func (t Track) CandorLevel() int {
-	if t.Candor < MinCandor || t.Candor > MaxCandor {
+	if t.Review == nil || t.Review.Candor < MinCandor || t.Review.Candor > MaxCandor {
 		return DefaultCandor
 	}
-	return t.Candor
+	return t.Review.Candor
 }
 
 // candorLabels is the one-phrase gloss for each level. Lives here so the
@@ -698,28 +818,37 @@ func CandorLabel(level int) string {
 
 // WindowName is the tmux window name for this track. It's the single
 // source of truth: the daemon opens the window under this name and
-// every selector/killer (CLI, dashboard, supervisor) targets it by
-// the same name, so they must all agree.
+// every selector/killer (CLI, dashboard, supervisor) targets it by the
+// same name, so they must all agree.
 //
-// The name reads as <label>-<id-tail>:
+// Normally that's Window, chosen once at creation (see
+// Server.claimWindowName) and stored — a bare human label like
+// "swap-rate-tooltip", with a "-2" appended only if something already
+// answered to the plain form.
 //
-//   - <label> is a slugified human hint — the user's Slug if they set
-//     one, otherwise the opening words of the task prompt — so the tab
-//     in tmux's status bar means something at a glance.
-//   - <id-tail> is the trailing 6 characters of the track ID, always
-//     appended so two tracks sharing a slug never collide on a name
-//     (which would make the daemon kill or select the wrong window).
-//
-// When there's no usable label (no slug, empty prompt) it falls back
-// to the historical "t-<id-tail>" form.
+// A track created before Window existed has none, and falls back to the
+// name it was actually opened under: <label>-<id-tail>, where the id
+// tail was stapled on unconditionally to keep two tracks sharing a slug
+// from colliding — which would have made the daemon kill or select the
+// wrong window. Those windows keep their old names for life; only new
+// tracks get clean ones.
 func (t Track) WindowName() string {
+	if t.Window != "" {
+		return t.Window
+	}
+	return t.legacyWindowName()
+}
+
+// legacyWindowName is the pre-Window derived form, kept so tracks that
+// predate the field still resolve to the window they were opened under.
+func (t Track) legacyWindowName() string {
 	suffix := t.ID
 	if len(t.ID) > 6 {
 		suffix = t.ID[len(t.ID)-6:]
 	}
-	label := windowLabel(t.Slug)
+	label := windowLabelCapped(t.Slug, legacyWindowLabelMaxLen)
 	if label == "" {
-		label = windowLabel(t.TaskPrompt)
+		label = windowLabelCapped(t.TaskPrompt, legacyWindowLabelMaxLen)
 	}
 	if label == "" {
 		return "t-" + suffix
@@ -727,21 +856,41 @@ func (t Track) WindowName() string {
 	return label + "-" + suffix
 }
 
+// LegacyFallbackWindowName is the id-suffixed form, exported so the
+// daemon can fall back to it for a track with no usable label, or when
+// every variant of a label is already spoken for. Unique by
+// construction, at the cost of being unreadable.
+func (t Track) LegacyFallbackWindowName() string { return t.legacyWindowName() }
+
+// WindowLabel is the human part of a window name for a track: the
+// user's slug if they set one, otherwise the opening words of the task
+// prompt, otherwise "" — the caller decides what to do with a track
+// that offers no usable text (see Server.claimWindowName).
+func (t Track) WindowLabel() string {
+	if l := windowLabel(t.Slug); l != "" {
+		return l
+	}
+	return windowLabel(t.TaskPrompt)
+}
+
 // windowLabel slugifies s into a tmux-safe token: lowercase ASCII
 // alphanumerics, with every other run collapsed to a single hyphen.
 // This deliberately strips ":" and "." (tmux target separators) and
 // whitespace (which would break the status-bar tab). The result is
-// capped at windowLabelMaxLen on a hyphen boundary so a long prompt
-// doesn't produce a giant tab. Returns "" when s carries no usable
-// characters.
-func windowLabel(s string) string {
+// truncated at maxLen so a long prompt doesn't produce a giant tab.
+// The cut is by length, not on a word boundary, so a label can end
+// mid-word ("investigate-the-rate-spike-on-sw").
+// Returns "" when s carries no usable characters.
+func windowLabel(s string) string { return windowLabelCapped(s, windowLabelMaxLen) }
+
+func windowLabelCapped(s string, maxLen int) string {
 	var b strings.Builder
 	prevHyphen := false
 	for _, r := range strings.ToLower(s) {
 		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
 		switch {
 		case isAlnum:
-			if b.Len() >= windowLabelMaxLen {
+			if b.Len() >= maxLen {
 				// Already at the cap; stop at this word boundary.
 				return strings.TrimRight(b.String(), "-")
 			}
@@ -918,14 +1067,27 @@ func migrateTrack(t *Track) {
 	if t.Status == statusPRLegacy {
 		t.Status = StatusPROpen
 	}
+	// Kind is only just settled for a pre-v2 record, so the review-spec
+	// invariant has to be re-checked now it's known.
+	t.ensureReviewSpec()
 }
 
-// UnmarshalJSON decodes a Track, folding the pre-v3 single-PR fields
-// (pr_url, pr_state, pr_draft, pr_review_state, pr_comments) into the
-// PRs list. Done here rather than in migrateTrack because those fields
-// no longer exist on Track — this is the only place they're still
-// visible. Tracks decoded from the daemon socket get the same treatment,
-// so an older state file needs no rewrite before it can be served.
+// UnmarshalJSON decodes a Track, folding two generations of removed
+// fields into their replacements:
+//
+//   - pre-v3: the single-PR fields (pr_url, pr_state, …) become PRs[0].
+//   - pre-v5: the flat review/doc fields (candor, doc_path,
+//     doc_skip_claim_check, doc_skip_opinion) become Review and Doc.
+//   - the renamed observed-model keys (model, subagent_model) become
+//     ObservedModel and ObservedSubagentModel. No schema bump went with
+//     that rename — the fields are derived, so the only thing at stake
+//     is a finished track's display, which this fold preserves.
+//
+// Done here rather than in migrateTrack because none of those fields
+// exists on Track any more — decode time is the only place they are
+// still visible. Tracks decoded from the daemon socket get the same
+// treatment, so an older state file needs no rewrite before it can be
+// served.
 func (t *Track) UnmarshalJSON(data []byte) error {
 	type track Track // shed the method set to avoid recursing
 	var aux struct {
@@ -935,6 +1097,14 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 		LegacyPRDraft       bool   `json:"pr_draft"`
 		LegacyPRReviewState string `json:"pr_review_state"`
 		LegacyPRComments    int    `json:"pr_comments"`
+
+		LegacyCandor         int    `json:"candor"`
+		LegacyDocPath        string `json:"doc_path"`
+		LegacyDocSkipClaim   bool   `json:"doc_skip_claim_check"`
+		LegacyDocSkipOpinion bool   `json:"doc_skip_opinion"`
+
+		LegacyModel         string `json:"model"`
+		LegacySubagentModel string `json:"subagent_model"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -949,7 +1119,55 @@ func (t *Track) UnmarshalJSON(data []byte) error {
 			Comments:    aux.LegacyPRComments,
 		}}
 	}
+	// A v4 file carries the review settings flat. Only fold them in when
+	// the new field is absent, so a v5 file that legitimately has both
+	// (it never should) isn't overwritten by stale keys.
+	if t.Review == nil && aux.LegacyCandor != 0 {
+		t.Review = &ReviewSpec{Candor: aux.LegacyCandor}
+	}
+	if t.Doc == nil && aux.LegacyDocPath != "" {
+		t.Doc = &DocSpec{
+			Path:           aux.LegacyDocPath,
+			SkipClaimCheck: aux.LegacyDocSkipClaim,
+			SkipOpinion:    aux.LegacyDocSkipOpinion,
+		}
+	}
+	// The observed-model keys were renamed. Both are derived, so a live
+	// track would re-derive them on its next refresh — but a track that
+	// already reached a terminal status never refreshes again
+	// (finalizeTrack returns early on one), and would lose its model
+	// display permanently. Carry the old keys across instead.
+	if t.ObservedModel == "" {
+		t.ObservedModel = aux.LegacyModel
+	}
+	if t.ObservedSubagentModel == "" {
+		t.ObservedSubagentModel = aux.LegacySubagentModel
+	}
+	t.ensureReviewSpec()
 	return nil
+}
+
+// ensureReviewSpec gives a review or doc track an empty ReviewSpec when
+// it hasn't got one, so "Review != nil" really does answer "is this
+// reviewing something?" for migrated records too.
+//
+// Without it a record written before the candor dial existed — or any
+// v4 record that simply omitted the key — decodes as a review-kind track
+// with a nil Review, and the invariant the struct promises is only true
+// for tracks created from v5 on. An empty spec is the right filler:
+// CandorLevel() reads it as DefaultCandor, which is exactly what those
+// tracks resolved to before.
+//
+// Called from UnmarshalJSON (where Kind is whatever the file said) and
+// again from migrateTrack (which runs later and infers Kind for pre-v2
+// records that never had one).
+func (t *Track) ensureReviewSpec() {
+	if t.Review != nil {
+		return
+	}
+	if t.Kind == KindReview || t.Kind == KindDoc {
+		t.Review = &ReviewSpec{}
+	}
 }
 
 // Path returns the absolute path of the state file (useful for

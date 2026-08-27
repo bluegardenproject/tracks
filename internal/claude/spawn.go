@@ -68,6 +68,12 @@ type SpawnOptions struct {
 	// existing conversation rather than starting a new one.
 	Resume bool
 
+	// Model is passed as --model. Empty omits the flag, leaving
+	// Claude's own default. Never set for a resume: a resumed session
+	// restores the model it was last using, and forcing the flag there
+	// would silently undo a mid-session `/model` switch.
+	Model string
+
 	// SentinelPath is the path to a file the shell wrapper touches
 	// the instant Claude exits, so the supervisor can finalize the
 	// track without depending on pid death. Empty means no shell
@@ -263,13 +269,13 @@ func docReviewBrief(t state.Track) string {
 	lines := []string{
 		fmt.Sprintf("    Candor level: %d/10 (%s). 1 = radical candor, 10 = honest but gently framed.", level, state.CandorLabel(level)),
 	}
-	if t.DocSkipOpinion {
+	if t.SkipOpinion() {
 		lines = append(lines, "    Opinion section: OFF — skip it; report findings only.")
 	} else {
 		lines = append(lines, "    Opinion section: ON — judge the argument, the reasoning, "+
 			"whether the content holds up, and how easily it reads for its audience.")
 	}
-	if t.DocSkipClaimCheck {
+	if t.SkipClaimCheck() {
 		lines = append(lines, "    Claim check: OFF — do not verify claims. No repo, GitHub, or Jira "+
 			"lookups and no claim-check table; flag a claim that looks shaky as an unverified `warn` instead.")
 	} else {
@@ -370,9 +376,11 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	// (~/Downloads/deck.pdf), so its directory has to be granted
 	// explicitly or Claude can't read it — or write the report beside it.
 	//
-	// Gated on the kind, not just on DocPath: promoting a doc track to
-	// work leaves DocPath in place as provenance, and a work session
-	// must not inherit the document's directory as a grant or a cwd.
+	// Gated on the kind, not just on the presence of a document: a work
+	// session must not inherit a document's directory as a grant or a
+	// cwd. handlePromote refuses to promote a doc track at all, so this
+	// is belt-and-braces against a work-kind record that carries a Doc
+	// spec by some other route, not a shape the daemon produces.
 	docDir := ""
 	if t.Kind == state.KindDoc {
 		docDir = t.DocDir()
@@ -395,7 +403,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 	permMode := cfg.Claude.PermissionMode
 	if t.Kind == state.KindDoc {
 		permMode = docPermissionMode(permMode)
-		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath, docReviewBrief(t))
+		prompt += "\n\n" + fmt.Sprintf(docReviewTemplate, t.DocPath(), docReviewBrief(t))
 	} else if t.Kind.Worktreeless() {
 		permMode = "plan"
 		if len(t.Repos) > 0 {
@@ -429,6 +437,14 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		cwd = home
 	}
 
+	// The track's own choice wins; the per-kind default is only
+	// consulted for a record created before the picker existed, or by a
+	// caller that didn't set one.
+	model := t.RequestedModel
+	if model == "" {
+		model = cfg.Claude.ModelFor(string(t.Kind))
+	}
+
 	return SpawnOptions{
 		CLIBinary:      cfg.Claude.Binary,
 		PermissionMode: permMode,
@@ -439,6 +455,7 @@ func BuildOptions(cfg config.Config, t state.Track, socketDir, sentinelPath stri
 		SocketDir:      socketDir,
 		SentinelPath:   sentinelPath,
 		SessionID:      t.SessionID,
+		Model:          model,
 	}, nil
 }
 
@@ -476,6 +493,11 @@ func (o SpawnOptions) ShellCommand() string {
 	}
 	if o.PermissionMode != "" {
 		claudeArgv = append(claudeArgv, "--permission-mode", shellQuote(o.PermissionMode))
+	}
+	// Deliberately outside the resume branch above: --resume brings its
+	// own model back with it.
+	if o.Model != "" && !o.Resume {
+		claudeArgv = append(claudeArgv, "--model", shellQuote(o.Model))
 	}
 	for _, d := range o.AddDirs {
 		claudeArgv = append(claudeArgv, "--add-dir", shellQuote(d))

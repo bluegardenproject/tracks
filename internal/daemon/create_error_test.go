@@ -17,8 +17,7 @@ import (
 // trace. That's what makes the failure visible and retryable from the
 // dashboard.
 func TestNewPersistsErroredTrackOnCreateFailure(t *testing.T) {
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Repos = []config.Repo{{Name: "demo", Path: "/nonexistent/demo", Base: "main"}}
 	store := state.NewMemoryStore()
 	srv := NewServer(cfg, store, "test")

@@ -69,8 +69,11 @@ type Server struct {
 	socketPath string
 	lockPath   string
 
-	mu              sync.Mutex
-	supervisors     map[string]*supervisor
+	mu          sync.Mutex
+	supervisors map[string]*supervisor
+	// pendingWindows are tmux window names claimed by track creations
+	// still in flight — see Server.claimWindowName.
+	pendingWindows  map[string]bool
 	proxyMgr        *proxy.Manager
 	listener        net.Listener
 	lockFile        *os.File
@@ -95,6 +98,7 @@ func NewServer(cfg config.Config, store state.Store, version string) *Server {
 			MacOS: cfg.Notify.MacOS,
 			Bell:  cfg.Notify.Bell,
 		}),
+		pendingWindows: make(map[string]bool),
 	}
 	// Snapshot the running binary's path + mtime once, at startup, so a
 	// later rebuild (which overwrites the file in place) doesn't change

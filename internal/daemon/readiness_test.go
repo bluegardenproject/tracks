@@ -20,8 +20,7 @@ import (
 // notifications or write to /dev/tty.
 func newReadinessTestServer(t *testing.T) *Server {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Paths.StateDir = t.TempDir()
+	cfg := testConfig(t)
 	cfg.Notify = config.Notify{}
 	srv := NewServer(cfg, state.NewMemoryStore(), "test")
 	srv.readyTimeout = 300 * time.Millisecond
