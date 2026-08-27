@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/bluegardenproject/tracks/compare/v1.0.0...v1.0.1) (2026-08-27)
+
+
+### Documentation
+
+* **design:** Cursor CLI integration research and design ([89a1e9d](https://github.com/bluegardenproject/tracks/commit/89a1e9de5eb2d7771d2dff977c073c500d54af80))
+
 ## [1.0.0](https://github.com/bluegardenproject/tracks/compare/v0.7.0...v1.0.0) (2026-08-27)
 
 
