@@ -457,3 +457,82 @@ func TestValidateRejectsAChoiceWithNoModel(t *testing.T) {
 		t.Fatal("an empty model was accepted; the picker would show a second indistinguishable Default")
 	}
 }
+
+// Cursor.ModelFor mirrors Claude.ModelFor, so it gets the mirrored
+// tests — the repo's pattern is that a copied struct copies its
+// coverage, not that a copy is assumed correct.
+func TestCursorModelForPrefersThePerKindOverride(t *testing.T) {
+	c := Cursor{
+		Model:       "gpt-5.3-codex",
+		ModelByKind: map[string]string{"doc": "composer-2.5", "review": "  "},
+	}
+	if got := c.ModelFor("doc"); got != "composer-2.5" {
+		t.Errorf("ModelFor(doc) = %q, want the override", got)
+	}
+	if got := c.ModelFor("work"); got != "gpt-5.3-codex" {
+		t.Errorf("ModelFor(work) = %q, want the global default", got)
+	}
+	if got := c.ModelFor("review"); got != "gpt-5.3-codex" {
+		t.Errorf("ModelFor(review) = %q, want a whitespace override ignored", got)
+	}
+}
+
+func TestCursorModelForEmptyWhenNothingConfigured(t *testing.T) {
+	if got := (Cursor{}).ModelFor("work"); got != "" {
+		t.Errorf("ModelFor = %q, want empty so no --model flag is passed", got)
+	}
+}
+
+func TestValidateRejectsCursorMisconfiguration(t *testing.T) {
+	base := func() Config {
+		c := Default()
+		c.Repos = []Repo{{Name: "demo", Path: "/tmp/demo", Base: "main"}}
+		return c
+	}
+	cases := []struct {
+		name string
+		bend func(*Config)
+		want string
+	}{
+		{"unknown kind key", func(c *Config) { c.Cursor.ModelByKind = map[string]string{"docs": "auto"} }, "docs"},
+		{"empty choice model", func(c *Config) { c.Cursor.ModelChoices = []ModelChoice{{Label: "X", Model: " "}} }, "cursor.model_choices"},
+		{"empty binary", func(c *Config) { c.Cursor.Binary = "" }, "cursor.binary"},
+		{"unknown provider", func(c *Config) { c.Provider = "codex" }, "codex"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base()
+			tc.bend(&cfg)
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatalf("accepted an invalid config")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q should mention %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsEveryOfferedProvider(t *testing.T) {
+	for _, p := range Providers() {
+		cfg := Default()
+		cfg.Repos = []Repo{{Name: "demo", Path: "/tmp/demo", Base: "main"}}
+		cfg.Provider = p
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("Providers() offers %q but Validate rejects it: %v", p, err)
+		}
+	}
+}
+
+// A config that never mentions cursor or a provider still has to come
+// out usable — this is every config written before the field existed.
+func TestDefaultsFillInCursorAndProvider(t *testing.T) {
+	cfg := Default()
+	if cfg.Cursor.Binary != "agent" {
+		t.Errorf("default cursor binary = %q, want agent", cfg.Cursor.Binary)
+	}
+	if cfg.Provider != "claude" {
+		t.Errorf("default provider = %q, want claude", cfg.Provider)
+	}
+}

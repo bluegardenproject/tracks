@@ -89,3 +89,28 @@ func TestConfigModelKindsMatchStateKinds(t *testing.T) {
 		}
 	}
 }
+
+// config.Providers duplicates state.Provider so internal/config can
+// stay independent of internal/state. This package sees both, so it is
+// where the two are held together.
+func TestConfigProvidersMatchStateProviders(t *testing.T) {
+	want := map[string]bool{}
+	for _, p := range state.Providers() {
+		want[string(p)] = true
+	}
+	got := map[string]bool{}
+	for _, p := range config.Providers() {
+		got[p] = true
+		if !want[p] {
+			t.Errorf("config.Providers has %q, which is not a state.Provider", p)
+		}
+		if !state.Provider(p).Valid() {
+			t.Errorf("config offers %q but state rejects it as invalid", p)
+		}
+	}
+	for p := range want {
+		if !got[p] {
+			t.Errorf("state.Provider %q missing from config.Providers — config.Validate would reject it", p)
+		}
+	}
+}

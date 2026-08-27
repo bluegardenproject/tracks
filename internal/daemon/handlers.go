@@ -255,6 +255,26 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	// opposite of what a per-kind default is for.
 	requestedModel := strings.TrimSpace(p.Model)
 
+	// Provider, unlike the model, IS resolved here. It has to be: the
+	// spawn path picks a binary from it, and a track that silently
+	// changed provider because the default moved would try to resume a
+	// Cursor chat id with `claude --resume`, or the reverse. Fixing it
+	// at creation is what makes the session id meaningful for the life
+	// of the track.
+	provider := state.Provider(strings.TrimSpace(p.Provider))
+	if !provider.Valid() {
+		return fail(fmt.Sprintf("unknown provider %q (want one of claude, cursor)", p.Provider))
+	}
+	if provider == "" {
+		provider = state.Provider(strings.TrimSpace(s.config().Provider))
+		// The config is validated on load, but it can be edited on disk
+		// between reloads; an unknown value there must not reach a track.
+		if !provider.Valid() {
+			provider = state.ProviderClaude
+		}
+	}
+	provider = provider.Resolved()
+
 	t := state.Track{
 		ID:             trackID,
 		Branch:         branch,
@@ -266,6 +286,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		TaskPrompt:     p.TaskPrompt,
 		SessionID:      sessionID,
 		RequestedModel: requestedModel,
+		Provider:       provider,
 		CreatedAt:      time.Now().UTC(),
 	}
 	// draft captures exactly what the user entered so a failed creation
@@ -299,7 +320,8 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		DocSkipOpinion:    draftSkipOpinion,
 		// Resolved, like DocPath: a relaunch should rerun the model the
 		// user picked, not whatever the default has become since.
-		Model: requestedModel,
+		Model:    requestedModel,
+		Provider: provider,
 	}
 	// failCreate persists the in-progress track as errored (with the
 	// reason and the draft spec) and returns the wire error, so the
@@ -1216,6 +1238,33 @@ func (s *Server) handleSaveDraft(raw json.RawMessage) Response {
 // throwaway errored record handleNew persisted is removed and the
 // original draft is kept — with its reason refreshed — so nothing is
 // lost and it stays launchable.
+// draftLaunchParams turns a saved draft back into the creation request
+// that produced it. Split out from handleLaunch so the carry-over is
+// reachable from a test: the failure path folds its error onto the
+// draft and discards the new record, so a relaunch driven end to end
+// never exposes what was actually replayed.
+func draftLaunchParams(t state.Track) NewParams {
+	return NewParams{
+		Repos:             t.Draft.Repos,
+		TaskPrompt:        t.Draft.TaskPrompt,
+		Slug:              t.Draft.Slug,
+		ReviewRef:         t.Draft.ReviewRef,
+		DocPath:           t.Draft.DocPath,
+		Kind:              t.Draft.Kind,
+		Candor:            t.Draft.Candor,
+		DocSkipClaimCheck: t.Draft.DocSkipClaimCheck,
+		DocSkipOpinion:    t.Draft.DocSkipOpinion,
+		Model:             t.Draft.Model,
+		// Resolved, not raw. A draft saved before providers existed
+		// carries "", and passing that through would let handleNew apply
+		// today's default — so a Claude draft could come back as a Cursor
+		// track. Unlike Model, where empty genuinely means "no preference
+		// expressed", empty here means "written when Claude was the only
+		// option".
+		Provider: string(t.Draft.Provider.Resolved()),
+	}
+}
+
 func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emit) Response {
 	var p LaunchParams
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -1235,18 +1284,7 @@ func (s *Server) handleLaunch(ctx context.Context, raw json.RawMessage, emit Emi
 		return fail(fmt.Sprintf("track %s is %s; only a draft or finished/failed track can be launched", p.ID, t.StatusLabel()))
 	}
 
-	params := NewParams{
-		Repos:             t.Draft.Repos,
-		TaskPrompt:        t.Draft.TaskPrompt,
-		Slug:              t.Draft.Slug,
-		ReviewRef:         t.Draft.ReviewRef,
-		DocPath:           t.Draft.DocPath,
-		Kind:              t.Draft.Kind,
-		Candor:            t.Draft.Candor,
-		DocSkipClaimCheck: t.Draft.DocSkipClaimCheck,
-		DocSkipOpinion:    t.Draft.DocSkipOpinion,
-		Model:             t.Draft.Model,
-	}
+	params := draftLaunchParams(t)
 	rawNew, err := json.Marshal(params)
 	if err != nil {
 		return fail("marshal params: " + err.Error())

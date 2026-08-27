@@ -213,6 +213,12 @@ type NewParams struct {
 	// --model. Empty means the caller expressed no preference and the
 	// daemon applies the configured default for the kind.
 	Model string `json:"model,omitempty"`
+	// Provider is the agent CLI to run the track on ("claude" or
+	// "cursor"). Empty means the caller expressed no preference and the
+	// daemon applies the configured default. Note Model is interpreted
+	// against whichever provider is chosen — the two id namespaces do
+	// not overlap.
+	Provider string `json:"provider,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.
