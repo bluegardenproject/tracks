@@ -351,10 +351,12 @@ still genuinely open.
       (`internal/daemon/handlers.go`) with a typed error from the git layer.
       Also document the `Ok=false` + `Result` shape `handleNew` returns, which
       contradicts `Response`'s own doc comment.
-- [ ] **Shared helpers.** `shellQuote` exists in 3 files with 2 different
-      escaping policies, `expandHome` in 2, plus four truncate/shortID/lastN/
-      padRight variants. `cmd/menu.go` repeats the same
-      `ErrCancelled`/`ErrNoTracks` block 11 times.
+- [ ] **Shared helpers.** ~~`shellQuote` exists in 3 files with 2 different
+      escaping policies~~ — done: `internal/shellx` names the two behaviours
+      (`Quote` / `QuoteIfNeeded`) behind one escaping implementation, and the
+      three copies are gone. Still open: `expandHome` in 2, four
+      truncate/shortID/lastN/padRight variants, and the same
+      `ErrCancelled`/`ErrNoTracks` block repeated 11 times in `cmd/menu.go`.
 - [ ] **tmux seam.** `tmux.Client` is concrete and constructed via
       `tmux.New()` at 11 sites inside the daemon, so no track-lifecycle path is
       testable without a real tmux server (package coverage: daemon 40%, tmux
