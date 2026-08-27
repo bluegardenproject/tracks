@@ -82,8 +82,10 @@ func (w Wrapper) Command(agentLine string) string {
 // ReadOnlySuffix is appended for worktree-less (ask/plan) tracks. They
 // point at the user's PRIMARY checkout — the one their editor watches
 // — so the prompt makes the read-only contract explicit as a second
-// line of defence behind whatever read-only mode the provider offers,
-// which in both cases is a default rather than a hard sandbox.
+// line of defence behind whatever read-only mode the provider offers.
+// For Claude that mode is a default rather than a hard sandbox;
+// whether Cursor's --mode plan behaves the same has not been
+// established, so this fragment carries the contract on its own.
 const ReadOnlySuffix = "" +
 	"\n\n**This is a read-only track.** You are pointed at the user's " +
 	"primary checkout — the working copy their editor uses — NOT a " +

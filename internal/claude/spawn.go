@@ -11,12 +11,12 @@ package claude
 import (
 	"errors"
 	"fmt"
-	"github.com/bluegardenproject/tracks/internal/shellx"
 	"os"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/agent"
 	"github.com/bluegardenproject/tracks/internal/config"
+	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
 
@@ -44,9 +44,11 @@ type SpawnOptions struct {
 	// relative to the primary repo.
 	CWD string
 
-	// TrackID is exported as TRACKS_ID in the child's env so any
-	// in-worktree helper script (e.g. tracks-add-repo) can identify
-	// which track is calling.
+	// TrackID, SocketDir, BinDir and SentinelPath are passed through to
+	// agent.Wrapper, which is where they are documented — restating
+	// them here in full is how two copies drift apart.
+	//
+	// TrackID is exported as TRACKS_ID in the child's env.
 	TrackID string
 
 	// SocketDir is exported as TRACKS_SOCKET_DIR so the same helper

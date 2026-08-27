@@ -1,7 +1,9 @@
 package shellx
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -38,6 +40,19 @@ func TestQuotingRoundTripsThroughARealShell(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("no sh")
 	}
+	// Run from a directory seeded with files that MATCH the glob inputs
+	// below. Without this the glob cases pass by accident: an unquoted
+	// `*glob*` only survives when nothing in the working directory
+	// matches it, so the test would silently stop testing anything the
+	// moment the package gained a file with the wrong name.
+	seeded := t.TempDir()
+	for _, decoy := range []string{"aglobb", "xquestion", "abracket", "abrace", "~tilde-ish"} {
+		if err := os.WriteFile(filepath.Join(seeded, decoy), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(seeded)
+
 	inputs := []string{
 		"plain", "has space", "it's", `double"quote`, "a$b", "back`tick`",
 		"semi;colon", "pipe|pipe", "amp&amp", "paren(s)", "redir>out",
