@@ -6,7 +6,14 @@ on:
   # main. It also loses the bottom PR of a stack, because retargeting
   # to main fires `edited` (not a default activity type) while the
   # push that preceded it was filtered out for having the old base.
+  #
+  # `types` restates the three defaults (dropping them would replace,
+  # not extend) and adds `edited`, which is what a retarget fires. With
+  # no branches filter the preceding push already covers a retargeted
+  # PR, so this is belt-and-braces — it also means a title or body edit
+  # runs CI, which is noise the unmetered public runners can absorb.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [ main ]
 
