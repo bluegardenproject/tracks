@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.0.0](https://github.com/bluegardenproject/tracks/compare/v0.7.0...v1.0.0) (2026-08-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **state:** state.json is written as schema_version 5. An older tracks binary refuses to load it ("schema_version 5 newer than supported") and will not start against a state file this version has written. Downgrading means restoring a backup of state.json.
+
+### Features
+
+* **dashboard:** drop the CHANGES column from the track table ([a90c21c](https://github.com/bluegardenproject/tracks/commit/a90c21c2583ca084ce6f8b05077da08a5665265c))
+* **dashboard:** report a track's sub-agent model alongside its own ([d25e43c](https://github.com/bluegardenproject/tracks/commit/d25e43c1b1278b2a35fec08d63b0eaf25ee979ea))
+* **dashboard:** show each track's model, and size the table to the terminal ([2919eb2](https://github.com/bluegardenproject/tracks/commit/2919eb296508df15634c893fe4b51f0f3000e9a3))
+* **settings:** add a Models section ([8ec3ba0](https://github.com/bluegardenproject/tracks/commit/8ec3ba0c926f96cc7d89d542b8a174114190ccd9))
+* **tracks:** choose a model when creating a track ([522ee3c](https://github.com/bluegardenproject/tracks/commit/522ee3c68ab330e04c745621e9b20fbea0397646))
+* **tracks:** name tmux tabs after the track, not the track id ([115f6a1](https://github.com/bluegardenproject/tracks/commit/115f6a1f989ab9165a3625c5fe9e8d832ebf1252))
+
+
+### Bug Fixes
+
+* **usage:** price each model version, not each family ([c4207ad](https://github.com/bluegardenproject/tracks/commit/c4207ad3d9014c4df3716ad927837e63c563fe2f))
+
+
+### Code Refactoring
+
+* **state:** move review/doc fields into sub-structs, drop LogPath ([f577705](https://github.com/bluegardenproject/tracks/commit/f577705196b8b93f27f942fdc2d864e4fdbb602e))
+* **state:** name the derived model ObservedModel ([270d079](https://github.com/bluegardenproject/tracks/commit/270d07900dd9521fab062dd066ffe7820ad35938))
+
+
+### Documentation
+
+* **roadmap:** record the open 1.0 review backlog ([bc9a2af](https://github.com/bluegardenproject/tracks/commit/bc9a2af2e448c8f25d80c244e733e00dca2850d2))
+* **roadmap:** record the proxy review findings ([6fa324d](https://github.com/bluegardenproject/tracks/commit/6fa324dedffe7bf680b5d1b4a7dd15abe99738ba))
+
 ## [0.7.0](https://github.com/bluegardenproject/tracks/compare/v0.6.0...v0.7.0) (2026-08-18)
 
 
