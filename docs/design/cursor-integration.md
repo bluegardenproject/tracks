@@ -180,8 +180,11 @@ config, and the TUI) is already merged.
    will also load. Is that desirable, or should the tracks.mdc file be the only
    rule source for Tracks-managed sessions?
 
-4. **Usage v2 timeline**: defer until there's demand, or implement alongside v1
-   to avoid a visible regression (missing cost data) compared to Claude tracks?
+4. ~~**Usage v2 timeline**~~ — **decided 2026-08-27: defer.** Blank cost and
+   token columns on Cursor tracks are acceptable; model choice is the point of
+   the integration. Note this decides *display* only — the computation still
+   has to be gated, or wrong numbers appear by default rather than blanks
+   (§8.3).
 
 ---
 
@@ -264,6 +267,13 @@ door.
 
 Six phases, each independently shippable and reviewable. Phases 1–2 get
 a Cursor track running; 3–6 make it pleasant.
+
+**Priority (2026-08-27):** the point of the integration is reaching
+models Claude Code can't — GPT-5.3 Codex, Gemini, Grok, Composer — from
+inside a track. Phases 1, 2, 4 and 5 are therefore the deliverable;
+cost reporting is not, and Phase 6 exists mainly to stop wrong numbers
+appearing (§8.3). If effort has to be cut, cut Phase 3's polish before
+anything that touches model selection.
 
 ### Phase 1 — Provider field through the three data layers (~0.5 d)
 
@@ -357,6 +367,12 @@ future provider share one dispatch point. `default` (not an explicit
   in the same pass, or the same class of bug ships again.
 
 ### Phase 6 — Usage stub + dashboard (~0.5 d)
+
+Cost display is explicitly out of scope (decided 2026-08-27, §5 q4).
+That makes this phase small, but **not empty**: the danger was never a
+missing number, it was a wrong one. Leaving the computation ungated
+produces Anthropic rates against Cursor model names (§8.3), so the gate
+ships even though the feature doesn't.
 
 - Skip transcript parsing entirely for Cursor tracks.
 - Gate cost at computation (§8.3), render `—` for COST and TOKENS.
