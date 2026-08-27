@@ -106,40 +106,43 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}
 
 	var (
-		repos []string
-		slug  string
-		model string
-		task  = templatePrompts[template]
+		repos    []string
+		slug     string
+		provider = defaultProvider(cfg)
+		model    string
+		task     = templatePrompts[template]
 	)
 
 	build := func() *huh.Form {
-		return huh.NewForm(
-			huh.NewGroup(
-				huh.NewMultiSelect[string]().
-					Title("Repos").
-					Description(repoDesc).
-					Options(repoOptions...).
-					Validate(repoValidate).
-					Value(&repos),
-				huh.NewInput().
-					Title("Slug (optional)").
-					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (Claude picks that). Leave empty to derive a tab name from the prompt.").
-					Placeholder("e.g. rate-bug-investigation").
-					Value(&slug),
-				modelField(cfg, kindFor(template), &model),
-				huh.NewText().
-					Title(taskTitle).
-					Description(taskDesc).
-					CharLimit(8192).
-					Validate(func(v string) error {
-						if strings.TrimSpace(v) == "" {
-							return errors.New("task prompt is required")
-						}
-						return nil
-					}).
-					Value(&task),
-			),
+		fields := []huh.Field{
+			huh.NewMultiSelect[string]().
+				Title("Repos").
+				Description(repoDesc).
+				Options(repoOptions...).
+				Validate(repoValidate).
+				Value(&repos),
+			huh.NewInput().
+				Title("Slug (optional)").
+				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (the agent picks that). Leave empty to derive a tab name from the prompt.").
+				Placeholder("e.g. rate-bug-investigation").
+				Value(&slug),
+		}
+		fields = append(fields, providerFields(cfg, &provider)...)
+		fields = append(fields,
+			modelField(cfg, &provider, kindFor(template), &model),
+			huh.NewText().
+				Title(taskTitle).
+				Description(taskDesc).
+				CharLimit(8192).
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("task prompt is required")
+					}
+					return nil
+				}).
+				Value(&task),
 		)
+		return huh.NewForm(huh.NewGroup(fields...))
 	}
 
 	if err := runFormWithDiscardConfirm(build); err != nil {
@@ -151,6 +154,7 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 		Slug:       strings.TrimSpace(slug),
 		TaskPrompt: strings.TrimSpace(task),
 		Kind:       kindFor(template),
+		Provider:   provider,
 		Model:      model,
 	}}, nil
 }
@@ -334,25 +338,56 @@ func candorField(v *int) *huh.Select[int] {
 // The values are passed to the CLI verbatim. An alias ("opus") follows
 // its family's newest release; a pinned id ("claude-opus-4-8") stays
 // put. Both are the user's to configure — see config.Claude.
-func modelField(cfg config.Config, kind string, v *string) *huh.Select[string] {
+func modelField(cfg config.Config, provider *string, kind string, v *string) *huh.Select[string] {
+	// provider is a POINTER, and the options are a func bound to it.
+	//
+	// Built from a value, the list would be fixed at form-construction
+	// time: switching Claude → Cursor in the picker above would leave
+	// Claude's ids on offer, and an explicit pick would then go out as
+	// `agent --model claude-sonnet-4-6`, a model Cursor does not have.
+	// huh re-runs OptionsFunc when a bound value changes, which is the
+	// only reason the two fields can live in one group.
+	sel := huh.NewSelect[string]().
+		Title("Model").
+		Description("Which model this track runs. For Claude, a \"latest\" entry follows its family as new versions ship and a pinned version doesn't; add your own under claude.model_choices. For Cursor the list comes from `agent --list-models`, so it is whatever your account can reach — type to filter, or pin a short list under cursor.model_choices.").
+		OptionsFunc(func() []huh.Option[string] {
+			return modelOptions(cfg, *provider, kind)
+		}, provider).
+		Value(v)
+	// Cursor's catalogue runs to 159 entries, and the list is dynamic so
+	// its length isn't known here. Filtering whenever Cursor is reachable
+	// costs a Claude-only user nothing, since they never see this branch.
+	if len(providerChoices(cfg)) > 1 {
+		sel = sel.Filtering(true).Height(modelListHeight)
+	}
+	return sel
+}
+
+// modelOptions builds the picker entries for one provider, with
+// "Default" first so the no-preference answer needs no keystroke.
+func modelOptions(cfg config.Config, provider, kind string) []huh.Option[string] {
 	defLabel := "Default"
-	if def := cfg.Claude.ModelFor(kind); def != "" {
+	if def := defaultModelFor(cfg, provider, kind); def != "" {
 		defLabel = fmt.Sprintf("Default (%s)", def)
 	}
 	options := []huh.Option[string]{huh.NewOption(defLabel, "")}
-	for _, c := range cfg.Claude.Choices() {
+	for _, c := range modelChoicesFor(cfg, provider) {
 		label := strings.TrimSpace(c.Label)
 		if label == "" {
 			label = c.Model
 		}
 		options = append(options, huh.NewOption(label, c.Model))
 	}
-	return huh.NewSelect[string]().
-		Title("Model").
-		Description("Which model this track runs. A \"latest\" entry follows its family as new versions ship; a pinned version doesn't move. Add your own in the config under claude.model_choices.").
-		Options(options...).
-		Value(v)
+	return options
 }
+
+// modelFilterThreshold is the list length past which the picker starts
+// filtering rather than showing everything. Cursor returns well over a
+// hundred models; scrolling that with arrow keys is not a picker.
+const modelFilterThreshold = 12
+
+// modelListHeight bounds how much of the form a long list may take.
+const modelListHeight = 10
 
 // runReview is the second form for the Review template. A review
 // targets one repo and one PR/branch, so we use a single-select repo
@@ -363,50 +398,53 @@ func runReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewP
 		repo      string
 		reviewRef string
 		slug      string
+		provider  = defaultProvider(cfg)
 		model     string
 		candor    = state.DefaultCandor
 		task      = templatePrompts[TemplateReview]
 	)
 
 	build := func() *huh.Form {
-		return huh.NewForm(
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Repo").
-					Description("The repo the PR / branch lives in. A review targets a single repo.").
-					Options(repoOptions...).
-					Value(&repo),
-				huh.NewInput().
-					Title("PR URL or branch to review").
-					Description("Paste a GitHub PR link (…/pull/123) or a branch name on origin (e.g. feat/foo). It's checked out detached so there's something to diff against base.").
-					Placeholder("https://github.com/org/repo/pull/123  —or—  feat/foo").
-					Validate(func(v string) error {
-						if strings.TrimSpace(v) == "" {
-							return errors.New("a PR URL or branch name is required for a review")
-						}
-						return nil
-					}).
-					Value(&reviewRef),
-				huh.NewInput().
-					Title("Slug (optional)").
-					Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
-					Placeholder("e.g. rate-bug-review").
-					Value(&slug),
-				modelField(cfg, string(state.KindReview), &model),
-				candorField(&candor),
-				huh.NewText().
-					Title("Task prompt").
-					Description("What should Claude do? Pre-filled with the review prompt — tweak as needed.").
-					CharLimit(8192).
-					Validate(func(v string) error {
-						if strings.TrimSpace(v) == "" {
-							return errors.New("task prompt is required")
-						}
-						return nil
-					}).
-					Value(&task),
-			),
+		fields := []huh.Field{
+			huh.NewSelect[string]().
+				Title("Repo").
+				Description("The repo the PR / branch lives in. A review targets a single repo.").
+				Options(repoOptions...).
+				Value(&repo),
+			huh.NewInput().
+				Title("PR URL or branch to review").
+				Description("Paste a GitHub PR link (…/pull/123) or a branch name on origin (e.g. feat/foo). It's checked out detached so there's something to diff against base.").
+				Placeholder("https://github.com/org/repo/pull/123  —or—  feat/foo").
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("a PR URL or branch name is required for a review")
+					}
+					return nil
+				}).
+				Value(&reviewRef),
+			huh.NewInput().
+				Title("Slug (optional)").
+				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to derive a tab name from the prompt.").
+				Placeholder("e.g. rate-bug-review").
+				Value(&slug),
+		}
+		fields = append(fields, providerFields(cfg, &provider)...)
+		fields = append(fields,
+			modelField(cfg, &provider, string(state.KindReview), &model),
+			candorField(&candor),
+			huh.NewText().
+				Title("Task prompt").
+				Description("What should the agent do? Pre-filled with the review prompt — tweak as needed.").
+				CharLimit(8192).
+				Validate(func(v string) error {
+					if strings.TrimSpace(v) == "" {
+						return errors.New("task prompt is required")
+					}
+					return nil
+				}).
+				Value(&task),
 		)
+		return huh.NewForm(huh.NewGroup(fields...))
 	}
 
 	if err := runFormWithDiscardConfirm(build); err != nil {
@@ -419,6 +457,7 @@ func runReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewP
 		TaskPrompt: strings.TrimSpace(task),
 		ReviewRef:  strings.TrimSpace(reviewRef),
 		Candor:     candor,
+		Provider:   provider,
 		Model:      model,
 	}, nil
 }
@@ -433,11 +472,12 @@ func runReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewP
 // a typo or a `.pptx` is rejected here rather than after a track exists.
 func runDocReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.NewParams, error) {
 	var (
-		docPath string
-		repos   []string
-		slug    string
-		model   string
-		candor  = state.DefaultCandor
+		docPath  string
+		repos    []string
+		slug     string
+		provider = defaultProvider(cfg)
+		model    string
+		candor   = state.DefaultCandor
 		// Both optional sections start selected — the useful default is a
 		// full review, and the switches exist to trim it down.
 		sections = []string{docSectionOpinion, docSectionClaimCheck}
@@ -463,13 +503,14 @@ func runDocReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.N
 				Options(repoOptions...).
 				Value(&repos))
 		}
+		fields = append(fields, providerFields(cfg, &provider)...)
 		fields = append(fields,
 			huh.NewInput().
 				Title("Slug (optional)").
 				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Leave empty to use the document's filename.").
 				Placeholder("e.g. q3-architecture-deck").
 				Value(&slug),
-			modelField(cfg, string(state.KindDoc), &model),
+			modelField(cfg, &provider, string(state.KindDoc), &model),
 			candorField(&candor),
 			huh.NewMultiSelect[string]().
 				Title("Optional review sections").
@@ -517,6 +558,7 @@ func runDocReview(cfg config.Config, repoOptions []huh.Option[string]) (daemon.N
 		Candor:            candor,
 		DocSkipOpinion:    !slices.Contains(sections, docSectionOpinion),
 		DocSkipClaimCheck: !slices.Contains(sections, docSectionClaimCheck),
+		Provider:          provider,
 		Model:             model,
 	}, nil
 }
