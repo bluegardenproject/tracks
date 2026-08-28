@@ -17,12 +17,13 @@ import (
 func init() {
 	c := &cobra.Command{
 		Use:   "reopen [track-id...]",
-		Short: "bring back the tracks that were running when tracks was last quit",
-		Long: "Resumes every track left in the `interrupted` status — the ones that were still live when " +
-			"tracks was last shut down. Each gets its worktree back (if it was removed) and a fresh tmux " +
-			"window running `claude --resume`, so the conversation continues where it stopped. Pass track " +
-			"IDs to reopen only those. Use `tracks resume <id>` for a track that finished normally " +
-			"or is sitting in review.",
+		Short: "bring back the tracks you had open when tracks was last quit",
+		Long: "Resumes every track that still had a window when tracks was last shut down — whatever it " +
+			"was doing at the time, so a finished or pr-merged track you kept open for the next round of " +
+			"work comes back with the running ones. Each gets its worktree back (if it was removed) and a " +
+			"fresh tmux window running `claude --resume`, so the conversation continues where it stopped. " +
+			"Closing a track (`tracks done`) is what takes it out of this set. Pass track IDs to reopen " +
+			"only those; use `tracks resume <id>` for one you had already closed.",
 		RunE: func(c *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
@@ -33,15 +34,15 @@ func init() {
 			// With no IDs, say up front whether there's anything to do —
 			// otherwise an empty result reads like a failure.
 			if len(args) == 0 {
-				pending, err := interruptedTracks(cl)
+				pending, err := reopenableTracks(cl)
 				if err != nil {
 					return err
 				}
 				if len(pending) == 0 {
-					fmt.Println("nothing to reopen — no interrupted tracks")
+					fmt.Println("nothing to reopen — no tracks were open when tracks stopped")
 					return nil
 				}
-				fmt.Printf("reopening %d interrupted track(s)...\n\n", len(pending))
+				fmt.Printf("reopening %d track(s)...\n\n", len(pending))
 			} else {
 				fmt.Printf("reopening %d track(s)...\n\n", len(args))
 			}
@@ -73,33 +74,36 @@ func init() {
 	register(c)
 }
 
-// offerReopen asks whether to bring back the tracks that were live when
-// tracks last stopped, and does it when the user says yes. Called from
+// offerReopen asks whether to bring back the tracks the user had open
+// when tracks last stopped, and does it when they say yes. Called from
 // bootstrap after the daemon is up (so state is reconciled) and before
 // tmux takes the terminal.
 //
 // Every failure path is silent-and-continue: this is a convenience on
 // the way into the session, and nothing here is worth blocking the
-// user's `tracks` invocation over. The tracks stay interrupted and
+// user's `tracks` invocation over. The tracks are left as they are and
 // `tracks reopen` is still there.
 func offerReopen(cfg config.Config) {
 	if !stdinIsTTY() {
 		return
 	}
 	cl := daemon.NewClient(cfg)
-	pending, err := interruptedTracks(cl)
+	pending, err := reopenableTracks(cl)
 	if err != nil || len(pending) == 0 {
 		return
 	}
 
-	fmt.Printf("\n%d track(s) were still running when tracks last stopped:\n", len(pending))
+	// The status is listed because the set is no longer all-running: a
+	// done or pr-merged track kept open comes back too, and the user
+	// should see that before answering.
+	fmt.Printf("\n%d track(s) were open when tracks last stopped:\n", len(pending))
 	for _, t := range pending {
-		fmt.Printf("  %s  %s\n", lastN(t.ID, 15), trackLabel(t))
+		fmt.Printf("  %s  %-11s %s\n", lastN(t.ID, 15), t.StatusLabel(), trackLabel(t))
 	}
 	fmt.Println()
 
 	yes, err := menu.Confirm(
-		fmt.Sprintf("Reopen %d interrupted track(s)?", len(pending)),
+		fmt.Sprintf("Reopen %d track(s)?", len(pending)),
 		"Each gets its worktree back and a fresh window running claude --resume, "+
 			"continuing the conversation where it stopped. Cancel leaves them as they are.")
 	if err != nil || !yes {
@@ -153,16 +157,18 @@ func stdinIsTTY() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
-// interruptedTracks returns every track waiting to be reopened, oldest
-// first — the same set `tracks reopen` acts on with no arguments.
-func interruptedTracks(cl *daemon.Client) ([]state.Track, error) {
+// reopenableTracks returns every track waiting to be reopened, oldest
+// first — the same set `tracks reopen` acts on with no arguments. The
+// predicate lives on Track so the CLI's listing and the daemon's
+// reopenTargets can't disagree about what is coming back.
+func reopenableTracks(cl *daemon.Client) ([]state.Track, error) {
 	tracks, err := cl.Ls()
 	if err != nil {
 		return nil, fmt.Errorf("daemon: %w", err)
 	}
 	var out []state.Track
 	for _, t := range tracks {
-		if t.Status == state.StatusInterrupted {
+		if t.ShouldReopen() {
 			out = append(out, t)
 		}
 	}
@@ -179,6 +185,6 @@ func printReopenResult(res daemon.ReopenResult) {
 		fmt.Fprintf(os.Stderr, "could not reopen %s: %s\n", lastN(f.ID, 15), f.Error)
 	}
 	if len(res.Reopened) == 0 && len(res.Failed) == 0 {
-		fmt.Println("nothing to reopen — no interrupted tracks")
+		fmt.Println("nothing to reopen — no tracks were open when tracks stopped")
 	}
 }

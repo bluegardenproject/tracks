@@ -719,6 +719,18 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	// still closes even if that later fails. Idempotent — KillWindow
 	// is a no-op when the window is already gone.
 	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, t.WindowName())
+	// The window is gone and the user is done with this track, so it
+	// leaves the reopen set here rather than at the tail: the worktree
+	// removal below can return early on failure, and a track whose window
+	// was killed must not be offered back on the next start.
+	t.WindowOpen = false
+	s.update(t.ID, "track closed", func(cur *state.Track) bool {
+		if !cur.WindowOpen {
+			return false
+		}
+		cur.WindowOpen = false
+		return true
+	})
 
 	// Remove worktrees, keep branches. Skip any whose checkout is
 	// already gone so ending a track is idempotent — a track that
@@ -746,16 +758,20 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 	if path, err := s.sentinelPathFor(t.ID); err == nil {
 		_ = os.Remove(path)
 	}
+	// Whatever the note said — the interruption, or a reopen that failed —
+	// it described a state the track is no longer in, and the dashboard
+	// renders ErrorMsg on every status now. Cleared for all of them, not
+	// just the interrupted case it was first written for. The exception is
+	// an errored track, where the message is the explanation of the status
+	// it keeps.
+	if t.Status != state.StatusErrored {
+		t.ErrorMsg = ""
+	}
 	// Completed rather than IsTerminal: ending an *interrupted* track is
 	// the user saying they're finished with it, so it must settle on an end
 	// state and stop being offered for reopen (its worktree is gone now
 	// anyway).
 	if !t.Status.Completed() {
-		if t.Status == state.StatusInterrupted {
-			// The "tracks was shut down…" note described a state the track
-			// is no longer in; leaving it behind would misreport a closed track.
-			t.ErrorMsg = ""
-		}
 		t.Status = terminalStatusFor(t)
 		// Keep an existing stamp — a track ended out of review or out of an
 		// interruption stopped running back then, not now. Matches
@@ -941,6 +957,9 @@ func (s *Server) handlePromote(ctx context.Context, raw json.RawMessage, emit Em
 		t.ErrorMsg = "spawn " + t.Provider.Label() + ": " + err.Error()
 		now := time.Now().UTC()
 		t.ExitedAt = &now
+		// The read-only window was killed above and the new one never
+		// opened, so there is nothing to reopen.
+		t.WindowOpen = false
 		s.persist(t, "promote spawn failure")
 		return fail("spawn " + t.Provider.Label() + ": " + err.Error())
 	}
@@ -1145,15 +1164,13 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	emit("spawning " + t.Provider.Label() + " (resume)...")
 	sup, err := s.startSupervisorResume(ctx, t)
 	if err != nil {
-		// An interrupted track stays interrupted and a track in review
-		// stays in review: neither is finished with, and Errored is
-		// Completed() — which would put the worktree in reach of
-		// prune-completed and `tracks gc` while its PRs are still open.
-		failStatus := state.StatusErrored
-		if prev.Status == state.StatusInterrupted || prev.Status == state.StatusPROpen {
-			failStatus = prev.Status
-		}
-		release(failStatus, "spawn "+t.Provider.Label()+": "+err.Error())
+		// Back where it came from, like every other failure path here. A
+		// failed spawn says nothing about what the track was: recording
+		// Errored would call a merged PR a failure, and — for an
+		// interrupted or in-review track — make it Completed(), putting a
+		// worktree still in use in reach of prune-completed and `tracks
+		// gc`. The reason is on ErrorMsg either way.
+		release(prev.Status, "spawn "+t.Provider.Label()+": "+err.Error())
 		return "", fmt.Errorf("spawn %s: %w", t.Provider.Label(), err)
 	}
 	// Re-arm the PR watch for a track resumed out of review. Nothing else
@@ -1192,10 +1209,10 @@ func (s *Server) releaseReviewSupervisor(id string) {
 	}
 }
 
-// handleReopen brings back the tracks that were interrupted when tracks
-// last shut down — the counterpart to markInterruptedOnShutdown. With no
-// IDs it reopens every interrupted track, oldest first; with IDs it
-// reopens exactly those.
+// handleReopen brings back the tracks the user still had open when
+// tracks last shut down — every track carrying Track.WindowOpen, plus
+// the interrupted ones. With no IDs it reopens all of them, oldest
+// first; with IDs it reopens exactly those.
 //
 // Failures are per-track: one track whose branch has since been deleted
 // must not stop the others from coming back, so each is reported in the
@@ -1234,11 +1251,12 @@ func (s *Server) handleReopen(ctx context.Context, raw json.RawMessage, emit Emi
 }
 
 // reopenTargets resolves the tracks handleReopen should act on. An empty
-// ids slice selects every interrupted track, oldest first (Store.All is
-// CreatedAt-ascending) so reopened windows land in the order the tracks
-// were created. Explicit ids are validated: a track that isn't
-// interrupted is a caller mistake worth an error, not a silent skip
-// (`tracks resume` is the way to re-open a finished one).
+// ids slice selects every track that was open when tracks stopped (see
+// Track.ShouldReopen), oldest first (Store.All is CreatedAt-ascending)
+// so reopened windows land in the order the tracks were created.
+// Explicit ids are validated: a track nobody had open is a caller
+// mistake worth an error, not a silent skip (`tracks resume` is the way
+// to bring back one that was closed).
 func (s *Server) reopenTargets(ids []string) ([]state.Track, error) {
 	if len(ids) > 0 {
 		out := make([]state.Track, 0, len(ids))
@@ -1247,9 +1265,9 @@ func (s *Server) reopenTargets(ids []string) ([]state.Track, error) {
 			if !found {
 				return nil, fmt.Errorf("track not found: %s", id)
 			}
-			if t.Status != state.StatusInterrupted {
-				return nil, fmt.Errorf("track %s is %s, not interrupted; use `tracks resume %s` instead",
-					id, t.Status, id)
+			if !t.ShouldReopen() {
+				return nil, fmt.Errorf("track %s wasn't open when tracks stopped (%s); use `tracks resume %s` instead",
+					id, t.StatusLabel(), id)
 			}
 			out = append(out, t)
 		}
@@ -1258,7 +1276,7 @@ func (s *Server) reopenTargets(ids []string) ([]state.Track, error) {
 
 	var out []state.Track
 	for _, t := range s.store.All() {
-		if t.Status == state.StatusInterrupted {
+		if t.ShouldReopen() {
 			out = append(out, t)
 		}
 	}
@@ -1450,6 +1468,13 @@ func (s *Server) handlePruneCompleted() Response {
 		// still means to reopen it, so a "clear completed" sweep must not
 		// take it.
 		if !t.Status.Completed() {
+			continue
+		}
+		// Nor one the user still has open. A done or pr-merged track kept
+		// open for the next round of work is Completed but is coming back
+		// on the next start, and this record is the only handle the reopen
+		// has. Closing it is what makes it sweepable.
+		if t.ShouldReopen() {
 			continue
 		}
 		if s.forget(t.ID, "prune completed") {

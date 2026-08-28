@@ -109,8 +109,8 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			// rather than advice that errors.
 			id := lastN(t.ID, 15)
 			switch {
-			case t.Status == state.StatusInterrupted && t.SessionID != "":
-				fmt.Printf("track %s was interrupted; bring it back with `tracks reopen`.\n", id)
+			case t.ShouldReopen() && t.SessionID != "":
+				fmt.Printf("track %s has no window — it is waiting to be reopened. Bring it back with `tracks reopen`.\n", id)
 			case t.CanLaunch():
 				// Launch is daemon-side only — there is no `tracks launch`.
 				fmt.Printf("track %s was never launched; press L in the dashboard to launch it.\n", id)
@@ -292,7 +292,7 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 
 	case menu.ActionPrune:
 		yes, err := menu.Confirm("Remove all completed tracks?",
-			"Drops every closed/merged/errored track's record from the dashboard. Interrupted tracks are kept. Worktrees are already gone; branches and log files stay on disk.")
+			"Drops every closed/merged/errored track's record from the dashboard. Tracks you still have open are kept, since they're waiting to be reopened. Worktrees are already gone; branches and log files stay on disk.")
 		if err != nil || !yes {
 			return nil
 		}
@@ -366,27 +366,26 @@ func runResumeTrackFromMenu(cfg config.Config) error {
 	return nil
 }
 
-// runReopenFromMenu brings back every track interrupted by the last
-// shutdown. Unlike the resume flow there's nothing to pick — the set is
-// whatever was live when tracks stopped — so it confirms, reports, and
-// waits for a key so the user can read the outcome before the popup
-// closes.
+// runReopenFromMenu brings back every track the user had open when
+// tracks last stopped. Unlike the resume flow there's nothing to pick —
+// the set is whatever was on screen — so it confirms, reports, and waits
+// for a key so the user can read the outcome before the popup closes.
 func runReopenFromMenu(cfg config.Config) error {
 	cl := daemon.NewClient(cfg)
-	pending, err := interruptedTracks(cl)
+	pending, err := reopenableTracks(cl)
 	if err != nil {
 		fmt.Println(err)
 		waitForKey()
 		return nil
 	}
 	if len(pending) == 0 {
-		fmt.Println("nothing to reopen — no interrupted tracks")
+		fmt.Println("nothing to reopen — no tracks were open when tracks stopped")
 		waitForKey()
 		return nil
 	}
 
 	yes, err := menu.Confirm(
-		fmt.Sprintf("Reopen %d interrupted track(s)?", len(pending)),
+		fmt.Sprintf("Reopen %d track(s)?", len(pending)),
 		"Each gets its worktree back and a fresh window running claude --resume, "+
 			"continuing the conversation where it stopped.")
 	if err != nil || !yes {

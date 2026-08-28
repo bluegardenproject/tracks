@@ -153,6 +153,12 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		case alive:
 			t.Status = state.StatusErrored
 			t.ErrorMsg = fmt.Sprintf("orphaned by a daemon restart while still running (PID %d) — the daemon can't re-supervise a process across restarts", t.PID)
+			// And out of the reopen set: reopening kills the window and
+			// spawns `claude --resume` on the session id, which for a
+			// process still writing to that session would fork the
+			// conversation and take its pane with it. The user attaches to
+			// it or kills it by hand; that is what the message is for.
+			t.WindowOpen = false
 		case t.PID == 0:
 			// Never spawned — cut down mid-creation, so there's no
 			// conversation to come back to (see markInterruptedOnShutdown).

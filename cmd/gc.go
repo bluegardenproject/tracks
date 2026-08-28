@@ -66,8 +66,11 @@ func runGC(ctx context.Context, cfg config.Config) error {
 		trackDir := filepath.Join(worktreeRoot, e.Name())
 		track, knownByDaemon := known[e.Name()]
 		// Leave alone anything the user hasn't finished with: a live track,
-		// and an interrupted one whose worktree is waiting to be reopened.
-		if knownByDaemon && !track.Status.Completed() {
+		// an interrupted one whose worktree is waiting to be reopened, and
+		// any other track still open — a done or pr-merged one kept for the
+		// next round of work comes back on the next start and needs its
+		// worktree when it does.
+		if knownByDaemon && (!track.Status.Completed() || track.ShouldReopen()) {
 			continue
 		}
 		// Reclaim, but never delete unsaved work: a track dir with

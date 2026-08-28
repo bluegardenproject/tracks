@@ -159,9 +159,15 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 		out = append(out, "")
 		out = append(out, wrapInfoText(t.TaskPrompt, w)...)
 	}
-	// For an errored track, show why underneath the prompt — the prompt
-	// stays copy/paste-able for a retry, the reason is there for debugging.
-	if t.Status == state.StatusErrored && t.ErrorMsg != "" {
+	// Show why underneath the prompt — the prompt stays copy/paste-able
+	// for a retry, the reason is there for debugging. Not gated on
+	// StatusErrored: a reopen that fails hands the track back to the
+	// status it came from and records the reason here, so a done or
+	// pr-merged track has one to show too. Interrupted and draft tracks
+	// render theirs in their own sections below, so they are excluded
+	// rather than shown twice.
+	if t.ErrorMsg != "" &&
+		t.Status != state.StatusInterrupted && t.Status != state.StatusDraft {
 		errStyle := m.styles.status[state.StatusErrored]
 		out = append(out, "", m.styles.sectionHdr.Render("ERROR"))
 		for _, line := range wrapInfoText(t.ErrorMsg, w) {

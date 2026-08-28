@@ -534,6 +534,26 @@ Raw, uncommitted thoughts — promote to a section above when they firm up.
 
 Move completed items here with a date, then delete once the dust settles.
 
+- **2026-08-28 — The reopen set is what you had open, not what was running.**
+  `Track.WindowOpen` records that tracks opened a window for a track and the
+  track hasn't been closed since — the "I'm still using this one" bit `Status`
+  can't carry, a `done` or `pr merged` track keeping its window until the track
+  is closed. `tracks reopen`, the startup offer and the menu entry all key on it
+  (`Track.ShouldReopen`), so a merged track kept open to carry on with the same
+  topic comes back with the running ones instead of having to be resumed by
+  hand. **Closing** a track is what takes it out of the set — and therefore what
+  makes it sweepable: `prune-completed` and `tracks gc` now skip a kept-open
+  track, whose record is the only handle the reopen has and whose worktree it
+  needs when it comes back. The flag is written at each spawn and cleared at
+  each close, deliberately not derived from tmux: the daemon's shutdown is
+  usually *triggered* by the session going away, so there is nothing left to
+  ask by then — which is also why the flag survives a crash or a machine
+  restart, exactly when the set matters. A track orphaned by a daemon restart
+  with its Claude still running is excluded, since reopening it would fork a
+  live session. A failed reopen now hands the track back to the status it came
+  from instead of recording `errored`, which called a merged PR a failure, and
+  the dashboard shows the reason on whatever status it lands on.
+
 - **2026-08-09 — 1.0 hardening pass, part 1 (P0 review findings).** Seven
   branches off the codebase review. **LICENSE** (MIT) and the removal of code
   left dead by earlier rewrites (`internal/services/runner.go`,

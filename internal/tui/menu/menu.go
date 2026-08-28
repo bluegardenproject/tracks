@@ -84,7 +84,7 @@ func PickAction() (Action, error) {
 				Options(
 					huh.NewOption("New track", ActionNewTrack),
 					huh.NewOption("Resume a track…", ActionResumeTrack),
-					huh.NewOption("Reopen interrupted tracks", ActionReopen),
+					huh.NewOption("Reopen tracks from the last session", ActionReopen),
 					huh.NewOption("Dashboard", ActionDashboard),
 					huh.NewOption("Add repo to a track…", ActionAddRepo),
 					huh.NewOption("Promote a read-only track…", ActionPromote),
@@ -206,10 +206,10 @@ func ConfirmRemoveTrack(t state.Track) (bool, error) {
 	}
 	body := "Drops its record from tracks — task prompt, cost and PR links go " +
 		"with it. Any branch it created stays in the repo. This cannot be undone."
-	if t.Status == state.StatusInterrupted {
-		// The record is the only handle `tracks reopen` has, and an
-		// interrupted track's worktree is still on disk.
-		body += " This track was interrupted, not closed: removing it gives up " +
+	if t.ShouldReopen() {
+		// The record is the only handle `tracks reopen` has, and the
+		// worktree of a track that was never closed is still on disk.
+		body += " This track was still open, not closed: removing it gives up " +
 			"reopening it, and leaves its worktree for the next `tracks gc`."
 	}
 	return Confirm(fmt.Sprintf("Remove track %s?", what), body)
