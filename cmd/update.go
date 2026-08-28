@@ -127,9 +127,11 @@ func runUpdateFromMenu(cfg config.Config) error {
 // liveTrackCount is how many tracks the daemon restart would interrupt.
 // The predicate mirrors the daemon's own shutdown sweep (sweepable in
 // internal/daemon/recovery.go), so the number matches what the warning
-// claims: a pr-open track is re-adopted on the next start, not
-// interrupted. A daemon we can't reach reports none — the count only
-// sharpens the warning, it isn't worth failing the update over.
+// claims: a track *in review* is re-adopted on the next start, not
+// interrupted, while a live session that opened a PR carries the same
+// status and is interrupted like any other. A daemon we can't reach
+// reports none — the count only sharpens the warning, it isn't worth
+// failing the update over.
 func liveTrackCount(cfg config.Config) int {
 	tracks, err := daemon.NewClient(cfg).Ls()
 	if err != nil {
@@ -137,7 +139,7 @@ func liveTrackCount(cfg config.Config) int {
 	}
 	n := 0
 	for _, t := range tracks {
-		if !t.Status.IsTerminal() && t.Status != state.StatusDraft && t.Status != state.StatusPROpen {
+		if !t.Status.IsTerminal() && t.Status != state.StatusDraft && !t.InReview() {
 			n++
 		}
 	}

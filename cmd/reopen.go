@@ -21,7 +21,8 @@ func init() {
 		Long: "Resumes every track left in the `interrupted` status — the ones that were still live when " +
 			"tracks was last shut down. Each gets its worktree back (if it was removed) and a fresh tmux " +
 			"window running `claude --resume`, so the conversation continues where it stopped. Pass track " +
-			"IDs to reopen only those. Use `tracks resume <id>` for a track that finished normally.",
+			"IDs to reopen only those. Use `tracks resume <id>` for a track that finished normally " +
+			"or is sitting in review.",
 		RunE: func(c *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {

@@ -194,6 +194,38 @@ closed — two hardened helpers is still per-test discipline.
 - [ ] Consider making `config.Default()` unsafe-by-omission rather than
       unsafe-by-default for tests (e.g. tests must opt into a session name).
 
+### Bug 8 — a track that opened a PR disappears across a restart  ✅ FIXED
+
+**Symptom**: the machine restarted mid-session; every open track came back
+except the one that had opened its PRs (`workflow-drift-detection`). No window,
+nothing in the reopen offer, and neither `tracks reopen` (interrupted only) nor
+`tracks resume` (terminal only) would take it.
+
+**Root cause**: `pr open` is reached by two different roads and both sweeps
+assumed the second one. `nextLiveStatus` moves a *live* track there the moment a
+PR URL appears in the pane (the stacked-PR flow), while `enterPRReview` moves a
+*Claude-exited* track there. `sweepable` and `reconcileOnStartup` keyed on the
+status alone, so a live track that had opened a PR was skipped by the shutdown
+sweep ("already settled") and then re-adopted at startup as a review-only PR
+watch — no window, no Claude, and not interrupted, so nothing offered it back.
+
+**Fix**: `ExitedAt` is now stamped when Claude exits on an open PR, so the two
+roads are distinguishable in the state file, where the dashboard can see it too.
+**Schema v6** — every `pr open` record already on disk is missing the stamp, and
+that shape now means "still running", so a version-gated migration backfills it
+from `UpdatedAt`, resolving old records toward review (how they were treated when
+they were written). One-way: a downgrade to 1.0.x refuses to start
+(`schema_version 6 newer than supported (5)`) until `state.json` is moved aside.
+- `Track.InReview()` = PR-open **and** Claude gone. Both sweeps key on it, so a
+  live PR-open track is interrupted like any other and comes back with the
+  reopen offer.
+- `Track.Dormant()` = terminal **or** in review, and `Resumable()` builds on it:
+  a track sitting in review can be resumed (`R`, `tracks resume`) instead of
+  being a dead end. The resume drops the review supervisor, re-arms the PR watch
+  on the new one, and hands both back if the spawn fails.
+- The dashboard says so: an IN REVIEW panel, "press R to resume" when a window
+  is missing, and a reason when `R` declines instead of a silent no-op.
+
 ---
 
 > **Bugs 2–6 fixed** (`b86548a`) and removed from this list: tmux pane not

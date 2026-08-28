@@ -427,11 +427,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m, m.poll()
 		case "R":
-			// Resume the highlighted track (must be finished with a session ID).
+			// Resume the highlighted track: anything with no Claude behind
+			// it and a session ID, review tracks included.
 			if len(m.tracks) > 0 {
 				t := m.tracks[m.cursor]
-				if t.Resumable() {
+				// CanLaunch first: a saved draft keeps the session ID minted
+				// for it, so it would otherwise be reported as running.
+				switch {
+				case t.Resumable():
 					return m, m.resumeTrack(t.ID)
+				case t.CanLaunch():
+					m.statusMsg = "this track was never launched — press L"
+				case t.SessionID == "":
+					m.statusMsg = "no session ID — this track can't be resumed"
+				default:
+					m.statusMsg = "claude is still running — press enter to attach"
 				}
 			}
 		case "L":
@@ -598,6 +608,9 @@ func (m *model) attachTrack(t state.Track) error {
 	window := t.WindowName()
 	exists, _ := m.tmux.HasWindow(session, window)
 	if !exists {
+		if t.Resumable() {
+			return fmt.Errorf("window %s is gone — claude exited; press R to resume", window)
+		}
 		return fmt.Errorf("window %s missing — claude likely exited", window)
 	}
 	return m.tmux.SelectWindow(session, window)

@@ -184,6 +184,16 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 			out = append(out, m.styles.dim.Render("no session ID — this track can't be reopened"))
 		}
 	}
+	// A track in review has no Claude running — it exited when the PR went
+	// up — and no window at all once tracks has been restarted. Say so,
+	// and name the key that brings the conversation back.
+	if t.InReview() {
+		out = append(out, "", m.styles.sectionHdr.Render("IN REVIEW"))
+		out = append(out, m.styles.status[state.StatusPROpen].Render("claude exited; the pull request is still open"))
+		if t.Resumable() {
+			out = append(out, m.styles.dim.Render("press R to pick the conversation back up"))
+		}
+	}
 	// A saved draft explains what it will launch with, and why the last
 	// creation attempt failed if it came from one.
 	if t.Status == state.StatusDraft {

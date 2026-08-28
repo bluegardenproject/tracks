@@ -99,11 +99,11 @@ func runMenuAction(cfg config.Config, action menu.Action) error {
 			// usage error. Say what happened and name the verb that
 			// applies; every command named below is a real one.
 			//
-			// Order matters, because Resumable() is IsTerminal() &&
-			// SessionID != "" and that is true of more than just a finished
-			// track. An interrupted one is terminal, and so is a failed
-			// creation — which carries a SessionID handleNew minted before
-			// it failed, for a session Claude never opened. Both are tested
+			// Order matters, because Resumable() covers every track with no
+			// Claude behind it and a SessionID — more than just a finished
+			// one. An interrupted track qualifies, and so does a failed
+			// creation, which carries a SessionID handleNew minted before it
+			// failed, for a session Claude never opened. Both are tested
 			// first, or the user is told to resume something that cannot be
 			// resumed. A track matching none of them gets a bare statement
 			// rather than advice that errors.

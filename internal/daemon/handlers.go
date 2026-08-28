@@ -715,8 +715,14 @@ func (s *Server) endTrack(ctx context.Context, raw json.RawMessage, force bool, 
 			t.ErrorMsg = ""
 		}
 		t.Status = terminalStatusFor(t)
-		now := time.Now().UTC()
-		t.ExitedAt = &now
+		// Keep an existing stamp — a track ended out of review or out of an
+		// interruption stopped running back then, not now. Matches
+		// finalizeTrack, so ending a review track by hand and letting its
+		// PR merge on its own report the same runtime.
+		if t.ExitedAt == nil {
+			now := time.Now().UTC()
+			t.ExitedAt = &now
+		}
 	}
 	if err := s.store.Put(t); err != nil {
 		return fail("persist state: " + err.Error())
@@ -912,8 +918,9 @@ func promotePrompt(original, branch string) string {
 		"has been created on branch `" + branch + "` — implement the change here."
 }
 
-// handleResume re-opens a finished track's Claude session. It:
-//  1. Verifies the track is terminal and has a SessionID.
+// handleResume re-opens a dormant track's Claude session. It:
+//  1. Verifies nothing is running behind the track and that it has a
+//     SessionID.
 //  2. Re-creates any worktrees that were removed by Done, on the same branch.
 //  3. Resets the track to a pending state.
 //  4. Spawns claude --resume <sessionID> in a new tmux window.
@@ -926,8 +933,9 @@ func (s *Server) handleResume(ctx context.Context, raw json.RawMessage, emit Emi
 	if !found {
 		return fail("track not found: " + p.ID)
 	}
-	if !t.Status.IsTerminal() {
-		return fail(fmt.Sprintf("track %s is %s; only finished tracks can be resumed", p.ID, t.StatusLabel()))
+	if !t.Dormant() {
+		return fail(fmt.Sprintf("track %s is %s; only a track whose claude has exited can be resumed — attach to its window instead",
+			p.ID, t.StatusLabel()))
 	}
 	if t.SessionID == "" {
 		return fail("track has no session ID; cannot resume")
@@ -970,7 +978,7 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	var prev state.Track
 	var claimedByUs bool
 	claimed, found, err := s.store.Update(t.ID, func(cur *state.Track) bool {
-		if !cur.Status.IsTerminal() {
+		if !cur.Dormant() {
 			return false // already claimed, or live again
 		}
 		prev = *cur
@@ -992,6 +1000,14 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	}
 	t = claimed
 
+	// A track in review carries a supervisor with no Claude behind it —
+	// only a PR watcher (see enterPRReview, resumePRReview). Drop it
+	// before anything is spawned, or spawnSupervisor's map write would
+	// strand that watcher polling on behalf of a supervisor nobody owns.
+	// Done before release is even defined, so every failure path below
+	// re-adopts a single watcher rather than racing this one.
+	s.releaseReviewSupervisor(t.ID)
+
 	// release hands the claim back, restoring the exit bookkeeping the
 	// claim cleared — a resume that fails must not make a finished track
 	// look like it just exited (which would inflate its reported runtime)
@@ -1008,6 +1024,13 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 			}
 			return true
 		})
+		// A track handed back to review needs its PR watch handed back
+		// too — the claim above dropped the supervisor that owned it.
+		if status == state.StatusPROpen {
+			if cur, ok := s.store.Get(t.ID); ok {
+				s.resumePRReview(cur)
+			}
+		}
 	}
 
 	// FileStore.Update mutates its in-memory map before flushing and
@@ -1078,16 +1101,25 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	_ = tmux.New().KillWindow(s.config().Tmux.SessionName, t.WindowName())
 
 	emit("spawning claude (resume)...")
-	if _, err := s.startSupervisorResume(ctx, t); err != nil {
-		// An interrupted track stays interrupted: the user hasn't finished
-		// with it, and Errored is Completed() — which would put its
-		// worktree in reach of prune-completed and `tracks gc`.
+	sup, err := s.startSupervisorResume(ctx, t)
+	if err != nil {
+		// An interrupted track stays interrupted and a track in review
+		// stays in review: neither is finished with, and Errored is
+		// Completed() — which would put the worktree in reach of
+		// prune-completed and `tracks gc` while its PRs are still open.
 		failStatus := state.StatusErrored
-		if prev.Status == state.StatusInterrupted {
-			failStatus = state.StatusInterrupted
+		if prev.Status == state.StatusInterrupted || prev.Status == state.StatusPROpen {
+			failStatus = prev.Status
 		}
 		release(failStatus, "spawn claude: "+err.Error())
 		return "", fmt.Errorf("spawn claude: %w", err)
+	}
+	// Re-arm the PR watch for a track resumed out of review. Nothing else
+	// would: the watcher is otherwise started only when a *new* PR URL
+	// appears in the pane, which will never happen for PRs opened in the
+	// previous session, so their state would freeze at the last poll.
+	if t.HasOpenPR() {
+		s.startPRWatcher(sup)
 	}
 	emit("claude running")
 	// Worktree-less kinds (doc/ask/plan) have no branch, so the "on
@@ -1099,6 +1131,23 @@ func (s *Server) resumeTrackSession(ctx context.Context, t state.Track, emit Emi
 	}
 	s.notifyEvent(string(notify.EventTrackCreated), "tracks: track resumed", detail)
 	return t.WindowName(), nil
+}
+
+// releaseReviewSupervisor drops the supervisor a track still carries and
+// releases its PR watcher, so a resumed session can register its own.
+// A no-op for the common case — a finished track has no supervisor left
+// — and safe for a live one only because callers claim the track first.
+func (s *Server) releaseReviewSupervisor(id string) {
+	s.mu.Lock()
+	sup, ok := s.supervisors[id]
+	if ok {
+		delete(s.supervisors, id)
+	}
+	s.mu.Unlock()
+	if ok {
+		sup.cancel()
+		sup.finish()
+	}
 }
 
 // handleReopen brings back the tracks that were interrupted when tracks

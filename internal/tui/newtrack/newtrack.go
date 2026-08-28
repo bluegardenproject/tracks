@@ -155,9 +155,10 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}}, nil
 }
 
-// PickResumable shows a single-select picker over finished tracks that
-// have a session ID and can therefore be resumed — including the ones
-// interrupted by a tracks shutdown. Returns the selected track ID or
+// PickResumable shows a single-select picker over the tracks with no
+// Claude behind them and a session ID, which can therefore be resumed —
+// finished ones, the ones interrupted by a tracks shutdown, and the ones
+// sitting in review on an open PR. Returns the selected track ID or
 // ErrCancelled when the user backs out.
 func PickResumable(client *daemon.Client) (string, error) {
 	tracks, err := client.Ls()
@@ -181,7 +182,7 @@ func PickResumable(client *daemon.Client) (string, error) {
 		options = append(options, huh.NewOption(label, t.ID))
 	}
 	if len(options) == 0 {
-		return "", errors.New("no finished tracks with a session ID — nothing to resume")
+		return "", errors.New("no dormant tracks with a session ID — nothing to resume")
 	}
 
 	var pick string

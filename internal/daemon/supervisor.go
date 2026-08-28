@@ -298,6 +298,18 @@ func (sup *supervisor) claimPRWatcher() bool {
 	return true
 }
 
+// releasePRWatcher hands the claim back when a watcher stops for want of
+// an open PR, so a PR opened later in the same session can arm a fresh
+// one. Without it the claim is one-shot for the life of the supervisor:
+// a resumed track carries settled PRs into a Running status, which ends
+// the watcher on its first tick and would leave every later PR on that
+// session unpolled.
+func (sup *supervisor) releasePRWatcher() {
+	sup.mu.Lock()
+	defer sup.mu.Unlock()
+	sup.prWatcherStarted = false
+}
+
 // claudeExited reports whether this track's Claude process has finished.
 // The pane's pid is no help — the wrapper shell lives on as a plain
 // shell after Claude exits (see ShellCommand) — so the exit sentinel is
@@ -358,13 +370,26 @@ func terminalStatusFor(t state.Track) state.Status {
 // watcher keeps polling PR state + refreshing usage. Ownership of the
 // eventual end-state transition passes to the PR watcher (once every PR
 // merges/closes) or to endTrack (on an explicit End/Kill).
+//
+// Stamping ExitedAt is what makes the track read as *in review* rather
+// than merely PR-open (see Track.InReview): the status is reached by two
+// different roads — this one, and a live session that opened PR #1 and
+// kept working — and only this one means Claude is gone. It must
+// therefore run even when the status is already PROpen, which is exactly
+// the stacked-PR track finishing.
 func (s *Server) enterPRReview(sup *supervisor) {
 	updated, _ := s.update(sup.trackID, "pr-review transition", func(t *state.Track) bool {
-		if t.Status.IsTerminal() || t.Status == state.StatusPROpen {
+		if t.Status.IsTerminal() {
 			return false
 		}
+		changed := t.Status != state.StatusPROpen
 		t.Status = state.StatusPROpen
-		return true
+		if t.ExitedAt == nil {
+			now := time.Now().UTC()
+			t.ExitedAt = &now
+			changed = true
+		}
+		return changed
 	})
 	// Settle usage now (so the figure covers everything up to the PR),
 	// then keep it current on the watcher's ticks for any follow-up work.
@@ -847,7 +872,12 @@ func (s *Server) finalizeTrack(trackID string) {
 		if t.Status.IsTerminal() {
 			return false
 		}
-		t.ExitedAt = &now
+		// Keep an existing stamp: a track finalized out of review had its
+		// Claude exit when the PR went up, and overwriting that with the
+		// moment the PR merged would report days of "runtime" nobody spent.
+		if t.ExitedAt == nil {
+			t.ExitedAt = &now
+		}
 		// We don't have a reliable exit code from the tmux-hosted
 		// process; treat any natural exit as a clean finish. (Future:
 		// parse pane_dead_status via tmux.)

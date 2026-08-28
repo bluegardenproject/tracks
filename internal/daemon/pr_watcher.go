@@ -32,6 +32,7 @@ func (s *Server) runPRWatcher(sup *supervisor) {
 	// First poll fires immediately so the dashboard reflects PR
 	// state within a second of the URL appearing.
 	if s.refreshPRs(sup) && s.onPRTerminal(sup) {
+		sup.releasePRWatcher()
 		return
 	}
 	ticker := time.NewTicker(prPollInterval)
@@ -39,6 +40,8 @@ func (s *Server) runPRWatcher(sup *supervisor) {
 	for {
 		select {
 		case <-sup.done:
+			// The supervisor is finished for good; nothing will start
+			// another watcher on it, so the claim stays spent.
 			return
 		case <-ticker.C:
 			terminal := s.refreshPRs(sup)
@@ -46,6 +49,11 @@ func (s *Server) runPRWatcher(sup *supervisor) {
 			// Claude to address comments — keep the stored figure current.
 			s.refreshUsage(sup)
 			if terminal && s.onPRTerminal(sup) {
+				// Stopping for want of an open PR, not for want of a track:
+				// the session may still open more (the stacked-PR flow, or a
+				// resumed track whose carried-over PRs have all landed), and
+				// each needs a watcher this claim would otherwise refuse.
+				sup.releasePRWatcher()
 				return
 			}
 		}
