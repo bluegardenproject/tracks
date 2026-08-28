@@ -216,6 +216,9 @@ func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPat
 	// Persist the live state.
 	t.Status = state.StatusRunning
 	t.PID = pid
+	// The window is the user's handle on this track from here until they
+	// close it, which is what puts the track in the reopen set.
+	t.WindowOpen = true
 	if err := s.store.Put(t); err != nil {
 		// We've already opened the window. Close it and bail —
 		// otherwise the daemon would be orphaned from the truth.

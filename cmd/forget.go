@@ -16,8 +16,8 @@ func init() {
 		Short: "remove a finished track from the dashboard (use --completed to clear all)",
 		Long: "Removes a track's entry from persistent state so the dashboard stops showing it. " +
 			"The track must already be finished (done / errored / interrupted) — `tracks forget` will refuse to drop a running track. " +
-			"With --completed, every done and errored track is removed in one go; interrupted tracks are kept, since they're " +
-			"waiting to be reopened (forget one by ID to drop it anyway). " +
+			"With --completed, every closed done and errored track is removed in one go; the ones you still have open are " +
+			"kept, since they're waiting to be reopened (forget one by ID to drop it anyway). " +
 			"Worktrees are already gone by this point; branches and log files stay on disk.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {

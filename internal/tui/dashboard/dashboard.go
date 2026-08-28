@@ -376,6 +376,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// since it's the same loss several times over.
 			if n := m.completedCount(); n > 0 {
 				m.confirm = clearCompletedConfirmation(n)
+			} else if kept := m.keptOpenCount(); kept > 0 {
+				// The common shape for someone who keeps finished tracks
+				// around: there are done rows on screen, they're just not
+				// sweepable yet. Saying "none" would read as a bug.
+				m.statusMsg = fmt.Sprintf("%d finished track(s) are still open — close one (d) first", kept)
 			} else {
 				m.statusMsg = "no completed tracks to clear"
 			}
@@ -528,13 +533,13 @@ func removeTrackConfirmation(t state.Track) *confirmation {
 	}
 	body := "Drops its record from tracks — task prompt, cost and PR links go with it. " +
 		"Any branch it created stays in the repo."
-	switch t.Status {
-	case state.StatusDraft:
+	switch {
+	case t.Status == state.StatusDraft:
 		body = "Discards the saved creation parameters. Nothing else is touched."
-	case state.StatusInterrupted:
-		// The record is the only handle `tracks reopen` has, and an
-		// interrupted track's worktree is still on disk.
-		body += " This track was interrupted, not closed: removing it gives " +
+	case t.ShouldReopen():
+		// The record is the only handle `tracks reopen` has, and the
+		// worktree of a track that was never closed is still on disk.
+		body += " This track is still open, not closed: removing it gives " +
 			"up reopening it, and leaves its worktree for the next `tracks gc`."
 	}
 	return &confirmation{
@@ -554,7 +559,8 @@ func clearCompletedConfirmation(n int) *confirmation {
 	return &confirmation{
 		title: fmt.Sprintf("Remove all %d completed tracks?", n),
 		body: "Drops every finished, merged and errored track's record. " +
-			"Interrupted tracks (still reopenable) and branches are kept.",
+			"Any track you still have open is kept — it's waiting to be " +
+			"reopened; close it first to sweep it. Branches are kept.",
 		run: func(m *model) tea.Cmd {
 			if _, err := m.client.PruneCompleted(); err != nil {
 				m.statusMsg = "clear failed: " + err.Error()
@@ -564,11 +570,25 @@ func clearCompletedConfirmation(n int) *confirmation {
 	}
 }
 
-// completedCount is how many tracks `X` would remove.
+// completedCount is how many tracks `X` would remove. It mirrors
+// handlePruneCompleted, kept-open tracks included: counting what the
+// sweep skips would promise a number it doesn't deliver.
 func (m *model) completedCount() int {
 	n := 0
 	for _, t := range m.tracks {
-		if t.Status.Completed() {
+		if t.Status.Completed() && !t.ShouldReopen() {
+			n++
+		}
+	}
+	return n
+}
+
+// keptOpenCount is how many finished tracks `X` is leaving alone
+// because the user still has them open.
+func (m *model) keptOpenCount() int {
+	n := 0
+	for _, t := range m.tracks {
+		if t.Status.Completed() && t.ShouldReopen() {
 			n++
 		}
 	}

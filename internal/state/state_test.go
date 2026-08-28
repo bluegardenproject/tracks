@@ -1048,3 +1048,41 @@ func TestMigrateLeavesV6PROpenTrackAlone(t *testing.T) {
 		t.Error("a v6 pr-open track with no exit stamp was backfilled; it is live, not in review")
 	}
 }
+
+// The reopen set is "what the user had open", which the status cannot
+// answer: a done or pr-merged track keeps its window until the track is
+// closed, and one kept open is usually one the user means to keep
+// working in.
+func TestTrackShouldReopen(t *testing.T) {
+	const sid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+	exited := time.Date(2026, 8, 27, 19, 3, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		trk  Track
+		want bool
+	}{
+		{"done, kept open", Track{Status: StatusDone, SessionID: sid, WindowOpen: true}, true},
+		{"pr merged, kept open", Track{Status: StatusPRMerged, SessionID: sid, WindowOpen: true}, true},
+		{"errored, kept open", Track{Status: StatusErrored, SessionID: sid, WindowOpen: true}, true},
+		{"in review, kept open", Track{Status: StatusPROpen, SessionID: sid, ExitedAt: &exited, WindowOpen: true}, true},
+		// Closed by the user: `tracks done` cleared the flag.
+		{"done, closed", Track{Status: StatusDone, SessionID: sid}, false},
+		{"pr merged, closed", Track{Status: StatusPRMerged, SessionID: sid}, false},
+		// Interrupted is in the set whatever the flag says, so records
+		// written before WindowOpen existed behave as they used to.
+		{"interrupted, no flag", Track{Status: StatusInterrupted, SessionID: sid}, true},
+		{"interrupted, no session", Track{Status: StatusInterrupted}, true},
+		// Nothing to rebuild: a live track has a window to attach to and a
+		// draft was never spawned at all.
+		{"running", Track{Status: StatusRunning, SessionID: sid, WindowOpen: true}, false},
+		{"draft", Track{Status: StatusDraft, SessionID: sid, WindowOpen: true}, false},
+		// No session to resume, but still in the set: handleReopen reports
+		// why it can't come back rather than dropping it silently.
+		{"done, kept open, no session", Track{Status: StatusDone, WindowOpen: true}, true},
+	}
+	for _, c := range cases {
+		if got := c.trk.ShouldReopen(); got != c.want {
+			t.Errorf("%s: ShouldReopen() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -49,10 +49,11 @@ import (
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
 // empty list; a v4 file's flat review fields are folded in at decode
 // time.
-// Two on-disk changes between v5 and v6 deliberately did NOT bump this,
-// both documented at their fields: the observed-model keys were renamed
-// (derived data, refolded on decode), and RequestedModel was added
-// (absent reads as "no preference"). A bump stops an older binary
+// Three on-disk changes since v5 deliberately did NOT bump this, each
+// documented at its field: the observed-model keys were renamed (derived
+// data, refolded on decode), RequestedModel was added (absent reads as
+// "no preference"), and so was WindowOpen (absent reads as false, which
+// only means the track isn't reopened). A bump stops an older binary
 // starting at all, which is the heavier cost of the two — worth paying
 // here, where the missing field silently misreports a live track as
 // finished with, and a finished one as live.
@@ -399,6 +400,35 @@ type Track struct {
 	// is unique. The downgrade fails safe as "window not found" rather
 	// than targeting somebody else's window.
 	Window string `json:"window,omitempty"`
+
+	// WindowOpen records that tracks opened a window for this track and
+	// the track has not been closed since. It is the "the user still has
+	// this one open" bit that Status cannot carry: a done or pr-merged
+	// track keeps its window until the track is closed, and one kept open
+	// is usually one the user means to keep working in — a merged PR
+	// followed by more work on the same topic, without re-supplying the
+	// context.
+	//
+	// Set when a window is opened (spawnSupervisor) and cleared when the
+	// track is closed (endTrack), when a promote's re-spawn fails, and
+	// when a restart finds the track orphaned with its Claude still
+	// running. A respawn that kills the window and then fails to open
+	// another keeps the flag on purpose: nobody closed that track, and it
+	// should be offered again. Deliberately not derived from tmux:
+	// the daemon's own shutdown is usually *triggered* by the session
+	// going away, so at the moment the question is asked there is nothing
+	// left to ask — and that is also why the flag survives a crash or a
+	// machine restart, which is exactly when the reopen set matters.
+	//
+	// It follows that the pane is not the handle: typing `exit` in a
+	// finished track's shell does not take it out of the set, because it
+	// does not close the track — the record, the worktree and the
+	// dashboard row are all still there. Closing it does.
+	//
+	// Added without a schema bump: absent reads as false, so an older
+	// binary simply doesn't reopen the track, and a track spawned once
+	// under this version gains the flag.
+	WindowOpen bool `json:"window_open,omitempty"`
 
 	// Kind is the track type (work/review/ask/plan/doc). Empty in v1
 	// files; migrated to KindWork on load. Drives worktree handling and
@@ -810,6 +840,27 @@ func (t Track) InReview() bool {
 // instead), and neither is a draft, which was never spawned at all.
 func (t Track) Dormant() bool {
 	return t.Status.IsTerminal() || t.InReview()
+}
+
+// ShouldReopen reports whether tracks should bring this track back when
+// it next starts: the user still had it open (see WindowOpen) and there
+// is no Claude behind it to attach to instead.
+//
+// What the track was *doing* is deliberately not part of the test. It is
+// in the set because it was on screen when tracks stopped — a pr-merged
+// track kept open for the next round of work on the same topic comes
+// back the same way a running one does. Closing it (`tracks done`, or
+// the dashboard's own close) is what takes it back out.
+//
+// An interrupted track is included whatever the flag says, so records
+// written before WindowOpen existed keep the behaviour they had.
+//
+// The session id is not checked here. A track that predates session
+// tracking has nothing to resume, but dropping it silently would leave
+// the user wondering where it went; it stays in the set and handleReopen
+// reports it as a per-track failure that says exactly why.
+func (t Track) ShouldReopen() bool {
+	return t.Dormant() && (t.WindowOpen || t.Status == StatusInterrupted)
 }
 
 // Resumable reports whether the track's Claude conversation can be

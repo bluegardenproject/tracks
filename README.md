@@ -55,8 +55,8 @@ Inside the session, press `<prefix>+t` to open the menu:
   from 1 (radical candor) to 10 (honest but gently framed), which changes how
   the findings are worded and nothing else.
 - **Dashboard** — live list of all tracks, statuses, PR URLs.
-- **Reopen interrupted tracks** — brings back everything that was still
-  running when tracks was last quit (see below).
+- **Reopen tracks from the last session** — brings back every track you had
+  open when tracks was last quit (see below).
 - **List / Attach… / End… / Kill…** — manage tracks.
 - **Settings** — add, edit, or remove repos, and choose which model tracks
   run, via a guided form (no YAML editing).
@@ -71,22 +71,29 @@ you can `git checkout <branch>` from your editor afterwards.
 
 Quitting tracks doesn't finish your tracks. Anything still live is recorded
 as `interrupted` — its branch, worktree and Claude session all survive — and
-the next `tracks` offers to bring them back:
+the next `tracks` offers to bring back everything you had open:
 
 ```
-2 track(s) were still running when tracks last stopped:
-  20260805-091305-1e1ec7  swap-rate-tooltip
-  20260805-095525-ee2eb3  reopen-tracks
+3 track(s) were open when tracks last stopped:
+  20260805-091305-1e1ec7  running     swap-rate-tooltip
+  20260805-095525-ee2eb3  running     reopen-tracks
+  20260804-142201-9c1f04  all merged  swap-release-notes
 
-Reopen 2 interrupted track(s)? [Yes / Cancel]
+Reopen 3 track(s)? [Yes / Cancel]
 ```
+
+The set is every track that still had a window, whatever it was doing — a
+finished or `pr merged` track you kept around to carry on with the same topic
+comes back with the running ones, so you don't re-supply the context. What
+takes a track out of the set is **closing** it, not finishing it.
 
 Each reopened track gets its worktree back and a fresh window running
 `claude --resume`, so the conversation continues where it stopped — Claude
 picks up with the full history and waits for your next message. Cancel and
 they stay as they are; run `tracks reopen` (or the menu entry) whenever you
-want them. Interrupted tracks are never touched by `X` (clear completed) or
-`tracks gc`, so their worktrees wait for you.
+want them. Nothing in that set is touched by `X` (clear completed) or
+`tracks gc`, so their worktrees wait for you — closing a track is what makes
+it sweepable again.
 
 To be done with one, **close** it (`d` in the dashboard) — that removes the
 worktree and keeps the branch. **Removing** it (`x`) drops the dashboard entry
@@ -105,6 +112,10 @@ handle `tracks reopen` needs — `x` and `X` (remove all completed) ask for a
 | `done` | finished without a merged PR: none was opened, one was closed unmerged, or you closed the track yourself |
 | `interrupted` | tracks was quit while this one was live — reopenable |
 | `errored` / `draft` | creation or the session failed / saved but never launched |
+
+Every one of these except `draft` comes back on the next start if you still had
+it open — see [Quitting and coming back](#quitting-and-coming-back). A draft was
+never launched, so there is no session to resume; launch it with `L`.
 
 Tracks that open several PRs get each one polled and listed separately in the
 dashboard's detail panel; emit one `TRACKS_PR_URL=<url>` line per PR.
