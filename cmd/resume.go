@@ -13,10 +13,11 @@ import (
 func init() {
 	c := &cobra.Command{
 		Use:   "resume <track-id>",
-		Short: "resume a finished track's Claude conversation",
+		Short: "resume a track's Claude conversation",
 		Long: "Re-creates the track's worktree (if it was removed by `tracks done`) and " +
 			"spawns Claude with `--resume <session-id>` so the conversation continues " +
-			"from where it left off. The track must be finished (done / errored / interrupted) " +
+			"from where it left off. The track must have no Claude running behind it " +
+			"(done / errored / interrupted / pr merged, or sitting in review with an open PR) " +
 			"and must have a session ID (all tracks created since session-ID tracking was added).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {

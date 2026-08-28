@@ -30,9 +30,13 @@ const interruptedUnclean = "tracks stopped unexpectedly while this track was sti
 // guess (see reconcileOnStartup) — and the user would be told their
 // work errored when all they did was quit.
 //
-// StatusPROpen tracks are deliberately left alone: Claude already exited on
-// those and reconcileOnStartup re-adopts them into review, which is the
-// truthful state to come back to. Drafts have no process at all.
+// Tracks *in review* are deliberately left alone: Claude already exited
+// on those and reconcileOnStartup re-adopts them, which is the truthful
+// state to come back to. That is InReview, not StatusPROpen — a live
+// session that opened a PR and kept working carries the same status, and
+// skipping it here is what made such a track vanish across a restart:
+// never marked interrupted, so never offered for reopen. Drafts have no
+// process at all.
 func (s *Server) markInterruptedOnShutdown() {
 	now := time.Now().UTC()
 	for _, t := range s.store.All() {
@@ -73,7 +77,7 @@ const creationInterrupted = "tracks was shut down while this track was still bei
 func sweepable(t state.Track) bool {
 	return !t.Status.IsTerminal() &&
 		t.Status != state.StatusDraft &&
-		t.Status != state.StatusPROpen
+		!t.InReview()
 }
 
 // reconcileOnStartup is called once during Server.Start, before
@@ -107,8 +111,10 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 		// A track left in review (Claude already exited) has no Claude
 		// process to re-supervise, so it must never be marked Errored.
 		// Its dev servers were orphaned by the dead daemon, so free them
-		// first either way.
-		if t.Status == state.StatusPROpen {
+		// first either way. A PR-open track whose Claude was still running
+		// is not this case — it falls through to the interrupted sweep
+		// below like any other live track.
+		if t.InReview() {
 			if len(t.Services) > 0 {
 				t.Services = stopPersistedServices(t.Services, true)
 			}
@@ -118,9 +124,16 @@ func (s *Server) reconcileOnStartup(ctx context.Context) {
 				s.resumePRReview(t)
 			} else {
 				// Every PR merged/closed during the downtime — finalize.
+				// The exit stamp is already the moment Claude stopped (it is
+				// what put the track in review); overwriting it here would
+				// report the whole downtime as runtime. InReview above means
+				// the guard never fires — it is here so all three
+				// finalization sites read the same way.
 				t.Status = terminalStatusFor(t)
-				now := time.Now().UTC()
-				t.ExitedAt = &now
+				if t.ExitedAt == nil {
+					now := time.Now().UTC()
+					t.ExitedAt = &now
+				}
 				s.persist(t, "review finalization")
 			}
 			continue

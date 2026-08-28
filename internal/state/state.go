@@ -38,16 +38,25 @@ import (
 // doc_skip_claim_check, doc_skip_opinion) into Track.Review and
 // Track.Doc, and drops Track.LogPath — a path that was computed and
 // persisted but never written to or read.
+// v6 gives `pr open` a second bit: ExitedAt is now stamped when Claude
+// exits on an open PR, which is what separates a track *in review* from
+// a live one that opened a PR and kept working (see Track.InReview).
+// Code before v6 stamped neither, so a pre-v6 record with the status and
+// no exited_at is backfilled from UpdatedAt on load — resolving the
+// ambiguity toward review, which is how those records were treated when
+// they were written.
 // Older tracks are migrated on load (see Track.UnmarshalJSON and
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
 // empty list; a v4 file's flat review fields are folded in at decode
 // time.
-// Two on-disk changes since v5 deliberately did NOT bump this, both
-// documented at their fields: the observed-model keys were renamed
+// Two on-disk changes between v5 and v6 deliberately did NOT bump this,
+// both documented at their fields: the observed-model keys were renamed
 // (derived data, refolded on decode), and RequestedModel was added
 // (absent reads as "no preference"). A bump stops an older binary
-// starting at all, which is the heavier cost of the two.
-const CurrentSchemaVersion = 5
+// starting at all, which is the heavier cost of the two — worth paying
+// here, where the missing field silently misreports a live track as
+// finished with, and a finished one as live.
+const CurrentSchemaVersion = 6
 
 // Provider is the agent CLI a track runs on. Tracks manages the
 // worktree, session and tmux lifecycle identically for every provider;
@@ -568,7 +577,10 @@ type Track struct {
 	// UpdatedAt is the last time any field on this track changed.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	// ExitedAt is set once Status reaches Done or Errored.
+	// ExitedAt is when the track's Claude process stopped: set on every
+	// end state, on an interruption, and on the transition into review
+	// (see InReview) — a track sitting on an open PR has no Claude
+	// behind it either. Cleared again when a resume spawns a new one.
 	ExitedAt *time.Time `json:"exited_at,omitempty"`
 
 	// ExitCode is the Claude process's exit code if available.
@@ -776,12 +788,36 @@ func (t *Track) SetPR(i int, p PRRef) bool {
 	return true
 }
 
+// InReview reports whether the track is sitting on an open pull request
+// with its Claude already gone — the state enterPRReview leaves behind.
+//
+// StatusPROpen alone does not say that. A live session that opens PR #1
+// and keeps working (the stacked-PR flow) is moved to the same status by
+// nextLiveStatus, and that track still has Claude in its window. ExitedAt
+// is what separates the two: it is stamped when the process stops.
+//
+// Treating the status as proof of review was how a live track could
+// disappear across a restart — the shutdown sweep skipped it as "already
+// settled" and startup re-adopted it as a PR watch with no window, so it
+// was never offered for reopen.
+func (t Track) InReview() bool {
+	return t.Status == StatusPROpen && t.ExitedAt != nil
+}
+
+// Dormant reports whether the track has no Claude process behind it, so
+// a fresh one can be spawned on its session: every end state, plus a
+// track in review. A live track is not dormant (attach to its window
+// instead), and neither is a draft, which was never spawned at all.
+func (t Track) Dormant() bool {
+	return t.Status.IsTerminal() || t.InReview()
+}
+
 // Resumable reports whether the track's Claude conversation can be
-// picked up again with `claude --resume`: it must be in an end state
-// (nothing running) and must carry the session UUID the transcript is
+// picked up again with `claude --resume`: nothing may be running behind
+// it (see Dormant) and it must carry the session UUID the transcript is
 // stored under.
 func (t Track) Resumable() bool {
-	return t.Status.IsTerminal() && t.SessionID != ""
+	return t.Dormant() && t.SessionID != ""
 }
 
 // CanLaunch reports whether the track can be (re)created from saved
@@ -1109,7 +1145,7 @@ func (fs *FileStore) load() error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	for _, t := range s.Tracks {
-		migrateTrack(&t)
+		migrateTrack(&t, s.SchemaVersion)
 		fs.tracks[t.ID] = t
 	}
 	for _, b := range s.Proxies {
@@ -1121,12 +1157,18 @@ func (fs *FileStore) load() error {
 }
 
 // migrateTrack upgrades a track loaded from an older schema in place.
+// from is the file's SchemaVersion, needed by any migration that would
+// be wrong to re-apply to a record this binary wrote itself.
+//
 // v1 had no Kind; infer it from the branch (pr/* came from review
 // tracks) and default everything else to work. v2 spelled the
 // in-review status "pr"; it's "pr open" from v3 on. (The v2 flat pr_*
 // fields are folded into PRs by UnmarshalJSON, which has to run at
-// decode time to see them at all.)
-func migrateTrack(t *Track) {
+// decode time to see them at all.) v5 and earlier never stamped
+// ExitedAt on entering review — see the backfill below, which is
+// version-gated precisely because a v6 record with the same shape means
+// the opposite thing.
+func migrateTrack(t *Track, from int) {
 	if t.Kind == "" {
 		if strings.HasPrefix(t.Branch, "pr/") {
 			t.Kind = KindReview
@@ -1136,6 +1178,24 @@ func migrateTrack(t *Track) {
 	}
 	if t.Status == statusPRLegacy {
 		t.Status = StatusPROpen
+	}
+	// Pre-v6, `pr open` with no exit stamp was the only shape a track in
+	// review could have. From v6 it means the opposite — a live session
+	// that opened a PR and kept working — so this must never run against
+	// a file this binary wrote, or the next restart would decide a live
+	// track had finished. UpdatedAt is the closest thing on record to
+	// when Claude stopped; only Duration reads the value, and the whole
+	// point is the field being set.
+	if from < 6 && t.Status == StatusPROpen && t.ExitedAt == nil {
+		stamped := t.UpdatedAt
+		if stamped.IsZero() {
+			// A pre-v2 record can carry neither timestamp, leaving a zero
+			// stamp. Deliberate: what the migration owes the track is a set
+			// field, and the only reader is Duration, which already
+			// short-circuits on a zero CreatedAt.
+			stamped = t.CreatedAt
+		}
+		t.ExitedAt = &stamped
 	}
 	// Kind is only just settled for a pre-v2 record, so the review-spec
 	// invariant has to be re-checked now it's known.

@@ -632,19 +632,32 @@ func TestStatusCompleted(t *testing.T) {
 
 func TestTrackResumable(t *testing.T) {
 	const sid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+	exited := time.Date(2026, 8, 27, 19, 3, 0, 0, time.UTC)
 	cases := []struct {
 		name string
 		trk  Track
 		want bool
 	}{
+		{"pending", Track{Status: StatusPending, SessionID: sid}, false},
 		{"running", Track{Status: StatusRunning, SessionID: sid}, false},
-		{"in review", Track{Status: StatusPROpen, SessionID: sid}, false},
+		{"waiting", Track{Status: StatusWaiting, SessionID: sid}, false},
 		{"draft", Track{Status: StatusDraft, SessionID: sid}, false},
 		{"done", Track{Status: StatusDone, SessionID: sid}, true},
 		{"pr merged", Track{Status: StatusPRMerged, SessionID: sid}, true},
 		{"errored", Track{Status: StatusErrored, SessionID: sid}, true},
 		{"interrupted", Track{Status: StatusInterrupted, SessionID: sid}, true},
 		{"interrupted without session", Track{Status: StatusInterrupted}, false},
+		// Claude exited when the PR went up, so there is a conversation to
+		// come back to — and after a restart no window to attach to
+		// instead. Excluding this stranded review tracks entirely: the
+		// shutdown sweep skips them and `reopen` only takes interrupted
+		// ones.
+		{"in review", Track{Status: StatusPROpen, SessionID: sid, ExitedAt: &exited}, true},
+		{"in review without session", Track{Status: StatusPROpen, ExitedAt: &exited}, false},
+		// Same status, live session: it opened PR #1 and kept working, so
+		// there is a window to attach to and resuming would fork the
+		// conversation.
+		{"pr open, claude still running", Track{Status: StatusPROpen, SessionID: sid}, false},
 	}
 	for _, c := range cases {
 		if got := c.trk.Resumable(); got != c.want {
@@ -980,5 +993,58 @@ func TestUnmarshalPrefersTheCurrentModelKey(t *testing.T) {
 	}
 	if tr.ObservedModel != "claude-opus-5" {
 		t.Errorf("ObservedModel = %q, want the current key to win", tr.ObservedModel)
+	}
+}
+
+// Pre-v6 code never stamped ExitedAt on entering review, so every
+// `pr open` record already on disk is missing it — the shape that means
+// "claude is still running" from v6 on. Left alone, those tracks would
+// read as live: swept to interrupted with a note that isn't true, or,
+// if the pane's shell outlived the daemon, errored — which is
+// Completed(), putting a worktree with an open PR in reach of a prune.
+func TestMigrateV5ReviewTrackGetsAnExitStamp(t *testing.T) {
+	dir := t.TempDir()
+	raw := `{"schema_version":5,"tracks":[` +
+		`{"id":"a","branch":"fix/x","kind":"work","repos":[],"status":"pr open",` +
+		`"task_prompt":"","created_at":"2026-08-20T09:00:00Z","updated_at":"2026-08-20T17:30:00Z",` +
+		`"prs":[{"url":"https://example.test/pr/1","state":"OPEN"}]}` +
+		`]}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := fs.Get("a")
+	if !got.InReview() {
+		t.Fatal("a migrated pr-open track reads as live; it must come back as in review")
+	}
+	if want := time.Date(2026, 8, 20, 17, 30, 0, 0, time.UTC); !got.ExitedAt.Equal(want) {
+		t.Errorf("ExitedAt = %v, want UpdatedAt %v", got.ExitedAt, want)
+	}
+}
+
+// The same shape written by *this* version means the opposite: a live
+// session that opened a PR and kept working. Backfilling it would decide
+// on the next restart that a running track had finished.
+func TestMigrateLeavesV6PROpenTrackAlone(t *testing.T) {
+	dir := t.TempDir()
+	raw := `{"schema_version":6,"tracks":[` +
+		`{"id":"a","branch":"fix/x","kind":"work","repos":[],"status":"pr open",` +
+		`"task_prompt":"","created_at":"2026-08-20T09:00:00Z","updated_at":"2026-08-20T17:30:00Z",` +
+		`"prs":[{"url":"https://example.test/pr/1","state":"OPEN"}]}` +
+		`]}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := OpenFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := fs.Get("a"); got.InReview() {
+		t.Error("a v6 pr-open track with no exit stamp was backfilled; it is live, not in review")
 	}
 }

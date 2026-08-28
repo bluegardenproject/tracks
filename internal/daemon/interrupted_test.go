@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/state"
 )
@@ -18,12 +19,19 @@ const deadPID = 0x7FFFFFFF
 // keep the status they had.
 func TestMarkInterruptedOnShutdown(t *testing.T) {
 	srv := newQuietServer(t)
+	exited := time.Date(2026, 8, 27, 19, 3, 0, 0, time.UTC)
 	seed := []state.Track{
 		{ID: "running", Status: state.StatusRunning, PID: deadPID},
 		{ID: "waiting", Status: state.StatusWaiting, PID: deadPID},
 		{ID: "pending", Status: state.StatusPending, PID: deadPID},
-		{ID: "review", Status: state.StatusPROpen,
+		// Claude exited when the PR went up: nothing to interrupt.
+		{ID: "review", Status: state.StatusPROpen, ExitedAt: &exited,
 			PRs: []state.PRRef{{URL: "https://example.test/pr/1", State: "OPEN"}}},
+		// Same status, other road: a live session opened PR #1 and kept
+		// working. Skipping it here was how such a track disappeared across
+		// a restart — never interrupted, so never offered for reopen.
+		{ID: "live-pr", Status: state.StatusPROpen, PID: deadPID,
+			PRs: []state.PRRef{{URL: "https://example.test/pr/2", State: "OPEN"}}},
 		{ID: "draft", Status: state.StatusDraft},
 		{ID: "done", Status: state.StatusDone},
 		{ID: "errored", Status: state.StatusErrored, ErrorMsg: "spawn claude: boom"},
@@ -41,6 +49,7 @@ func TestMarkInterruptedOnShutdown(t *testing.T) {
 		"waiting": state.StatusInterrupted,
 		"pending": state.StatusInterrupted,
 		"review":  state.StatusPROpen,
+		"live-pr": state.StatusInterrupted,
 		"draft":   state.StatusDraft,
 		"done":    state.StatusDone,
 		"errored": state.StatusErrored,
@@ -62,6 +71,11 @@ func TestMarkInterruptedOnShutdown(t *testing.T) {
 		if got.ErrorMsg != interruptedByQuit {
 			t.Errorf("%s: ErrorMsg = %q, want %q", id, got.ErrorMsg, interruptedByQuit)
 		}
+	}
+
+	// A track left in review keeps the moment Claude actually exited.
+	if got, _ := srv.store.Get("review"); got.ExitedAt == nil || !got.ExitedAt.Equal(exited) {
+		t.Errorf("review ExitedAt = %v, want the original %v", got.ExitedAt, exited)
 	}
 
 	// The errored track's own reason must not be overwritten.
