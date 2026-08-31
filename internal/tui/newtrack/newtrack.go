@@ -381,11 +381,6 @@ func modelOptions(cfg config.Config, provider, kind string) []huh.Option[string]
 	return options
 }
 
-// modelFilterThreshold is the list length past which the picker starts
-// filtering rather than showing everything. Cursor returns well over a
-// hundred models; scrolling that with arrow keys is not a picker.
-const modelFilterThreshold = 12
-
 // modelListHeight bounds how much of the form a long list may take.
 const modelListHeight = 10
 

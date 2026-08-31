@@ -32,7 +32,8 @@ func TestCreateChatReturnsTheID(t *testing.T) {
 }
 
 // The real CLI prints certificate warnings before the id on this
-// machine, so the id is taken from the last non-empty line.
+// machine, and could print a hint after it. The id is found by
+// matching a uuid on any line, first match wins — not by position.
 func TestCreateChatFindsTheIDOnAnyLine(t *testing.T) {
 	// Warnings before it today; a hint line after it is equally
 	// plausible tomorrow, and a last-line heuristic would fail on that.
