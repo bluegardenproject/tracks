@@ -22,7 +22,7 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 	}{
 		{
 			name:     "tracks-reviewer",
-			body:     reviewerAgentTemplate,
+			body:     ReviewerAgentTemplate,
 			wantName: "name: tracks-reviewer",
 			wantAll: []string{
 				"REVIEW OUTCOME: pass",
@@ -96,7 +96,7 @@ func TestAgentTemplatesAreWellFormed(t *testing.T) {
 // both templates rather than left to the wording of the scale.
 func TestCandorIsDeliveryOnlyInBothAgents(t *testing.T) {
 	for name, body := range map[string]string{
-		"tracks-reviewer":      reviewerAgentTemplate,
+		"tracks-reviewer":      ReviewerAgentTemplate,
 		"tracks-docs-reviewer": docsReviewerAgentTemplate,
 	} {
 		if !strings.Contains(body, "**Candor changes wording only.**") {
