@@ -15,18 +15,16 @@ import (
 //
 // It is a rewrite rather than a copy, because the Claude version's
 // central instruction — invoke the `tracks-reviewer` subagent via the
-// Task tool — names a mechanism Cursor does not have. Cursor has no
-// user-definable subagents: ~/.cursor/agents exists but is empty with
-// no documented format, and the `exploreSubagentModel` in its config is
-// internal.
+// Task tool — names a mechanism the Cursor CLI does not expose. Its
+// Task tool accepts only built-in types, and invoking a custom agent
+// by slash loads the definition into the *same* conversation.
 //
-// So the review gate is preserved in intent and weakened in mechanism:
-// the agent reviews its own diff in-conversation instead of handing it
-// to a reviewer with a separate context. That is a real difference in
-// rigour, not a wording change — a self-review shares the blind spots
-// of the work it is reviewing. It is called out in
-// docs/design/cursor-integration.md §10 and is the honest option until
-// Cursor grows an equivalent.
+// The gate is preserved by other means: `tracks review` runs the same
+// reviewer definition as a second agent process with a fresh chat, so
+// the isolation comes from the process boundary. The agent is told to
+// run that command rather than to review its own work, and rather than
+// to spawn the reviewer itself — keeping the spawn inside tracks is
+// what lets it refuse a review from inside a review.
 //
 // The wording overlaps claude.taskSuffix in the parts that describe
 // tracks rather than the assistant (the interactive framing, the PR
@@ -39,7 +37,7 @@ const taskSuffix = "" +
 	"pane at any time to reply. Stay engaged: if the task naturally " +
 	"ends with a question or a confirmation, ask it and wait — do " +
 	"NOT wrap up the session just to acknowledge completion.\n\n" +
-	"**Review your own work before pushing (code changes only).** " +
+	"**Review before pushing (code changes only).** " +
 	"Before you run `git push` or open a pull request, check what the " +
 	"branch actually changes with `git diff --name-only <base>...HEAD`:\n" +
 	"  - If every changed path is documentation or agent " +
@@ -51,18 +49,21 @@ const taskSuffix = "" +
 	"or CI change, including a diff that mixes those with docs) review " +
 	"before pushing. When in doubt, review.\n\n" +
 	"The review:\n" +
-	"  1. Run `git diff <base>...HEAD` and read the whole diff, not " +
-	"just the file list.\n" +
-	"  2. Report what you find grouped as block / warn / hint, against " +
-	"whatever conventions the repo documents. Correctness bugs first, " +
-	"then anything the repo's own patterns would reject. Be specific " +
-	"about what you checked — a review that finds nothing should say " +
-	"what it looked for.\n" +
-	"  3. End with the literal line `REVIEW OUTCOME: pass` or " +
-	"`REVIEW OUTCOME: blocked`, so the outcome is greppable rather " +
-	"than a matter of tone.\n" +
-	"  4. If you found blocks, do NOT push. Fix them, re-run the " +
-	"review, and only push once it comes back `pass`.\n\n" +
+	"  1. Run `tracks review`. It runs the reviewer as a separate " +
+	"agent session that has not seen this conversation, so it reads " +
+	"your diff with fresh eyes rather than re-reading your own " +
+	"reasoning. Do NOT review the diff yourself instead, and do NOT " +
+	"invoke `agent` directly — `tracks review` is what stops a " +
+	"reviewer reviewing itself.\n" +
+	"  2. Read its report. It ends with `REVIEW OUTCOME: pass` or " +
+	"`REVIEW OUTCOME: blocked`.\n" +
+	"  3. If blocked, address every `block` finding and run " +
+	"`tracks review` again. Do not push with unresolved blocks.\n" +
+	"  4. If `tracks review` itself fails (command not found, no " +
+	"changes, reviewer unavailable), say so plainly and review the " +
+	"diff yourself as a fallback, ending with the same " +
+	"`REVIEW OUTCOME:` line — a degraded review beats a skipped " +
+	"one, but say which you did.\n\n" +
 	"If you open a pull request at any point, include the URL on its " +
 	"own line as `TRACKS_PR_URL=<url>` so the tracks dashboard " +
 	"surfaces it. If you open several, emit one such line per PR.\n\n" + agent.DevServerContract + "\n\n" +

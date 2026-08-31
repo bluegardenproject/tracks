@@ -87,7 +87,7 @@ isn't true". That is still within the register; losing it is not.
 
 `
 
-// reviewerAgentTemplate is the system prompt for the dedicated
+// ReviewerAgentTemplate is the system prompt for the dedicated
 // code-review subagent we install into every tracks worktree.
 //
 // Frontmatter `description` is the auto-discovery hook — Claude
@@ -97,7 +97,10 @@ isn't true". That is still within the register; losing it is not.
 // The body is the subagent's system prompt. It's intentionally
 // strict: read-only tools, no commits, no PRs, always end with a
 // `REVIEW OUTCOME:` line so callers can grep the verdict.
-const reviewerAgentTemplate = `---
+// ReviewerAgentTemplate is the reviewer definition tracks ships. It is
+// installed for Claude's subagent mechanism and read directly by
+// `tracks review`, so both providers review to one standard.
+const ReviewerAgentTemplate = `---
 x-tracks-managed: "1"
 name: tracks-reviewer
 description: |
@@ -567,7 +570,7 @@ func (s *Server) InstallGlobalHelpers() error {
 		// Both subagents are static — the same for every user. Doc
 		// reviews are repo-agnostic; grounding comes from whatever repos
 		// the track attaches at creation time.
-		{filepath.Join(agentsDir, "tracks-reviewer.md"), reviewerAgentTemplate},
+		{filepath.Join(agentsDir, "tracks-reviewer.md"), ReviewerAgentTemplate},
 		{filepath.Join(agentsDir, "tracks-docs-reviewer.md"), docsReviewerAgentTemplate},
 	}
 	for _, f := range files {

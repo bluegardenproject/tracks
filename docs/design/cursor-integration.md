@@ -410,8 +410,26 @@ a first working Cursor track.
    would be the only reason to add secret handling to a file that
    currently holds none. Recommend delegating to the user's environment
    and documenting it.
-4. ~~**Review gate parity**~~ — **decided 2026-08-27: an in-conversation
-   self-review.** Cursor has no user-definable subagents (`~/.cursor/agents`
+4. ~~**Review gate parity**~~ — **superseded 2026-08-31 by `tracks review`.**
+   The reviewer now runs as a *second agent process* with a fresh chat, so the
+   isolation comes from the process boundary rather than from a CLI feature.
+   Recursion is stopped by tracks rather than by the prompt: the command
+   refuses when `TRACKS_REVIEW` is set, and again when a per-track lock is
+   held. It passes no permission flags, so the user's `approvalMode` decides
+   what the reviewer may do — on a default allowlist that is "read files,
+   execute nothing", which is also why it cannot spawn another reviewer.
+
+   Probed before building it, and worth recording so nobody repeats it:
+   custom subagents are documented as having their own context in the CLI, but
+   this build rejects them from the Task tool (`Valid types are
+   generalPurpose, cursor-guide, bugbot, security-review, best-of-n-runner`),
+   and `/name` loads the definition into the *same* conversation — a secret
+   stated in the parent came back out of the "subagent". Same from
+   `~/.cursor/agents/` and `~/.claude/agents/`, with the documented
+   frontmatter, on the current build. The CLI's built-in registry does not
+   match the documented one either, so the two are different implementations.
+
+   *Superseded text:* ~~decided 2026-08-27: an in-conversation self-review.~~ Cursor has no user-definable subagents (`~/.cursor/agents`
    exists but is empty with no documented format; `exploreSubagentModel` in
    its config is internal), so the gate cannot be delegated. `cursor.taskSuffix`
    asks the agent to review its own diff and end with the same literal

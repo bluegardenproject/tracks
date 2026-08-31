@@ -60,6 +60,13 @@ Inside the session, press `<prefix>+t` to open the menu:
 - **List / Attach… / End… / Kill…** — manage tracks.
 - **Settings** — add, edit, or remove repos, and choose which model tracks
   run, via a guided form (no YAML editing).
+Inside a track, `tracks review` runs the code reviewer as a separate agent
+session that has not seen the working conversation, and prints its report.
+Claude tracks reach the same reviewer through their subagent; Cursor tracks
+use this command, because the Cursor CLI cannot delegate to a custom
+subagent. It reviews the branch against its repo's configured base plus any
+uncommitted work, and refuses to run from inside a review.
+
 - **Check for updates…** — compares your version against the latest GitHub
   release and, after a confirm, installs it over the binary you're running.
 - **Quit session** — kills tmux and the daemon; running Claudes get SIGTERM.

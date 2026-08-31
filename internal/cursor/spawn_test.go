@@ -189,8 +189,14 @@ func TestCursorUsesTheSharedWrapper(t *testing.T) {
 // Claude's subagent gate by necessity, but it must not be absent.
 func TestWorkPromptKeepsAReviewGate(t *testing.T) {
 	opts, _ := BuildOptions(baseCfg(), baseTrack(state.KindWork), "/sock", "")
-	if !strings.Contains(opts.TaskPrompt, "Review your own work before pushing") {
-		t.Error("work prompt has no review gate")
+	// The gate must send the agent to `tracks review`, not have it
+	// review its own diff: the command is what gives the reviewer a
+	// fresh context, and what refuses a review from inside a review.
+	if !strings.Contains(opts.TaskPrompt, "tracks review") {
+		t.Error("work prompt does not invoke `tracks review` — the command would ship unreachable")
+	}
+	if strings.Contains(opts.TaskPrompt, "Review your own work") {
+		t.Error("work prompt still asks the agent to review its own diff")
 	}
 	if !strings.Contains(opts.TaskPrompt, "TRACKS_PR_URL=") {
 		t.Error("work prompt lost the PR marker contract the dashboard needs")
@@ -318,9 +324,10 @@ func TestResumeCarriesNoPromptForAnyKind(t *testing.T) {
 func TestReviewGateIsCheckable(t *testing.T) {
 	opts, _ := BuildOptions(baseCfg(), baseTrack(state.KindWork), "/sock", "")
 	for _, want := range []string{
-		"REVIEW OUTCOME: pass", // greppable verdict, same convention as Claude's
-		"do NOT push",          // the negative constraint
-		"read the whole diff",  // an observable action, not a disposition
+		"REVIEW OUTCOME: pass",        // greppable verdict, same convention as Claude's
+		"Do not push with unresolved", // the negative constraint
+		"tracks review",               // an observable action, not a disposition
+		"do NOT invoke `agent`",       // the agent must not spawn the reviewer itself
 	} {
 		if !strings.Contains(opts.TaskPrompt, want) {
 			t.Errorf("review gate is missing %q", want)

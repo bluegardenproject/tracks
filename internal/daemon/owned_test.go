@@ -94,7 +94,7 @@ func TestHasManagedMarker(t *testing.T) {
 func TestShippedTemplatesCarryTheMarker(t *testing.T) {
 	for name, tpl := range map[string]string{
 		"skillTemplate":             skillTemplate,
-		"reviewerAgentTemplate":     reviewerAgentTemplate,
+		"ReviewerAgentTemplate":     ReviewerAgentTemplate,
 		"docsReviewerAgentTemplate": docsReviewerAgentTemplate,
 		"cursorRuleTemplate":        cursorRuleTemplate,
 	} {
