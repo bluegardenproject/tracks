@@ -80,7 +80,7 @@ func CreateChat(ctx context.Context, binary string) (string, error) {
 	return id, nil
 }
 
-// findChatID returns the first line that is a chat id, or "". Scanning
+// findChatID returns the FIRST line that is a chat id, or "". Scanning
 // every line rather than trusting position: the CLI prints unrelated
 // warnings before the id today (certificate noise on macOS) and is
 // free to print something after it tomorrow.
@@ -96,10 +96,17 @@ func findChatID(out string) string {
 // truncate bounds CLI output quoted into an error.
 func truncate(s string) string {
 	s = strings.TrimSpace(s)
-	if len(s) > 200 {
-		return s[:200] + "…"
+	// Cut on a rune boundary: slicing bytes can split a multi-byte
+	// character and put a replacement glyph in the error message.
+	const limit = 200
+	if len(s) <= limit {
+		return s
 	}
-	return s
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	return string(r[:limit]) + "…"
 }
 
 func firstLine(b []byte) string {

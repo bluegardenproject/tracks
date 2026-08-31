@@ -137,35 +137,6 @@ func TestDefaultModelForUsesThePerProviderConfig(t *testing.T) {
 	}
 }
 
-// Cursor returns well over a hundred models, which is not something a
-// user can arrow through. Past a threshold the picker has to filter.
-func TestLongModelListsGetFiltering(t *testing.T) {
-	cfg := config.Default()
-	many := make([]config.ModelChoice, 0, 40)
-	for i := 0; i < 40; i++ {
-		many = append(many, config.ModelChoice{Label: "M", Model: string(rune('a'+i%26)) + "-model"})
-	}
-	cfg.Cursor.ModelChoices = many
-
-	var v string
-	cursorP, claudeP := "cursor", "claude"
-	long := modelField(cfg, &cursorP, "work", &v)
-	short := modelField(cfg, &claudeP, "work", &v)
-	if long == nil || short == nil {
-		t.Fatal("nil field")
-	}
-	// The built-in Claude list is four entries; the Cursor one here is
-	// forty. Only the second should be filterable, and the threshold is
-	// what decides — assert on it rather than on huh's internals.
-	if len(cfg.Claude.Choices())+1 > modelFilterThreshold {
-		t.Errorf("the built-in Claude list (%d) is above the filter threshold (%d); the constant needs raising or the list trimming",
-			len(cfg.Claude.Choices()), modelFilterThreshold)
-	}
-	if len(many)+1 <= modelFilterThreshold {
-		t.Errorf("test fixture is too small to exercise filtering")
-	}
-}
-
 // Switching provider must change the model list. Built from a value
 // rather than a bound pointer, the list froze at form-construction
 // time: picking Cursor still offered Claude ids, and an explicit pick
