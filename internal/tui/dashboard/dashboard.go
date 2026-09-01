@@ -31,6 +31,27 @@ import (
 // enough to keep CPU near-idle.
 const pollInterval = 1 * time.Second
 
+// detailTTL is how long the git-derived halves of a detail panel —
+// the changed-file list and the commit log — stay good for.
+//
+// Unlike the daemon state the 1s poll reads (a local socket read),
+// gatherDetail shells out to git — three processes per repo — so
+// riding the poll tick meant ~180 git spawns a minute per repo for
+// as long as the dashboard sat open. A file list and a commit log
+// are reference material, not a live signal: a minute stale reads
+// the same as live, and a cursor move or `r` refreshes at once.
+//
+// Only those two halves are cached. Everything else the panel draws
+// (status, idle, usage, the action hints) is re-pointed at the live
+// track on every poll — see refreshDetailIfStale.
+const detailTTL = 60 * time.Second
+
+// detailRetryTTL is the shorter window a gather that hit a git error
+// or timeout is held for. Without it one 3s context timeout on a cold
+// repo would pin an empty panel on screen for a full detailTTL, where
+// the old per-tick gather healed on the next tick.
+const detailRetryTTL = 5 * time.Second
+
 // styles holds all lipgloss styles. Centralized so a future theme
 // switch is a single edit.
 type styles struct {
@@ -158,9 +179,17 @@ type model struct {
 	proxyCursor int
 
 	// detail is the lazily-refreshed extra info shown below the
-	// table for whatever row the cursor's on. Refreshed every
-	// poll; cleared when there are no tracks.
-	detail *detail
+	// table for whatever row the cursor's on. Cleared when there
+	// are no tracks.
+	//
+	// detailID is the track the git halves were gathered for and
+	// detailGoodUntil is when they expire. A cursor move onto a
+	// different track re-gathers at once; sitting still re-gathers
+	// only on expiry, because it costs git subprocesses (see
+	// detailTTL).
+	detail          *detail
+	detailID        string
+	detailGoodUntil time.Time
 
 	// statusMsg is a transient one-line message for operation
 	// feedback (e.g., a failed resume). Unlike m.err it does not
@@ -222,16 +251,62 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.poll(), tickEvery())
 }
 
-// refreshDetail re-runs gatherDetail for the currently-highlighted
+// refreshDetail re-gathers the panel for the currently-highlighted
 // track, or clears m.detail when there's nothing selected. Called
-// after every cursor move and on each daemon-state poll.
+// after every cursor move, where the user is asking for this
+// track's detail and must not wait for a TTL.
 func (m *model) refreshDetail() {
 	if len(m.tracks) == 0 || m.cursor >= len(m.tracks) {
-		m.detail = nil
+		m.detail, m.detailID, m.detailGoodUntil = nil, "", time.Time{}
 		return
 	}
-	d := gatherDetail(m.cfg, m.tracks[m.cursor])
-	m.detail = &d
+	t := m.tracks[m.cursor]
+	// Whether the gather we're replacing already failed. detailRetryTTL
+	// is for a transient stumble — a cold repo, a 3s timeout — so only
+	// the first failure earns the short window. A repo that fails every
+	// time (a finished track whose worktree the daemon removed) would
+	// otherwise re-spawn git every 5s for as long as the cursor sits on
+	// it, and that failure never heals.
+	failedBefore := m.detail != nil && m.detailID == t.ID && m.detail.incomplete
+
+	d := gatherDetail(m.cfg, t)
+	ttl := detailTTL
+	if d.incomplete && !failedBefore {
+		ttl = detailRetryTTL
+	}
+	m.detail, m.detailID, m.detailGoodUntil = &d, t.ID, time.Now().Add(ttl)
+}
+
+// refreshDetailIfStale is the poll-tick path. It re-gathers only
+// when the selection moved to a track we haven't gathered, or when
+// the cached git halves have expired — so an idle dashboard shells
+// out to git once a minute instead of once a second.
+//
+// On a cache hit it still re-points detail.track at the freshly
+// polled record. The panel renders status, idle, token usage and
+// the INTERRUPTED / DRAFT / IN REVIEW hints from that field, and the
+// table row right above it is drawn from live state — a frozen copy
+// would have the two disagreeing for up to a minute, and would show
+// "press R to reopen" on a track the user just resumed.
+func (m *model) refreshDetailIfStale() {
+	if len(m.tracks) == 0 || m.cursor >= len(m.tracks) {
+		m.detail, m.detailID, m.detailGoodUntil = nil, "", time.Time{}
+		return
+	}
+	t := m.tracks[m.cursor]
+	if m.detail != nil && m.detailID == t.ID && time.Now().Before(m.detailGoodUntil) {
+		m.detail.track = t
+		return
+	}
+	m.refreshDetail()
+}
+
+// invalidateDetail expires the cached git halves so the next poll
+// re-gathers them. The `r` key is the user asking for exactly that,
+// and a cursor move can't serve as the escape hatch when the cursor
+// is already on the row they want refreshed.
+func (m *model) invalidateDetail() {
+	m.detailGoodUntil = time.Time{}
 }
 
 func tickEvery() tea.Cmd {
@@ -428,6 +503,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "r":
+			m.invalidateDetail()
 			return m, m.poll()
 		case "R":
 			// Resume the highlighted track: anything with no Claude behind
@@ -492,12 +568,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < 0 {
 				m.cursor = 0
 			}
-			m.refreshDetail()
+			m.refreshDetailIfStale()
 		}
 	case resumeResult:
 		if msg.err != nil {
 			m.statusMsg = "resume failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
+			m.invalidateDetail()
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
 		}
 		return m, m.poll()
@@ -505,6 +582,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = "launch failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
+			// A just-launched draft has worktrees the cached (empty)
+			// columns predate.
+			m.invalidateDetail()
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
 		}
 		return m, m.poll()
