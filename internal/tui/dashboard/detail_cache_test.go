@@ -135,6 +135,9 @@ func TestRefreshDetailRetriesAnIncompleteGatherSooner(t *testing.T) {
 	if m.detailGoodUntil.After(time.Now().Add(detailRetryTTL)) {
 		t.Errorf("an incomplete gather was held past the retry window: %v", m.detailGoodUntil)
 	}
+	if !m.detailGoodUntil.After(time.Now()) {
+		t.Error("an incomplete gather was given no retry window at all")
+	}
 }
 
 // A repo that fails every time — a finished track whose worktree the

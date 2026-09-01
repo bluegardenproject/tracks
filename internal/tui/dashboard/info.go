@@ -108,8 +108,8 @@ func (m *model) renderDetail(d detail, width, maxHeight int) string {
 	if colWidth < 14 {
 		colWidth = 14
 	}
-	commitsCol := m.renderCommitsSection(d.commits, colWidth)
-	changesCol := m.renderChangesSection(d.files, colWidth)
+	commitsCol := m.renderCommitsSection(d.commits, d.incomplete, colWidth)
+	changesCol := m.renderChangesSection(d.files, d.incomplete, colWidth)
 	prCol := m.renderPRSection(d.track, colWidth)
 
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -248,12 +248,12 @@ func (m *model) renderUsageMeta(t state.Track) string {
 }
 
 // renderCommitsSection: short list of commits beyond base.
-func (m *model) renderCommitsSection(commits []string, w int) string {
+func (m *model) renderCommitsSection(commits []string, incomplete bool, w int) string {
 	lines := []string{
 		m.styles.sectionHdr.Render(fmt.Sprintf("COMMITS (%d)", len(commits))),
 	}
 	if len(commits) == 0 {
-		lines = append(lines, m.styles.dim.Render("  (none yet)"))
+		lines = append(lines, m.styles.dim.Render(emptyReason(incomplete, "  (none yet)")))
 	} else {
 		const max = 6
 		shown := commits
@@ -271,10 +271,10 @@ func (m *model) renderCommitsSection(commits []string, w int) string {
 }
 
 // renderChangesSection: the first few changed files.
-func (m *model) renderChangesSection(files []string, w int) string {
+func (m *model) renderChangesSection(files []string, incomplete bool, w int) string {
 	lines := []string{m.styles.sectionHdr.Render("CHANGES")}
 	if len(files) == 0 {
-		lines = append(lines, m.styles.dim.Render("  (no diff yet)"))
+		lines = append(lines, m.styles.dim.Render(emptyReason(incomplete, "  (no diff yet)")))
 	} else {
 		const max = 6
 		shown := files
@@ -289,6 +289,18 @@ func (m *model) renderChangesSection(files []string, w int) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// emptyReason picks the placeholder for an empty column. A gather
+// that errored knows it read nothing rather than that there is
+// nothing, and must say so: the cache holds a failed read for up to
+// detailTTL, so claiming "nothing yet" would be wrong on screen for
+// a minute rather than for one tick.
+func emptyReason(incomplete bool, nothingYet string) string {
+	if incomplete {
+		return "  (couldn't read)"
+	}
+	return nothingYet
 }
 
 // renderPRSection: one block per pull request the track opened — URL,

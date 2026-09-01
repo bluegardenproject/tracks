@@ -574,6 +574,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = "resume failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
+			// Resume re-attaches a worktree the cached columns may
+			// predate. The track half is already live via the
+			// re-point; this is only about the git halves.
 			m.invalidateDetail()
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
 		}
@@ -582,9 +585,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = "launch failed: " + msg.err.Error()
 		} else if msg.windowName != "" {
-			// A just-launched draft has worktrees the cached (empty)
-			// columns predate.
-			m.invalidateDetail()
+			// No invalidation needed: launch mints a new track ID, so
+			// the next poll re-gathers on the ID mismatch anyway.
 			_ = m.tmux.SelectWindow(m.cfg.Tmux.SessionName, msg.windowName)
 		}
 		return m, m.poll()
