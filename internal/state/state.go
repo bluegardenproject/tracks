@@ -227,22 +227,6 @@ type TrackRepo struct {
 	Branch string `json:"branch,omitempty"`
 }
 
-// Changes is the diff summary the dashboard's detail panel shows for
-// the selected track. Summed across all worktrees the track owns, so a
-// cross-repo change reads as one figure.
-type Changes struct {
-	Files      int `json:"files,omitempty"`
-	Insertions int `json:"insertions,omitempty"`
-	Deletions  int `json:"deletions,omitempty"`
-}
-
-// IsZero reports whether this Changes value carries no signal
-// (every field is zero). Used by the detail panel to decide whether
-// there is a diff worth rendering.
-func (c Changes) IsZero() bool {
-	return c.Files == 0 && c.Insertions == 0 && c.Deletions == 0
-}
-
 // Usage is the token spend + USD cost of a track, summed from Claude
 // Code's session transcript by internal/usage. Token counts are the
 // *billed* sums across every API call — InputTokens re-counts the
@@ -501,13 +485,6 @@ type Track struct {
 	// full prompt — question + options — so the dashboard can
 	// render it as the highlight, not just an arbitrary tail.
 	AwaitingInput bool `json:"awaiting_input,omitempty"`
-
-	// Changes is the diff summary (files / insertions / deletions)
-	// between the track's branch and its base, plus uncommitted
-	// edits in the worktree. Refreshed by the supervisor every
-	// poll. Zero values mean nothing produced yet or the worktree
-	// is gone.
-	Changes Changes `json:"changes,omitempty"`
 
 	// SessionID is the UUID passed to `claude --session-id` at spawn.
 	// Lets the daemon find this track's transcript under
