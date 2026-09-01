@@ -46,7 +46,6 @@ type styles struct {
 	slug       lipgloss.Style
 	repo       lipgloss.Style
 	insertions lipgloss.Style
-	deletions  lipgloss.Style
 	count      lipgloss.Style
 	cost       lipgloss.Style
 	model      lipgloss.Style
@@ -102,7 +101,6 @@ func defaultStyles() styles {
 		slug:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
 		repo:       lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
 		insertions: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		deletions:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		count:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 		cost:       lipgloss.NewStyle().Foreground(lipgloss.Color("78")),
 		// Muted blue — the model is context, not a signal to act on, so it

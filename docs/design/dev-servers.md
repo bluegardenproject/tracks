@@ -44,7 +44,7 @@ open-sourceable.
 Current state (for reference):
 - One long-running process per track: Claude, in a tmux pane.
 - Supervisor polls every 2s: PID liveness, sentinel file, `tmux capture-pane`
-  for "waiting", diff shortstat for `Changes`, scans pane for `TRACKS_PR_URL=`.
+  for "waiting", current branch per repo, scans pane for `TRACKS_PR_URL=`.
 - `notify` (macOS notifications + bell) on status transitions.
 - Dashboard reads `state.json`.
 
