@@ -49,11 +49,14 @@ import (
 // migrateTrack). A v3 file simply carries no Proxies, which loads as an
 // empty list; a v4 file's flat review fields are folded in at decode
 // time.
-// Three on-disk changes since v5 deliberately did NOT bump this, each
+// Four on-disk changes since v5 deliberately did NOT bump this, each
 // documented at its field: the observed-model keys were renamed (derived
 // data, refolded on decode), RequestedModel was added (absent reads as
 // "no preference"), and so was WindowOpen (absent reads as false, which
-// only means the track isn't reopened). A bump stops an older binary
+// only means the track isn't reopened). The fourth has no field left to
+// document it at: Changes/"changes" was removed. It was derived too, so
+// a stale key is ignored on load and dropped on the next save, and an
+// older binary re-derives nothing from its absence. A bump stops an older binary
 // starting at all, which is the heavier cost of the two — worth paying
 // here, where the missing field silently misreports a live track as
 // finished with, and a finished one as live.
