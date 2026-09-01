@@ -127,12 +127,17 @@ func (c *WorktreeClient) UnsavedWork(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-// ChangedFiles returns the list of files touched between base..HEAD
+// ChangedFiles returns the list of files this branch touched
 // (committed) plus the working tree's uncommitted changes. Each
 // entry is `<status>\t<path>` (e.g. "M\tfoo.go"). Used by the
 // dashboard's info modal.
+//
+// The committed half uses the three-dot `base...HEAD`, which diffs
+// from the merge-base. Two dots would be a plain two-endpoint diff
+// — every commit that landed on base after we branched would show
+// up here too, inverted (someone else's new file reading as `D`).
 func (c *WorktreeClient) ChangedFiles(ctx context.Context, base string) ([]string, error) {
-	committedOut, _, err := c.Runner.Run(ctx, "diff", "--name-status", base+"..HEAD")
+	committedOut, _, err := c.Runner.Run(ctx, "diff", "--name-status", base+"...HEAD")
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +157,11 @@ func (c *WorktreeClient) ChangedFiles(ctx context.Context, base string) ([]strin
 
 // CommitLog returns the short-form commit log between base..HEAD.
 // Each entry is "<sha7> <subject>".
+//
+// Two dots here is correct and is NOT the bug ChangedFiles had:
+// `log A..B` already means "reachable from B, not A", the same set
+// `diff A...B` shows. Three dots would be the symmetric difference,
+// which would pull in the base's own commits.
 func (c *WorktreeClient) CommitLog(ctx context.Context, base string) ([]string, error) {
 	out, _, err := c.Runner.Run(ctx, "log", "--oneline", base+"..HEAD")
 	if err != nil {
