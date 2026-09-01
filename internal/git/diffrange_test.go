@@ -10,12 +10,11 @@ import (
 // assert on the revision range a method asked git for.
 type recordingRunner struct {
 	argv [][]string
-	out  string
 }
 
 func (r *recordingRunner) Run(ctx context.Context, args ...string) (string, string, error) {
 	r.argv = append(r.argv, args)
-	return r.out, "", nil
+	return "", "", nil
 }
 
 // The committed half must use three dots. Two dots is a plain

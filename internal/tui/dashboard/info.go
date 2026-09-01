@@ -14,17 +14,27 @@ import (
 )
 
 // detail is the data the inline detail panel renders for the
-// currently selected track. Populated by the dashboard's poll
-// loop whenever the cursor lands on a row.
+// currently selected track.
+//
+// The two git-derived halves are gathered on a TTL (see detailTTL);
+// track is re-pointed at the live record on every poll, because the
+// panel renders status, idle, usage and the action hints from it and
+// those must not lag the table row directly above them.
 type detail struct {
 	track   state.Track
 	files   []string // "<repo>: <status>\t<path>"
 	commits []string // "<repo>: <sha7> <subject>"
+	// incomplete records that a git call failed or timed out, so the
+	// empty halves below mean "couldn't read" rather than "nothing
+	// yet". Cached for a short retry window instead of a full TTL.
+	incomplete bool
 }
 
 // gatherDetail walks the track's worktrees and pulls the changed
-// files + commit log for each. Fast enough to run on every poll
-// tick (~2s). This panel is the only place they're shown.
+// files + commit log for each — three git subprocesses per repo,
+// so it is rate-limited by detailTTL rather than run on the poll
+// tick. This panel is the only place they're shown; nothing here
+// is persisted.
 func gatherDetail(cfg config.Config, t state.Track) detail {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -45,11 +55,15 @@ func gatherDetail(cfg config.Config, t state.Track) detail {
 			for _, f := range files {
 				d.files = append(d.files, tr.Name+": "+f)
 			}
+		} else {
+			d.incomplete = true
 		}
 		if commits, err := c.CommitLog(ctx, base); err == nil {
 			for _, line := range commits {
 				d.commits = append(d.commits, tr.Name+": "+line)
 			}
+		} else {
+			d.incomplete = true
 		}
 	}
 	return d

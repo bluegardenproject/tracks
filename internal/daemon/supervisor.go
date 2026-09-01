@@ -273,12 +273,12 @@ func (s *Server) watchTrackProcess(ctx context.Context, sup *supervisor) {
 				s.retireOrReview(sup)
 				return
 			}
-			s.refreshRunningStatus(tm, sup)
+			tick++
+			s.refreshRunningStatus(tm, sup, shouldRefreshBranches(tick))
 			// Token usage changes far slower than the pane, and
 			// parsing the transcript is heavier than a capture-pane,
 			// so refresh it on a coarser cadence (~10s) and skip
 			// entirely when the transcript file is unchanged.
-			tick++
 			if tick%usageRefreshEveryTicks == 0 {
 				s.refreshUsage(sup)
 			}
@@ -465,6 +465,28 @@ func (s *Server) enterPRReview(sup *supervisor) {
 	}
 }
 
+// branchRefreshEveryTicks is how many 2s poll ticks pass between
+// branch reads (~10s). See refreshRunningStatus for why they don't
+// need to ride every tick.
+//
+// branchRefreshTickOffset staggers them off the usage refresh, which
+// runs on the same divisor. Both are the heavy jobs in this loop — N
+// git subprocesses and a transcript parse — and a ticker drops ticks
+// rather than queueing them if one slot overruns.
+const (
+	branchRefreshEveryTicks = 5
+	branchRefreshTickOffset = 2
+)
+
+// shouldRefreshBranches reports whether this poll tick is one of the
+// ~10s ticks that re-reads each repo's branch. Split out so the
+// stagger against the usage refresh is testable — it is otherwise a
+// claim living only in a comment, which a later edit to either
+// constant would silently break.
+func shouldRefreshBranches(tick int) bool {
+	return tick%branchRefreshEveryTicks == branchRefreshTickOffset
+}
+
 // usageRefreshEveryTicks is how many 2s poll ticks pass between token
 // usage refreshes (~10s).
 const usageRefreshEveryTicks = 5
@@ -599,7 +621,7 @@ func nextLiveStatus(current state.Status, idle, newPR bool) state.Status {
 //
 // Errors from capture-pane are swallowed — they shouldn't bring
 // down the supervisor.
-func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
+func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor, withBranches bool) {
 	snapshot, err := tm.CapturePane(s.config().Tmux.SessionName, sup.windowName)
 	if err != nil {
 		return
@@ -611,7 +633,15 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	}
 	snippet, awaiting := paneSnippet(snapshot)
 	prURLs := scanForPRURLs(snapshot)
-	updatedRepos, rolledUpBranch := s.refreshBranches(t)
+	// Reading the branch costs a git subprocess per repo, and what it
+	// watches for — Claude replacing the `tracks/<id>` placeholder with
+	// a real branch name — happens once in a track's life. Carrying the
+	// stored values through on the other ticks leaves every comparison
+	// below equal, so a skipped read is not a write.
+	updatedRepos, rolledUpBranch := t.Repos, t.Branch
+	if withBranches {
+		updatedRepos, rolledUpBranch = s.refreshBranches(t)
+	}
 
 	// Apply the observed state atomically so we never clobber a field we
 	// don't own (e.g. Services written by a concurrent service start).
