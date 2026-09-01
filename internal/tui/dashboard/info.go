@@ -24,8 +24,7 @@ type detail struct {
 
 // gatherDetail walks the track's worktrees and pulls the changed
 // files + commit log for each. Fast enough to run on every poll
-// tick (~2s). The supervisor's own poll keeps state.Changes current
-// independently; this panel is the only place either is shown.
+// tick (~2s). This panel is the only place they're shown.
 func gatherDetail(cfg config.Config, t state.Track) detail {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -96,7 +95,7 @@ func (m *model) renderDetail(d detail, width, maxHeight int) string {
 		colWidth = 14
 	}
 	commitsCol := m.renderCommitsSection(d.commits, colWidth)
-	changesCol := m.renderChangesSection(d.track, d.files, colWidth)
+	changesCol := m.renderChangesSection(d.files, colWidth)
 	prCol := m.renderPRSection(d.track, colWidth)
 
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -257,16 +256,9 @@ func (m *model) renderCommitsSection(commits []string, w int) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderChangesSection: shortstat + first few changed files.
-func (m *model) renderChangesSection(t state.Track, files []string, w int) string {
-	lines := []string{
-		m.styles.sectionHdr.Render(fmt.Sprintf("CHANGES (%d files)", t.Changes.Files)),
-	}
-	if !t.Changes.IsZero() {
-		lines = append(lines,
-			m.styles.insertions.Render(fmt.Sprintf("+%d", t.Changes.Insertions))+
-				" "+m.styles.deletions.Render(fmt.Sprintf("-%d", t.Changes.Deletions)))
-	}
+// renderChangesSection: the first few changed files.
+func (m *model) renderChangesSection(files []string, w int) string {
+	lines := []string{m.styles.sectionHdr.Render("CHANGES")}
 	if len(files) == 0 {
 		lines = append(lines, m.styles.dim.Render("  (no diff yet)"))
 	} else {

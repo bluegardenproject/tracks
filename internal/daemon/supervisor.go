@@ -611,7 +611,6 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 	}
 	snippet, awaiting := paneSnippet(snapshot)
 	prURLs := scanForPRURLs(snapshot)
-	changes := s.aggregateChanges(t)
 	updatedRepos, rolledUpBranch := s.refreshBranches(t)
 
 	// Apply the observed state atomically so we never clobber a field we
@@ -631,7 +630,6 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 			snippet == t.LastOutput &&
 			awaiting == t.AwaitingInput &&
 			len(addedPRs) == 0 &&
-			changes == t.Changes &&
 			rolledUpBranch == t.Branch &&
 			reposBranchesEqual(updatedRepos, t.Repos) {
 			newStatus = t.Status
@@ -640,7 +638,6 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor) {
 		t.Status = target
 		t.LastOutput = snippet
 		t.AwaitingInput = awaiting
-		t.Changes = changes
 		t.Repos = updatedRepos
 		t.Branch = rolledUpBranch
 		for _, url := range addedPRs {
@@ -771,33 +768,6 @@ func reposBranchesEqual(a, b []state.TrackRepo) bool {
 		}
 	}
 	return true
-}
-
-// aggregateChanges sums ShortStat results across every worktree
-// the track owns. Cross-repo tracks then read as a single row in
-// the dashboard — same shape as the `Repos` field.
-//
-// Uses its own short-deadline context so a stuck git invocation
-// can't wedge the supervisor's 2-second poll loop.
-func (s *Server) aggregateChanges(t state.Track) state.Changes {
-	// Worktree-less tracks don't own worktrees — nothing to diff.
-	if t.Kind.Worktreeless() {
-		return state.Changes{}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	var agg state.Changes
-	for _, tr := range t.Repos {
-		repo, ok := s.config().RepoByName(tr.Name)
-		if !ok {
-			continue
-		}
-		stat := git.NewWorktreeClient(tr.Path).ShortStat(ctx, "origin/"+repo.Base)
-		agg.Files += stat.Files
-		agg.Insertions += stat.Insertions
-		agg.Deletions += stat.Deletions
-	}
-	return agg
 }
 
 // scanForPRURLs pulls every URL out of the TRACKS_PR_URL=<url> markers
