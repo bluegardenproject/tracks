@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.1.0](https://github.com/bluegardenproject/tracks/compare/v1.0.1...v1.1.0) (2026-09-02)
+
+
+### Features
+
+* **cursor:** don't cost a Cursor track against Anthropic rates ([3a69492](https://github.com/bluegardenproject/tracks/commit/3a6949228722c7c58395f67128159a1f3325cfb9))
+* **cursor:** install the tracks rule into ~/.cursor/rules ([ef1a6ce](https://github.com/bluegardenproject/tracks/commit/ef1a6cee9a9f41d1942b4541309982c30e0b601e))
+* **cursor:** launch Cursor Agent as a track's provider ([ed272f6](https://github.com/bluegardenproject/tracks/commit/ed272f60f89efd0d3551a8faee91367b673b24fe))
+* **cursor:** review with a second agent, not with itself ([f1f1bea](https://github.com/bluegardenproject/tracks/commit/f1f1bead04ea5887a8dc4f078ba9726206628572))
+* **tracks:** carry a provider on every track ([b2ccf2c](https://github.com/bluegardenproject/tracks/commit/b2ccf2ca85b431f8e4eda56fbca3cc26e558cb70))
+* **tracks:** launch the provider the track was created with ([f3a6ecf](https://github.com/bluegardenproject/tracks/commit/f3a6ecfe66fdbe87ba3ea67c51028b73f2ca0327))
+* **tracks:** pick a provider when creating a track ([b2e3955](https://github.com/bluegardenproject/tracks/commit/b2e395562292e756f6c92f57499220fb1bdee750))
+* **tracks:** reopen every track you had open, not just the running ones ([4940eaa](https://github.com/bluegardenproject/tracks/commit/4940eaae77b47281ed7bf495de1fc27c289e7e6f))
+
+
+### Bug Fixes
+
+* **cursor:** rune-safe truncation, and drop a constant nothing reads ([936b1a3](https://github.com/bluegardenproject/tracks/commit/936b1a369638263da343d8844760e40ef01c92a9))
+* **daemon:** never overwrite a home-directory file tracks doesn't own ([9ab3d20](https://github.com/bluegardenproject/tracks/commit/9ab3d209c6572e9532cea102bfa888e7496eda33))
+* **tracks:** diff the changed-file list from the merge-base ([fbbf16f](https://github.com/bluegardenproject/tracks/commit/fbbf16fbad9e3922713709e8922722e480084a67))
+* **tracks:** keep a PR-open track reachable across a restart ([8221e4e](https://github.com/bluegardenproject/tracks/commit/8221e4e3cb7d077be2fe08572d9672fb404b0389))
+* **tracks:** say when the detail panel couldn't read a repo ([62c06bf](https://github.com/bluegardenproject/tracks/commit/62c06bf5025ef7b4da6b1b6b15fb62a5d543227b))
+
+
+### Performance Improvements
+
+* **tracks:** rate-limit the git polling behind the dashboard ([94259fd](https://github.com/bluegardenproject/tracks/commit/94259fdb6c0f44a09f82a7f3d055aa210d28bbbd))
+
+
+### Code Refactoring
+
+* **agent:** share the pane scaffolding between providers ([6a3bdcd](https://github.com/bluegardenproject/tracks/commit/6a3bdcdd2ea11a6ae4e2e129715e2417a2ccd3eb))
+* **shellx:** one shell-quoting implementation, two named behaviours ([d9867cb](https://github.com/bluegardenproject/tracks/commit/d9867cbd660ad3a666f36124089da76c1a0f025b))
+* **shellx:** quote globs, and stop the test passing by accident ([73ed28f](https://github.com/bluegardenproject/tracks/commit/73ed28fce09fb6fe4c9bdf2942a31056e134af3b))
+* **tracks:** clean up the diffstat leftovers ([621e196](https://github.com/bluegardenproject/tracks/commit/621e196ef106f8b9affa315c78f9d62c3d2c73ee))
+* **tracks:** drop the per-tick diffstat ([d770f13](https://github.com/bluegardenproject/tracks/commit/d770f138e807973cd837aa4770a429e074bfe056))
+
+
+### Documentation
+
+* **roadmap:** the shellQuote half of "shared helpers" is done ([5f54d1e](https://github.com/bluegardenproject/tracks/commit/5f54d1e672b604085cc2e7fe7af27b0cb799fb9b))
+
 ## [1.0.1](https://github.com/bluegardenproject/tracks/compare/v1.0.0...v1.0.1) (2026-08-27)
 
 
