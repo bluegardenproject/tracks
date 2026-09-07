@@ -334,8 +334,14 @@ func expectedDigest(ctx context.Context, url, name string) (string, error) {
 
 // verifyAssetURL rejects a download URL that isn't an HTTPS URL on
 // GitHub. Both URLs Apply uses come out of the release JSON, so this is
-// what keeps a tampered or redirected response from choosing the host
-// that supplies the checksums — the file every other check trusts.
+// what keeps a tampered response from naming the host that supplies the
+// checksums — the file every other check trusts.
+//
+// First hop only: the client follows redirects with no host policy, and
+// GitHub does redirect assets (to objects.githubusercontent.com), so this
+// pins where we *ask*, not where we land. The digest makes that moot for
+// the binary; for the checksums file it rests on GitHub not redirecting
+// maliciously.
 //
 // A var so tests can serve a release from a local httptest server.
 var verifyAssetURL = func(raw string) error {

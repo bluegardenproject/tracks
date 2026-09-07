@@ -20,7 +20,14 @@ build-all:
 	@CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-linux-arm64 .
 	@CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-darwin-amd64 .
 	@CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)-darwin-arm64 .
-	@echo "Built all platform binaries in dist/"
+	@# `tracks update` refuses an asset SHA256SUMS doesn't vouch for, so a
+	@# release cut by hand from here needs the same file the workflow writes.
+	@cd dist && if command -v sha256sum >/dev/null 2>&1; then \
+		sha256sum $(BINARY_NAME)-* > SHA256SUMS; \
+	else \
+		shasum -a 256 $(BINARY_NAME)-* > SHA256SUMS; \
+	fi
+	@echo "Built all platform binaries + SHA256SUMS in dist/"
 
 release: clean build-all
 	@echo "Release artifacts ready in dist/:"

@@ -6,15 +6,15 @@ import (
 )
 
 func TestStartOrderDependenciesFirst(t *testing.T) {
-	// live-app depends on lld, so lld must come first.
-	names := []string{"live-app", "lld"}
-	deps := map[string][]string{"live-app": {"lld"}}
+	// live-app depends on desktop, so desktop must come first.
+	names := []string{"live-app", "desktop"}
+	deps := map[string][]string{"live-app": {"desktop"}}
 	order, err := StartOrder(names, deps)
 	if err != nil {
 		t.Fatalf("StartOrder: %v", err)
 	}
-	if pos(order, "lld") > pos(order, "live-app") {
-		t.Errorf("lld should precede live-app, got %v", order)
+	if pos(order, "desktop") > pos(order, "live-app") {
+		t.Errorf("desktop should precede live-app, got %v", order)
 	}
 	if len(order) != 2 {
 		t.Errorf("expected both services, got %v", order)

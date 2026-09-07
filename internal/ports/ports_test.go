@@ -3,7 +3,7 @@ package ports
 import "testing"
 
 func TestAllocateDeterministic(t *testing.T) {
-	names := []string{"lld", "live-app"}
+	names := []string{"desktop", "live-app"}
 	a, err := Allocate("track-abc", names, nil)
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)

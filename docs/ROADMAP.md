@@ -108,8 +108,9 @@ problem on every upgrade.
 - [x] **Install script** — `scripts/install.sh` (curl | bash) detects OS/arch,
       downloads the matching release asset, and installs to `~/.tracks` with
       PATH injection (mirrors the stac-man installer). `scripts/uninstall.sh`
-      does the reverse. *No checksum yet* — stac-man doesn't verify one either;
-      left as a possible follow-up.
+      does the reverse. The download is checked against the release's
+      `SHA256SUMS`; a release that publishes none only warns, since releases
+      predating that file exist.
 - [x] **Versioning** — semver + git tags via release-please; tagged builds stamp
       `main.Version`/`BuildTime` through the existing `LDFLAGS`, and the
       `x-release-please-version` marker in `main.go` is bumped by the config's
@@ -131,8 +132,9 @@ problem on every upgrade.
       once before the swap so a truncated or wrong-platform asset can't replace a
       working install. The daemon is deliberately *not* bounced from the update
       itself (that would tear down live tracks); the confirm says so, and names
-      how many tracks the next `tracks` run would interrupt. Still no checksum on
-      the asset — same tradeoff as the installer above.
+      how many tracks the next `tracks` run would interrupt. The asset is
+      verified against the release's `SHA256SUMS` before it is executed or
+      installed, and a release without that file is refused.
 
 ---
 
