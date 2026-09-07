@@ -86,7 +86,6 @@ func sendMacOS(title, body string) {
 	if _, err := exec.LookPath("osascript"); err != nil {
 		return
 	}
-	// AppleScript single-quote escape: ' -> '\''
 	script := "display notification " + quote(body) + " with title " + quote(title)
 	_ = exec.Command("osascript", "-e", script).Run()
 }
@@ -104,8 +103,41 @@ func sendBell() {
 	_, _ = tty.Write([]byte("\a"))
 }
 
-// quote wraps s in AppleScript double-quotes with internal quotes
-// escaped. Used by sendMacOS for both title and body.
+// quote wraps s in AppleScript double-quotes, escaping what AppleScript
+// treats as special inside one.
+//
+// Backslashes go first, and that order is the whole point: escaping only
+// the quotes left `\"` in a title as `\\"`, which AppleScript reads as a
+// literal backslash followed by the string's closing quote. The rest of
+// the title then parsed as code — and this string is handed straight to
+// `osascript -e`.
+//
+// The text is not always the user's own typing: bodies and titles are
+// built from track slugs (which for a doc review are derived from a
+// filename on disk), branch names, PR URLs, service names and log paths.
+// git forbids a backslash in a refname but not a double quote, and a
+// filename may contain either.
+//
+// Newlines and tabs get escaped for a duller reason: AppleScript has no
+// multi-line string literal, so a raw newline is a syntax error and the
+// notification silently never arrives. Control characters it has no
+// escape for are dropped — NUL above all, since exec.Command refuses an
+// argument containing one, which would lose the notification just as
+// quietly.
 func quote(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n', r == '\r', r == '\t':
+			return r
+		case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
+			return -1
+		}
+		return r
+	}, s)
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return `"` + s + `"`
 }
