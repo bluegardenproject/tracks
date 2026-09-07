@@ -46,10 +46,36 @@ func TestScanForPRURLs(t *testing.T) {
 		{"none alongside a real url",
 			"TRACKS_PR_URL=none\nTRACKS_PR_URL=https://github.com/o/r/pull/4\n",
 			[]string{"https://github.com/o/r/pull/4"}},
+		// The marker is scanned out of a pane the agent doesn't fully
+		// control, and every URL adopted here gets polled with `gh pr
+		// view` and shown as one of the track's PRs.
+		{"a non-github host is not adopted",
+			"TRACKS_PR_URL=https://evil.test/o/r/pull/1\n",
+			nil},
+		{"a host that merely ends in github.com is not adopted",
+			"TRACKS_PR_URL=https://github.com.evil.test/o/r/pull/1\n",
+			nil},
+		{"a github subdomain is fine",
+			"TRACKS_PR_URL=https://www.github.com/o/r/pull/8\n",
+			[]string{"https://www.github.com/o/r/pull/8"}},
+		{"a real url still wins after a rejected one",
+			"TRACKS_PR_URL=https://evil.test/x\nTRACKS_PR_URL=https://github.com/o/r/pull/7\n",
+			[]string{"https://github.com/o/r/pull/7"}},
+		// An escape can't ride along into state.json or the dashboard:
+		// the capture stops at it. The URL in front of it is still a
+		// real PR, so it is kept rather than the whole line discarded.
+		{"an escape is excluded from the captured url",
+			"TRACKS_PR_URL=https://github.com/o/r/pull/1\x1b[2Jgarbage\n",
+			[]string{"https://github.com/o/r/pull/1"}},
+		// U+009B is a CSI introducer on terminals that still decode it,
+		// and Go's `\s`/`\x7f` classes don't reach it.
+		{"a c1 introducer is excluded from the captured url",
+			"TRACKS_PR_URL=https://github.com/o/r/pull/2\u009b2Jgarbage\n",
+			[]string{"https://github.com/o/r/pull/2"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := scanForPRURLs(c.snapshot)
+			got, _ := scanForPRURLs(c.snapshot)
 			if len(got) != len(c.want) {
 				t.Fatalf("scanForPRURLs() = %v, want %v", got, c.want)
 			}
