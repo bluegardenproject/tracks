@@ -79,7 +79,7 @@ func (m *model) viewProxy() string {
 	}
 
 	if m.err != nil {
-		lines = append(lines, m.styles.dim.Render("daemon unreachable: ")+m.err.Error())
+		lines = append(lines, m.styles.dim.Render("daemon unreachable: ")+stripControl(m.err.Error()))
 	} else if len(rows) == 0 {
 		lines = append(lines, m.styles.dim.Render("no stable ports defined — add one from the menu (Proxy)"))
 	} else {
