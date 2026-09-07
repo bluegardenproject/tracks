@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.1](https://github.com/bluegardenproject/tracks/compare/v1.1.0...v1.1.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **daemon:** only adopt GitHub URLs from the PR marker ([37bc7f1](https://github.com/bluegardenproject/tracks/commit/37bc7f12f01312013ca0494acef12d35bc574f69))
+* **dashboard:** strip control characters from externally-supplied text ([d2e5b20](https://github.com/bluegardenproject/tracks/commit/d2e5b201dcbd211945f717fb633d7f25997089b9))
+* **notify:** escape backslashes before quotes in AppleScript strings ([36d5980](https://github.com/bluegardenproject/tracks/commit/36d59801d63dbf330a270bf3e2e7db6408bf01fe))
+* **update:** finish the de-branding pass and the verify story ([edd40b9](https://github.com/bluegardenproject/tracks/commit/edd40b92bf3fe31115e295526a9b918991588208))
+* **update:** verify a release download before running it ([77668c1](https://github.com/bluegardenproject/tracks/commit/77668c1ba115bd21c6198e7a2f4aad3135b1018a))
+
+
+### Miscellaneous
+
+* drop project-specific references from docs and fixtures ([53b4e13](https://github.com/bluegardenproject/tracks/commit/53b4e1353a5933ed1b6069006f0029191cb100e5))
+
 ## [1.1.0](https://github.com/bluegardenproject/tracks/compare/v1.0.1...v1.1.0) (2026-09-02)
 
 
