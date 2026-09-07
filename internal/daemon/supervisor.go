@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -70,6 +71,11 @@ type supervisor struct {
 	// track's transcript file(s) at the last usage refresh. We skip
 	// re-parsing when it's unchanged, so an idle track costs nothing.
 	lastUsageSig string
+
+	// loggedPRRejects remembers the marker URLs we've already refused,
+	// so a line that lingers in the pane is logged once instead of on
+	// every 2s poll for the life of the track. Guarded by mu.
+	loggedPRRejects map[string]bool
 
 	// servicePanes maps service name to the tmux pane ID running that dev
 	// server in the right column of the track window. The pane *owns* the
@@ -632,7 +638,8 @@ func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor, withBran
 		return
 	}
 	snippet, awaiting := paneSnippet(snapshot)
-	prURLs := scanForPRURLs(snapshot)
+	prURLs, rejectedPRURLs := scanForPRURLs(snapshot)
+	sup.logRejectedPRURLs(rejectedPRURLs)
 	// Reading the branch costs a git subprocess per repo, and what it
 	// watches for — Claude replacing the `tracks/<id>` placeholder with
 	// a real branch name — happens once in a track's life. Carrying the
@@ -746,7 +753,36 @@ func (s *Server) notifyEvent(event, title, body string) {
 // `TRACKS_PR_URL=…`") no longer matches. Since every match is now
 // recorded as its own PR, a false positive would stick around as a PR
 // that gh can never resolve.
-var prURLPattern = regexp.MustCompile(`(?m)^[^A-Za-z]*TRACKS_PR_URL=(https?://\S+|none)`)
+// Control characters are excluded from the URL tail as well: `\S`
+// admits an ESC, and a URL that carries one would be rendered in the
+// dashboard and stored in state.json. The C1 block is named explicitly
+// because Go's `\s` is ASCII-only and `\x7f` stops at DEL — U+009B is
+// a CSI introducer on the terminals that still decode it.
+var prURLPattern = regexp.MustCompile(`(?m)^[^A-Za-z]*TRACKS_PR_URL=(https?://[^\s\x00-\x1f\x7f\x{0080}-\x{009f}]+|none)`)
+
+// prHostAllowed reports whether a scanned marker URL points at GitHub.
+//
+// The marker is emitted by the agent into a pane whose contents it does
+// not fully control: a task prompt, a file it read aloud, or the body of
+// a PR it is reviewing can each put a line in front of this scanner.
+// Every URL that gets adopted is then polled with `gh pr view` every few
+// seconds and shown as one of the track's pull requests, so a host that
+// isn't GitHub has no business being adopted.
+//
+// Rejections are logged rather than dropped silently — a real PR going
+// missing from its track is the failure mode worth being loud about.
+//
+// GitHub Enterprise hosts are not accepted. That matches prURLNumber in
+// handlers.go, which already assumes github.com paths; supporting them
+// is a wider change than a host check.
+func prHostAllowed(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return h == "github.com" || strings.HasSuffix(h, ".github.com")
+}
 
 // refreshBranches re-reads each worktree's current branch via
 // `git branch --show-current` and returns an updated copy of
@@ -800,12 +836,14 @@ func reposBranchesEqual(a, b []state.TrackRepo) bool {
 	return true
 }
 
-// scanForPRURLs pulls every URL out of the TRACKS_PR_URL=<url> markers
+// scanForPRURLs pulls every accepted URL out of the TRACKS_PR_URL=<url> markers
 // in the pane snapshot, de-duplicated and in the order they appear. A
 // track that opens several PRs emits one marker line per PR, and the
 // pane usually still shows the earlier ones. The sentinel "none" and
 // empty values are skipped.
-func scanForPRURLs(snapshot string) []string {
+// The second return is the markers whose host was refused, so the
+// caller can log them once rather than on every poll of the same pane.
+func scanForPRURLs(snapshot string) (accepted, rejected []string) {
 	var out []string
 	seen := make(map[string]bool)
 	for _, m := range prURLPattern.FindAllStringSubmatch(snapshot, -1) {
@@ -817,9 +855,13 @@ func scanForPRURLs(snapshot string) []string {
 			continue
 		}
 		seen[v] = true
+		if !prHostAllowed(v) {
+			rejected = append(rejected, v)
+			continue
+		}
 		out = append(out, v)
 	}
-	return out
+	return out, rejected
 }
 
 // paneSnippet returns a snippet of pane content suitable for the
@@ -1152,4 +1194,30 @@ func (s *Server) teardownTrackServices(trackID string, force bool) {
 	}
 	t.Services = stopPersistedServices(t.Services, force)
 	s.persist(t, "service teardown")
+}
+
+// logRejectedPRURLs logs each refused marker URL once per track. The
+// offending line usually stays in the pane snapshot, so without the
+// memory a single bad marker writes a line to the daemon log every poll
+// for as long as the track lives.
+func (sup *supervisor) logRejectedPRURLs(urls []string) {
+	if len(urls) == 0 {
+		return
+	}
+	sup.mu.Lock()
+	if sup.loggedPRRejects == nil {
+		sup.loggedPRRejects = make(map[string]bool)
+	}
+	fresh := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if sup.loggedPRRejects[u] {
+			continue
+		}
+		sup.loggedPRRejects[u] = true
+		fresh = append(fresh, u)
+	}
+	sup.mu.Unlock()
+	for _, u := range fresh {
+		dlog.Printf("ignoring TRACKS_PR_URL %q on track %s: not a github.com URL", u, sup.trackID)
+	}
 }
