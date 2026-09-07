@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-REPO_NAME="${REPO_NAME:-ledger-live}"
-PRIMARY="$HOME/ledger/$REPO_NAME"
+REPO_NAME="${REPO_NAME:-my-repo}"
+PRIMARY="${PRIMARY:-$HOME/code/$REPO_NAME}"
 BASE_BRANCH="${BASE_BRANCH:-develop}"
 SPIKE_BRANCH="feat/spike-tracks-$(date +%s)"
 WORKTREE_ROOT="$HOME/.local/state/tracks/worktrees/spike"
@@ -35,7 +35,7 @@ echo "Path:    $WORKTREE"
 echo
 
 if [ ! -d "$PRIMARY/.git" ]; then
-  echo "ERROR: $PRIMARY is not a git repo. Set REPO_NAME=<repo> if needed."
+  echo "ERROR: $PRIMARY is not a git repo. Set REPO_NAME=<repo> or PRIMARY=<path>."
   exit 2
 fi
 

@@ -13,9 +13,9 @@ whenever the design shifts.
 
 When Claude makes changes on a branch inside a track worktree, there's no way
 to *run* those changes without releasing/merging them. We want a track to be
-able to spin up the relevant dev servers (Ledger Live Desktop, live apps like
-swap-live-app, and later Ledger Live Mobile) so the work can be exercised
-in-place — first by the human, eventually by Claude itself.
+able to spin up the relevant dev servers (an Electron desktop app,
+embedded web apps, and later a React Native mobile app) so the work can be
+exercised in-place — first by the human, eventually by Claude itself.
 
 Two hard constraints:
 
@@ -29,12 +29,12 @@ Two hard constraints:
 
 > The binary stays **mechanism, never policy.** It learns to run named
 > processes, allocate ports, run hooks, and (later) hand off to autonomous
-> drivers. It never learns anything Ledger-specific — no "metro", no
-> "manifest", no `~/ledger`, no repo names.
+> drivers. It never learns anything project-specific — no "metro", no
+> "manifest", no hard-coded checkout root, no repo names.
 
-Ledger knowledge lives in `config.yaml` + hook scripts, versioned and shared as
-a `tracks-ledger-setup` starter kit. This dissolves the "Ledger-specific vs.
-shareable" tension: deep automation in config/hooks, generic tool stays
+Project knowledge lives in `config.yaml` + hook scripts, versioned and shared
+as a `tracks-<project>-setup` starter kit. This dissolves the
+"project-specific vs. shareable" tension: deep automation in config/hooks, generic tool stays
 open-sourceable.
 
 ---
@@ -62,11 +62,11 @@ Current state (for reference):
    Everything downstream (handoff notification, autonomous driving, dependency
    ordering) depends on this.
 4. **Hook lifecycle** — `pre_start` / `post_start` / `pre_stop`, per service
-   and/or per track. This is where Ledger-specific wiring lives (e.g. patch a
-   live-app manifest URL with the allocated port).
+   and/or per track. This is where project-specific wiring lives (e.g. patch
+   an embedded app's manifest URL with the allocated port).
 5. **Templating** — for cmd/env/hooks: `{{.Port "name"}}`, track id, worktree
    paths, etc.
-6. **Dependency ordering** — `depends_on: [lld]`; honor via ordered
+6. **Dependency ordering** — `depends_on: [desktop]`; honor via ordered
    wait-for-ready. Keep it a simple ordered list, not a DAG, until proven
    necessary.
 
@@ -74,26 +74,26 @@ Current state (for reference):
 
 ```yaml
 repos:
-  - name: ledger-live
-    path: ~/ledger/ledger-live
+  - name: desktop-app
+    path: ~/code/desktop-app
     base: develop
     services:
-      - name: lld                         # Ledger Live Desktop (Electron)
-        cmd: "pnpm dev:lld"
+      - name: desktop                     # Electron desktop app
+        cmd: "pnpm dev:desktop"
         env:
-          PORT: '{{.Port "lld"}}'
+          PORT: '{{.Port "desktop"}}'
         ready:
           log_regex: "compiled successfully"
       - name: live-app
-        cmd: 'pnpm --filter swap dev --port {{.Port "live-app"}}'
+        cmd: 'pnpm --filter live-app dev --port {{.Port "live-app"}}'
         env:
           PORT: '{{.Port "live-app"}}'
         ready:
           port: '{{.Port "live-app"}}'
         post_start:
-          # Ledger-specific manifest patching lives here, NOT in the binary.
+          # Project-specific manifest patching lives here, NOT in the binary.
           - 'scripts/patch-manifest.sh {{.Port "live-app"}}'
-        depends_on: [lld]
+        depends_on: [desktop]
       - name: metro                       # v1b — mobile
         cmd: 'pnpm mobile:start --port {{.Port "metro"}}'
         env:
@@ -112,7 +112,7 @@ the logs; they never *own* the processes.
 
 - **Left ~65% width:** Claude's pane (the main interactive pane, as today).
 - **Right ~35% width:** a column of **viewer panes**, one per running service,
-  each just `tail -f`-ing that service's log file, so LLD / live-app / Metro
+  each just `tail -f`-ing that service's log file, so desktop / live-app / Metro
   logs are visible side-by-side without leaving the window or spawning a
   separate tmux session.
 
@@ -192,18 +192,18 @@ tracks exist, and sidesteps the resource-ceiling question.
 
 ---
 
-## 4. The cross-port wiring problem  *(Ledger-specific → hooks)*
+## 4. The cross-port wiring problem  *(project-specific → hooks)*
 
 Naive port-swapping breaks because the *client* side must know the port too:
 
-- **Live apps** — the dev server port is the easy half. Ledger Live loads a live
-  app from a **manifest whose URL points at `localhost:<port>`**. Changing the
+- **Live apps** — the dev server port is the easy half. The host app loads an
+  embedded app from a **manifest whose URL points at `localhost:<port>`**. Changing the
   port means regenerating/patching the local manifest the Discover/dev panel
   loads → handled by a `post_start` hook.
 - **Mobile / Metro** — `--port` on the server isn't enough; the app must bind to
   the same port (`RCT_METRO_PORT` / in-app "Debug server host & port") → handled
   via service `env`.
-- **LLD renderer** — webpack dev server port via env; least painful.
+- **Electron renderer** — webpack dev server port via env; least painful.
 
 All expressed as `env` + hooks, none in the binary.
 
@@ -211,7 +211,7 @@ All expressed as `env` + hooks, none in the binary.
 
 ## 5. Phased plan
 
-### Phase v1a — LLD + live apps, human drives  *(first build)*
+### Phase v1a — desktop + embedded apps, human drives  *(first build)*
 
 Goal: from a track, start the necessary dev servers, wait for readiness, notify
 the dev that manual testing can begin (with URLs). Human drives the browser.
@@ -288,8 +288,8 @@ Open unknowns to spike (each ~minutes):
 - Does Argent let you target a specific simulator **UDID** (for per-track
   isolation)?
 - Does Argent let you set/inherit the **Metro port**, or does it assume 8081?
-- Does building/iterating work cleanly from a **worktree** checkout of
-  ledger-live mobile (vs the primary)?
+- Does building/iterating work cleanly from a **worktree** checkout of the
+  mobile repo (vs the primary)?
 - iOS only today (Android emulator "in the works") — fine for MVP.
 
 Prereqs: macOS + Xcode, Node 20.11+. Install: `npx @swmansion/argent init`.
@@ -302,16 +302,17 @@ signal next to the track's status. Bolts onto the same services/ports/readiness
 primitives — autonomous drivers are just another consumer of "server up on
 port X".
 
-**Desktop (Electron/LLD) → Playwright.**
+**Desktop (Electron) → Playwright.**
 - Playwright has first-class Electron support (`_electron.launch()` drives the
   renderer like a normal page). Official **Playwright MCP** server → Claude
   clicks/types/asserts via MCP.
 - Most tractable (Electron == Chromium).
-- Note: autonomous mode launches LLD *via Playwright*, so the "service" shape
-  differs from v1a's `pnpm dev:lld`. Consider a `mode: manual|driven` on the
+- Note: autonomous mode launches the desktop app *via Playwright*, so the
+  "service" shape differs from v1a's `pnpm dev:desktop`. Consider a
+  `mode: manual|driven` on the
   service, or a separate service definition for driven runs.
 - Build: [ ] Playwright(-MCP) wired as a per-track capability pointed at the
-  allocated LLD port; [ ] a verify-loop convention Claude follows (start →
+  allocated desktop port; [ ] a verify-loop convention Claude follows (start →
   drive → assert → report); [ ] surface results to dashboard.
 
 **Mobile → Argent (primary), Maestro/Appium as fallbacks.**
@@ -340,19 +341,19 @@ port X".
 - [ ] MCP surface for Claude to start/stop/drive services and read logs.
 - [ ] Verify-loop integration with the existing `tracks-reviewer` gate (verified
       ✓ becomes part of the pre-PR checklist).
-- [ ] Resource ceiling: cap concurrent driven tracks (LLD + Playwright + Metro +
-      sim is heavy).
+- [ ] Resource ceiling: cap concurrent driven tracks (desktop + Playwright +
+      Metro + sim is heavy).
 
 ---
 
 ## 6. Shareability work  *(parallel)*
 
 Current blocker to sharing with teammates: config encodes the local machine
-(`~/ledger/...`).
+(`~/code/...`).
 
 - [ ] `${VAR}` / env expansion + relative paths in config.
-- [ ] Checked-in template config + hook scripts as a `tracks-ledger-setup`
-      starter repo. Teammates clone, set `LEDGER_ROOT`, run.
+- [ ] Checked-in template config + hook scripts as a `tracks-<project>-setup`
+      starter repo. Teammates clone, set the checkout root, run.
 
 ---
 

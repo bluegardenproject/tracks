@@ -19,8 +19,8 @@ CLI. Add freely; delete things once implemented/fixed.
 ### 0. ⭐ Worktree provisioning (deps + gitignored env)  *(blocks Topic 1)*
 A fresh worktree isn't runnable: no `node_modules`, no gitignored env/config.
 Until this exists, dev servers / builds / tests can't run in a track. Caching
-is essential (huge repos). Generic `provision:` config block; Ledger specifics
-in config.
+is essential (huge repos). Generic `provision:` config block; project
+specifics in config.
 **Detail:** [`design/worktree-provisioning.md`](design/worktree-provisioning.md)
 
 - [x] **v1** — `cache_strategy`: `apfs-clone` (COW) for the non-pnpm case.
@@ -31,12 +31,12 @@ in config.
       package manager.
 
 ### 1. Dev servers & autonomous testing inside a track
-Run/verify branch changes without releasing them — dev servers for LLD + live
-apps, and autonomous mobile testing via Argent.
+Run/verify branch changes without releasing them — dev servers for the
+desktop + embedded apps, and autonomous mobile testing via Argent.
 **Detail:** [`design/dev-servers.md`](design/dev-servers.md) ·
 [`design/argent-spike.md`](design/argent-spike.md)
 
-- [x] **v1a** — LLD + live apps, human drives.
+- [x] **v1a** — desktop + embedded apps, human drives.
       **Shipped:** config, ports, supervisor, readiness, hooks, group-kill
       teardown (PRs #14–#17), then CLI control surface + tmux viewer panes +
       service_ready notification + stable-port reverse proxy (this PR).
@@ -50,16 +50,16 @@ apps, and autonomous mobile testing via Argent.
 - [ ] **v1b** — mobile manual (Metro + simulator boot, hand off to human).
 - [ ] **v1c** — autonomous mobile smoke-test via Argent (isolation + MCP
       injection + task-suffix). *Next: run the Argent spike.*
-- [ ] **v2** — full autonomous verify loop (Playwright/-MCP for LLD, Argent for
-      mobile), gated into the `tracks-reviewer` pre-PR check.
+- [ ] **v2** — full autonomous verify loop (Playwright/-MCP for the desktop
+      app, Argent for mobile), gated into the `tracks-reviewer` pre-PR check.
 
 ### 2. Shareability (use beyond this machine / with the team)
 Keep the binary generic; make config portable so teammates can adopt it.
 **Detail:** [`design/dev-servers.md` §6](design/dev-servers.md)
 
 - [ ] `${VAR}` / env expansion + relative paths in `config.yaml`.
-- [ ] Checked-in template config + hook scripts as a `tracks-ledger-setup`
-      starter repo (clone, set `LEDGER_ROOT`, run).
+- [ ] Checked-in template config + hook scripts as a `tracks-<project>-setup`
+      starter repo (clone, set the checkout root, run).
 
 ### 3. Track types & progressive new-track flow
 Show all track *types* first, then ask only for type-specific info. Add
