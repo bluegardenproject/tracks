@@ -155,8 +155,8 @@ func TestValidateAcceptsServices(t *testing.T) {
 	c.Repos = []Repo{{
 		Name: "r", Path: "/a", Base: "main",
 		Services: []Service{
-			{Name: "lld", Cmd: "pnpm dev:lld", Ready: ReadyProbe{LogRegex: "compiled"}},
-			{Name: "live-app", Cmd: `pnpm dev --port {{.Port "live-app"}}`, Ready: ReadyProbe{Port: `{{.Port "live-app"}}`}, DependsOn: []string{"lld"}},
+			{Name: "desktop", Cmd: "pnpm dev:desktop", Ready: ReadyProbe{LogRegex: "compiled"}},
+			{Name: "live-app", Cmd: `pnpm dev --port {{.Port "live-app"}}`, Ready: ReadyProbe{Port: `{{.Port "live-app"}}`}, DependsOn: []string{"desktop"}},
 		},
 	}}
 	if err := c.Validate(); err != nil {

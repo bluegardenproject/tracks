@@ -84,8 +84,8 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 
 	// Ask/Plan are worktree-less: they run read-only against your
 	// primary checkout, or against nothing at all. So repos are
-	// optional — you can ask a general Ledger question unrelated to any
-	// repo, or attach repos just to give Claude read context.
+	// optional — you can ask a general question unrelated to any repo, or
+	// attach repos just to give Claude read context.
 	worktreeless := template == TemplateAsk || template == TemplatePlan
 
 	repoDesc := "Space to toggle, enter to confirm. Pick the repos this track should start with. Claude can request more later via the `tracks-add-repo` skill."
