@@ -11,7 +11,8 @@ curl -fsSL https://raw.githubusercontent.com/bluegardenproject/tracks/main/scrip
 ```
 
 Downloads the matching binary from the latest release into `~/.tracks` and
-adds it to your `PATH`. Re-run it any time to upgrade — a daemon from the
+adds it to your `PATH`, after checking it against the `SHA256SUMS` published
+with the release. Re-run it any time to upgrade — a daemon from the
 previous version restarts automatically on the next `tracks` run. Uninstall
 with [`scripts/uninstall.sh`](scripts/uninstall.sh).
 
