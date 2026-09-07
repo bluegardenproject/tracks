@@ -2,6 +2,8 @@ package update
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -45,7 +47,8 @@ func TestLatestFromPicksPlatformAsset(t *testing.T) {
 	  "html_url": "https://example.test/releases/v1.2.3",
 	  "assets": [
 	    {"name": "tracks-other-arch", "browser_download_url": "https://example.test/other"},
-	    {"name": "` + AssetName() + `", "browser_download_url": "https://example.test/mine"}
+	    {"name": "` + AssetName() + `", "browser_download_url": "https://example.test/mine"},
+	    {"name": "` + ChecksumsName + `", "browser_download_url": "https://example.test/sums"}
 	  ]
 	}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +66,9 @@ func TestLatestFromPicksPlatformAsset(t *testing.T) {
 	}
 	if rel.AssetURL != "https://example.test/mine" {
 		t.Errorf("asset URL = %q, want the one matching %s", rel.AssetURL, AssetName())
+	}
+	if rel.ChecksumsURL != "https://example.test/sums" {
+		t.Errorf("checksums URL = %q, want the one matching %s", rel.ChecksumsURL, ChecksumsName)
 	}
 }
 
@@ -120,21 +126,54 @@ func fakeInstall(t *testing.T) string {
 	return target
 }
 
-// assetServer serves body as the release asset.
-func assetServer(t *testing.T, body string) *httptest.Server {
+// fakeRelease serves body as this platform's release asset alongside a
+// checksums file that vouches for it, and returns the Release naming
+// both — the happy path Apply expects.
+func fakeRelease(t *testing.T, body string) Release {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return fakeReleaseWithSums(t, body, sha256Hex(body)+"  "+AssetName()+"\n")
+}
+
+// fakeReleaseWithSums spells the checksums file out, for the cases where
+// it disagrees with the asset it is supposed to describe.
+func fakeReleaseWithSums(t *testing.T, body, sums string) Release {
+	t.Helper()
+	allowLocalAssets(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/asset", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(body))
-	}))
+	})
+	mux.HandleFunc("/"+ChecksumsName, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(sums))
+	})
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv
+	return Release{
+		Tag:          "v1.2.3",
+		AssetURL:     srv.URL + "/asset",
+		ChecksumsURL: srv.URL + "/" + ChecksumsName,
+	}
+}
+
+// allowLocalAssets relaxes the GitHub host allowlist for one test, since
+// httptest serves plain HTTP on 127.0.0.1.
+func allowLocalAssets(t *testing.T) {
+	t.Helper()
+	orig := verifyAssetURL
+	verifyAssetURL = func(string) error { return nil }
+	t.Cleanup(func() { verifyAssetURL = orig })
+}
+
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 func TestApplyReplacesBinary(t *testing.T) {
 	target := fakeInstall(t)
-	srv := assetServer(t, "#!/bin/sh\necho new\n")
+	rel := fakeRelease(t, "#!/bin/sh\necho new\n")
 
-	got, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL})
+	got, err := Apply(context.Background(), rel)
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -163,11 +202,12 @@ func TestApplyReplacesBinary(t *testing.T) {
 
 func TestApplyKeepsTargetWhenDownloadDoesNotRun(t *testing.T) {
 	target := fakeInstall(t)
-	// A binary for another platform (or a truncated download) fails to
-	// execute — the working install must survive.
-	srv := assetServer(t, "not an executable")
+	// A binary for another platform fails to execute even though it is
+	// the file the release vouches for — the working install must
+	// survive.
+	rel := fakeRelease(t, "not an executable")
 
-	if _, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL}); err == nil {
+	if _, err := Apply(context.Background(), rel); err == nil {
 		t.Fatal("want an error when the downloaded binary does not run")
 	}
 	content, err := os.ReadFile(target)
@@ -189,12 +229,87 @@ func TestApplySweepsStaleTempFiles(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("half a download"), 0o600); err != nil {
 		t.Fatalf("writing stale temp file: %v", err)
 	}
-	srv := assetServer(t, "#!/bin/sh\nexit 0\n")
+	rel := fakeRelease(t, "#!/bin/sh\nexit 0\n")
 
-	if _, err := Apply(context.Background(), Release{Tag: "v1.2.3", AssetURL: srv.URL}); err != nil {
+	if _, err := Apply(context.Background(), rel); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Errorf("stale temp file survived: %v", err)
+	}
+}
+
+// TestApplyRejectsChecksumMismatch is the core of the integrity check: a
+// download that isn't the file the release vouches for must never be
+// executed or installed.
+func TestApplyRejectsChecksumMismatch(t *testing.T) {
+	target := fakeInstall(t)
+	sums := strings.Repeat("a", 64) + "  " + AssetName() + "\n"
+	rel := fakeReleaseWithSums(t, "#!/bin/sh\necho tampered\n", sums)
+
+	_, err := Apply(context.Background(), rel)
+	if err == nil {
+		t.Fatal("want an error when the download does not match the published checksum")
+	}
+	if !strings.Contains(err.Error(), "checksum") {
+		t.Errorf("error should name the checksum, got: %v", err)
+	}
+	content, readErr := os.ReadFile(target)
+	if readErr != nil {
+		t.Fatalf("reading target: %v", readErr)
+	}
+	if !strings.Contains(string(content), "echo old") {
+		t.Errorf("target was replaced by an unverified download: %q", content)
+	}
+	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(target), tmpPrefix+"*"))
+	if len(leftovers) != 0 {
+		t.Errorf("left temp files behind: %v", leftovers)
+	}
+}
+
+func TestApplyRefusesReleaseWithoutChecksums(t *testing.T) {
+	fakeInstall(t)
+	rel := Release{
+		Tag:      "v1.2.3",
+		AssetURL: "https://github.com/o/r/releases/download/v1.2.3/" + AssetName(),
+	}
+	_, err := Apply(context.Background(), rel)
+	if err == nil {
+		t.Fatal("want an error when the release publishes no checksums")
+	}
+	if !strings.Contains(err.Error(), ChecksumsName) {
+		t.Errorf("error should name %s, got: %v", ChecksumsName, err)
+	}
+}
+
+// A checksums file that simply omits our asset must not read as approval.
+func TestApplyRejectsChecksumsMissingOurAsset(t *testing.T) {
+	fakeInstall(t)
+	sums := strings.Repeat("b", 64) + "  tracks-plan9-mips\n"
+	rel := fakeReleaseWithSums(t, "#!/bin/sh\nexit 0\n", sums)
+
+	if _, err := Apply(context.Background(), rel); err == nil {
+		t.Fatalf("want an error when %s does not list %s", ChecksumsName, AssetName())
+	}
+}
+
+func TestVerifyAssetURL(t *testing.T) {
+	cases := []struct {
+		url  string
+		want bool // true = accepted
+	}{
+		{"https://github.com/o/r/releases/download/v1/" + AssetName(), true},
+		{"https://api.github.com/repos/o/r/releases/assets/1", true},
+		{"http://github.com/o/r/releases/download/v1/x", false},
+		{"https://github.com.evil.test/o/r/x", false},
+		{"https://evil.test/" + AssetName(), false},
+		{"https://githubXcom/o/r/x", false},
+		{"not a url at all", false},
+	}
+	for _, c := range cases {
+		err := verifyAssetURL(c.url)
+		if (err == nil) != c.want {
+			t.Errorf("verifyAssetURL(%q) error = %v, want accepted=%v", c.url, err, c.want)
+		}
 	}
 }

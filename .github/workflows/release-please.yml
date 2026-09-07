@@ -53,6 +53,13 @@ jobs:
           GOOS=darwin  GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/tracks-darwin-amd64 .
           GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/tracks-darwin-arm64 .
 
+          # Publish the digests next to the binaries. `tracks update`
+          # refuses to install an asset SHA256SUMS doesn't vouch for, and
+          # install.sh checks the same file, so a release without it can
+          # only be installed by hand.
+          (cd dist && sha256sum tracks-* > SHA256SUMS)
+          cat dist/SHA256SUMS
+
       - name: Upload Release Assets
         if: ${{ steps.release.outputs.release_created }}
         env:
