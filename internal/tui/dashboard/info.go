@@ -22,7 +22,7 @@ import (
 // those must not lag the table row directly above them.
 type detail struct {
 	track   state.Track
-	files   []string // "<repo>: <status>\t<path>"
+	files   []string // "<repo>: <status> <path>" (git's tab, de-tabbed)
 	commits []string // "<repo>: <sha7> <subject>"
 	// incomplete records that a git call failed or timed out, so the
 	// empty halves below mean "couldn't read" rather than "nothing
@@ -53,14 +53,14 @@ func gatherDetail(cfg config.Config, t state.Track) detail {
 		base := "origin/" + repo.Base
 		if files, err := c.ChangedFiles(ctx, base); err == nil {
 			for _, f := range files {
-				d.files = append(d.files, tr.Name+": "+f)
+				d.files = append(d.files, stripControl(tr.Name+": "+f))
 			}
 		} else {
 			d.incomplete = true
 		}
 		if commits, err := c.CommitLog(ctx, base); err == nil {
 			for _, line := range commits {
-				d.commits = append(d.commits, tr.Name+": "+line)
+				d.commits = append(d.commits, stripControl(tr.Name+": "+line))
 			}
 		} else {
 			d.incomplete = true
@@ -97,7 +97,7 @@ func (m *model) renderDetail(d detail, width, maxHeight int) string {
 	title := m.styles.panelTitle.Render("▍ Details") +
 		"  " + m.styles.dim.Render(d.track.ID)
 	if d.track.Slug != "" {
-		title += "  " + m.styles.slug.Render(d.track.Slug)
+		title += "  " + m.styles.slug.Render(stripControl(d.track.Slug))
 	}
 
 	taskSection := m.renderTaskSection(d.track, innerWidth)
@@ -144,7 +144,7 @@ func (m *model) renderTaskSection(t state.Track, w int) string {
 	header := m.styles.sectionHdr.Render("TASK")
 
 	meta := m.styles.dim.Render("status ") + m.styles.status[t.Status].Render(t.StatusLabel()) +
-		"  " + m.styles.dim.Render("branch ") + m.styles.branch.Render(t.Branch)
+		"  " + m.styles.dim.Render("branch ") + m.styles.branch.Render(stripControl(t.Branch))
 	if !t.UpdatedAt.IsZero() {
 		meta += "  " + m.styles.dim.Render("idle ") + renderIdle(t)
 	}
@@ -324,7 +324,9 @@ func (m *model) renderPRSection(t state.Track, w int) string {
 		shown = shown[:maxPRs]
 	}
 	for _, pr := range shown {
-		lines = append(lines, m.styles.pr.Render(truncate(pr.URL, w)))
+		// Stripped as well as filtered at ingest: a URL persisted by an
+		// older build predates the marker's control-character exclusion.
+		lines = append(lines, m.styles.pr.Render(truncate(stripControl(pr.URL), w)))
 		meta := ""
 		if badge := prBadge(pr); badge != "" {
 			meta = m.prBadgeStyle(pr).Render("● " + badge)
@@ -350,10 +352,22 @@ func (m *model) renderPRSection(t state.Track, w int) string {
 // easy line-by-line rendering by the caller.
 func wrapInfoText(s string, width int) []string {
 	if width <= 0 {
-		return []string{s}
+		// Still stripped: this is the sanitising entry for every error
+		// message and prompt, and a degenerate width must not be a way
+		// around it. Split first, so the paragraph breaks survive —
+		// stripControl drops a newline like any other control character.
+		lines := strings.Split(s, "\n")
+		for i, l := range lines {
+			lines[i] = stripControl(l)
+		}
+		return lines
 	}
 	var out []string
 	for _, para := range strings.Split(s, "\n") {
+		// Strip after the split: the paragraph breaks are this
+		// function's own structure, everything else in here came from
+		// git, gh or a pasted prompt.
+		para = stripControl(para)
 		if para == "" {
 			out = append(out, "")
 			continue

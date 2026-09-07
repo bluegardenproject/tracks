@@ -750,7 +750,10 @@ func (m *model) View() string {
 	lines = append(lines, "")
 	lines = append(lines, m.styles.dim.Render(fmt.Sprintf("%d tracks", len(m.tracks))))
 	if m.statusMsg != "" {
-		lines = append(lines, m.styles.warn.Render(m.statusMsg))
+		// Same provenance as the panel's ERROR section: these messages
+		// quote git and gh stderr, and the daemon's own error strings,
+		// verbatim.
+		lines = append(lines, m.styles.warn.Render(stripControl(m.statusMsg)))
 	}
 	if m.confirm != nil {
 		lines = append(lines, m.renderConfirm(*m.confirm, width, m.height)...)
@@ -789,7 +792,7 @@ func (m *model) View() string {
 		rowsBudget = 1
 	}
 	if m.err != nil {
-		lines = append(lines, m.styles.dim.Render("daemon unreachable: ")+m.err.Error())
+		lines = append(lines, m.styles.dim.Render("daemon unreachable: ")+stripControl(m.err.Error()))
 	} else if len(m.tracks) == 0 {
 		lines = append(lines, m.styles.dim.Render("no tracks yet — run `tracks new`"))
 	} else {
@@ -910,16 +913,22 @@ const statusColWidth = 11
 // highlight background threaded through every cell (see the inline note
 // below); all others render plainly.
 func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
-	branch := t.Branch
+	// Branch and slug are external text too: git refuses only bytes
+	// below \040 and DEL in a refname, so a C1 introducer encoded as
+	// UTF-8 passes, and a doc-review slug is derived from a filename on
+	// disk. An escape in a table cell doesn't corrupt that cell, it
+	// breaks the layout of every row.
+	branch := stripControl(t.Branch)
 	if branch == "" {
 		branch = "—"
 	}
+	slug := stripControl(t.Slug)
 	if i != m.cursor {
 		return fmt.Sprintf("  %-*s  %s  %s  %s  %s  %s  %s  %s",
 			idColWidth, shortID(t.ID),
 			padRendered(m.renderKind(t), kindColWidth),
 			padRendered(m.styles.branch.Render(truncate(branch, cols.branch)), cols.branch),
-			padRendered(m.styles.slug.Render(truncate(t.Slug, cols.slug)), cols.slug),
+			padRendered(m.styles.slug.Render(truncate(slug, cols.slug)), cols.slug),
 			m.styles.status[t.Status].Render(padRight(t.StatusLabel(), statusColWidth)),
 			padRendered(m.renderServices(t), svcColWidth),
 			padRendered(m.renderModel(t, cols.model), cols.model),
@@ -988,7 +997,7 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 	return m.styles.rowActive.Render(fmt.Sprintf("  %-*s", idColWidth, shortID(t.ID))) +
 		sep + pad(kindStr, kindColWidth) +
 		sep + pad(addBg(m.styles.branch).Render(truncate(branch, cols.branch)), cols.branch) +
-		sep + pad(addBg(m.styles.slug).Render(truncate(t.Slug, cols.slug)), cols.slug) +
+		sep + pad(addBg(m.styles.slug).Render(truncate(slug, cols.slug)), cols.slug) +
 		sep + addBg(m.styles.status[t.Status]).Render(padRight(t.StatusLabel(), statusColWidth)) +
 		sep + pad(svcStr, svcColWidth) +
 		sep + pad(modelStr, cols.model) +
