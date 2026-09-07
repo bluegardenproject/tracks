@@ -57,11 +57,13 @@ RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
 ASSET="tracks-$OS-$ARCH"
 RELEASE_JSON=$(curl -s "$RELEASE_URL")
 
-# Two things matter in these patterns. `[^"]*` keeps a match inside one
-# JSON string — the API answers on a single line, so a greedy `.*` would
-# splice the first URL in the response onto the last asset name and yield
-# a URL that 404s. Requiring `/releases/download/` keeps us on an actual
-# asset rather than a URL that happens to appear in the release notes.
+# `[^"]*` keeps a match inside one JSON string — the API answers on a
+# single line, so a greedy `.*` would splice the first URL in the response
+# onto the last asset name and yield a URL that 404s. Requiring
+# `/releases/download/` narrows it to release assets, though a download
+# URL quoted in the release notes still matches; what picks the right one
+# is `head -1` plus GitHub listing `assets` ahead of `body`. The digest
+# check below is what makes a wrong pick safe rather than fatal.
 # `|| true` so a missing asset (e.g. before the first release exists,
 # when /releases/latest 404s) falls through to the friendly guard below
 # instead of aborting on grep's exit 1 under `set -e`.
@@ -101,8 +103,18 @@ sha256_of() {
 
 echo -e "${BLUE}Verifying checksum...${NC}"
 if [ -z "$CHECKSUMS_URL" ]; then
+    # TODO: make this a hard failure once a release published *after* this
+    # change is the latest one. /releases/latest always serves the newest
+    # release, so from that point on there is no legitimate way to land on
+    # a release without SHA256SUMS — while stripping the file is exactly
+    # what someone with release-write access would do.
     echo -e "${YELLOW}  This release publishes no SHA256SUMS — skipping.${NC}"
-elif ! EXPECTED=$(curl -fsSL "$CHECKSUMS_URL" |
+elif ! SUMS=$(curl -fsSL "$CHECKSUMS_URL"); then
+    rm -f "$TEMP_FILE"
+    echo -e "${RED}Error: could not fetch SHA256SUMS — refusing to install.${NC}"
+    echo -e "${RED}  $CHECKSUMS_URL${NC}"
+    exit 1
+elif ! EXPECTED=$(printf '%s\n' "$SUMS" |
     awk -v a="$ASSET" '$2 == a || $2 == "*" a {print $1}' | head -1) ||
     [ -z "$EXPECTED" ]; then
     rm -f "$TEMP_FILE"

@@ -244,8 +244,12 @@ func TestApplySweepsStaleTempFiles(t *testing.T) {
 // executed or installed.
 func TestApplyRejectsChecksumMismatch(t *testing.T) {
 	target := fakeInstall(t)
+	// The asset would leave a mark if it ever ran, which is what pins the
+	// ordering: move the chmod+exec pair ahead of the digest compare and
+	// this sentinel appears.
+	sentinel := filepath.Join(t.TempDir(), "it-ran")
 	sums := strings.Repeat("a", 64) + "  " + AssetName() + "\n"
-	rel := fakeReleaseWithSums(t, "#!/bin/sh\necho tampered\n", sums)
+	rel := fakeReleaseWithSums(t, "#!/bin/sh\ntouch "+sentinel+"\n", sums)
 
 	_, err := Apply(context.Background(), rel)
 	if err == nil {
@@ -260,6 +264,9 @@ func TestApplyRejectsChecksumMismatch(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "echo old") {
 		t.Errorf("target was replaced by an unverified download: %q", content)
+	}
+	if _, statErr := os.Stat(sentinel); !os.IsNotExist(statErr) {
+		t.Errorf("the unverified download was executed: %v", statErr)
 	}
 	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(target), tmpPrefix+"*"))
 	if len(leftovers) != 0 {

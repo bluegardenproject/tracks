@@ -34,8 +34,8 @@ Two hard constraints:
 
 Project knowledge lives in `config.yaml` + hook scripts, versioned and shared
 as a `tracks-<project>-setup` starter kit. This dissolves the
-"project-specific vs. shareable" tension: deep automation in config/hooks, generic tool stays
-open-sourceable.
+"project-specific vs. shareable" tension: deep automation in config/hooks,
+generic tool stays open-sourceable.
 
 ---
 
@@ -112,9 +112,9 @@ the logs; they never *own* the processes.
 
 - **Left ~65% width:** Claude's pane (the main interactive pane, as today).
 - **Right ~35% width:** a column of **viewer panes**, one per running service,
-  each just `tail -f`-ing that service's log file, so desktop / live-app / Metro
-  logs are visible side-by-side without leaving the window or spawning a
-  separate tmux session.
+  each just `tail -f`-ing that service's log file, so the desktop, live-app
+  and Metro logs are visible side-by-side without leaving the window or
+  spawning a separate tmux session.
 
 Notes / implementation:
 - Only split when at least one service is running; a track with no services
@@ -197,9 +197,9 @@ tracks exist, and sidesteps the resource-ceiling question.
 Naive port-swapping breaks because the *client* side must know the port too:
 
 - **Live apps** — the dev server port is the easy half. The host app loads an
-  embedded app from a **manifest whose URL points at `localhost:<port>`**. Changing the
-  port means regenerating/patching the local manifest the Discover/dev panel
-  loads → handled by a `post_start` hook.
+  embedded app from a **manifest whose URL points at `localhost:<port>`**.
+  Changing the port means regenerating/patching the local manifest the
+  Discover/dev panel loads → handled by a `post_start` hook.
 - **Mobile / Metro** — `--port` on the server isn't enough; the app must bind to
   the same port (`RCT_METRO_PORT` / in-app "Debug server host & port") → handled
   via service `env`.
@@ -309,8 +309,8 @@ port X".
 - Most tractable (Electron == Chromium).
 - Note: autonomous mode launches the desktop app *via Playwright*, so the
   "service" shape differs from v1a's `pnpm dev:desktop`. Consider a
-  `mode: manual|driven` on the
-  service, or a separate service definition for driven runs.
+  `mode: manual|driven` on the service, or a separate service definition for
+  driven runs.
 - Build: [ ] Playwright(-MCP) wired as a per-track capability pointed at the
   allocated desktop port; [ ] a verify-loop convention Claude follows (start →
   drive → assert → report); [ ] surface results to dashboard.
@@ -366,7 +366,7 @@ Current blocker to sharing with teammates: config encodes the local machine
 - **Resource ceiling:** cap concurrent service-bearing / driven tracks?
 - **Dependency ordering:** ordered list (current plan) — when does a real DAG
   become necessary?
-- **Service modes:** how to model manual (`pnpm dev:lld`) vs driven (launched by
+- **Service modes:** how to model manual (`pnpm dev:desktop`) vs driven (launched by
   Playwright) for the same app — `mode` field, or separate service defs?
 - **Claude control surface:** MCP tool vs `tracks` subcommands vs both for
   start/stop/logs/url.

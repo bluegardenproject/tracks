@@ -96,8 +96,18 @@ func runUpdateFromMenu(cfg config.Config) error {
 		waitForKey()
 		return nil
 	}
-	if rel.AssetURL == "" {
-		fmt.Printf("tracks %s is out, but the release has no %s binary.\n", rel.Version, update.AssetName())
+	// Both of these make Apply fail. Catching them here turns a raw error
+	// after the user confirms into a plain sentence before it.
+	var blocked string
+	switch {
+	case rel.AssetURL == "":
+		blocked = fmt.Sprintf("the release has no %s binary", update.AssetName())
+	case rel.ChecksumsURL == "":
+		blocked = fmt.Sprintf("the release publishes no %s, so the download can't be verified",
+			update.ChecksumsName)
+	}
+	if blocked != "" {
+		fmt.Printf("tracks %s is out, but %s.\n", rel.Version, blocked)
 		page := rel.PageURL
 		if page == "" {
 			page = update.ReleasesPage
