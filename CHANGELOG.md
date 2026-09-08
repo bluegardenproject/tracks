@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/bluegardenproject/tracks/compare/v1.1.1...v1.1.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **install:** refuse a download SHA256SUMS can't vouch for ([d651273](https://github.com/bluegardenproject/tracks/commit/d65127344cfeaa2d9d0a96a3563013defbd51ac0))
+
 ## [1.1.1](https://github.com/bluegardenproject/tracks/compare/v1.1.0...v1.1.1) (2026-09-07)
 
 
