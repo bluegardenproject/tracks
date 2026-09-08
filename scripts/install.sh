@@ -49,6 +49,15 @@ esac
 
 echo -e "Detected: ${GREEN}$OS-$ARCH${NC}"
 
+# Verification is mandatory (see below), so an environment that can't
+# hash is a failure — say so now rather than after two downloads.
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+    echo -e "${RED}Error: neither sha256sum nor shasum is on PATH.${NC}"
+    echo -e "${YELLOW}tracks verifies its download against the release checksums, so"
+    echo -e "one of them is required. Install coreutils (or perl for shasum).${NC}"
+    exit 1
+fi
+
 echo -e "${BLUE}Creating installation directory...${NC}"
 mkdir -p "$INSTALL_DIR"
 
@@ -62,8 +71,9 @@ RELEASE_JSON=$(curl -s "$RELEASE_URL")
 # onto the last asset name and yield a URL that 404s. Requiring
 # `/releases/download/` narrows it to release assets, though a download
 # URL quoted in the release notes still matches; what picks the right one
-# is `head -1` plus GitHub listing `assets` ahead of `body`. The digest
-# check below is what makes a wrong pick safe rather than fatal.
+# is `head -1` plus GitHub listing `assets` ahead of `body`. A wrong pick
+# is caught by the digest check below rather than installed — which now
+# means the install aborts, not that it quietly carries on.
 # `|| true` so a missing asset (e.g. before the first release exists,
 # when /releases/latest 404s) falls through to the friendly guard below
 # instead of aborting on grep's exit 1 under `set -e`.
@@ -82,48 +92,67 @@ echo -e "Download URL: ${GREEN}$DOWNLOAD_URL${NC}"
 
 echo -e "${BLUE}Downloading tracks...${NC}"
 TEMP_FILE=$(mktemp)
+# One cleanup for every exit, including the ones no branch below handles:
+# a failing curl, or a failing mv after verification. After a successful
+# mv the path is gone and the rm is a harmless no-op. `|| true` keeps the
+# script's own exit status: bash replaces it with 1 if the trap's last
+# command fails, which an unremovable temp file would otherwise do.
+trap 'rm -f "$TEMP_FILE" || true' EXIT
 # -f: fail (non-zero exit) on an HTTP error instead of saving the error
 # body as if it were the binary.
 curl -fL -o "$TEMP_FILE" "$DOWNLOAD_URL"
 
 # --- Verify the download against the release's published digests ---
-# A checksums file that disagrees with the download always aborts. A
-# release that publishes none only warns: releases before this check
-# existed have no SHA256SUMS, and refusing those would break the
-# documented install path for anyone landing on an older one.
+# Every outcome except a verified match aborts, and the installed file is
+# only ever one SHA256SUMS vouches for.
+#
+# This used to warn-and-continue when a release published no SHA256SUMS,
+# because v1.1.0 and earlier don't have the file. /releases/latest always
+# serves the newest release, so from v1.1.1 on there is no legitimate way
+# to land on one without it — whereas removing the file is exactly what
+# someone with release-write access would do to get an unverified binary
+# installed. There is deliberately no override: an env var that switches
+# verification off is one social-engineering line away from being the
+# install instructions.
+# Prints the file's SHA-256, or returns non-zero if it can't be computed.
+# The status is taken from the digest tool itself, not from a pipeline —
+# `sha256sum | awk` would return awk's success and print nothing, turning
+# a local read error into a "checksum mismatch" scare with a blank field.
 sha256_of() {
+    local hash_line=""
     if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$1" | awk '{print $1}'
+        hash_line=$(sha256sum "$1") || return 1
     elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "$1" | awk '{print $1}'
+        hash_line=$(shasum -a 256 "$1") || return 1
     else
         return 1
     fi
+    [ -n "$hash_line" ] || return 1
+    printf '%s\n' "${hash_line%% *}"
 }
 
 echo -e "${BLUE}Verifying checksum...${NC}"
 if [ -z "$CHECKSUMS_URL" ]; then
-    # TODO: make this a hard failure once a release published *after* this
-    # change is the latest one. /releases/latest always serves the newest
-    # release, so from that point on there is no legitimate way to land on
-    # a release without SHA256SUMS — while stripping the file is exactly
-    # what someone with release-write access would do.
-    echo -e "${YELLOW}  This release publishes no SHA256SUMS — skipping.${NC}"
+    echo -e "${RED}Error: this release publishes no SHA256SUMS — refusing to install.${NC}"
+    echo -e "${YELLOW}  Every release from v1.1.1 on publishes one, so this is unexpected.${NC}"
+    echo -e "${YELLOW}  Download and verify by hand: https://github.com/$REPO/releases${NC}"
+    exit 1
 elif ! SUMS=$(curl -fsSL "$CHECKSUMS_URL"); then
-    rm -f "$TEMP_FILE"
     echo -e "${RED}Error: could not fetch SHA256SUMS — refusing to install.${NC}"
     echo -e "${RED}  $CHECKSUMS_URL${NC}"
     exit 1
 elif ! EXPECTED=$(printf '%s\n' "$SUMS" |
     awk -v a="$ASSET" '$2 == a || $2 == "*" a {print $1}' | head -1) ||
     [ -z "$EXPECTED" ]; then
-    rm -f "$TEMP_FILE"
     echo -e "${RED}Error: SHA256SUMS does not list $ASSET — refusing to install.${NC}"
     exit 1
 elif ! ACTUAL=$(sha256_of "$TEMP_FILE"); then
-    echo -e "${YELLOW}  No sha256sum or shasum on PATH — skipping.${NC}"
+    # "couldn't check" and "didn't match" get the same answer: both mean
+    # the binary is unverified. The preflight above catches a missing
+    # tool, so reaching here means the tool itself failed.
+    echo -e "${RED}Error: could not compute the checksum of the download — refusing to install.${NC}"
+    exit 1
 elif [ "$EXPECTED" != "$ACTUAL" ]; then
-    rm -f "$TEMP_FILE"
     echo -e "${RED}Error: checksum mismatch for $ASSET — refusing to install.${NC}"
     echo -e "${RED}  expected $EXPECTED${NC}"
     echo -e "${RED}  actual   $ACTUAL${NC}"

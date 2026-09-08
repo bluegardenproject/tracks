@@ -108,9 +108,9 @@ problem on every upgrade.
 - [x] **Install script** — `scripts/install.sh` (curl | bash) detects OS/arch,
       downloads the matching release asset, and installs to `~/.tracks` with
       PATH injection (mirrors the stac-man installer). `scripts/uninstall.sh`
-      does the reverse. The download is checked against the release's
-      `SHA256SUMS`; a release that publishes none only warns, since releases
-      predating that file exist.
+      does the reverse. The download must match the release's `SHA256SUMS`
+      or the install aborts — including when the file is absent or no
+      digest tool is available, since both mean the binary is unverified.
 - [x] **Versioning** — semver + git tags via release-please; tagged builds stamp
       `main.Version`/`BuildTime` through the existing `LDFLAGS`, and the
       `x-release-please-version` marker in `main.go` is bumped by the config's
