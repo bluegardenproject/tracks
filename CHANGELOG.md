@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/bluegardenproject/tracks/compare/v1.1.1...v1.2.0) (2026-09-22)
+
+
+### Features
+
+* add worktree terminal panes ([12eae54](https://github.com/bluegardenproject/tracks/commit/12eae5419f4f3bba3ac6b7cf4113f584fcef1e08))
+
+
+### Bug Fixes
+
+* **install:** refuse a download SHA256SUMS can't vouch for ([d651273](https://github.com/bluegardenproject/tracks/commit/d65127344cfeaa2d9d0a96a3563013defbd51ac0))
+* use portable tmux split sizing ([4bc8577](https://github.com/bluegardenproject/tracks/commit/4bc857740609b7182e2dfba8f2a4e0d4d29c454d))
+
 ## [1.1.1](https://github.com/bluegardenproject/tracks/compare/v1.1.0...v1.1.1) (2026-09-07)
 
 
