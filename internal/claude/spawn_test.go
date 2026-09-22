@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/agent"
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/state"
 )
@@ -56,6 +57,16 @@ func TestBuildOptionsWorkUsesConfiguredMode(t *testing.T) {
 	}
 	if strings.Contains(opts.TaskPrompt, "read-only track") {
 		t.Error("work prompt should not carry the read-only suffix")
+	}
+}
+
+func TestWorkPromptCarriesTheTerminalContract(t *testing.T) {
+	opts, err := BuildOptions(config.Default(), baseTrack(state.KindWork), "/sock", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(opts.TaskPrompt, agent.TerminalContract) {
+		t.Error("work prompt lost the shared terminal contract")
 	}
 }
 

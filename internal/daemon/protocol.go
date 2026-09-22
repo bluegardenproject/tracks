@@ -76,6 +76,10 @@ const (
 	// ports for a track.
 	MethodServices Method = "services"
 
+	// MethodTerminal opens an interactive shell in the track's worktree,
+	// sharing the right-hand pane column used by dev servers.
+	MethodTerminal Method = "terminal"
+
 	// MethodProxyAdd defines a new stable port (persisted in state). It does
 	// not bind until a Switch points it at an upstream.
 	MethodProxyAdd Method = "proxy_add"
@@ -219,6 +223,9 @@ type NewParams struct {
 	// against whichever provider is chosen — the two id namespaces do
 	// not overlap.
 	Provider string `json:"provider,omitempty"`
+	// OpenTerminal opens a shell in the track's worktree beside the agent.
+	// It is ignored for worktree-less tracks.
+	OpenTerminal bool `json:"open_terminal,omitempty"`
 }
 
 // NewResult is the payload for MethodNew.
@@ -303,6 +310,17 @@ type ServicesParams struct {
 type ServicesResult struct {
 	Services []state.ServiceState `json:"services"`
 	Ports    map[string]int       `json:"ports"`
+}
+
+// TerminalParams is the payload for MethodTerminal.
+type TerminalParams struct {
+	TrackID string `json:"track_id"`
+}
+
+// TerminalResult reports whether a pane was created. Opened is false when
+// the track already had a live terminal pane.
+type TerminalResult struct {
+	Opened bool `json:"opened"`
 }
 
 // ProxyAddParams is the payload for MethodProxyAdd.

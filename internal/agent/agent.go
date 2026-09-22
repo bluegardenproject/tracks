@@ -246,3 +246,11 @@ const DevServerContract = "" +
 	"To confirm the server came up, tail/cat the log path from `tracks " +
 	"services` (the pane also tees its output there); do not assume " +
 	"success just because `tracks up` returned. If `tracks up` itself errors (command not found, daemon unreachable, unknown service, any non-zero exit), STOP and report the exact error to the user — do not fall back to starting the server yourself."
+
+// TerminalContract tells agents how to open a user-facing shell without
+// launching a nested or background terminal process in their own pane.
+const TerminalContract = "" +
+	"**Track terminal.** When the user asks for a terminal or shell in the " +
+	"track's worktree, run `tracks terminal`. It opens an interactive shell " +
+	"in the track window's right-hand pane column and returns immediately. " +
+	"`$TRACKS_ID` is already set, so do not pass `--track`."

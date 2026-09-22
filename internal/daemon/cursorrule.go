@@ -61,6 +61,8 @@ in a tmux pane the user can switch into at any time.
   ` + "`tracks services`" + ` lists what is configured, ` + "`tracks down <name>`" + ` stops one,
   ` + "`tracks url <name>`" + ` prints the URL. ` + "`$TRACKS_ID`" + ` is already set, so
   ` + "`--track`" + ` is never needed.
+- **Track terminals belong to tracks too.** When the user asks for a shell in
+  the worktree, run ` + "`tracks terminal`" + `; it opens a terminal pane beside this one.
 - **Announce pull requests.** If you open one, put its URL on a line of its
   own as ` + "`TRACKS_PR_URL=<url>`" + ` so the dashboard picks it up. One line per PR.
 - **Review before you push.** Re-read the whole diff and report what you find

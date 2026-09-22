@@ -233,6 +233,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 	if !kind.Worktreeless() && len(repos) == 0 {
 		return fail("at least one repo required")
 	}
+	openTerminal := p.OpenTerminal && !kind.Worktreeless()
 
 	trackID, err := generateTrackID()
 	if err != nil {
@@ -305,6 +306,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		TaskPrompt:     p.TaskPrompt,
 		RequestedModel: requestedModel,
 		Provider:       provider,
+		OpenTerminal:   openTerminal,
 		CreatedAt:      time.Now().UTC(),
 	}
 	// draft captures exactly what the user entered so a failed creation
@@ -336,6 +338,7 @@ func (s *Server) handleNew(ctx context.Context, raw json.RawMessage, emit Emit) 
 		Candor:            draftCandor,
 		DocSkipClaimCheck: draftSkipClaim,
 		DocSkipOpinion:    draftSkipOpinion,
+		OpenTerminal:      openTerminal,
 		// Resolved, like DocPath: a relaunch should rerun the model the
 		// user picked, not whatever the default has become since.
 		Model:    requestedModel,
@@ -1363,6 +1366,7 @@ func draftLaunchParams(t state.Track) NewParams {
 		Candor:            t.Draft.Candor,
 		DocSkipClaimCheck: t.Draft.DocSkipClaimCheck,
 		DocSkipOpinion:    t.Draft.DocSkipOpinion,
+		OpenTerminal:      t.Draft.OpenTerminal,
 		Model:             t.Draft.Model,
 		// Resolved, not raw. A draft saved before providers existed
 		// carries "", and passing that through would let handleNew apply

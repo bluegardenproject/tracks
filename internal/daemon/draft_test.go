@@ -25,7 +25,10 @@ func newDraftTestServer(t *testing.T) (*Server, *state.MemoryStore) {
 // persisted (errored) track plus the wire response.
 func failNew(t *testing.T, srv *Server, store *state.MemoryStore) (state.Track, Response) {
 	t.Helper()
-	raw, err := json.Marshal(NewParams{Repos: []string{"demo"}, TaskPrompt: "fix the thing", Slug: "rate-bug", Kind: "work"})
+	raw, err := json.Marshal(NewParams{
+		Repos: []string{"demo"}, TaskPrompt: "fix the thing", Slug: "rate-bug",
+		Kind: "work", OpenTerminal: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +59,12 @@ func TestFailedCreationCapturesDraftAndID(t *testing.T) {
 	}
 	if tr.Draft.TaskPrompt != "fix the thing" || tr.Draft.Slug != "rate-bug" {
 		t.Errorf("Draft did not preserve prompt/slug: %+v", tr.Draft)
+	}
+	if !tr.Draft.OpenTerminal {
+		t.Error("Draft did not preserve the terminal choice")
+	}
+	if !tr.OpenTerminal {
+		t.Error("track did not preserve the terminal choice")
 	}
 
 	var nr NewResult

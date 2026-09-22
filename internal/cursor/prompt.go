@@ -66,7 +66,8 @@ const taskSuffix = "" +
 	"one, but say which you did.\n\n" +
 	"If you open a pull request at any point, include the URL on its " +
 	"own line as `TRACKS_PR_URL=<url>` so the tracks dashboard " +
-	"surfaces it. If you open several, emit one such line per PR.\n\n" + agent.DevServerContract + "\n\n" +
+	"surfaces it. If you open several, emit one such line per PR.\n\n" +
+	agent.DevServerContract + "\n\n" + agent.TerminalContract + "\n\n" +
 	"Keep your output terse and your diffs comment-free unless the " +
 	"repo's conventions ask otherwise — these sessions are read in a " +
 	"dashboard."

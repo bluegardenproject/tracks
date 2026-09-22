@@ -34,6 +34,7 @@ import (
 type supervisor struct {
 	trackID      string
 	windowName   string
+	agentPane    string
 	pid          int
 	sentinelPath string
 	cancel       context.CancelFunc
@@ -77,18 +78,14 @@ type supervisor struct {
 	// every 2s poll for the life of the track. Guarded by mu.
 	loggedPRRejects map[string]bool
 
-	// servicePanes maps service name to the tmux pane ID running that dev
-	// server in the right column of the track window. The pane *owns* the
-	// process (see startServicePane); killing the pane is cosmetic, the
-	// authoritative teardown is the process-group kill by the persisted
-	// PGID. Guarded by svcMu.
-	svcMu        sync.Mutex
+	// servicePanes maps service names to their tmux panes. sidePanes keeps
+	// the right-hand column ordered across services and the optional shell,
+	// so each additional pane can be stacked underneath the previous one.
+	// Guarded by paneMu.
+	paneMu       sync.Mutex
 	servicePanes map[string]string
-	// lastServicePane is the pane ID of the most recently created service
-	// pane. SplitPaneDown targets this ID so new panes stack below it in the
-	// right column rather than splitting a random pane (map iteration is
-	// unordered).
-	lastServicePane string
+	sidePanes    []string
+	terminalPane string
 }
 
 // waitingNotifyMinInterval is the shortest gap between two
@@ -203,7 +200,7 @@ func (s *Server) spawnFor(t state.Track, sentinelPath string, resume bool) (cmd,
 func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPath, shellCmd, cwd string) (*supervisor, error) {
 	tm := tmux.New()
 	window := t.WindowName()
-	pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, shellCmd, cwd)
+	agentPane, pid, err := tm.NewWindowReturningPaneID(s.config().Tmux.SessionName, window, shellCmd, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux window: %w", err)
 	}
@@ -212,11 +209,19 @@ func (s *Server) spawnSupervisor(ctx context.Context, t state.Track, sentinelPat
 	sup := &supervisor{
 		trackID:          t.ID,
 		windowName:       window,
+		agentPane:        agentPane,
 		pid:              pid,
 		sentinelPath:     sentinelPath,
 		cancel:           cancel,
 		done:             make(chan struct{}),
 		lastPaneChangeAt: time.Now(),
+	}
+	if t.OpenTerminal {
+		if _, err := s.openTerminalPane(sup, t); err != nil {
+			_ = tm.KillWindow(s.config().Tmux.SessionName, window)
+			cancel()
+			return nil, fmt.Errorf("open terminal pane: %w", err)
+		}
 	}
 
 	// Persist the live state.
@@ -628,7 +633,7 @@ func nextLiveStatus(current state.Status, idle, newPR bool) state.Status {
 // Errors from capture-pane are swallowed — they shouldn't bring
 // down the supervisor.
 func (s *Server) refreshRunningStatus(tm *tmux.Client, sup *supervisor, withBranches bool) {
-	snapshot, err := tm.CapturePane(s.config().Tmux.SessionName, sup.windowName)
+	snapshot, err := tm.CapturePaneByID(sup.agentPane)
 	if err != nil {
 		return
 	}
