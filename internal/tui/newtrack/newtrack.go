@@ -346,7 +346,7 @@ func candorField(v *int) *huh.Select[int] {
 // never thinks about models just presses enter.
 //
 // The values are passed to the CLI verbatim. An alias ("opus") follows
-// its family's newest release; a pinned id ("claude-opus-4-8") stays
+// its family's newest release; a pinned id ("claude-opus-5-5") stays
 // put. Both are the user's to configure — see config.Claude.
 func modelField(cfg config.Config, provider *string, kind string, v *string) *huh.Select[string] {
 	// provider is a POINTER, and the options are a func bound to it.

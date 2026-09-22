@@ -400,15 +400,18 @@ func TestModelForEmptyWhenNothingConfigured(t *testing.T) {
 	}
 }
 
-// The built-in list is aliases only: a pinned id baked into the binary
-// goes stale, an alias does not.
-func TestDefaultChoicesAreAliasesOnly(t *testing.T) {
+// The built-in list is aliases plus the pins named here: a pinned id
+// baked into the binary goes stale, an alias does not, so each pin is
+// listed in both places or the test fails.
+func TestDefaultChoicesAreAliasesOrNamedPins(t *testing.T) {
 	// The known family aliases. A hyphen test would be a proxy for this
 	// and would fire on a legitimate hyphenated alias.
 	aliases := map[string]bool{"opus": true, "sonnet": true, "haiku": true, "fable": true, "mythos": true}
+	// Sanctioned pins, per DefaultModelChoices.
+	pins := map[string]bool{"claude-opus-5-5": true}
 	for _, c := range (Claude{}).Choices() {
-		if !aliases[c.Model] {
-			t.Errorf("built-in choice %q is not a family alias; a pinned id in the binary goes stale", c.Model)
+		if !aliases[c.Model] && !pins[c.Model] {
+			t.Errorf("built-in choice %q is neither a family alias nor a sanctioned pin; a pinned id in the binary goes stale", c.Model)
 		}
 		if c.Label == "" {
 			t.Errorf("built-in choice %q has no label", c.Model)
