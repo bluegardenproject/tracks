@@ -106,11 +106,12 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}
 
 	var (
-		repos    []string
-		slug     string
-		provider = defaultProvider(cfg)
-		model    string
-		task     = templatePrompts[template]
+		repos        []string
+		slug         string
+		openTerminal bool
+		provider     = defaultProvider(cfg)
+		model        string
+		task         = templatePrompts[template]
 	)
 
 	build := func() *huh.Form {
@@ -126,6 +127,14 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 				Description("Short human label shown in the dashboard and used to name the track's tmux tab. Independent of the branch name (the agent picks that). Leave empty to derive a tab name from the prompt.").
 				Placeholder("e.g. rate-bug-investigation").
 				Value(&slug),
+		}
+		if template == TemplateCustom {
+			fields = append(fields, huh.NewConfirm().
+				Title("Add terminal window").
+				Description("Open a shell in the track's worktree, beside the agent.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&openTerminal))
 		}
 		fields = append(fields, providerFields(cfg, &provider)...)
 		fields = append(fields,
@@ -150,12 +159,13 @@ func Run(cfg config.Config, client *daemon.Client) (Result, error) {
 	}
 
 	return Result{Params: daemon.NewParams{
-		Repos:      repos,
-		Slug:       strings.TrimSpace(slug),
-		TaskPrompt: strings.TrimSpace(task),
-		Kind:       kindFor(template),
-		Provider:   provider,
-		Model:      model,
+		Repos:        repos,
+		Slug:         strings.TrimSpace(slug),
+		TaskPrompt:   strings.TrimSpace(task),
+		Kind:         kindFor(template),
+		Provider:     provider,
+		Model:        model,
+		OpenTerminal: openTerminal,
 	}}, nil
 }
 

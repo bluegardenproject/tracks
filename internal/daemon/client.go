@@ -280,6 +280,12 @@ func (c *Client) Services(trackID string) (ServicesResult, error) {
 	return r, c.callMethod(MethodServices, ServicesParams{TrackID: trackID}, &r)
 }
 
+// OpenTerminal opens an interactive shell pane in the track's worktree.
+func (c *Client) OpenTerminal(trackID string) (TerminalResult, error) {
+	var r TerminalResult
+	return r, c.callMethod(MethodTerminal, TerminalParams{TrackID: trackID}, &r)
+}
+
 // ProxyAdd defines a new stable port. It does not bind until linked.
 func (c *Client) ProxyAdd(port int, bindAll bool) error {
 	return c.callMethod(MethodProxyAdd, ProxyAddParams{PublicPort: port, BindAll: bindAll}, nil)

@@ -139,7 +139,7 @@ func (Client) NewWindow(session, name, command, startDir string, remainOnExit bo
 // Extracted for the same testability reason as newWindowArgs.
 func newWindowPaneArgs(session, name, command, startDir string) []string {
 	args := []string{"new-window", "-t", sessionTarget(session), "-n", name,
-		"-P", "-F", "#{pane_pid}"}
+		"-P", "-F", "#{pane_id} #{pane_pid}"}
 	if startDir != "" {
 		args = append(args, "-c", startDir)
 	}
@@ -150,7 +150,9 @@ func newWindowPaneArgs(session, name, command, startDir string) []string {
 }
 
 // NewWindowReturningPaneID opens a new window like NewWindow and
-// returns the new pane's pid. We use this for tracks so the daemon
+// returns the new pane's tmux ID and process pid. We use these for tracks
+// so supervision always captures the agent pane even when another pane is
+// selected, and so the daemon
 // can watch the live process (which tmux owns) without dropping the
 // "interactive TTY inside tmux" property that lets the user type
 // to Claude directly.
@@ -161,15 +163,19 @@ func newWindowPaneArgs(session, name, command, startDir string) []string {
 // when the popup closes the user lands on the new track window.
 // Always uses remain-on-exit=on so the user can read Claude's final
 // output even after the agent itself terminates.
-func (Client) NewWindowReturningPaneID(session, name, command, startDir string) (int, error) {
+func (Client) NewWindowReturningPaneID(session, name, command, startDir string) (string, int, error) {
 	cmd := exec.Command("tmux", newWindowPaneArgs(session, name, command, startDir)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("tmux new-window: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", 0, fmt.Errorf("tmux new-window: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	fields := strings.Fields(strings.TrimSpace(string(out)))
+	if len(fields) != 2 || !strings.HasPrefix(fields[0], "%") {
+		return "", 0, fmt.Errorf("tmux new-window: could not parse pane id/pid from %q", string(out))
 	}
 	pid := 0
-	if _, scanErr := fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &pid); scanErr != nil || pid <= 0 {
-		return 0, fmt.Errorf("tmux new-window: could not parse pid from %q", string(out))
+	if _, scanErr := fmt.Sscanf(fields[1], "%d", &pid); scanErr != nil || pid <= 0 {
+		return "", 0, fmt.Errorf("tmux new-window: could not parse pane pid from %q", string(out))
 	}
 	target := session + ":" + name
 	// Pin the name: tmux's automatic-rename (on by default) would
@@ -180,7 +186,7 @@ func (Client) NewWindowReturningPaneID(session, name, command, startDir string) 
 	// just gave it, so the target resolves.
 	_ = exec.Command("tmux", "set-window-option", "-t", target, "automatic-rename", "off").Run()
 	_ = exec.Command("tmux", "set-window-option", "-t", target, "remain-on-exit", "on").Run()
-	return pid, nil
+	return fields[0], pid, nil
 }
 
 // KillWindow closes the named window. No-op when missing.
@@ -258,7 +264,17 @@ func (Client) SetCurrentPaneTitle(title string) error {
 // long status line doesn't show up as two different snapshots
 // across a terminal resize.
 func (Client) CapturePane(session, window string) (string, error) {
-	cmd := exec.Command("tmux", "capture-pane", "-t", session+":"+window, "-p", "-J")
+	return capturePane(session + ":" + window)
+}
+
+// CapturePaneByID returns the visible content of exactly one pane, regardless
+// of which pane the user currently has selected in its window.
+func (Client) CapturePaneByID(paneID string) (string, error) {
+	return capturePane(paneID)
+}
+
+func capturePane(target string) (string, error) {
+	cmd := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-J")
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -278,6 +294,7 @@ func (Client) SplitWindowRight(session, window, command, startDir string, percen
 	target := session + ":" + window
 	args := []string{
 		"split-window", "-h",
+		"-d",
 		"-p", fmt.Sprintf("%d", percent),
 		"-t", target,
 	}
@@ -296,6 +313,7 @@ func (Client) SplitWindowRight(session, window, command, startDir string, percen
 func (Client) SplitPaneDown(paneID, command, startDir string) (newPaneID string, panePID int, err error) {
 	args := []string{
 		"split-window", "-v",
+		"-d",
 		"-t", paneID,
 	}
 	if startDir != "" {
@@ -335,6 +353,21 @@ func (Client) KillPane(paneID string) error {
 		return fmt.Errorf("tmux kill-pane %s: %w: %s", paneID, err, msg)
 	}
 	return nil
+}
+
+// HasPane reports whether paneID still identifies a live tmux pane.
+func (Client) HasPane(paneID string) (bool, error) {
+	cmd := exec.Command("tmux", "display-message", "-p", "-t", paneID, "#{pane_id} #{pane_dead}")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		fields := strings.Fields(strings.TrimSpace(string(out)))
+		return len(fields) == 2 && fields[0] == paneID && fields[1] == "0", nil
+	}
+	msg := strings.TrimSpace(string(out))
+	if strings.Contains(msg, "no such pane") || strings.Contains(msg, "can't find pane") {
+		return false, nil
+	}
+	return false, fmt.Errorf("tmux display-message %s: %w: %s", paneID, err, msg)
 }
 
 // SetPaneTitle sets the title displayed in the pane border for the pane

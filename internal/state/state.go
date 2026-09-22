@@ -447,6 +447,11 @@ type Track struct {
 	// appended).
 	Repos []TrackRepo `json:"repos"`
 
+	// OpenTerminal remembers that this track should have an interactive
+	// shell beside the agent. The pane itself is runtime-only and is
+	// recreated when the track is resumed.
+	OpenTerminal bool `json:"open_terminal,omitempty"`
+
 	// Ports maps a declared service name to the TCP port reserved for it
 	// in this track. Allocated once at track creation (arithmetic only —
 	// nothing is bound) and kept clear of other live tracks' ports. Empty
@@ -671,6 +676,7 @@ type DraftSpec struct {
 	Candor            int      `json:"candor,omitempty"`
 	DocSkipClaimCheck bool     `json:"doc_skip_claim_check,omitempty"`
 	DocSkipOpinion    bool     `json:"doc_skip_opinion,omitempty"`
+	OpenTerminal      bool     `json:"open_terminal,omitempty"`
 
 	// Model is the model picked at creation, so a relaunch runs the same
 	// one rather than the current default.

@@ -74,7 +74,7 @@ func TestNewWindowLandsInTargetSessionDespiteOtherSessions(t *testing.T) {
 	mustTmux("new-window", "-t", otherSess+":2", "-n", "filler")
 	mustTmux("select-window", "-t", otherSess+":1")
 
-	if _, err := (Client{}).NewWindowReturningPaneID(trackSess, "claude-x", "", ""); err != nil {
+	if _, _, err := (Client{}).NewWindowReturningPaneID(trackSess, "claude-x", "", ""); err != nil {
 		t.Fatalf("NewWindowReturningPaneID: %v", err)
 	}
 

@@ -284,32 +284,26 @@ func (s *Server) openServerPane(sup *supervisor, svcName string, port int, comma
 	tm := tmux.New()
 	session := s.config().Tmux.SessionName
 
-	sup.svcMu.Lock()
-	defer sup.svcMu.Unlock()
+	sup.paneMu.Lock()
+	defer sup.paneMu.Unlock()
 	if sup.servicePanes == nil {
 		sup.servicePanes = make(map[string]string)
 	}
 
-	var paneID string
-	if len(sup.servicePanes) == 0 {
-		paneID, panePID, err = tm.SplitWindowRight(session, sup.windowName, command, worktree, 30)
-	} else {
-		paneID, panePID, err = tm.SplitPaneDown(sup.lastServicePane, command, worktree)
-	}
+	paneID, panePID, err := splitSidePaneLocked(tm, session, sup, command, worktree)
 	if err != nil {
 		return 0, err
 	}
 	_ = tm.SetPaneTitle(paneID, fmt.Sprintf("%s:%d", svcName, port))
 	sup.servicePanes[svcName] = paneID
-	sup.lastServicePane = paneID
 	return panePID, nil
 }
 
 // closeServerPane kills the pane for the named service (cosmetic — the
 // authoritative teardown is the process-group kill by PGID).
 func (s *Server) closeServerPane(sup *supervisor, svcName string) {
-	sup.svcMu.Lock()
-	defer sup.svcMu.Unlock()
+	sup.paneMu.Lock()
+	defer sup.paneMu.Unlock()
 	if sup.servicePanes == nil {
 		return
 	}
@@ -318,6 +312,7 @@ func (s *Server) closeServerPane(sup *supervisor, svcName string) {
 		return
 	}
 	delete(sup.servicePanes, svcName)
+	removeSidePaneLocked(sup, paneID)
 	_ = tmux.New().KillPane(paneID)
 }
 

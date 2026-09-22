@@ -343,3 +343,10 @@ func TestWorkPromptCarriesTheDevServerContract(t *testing.T) {
 		t.Error("work prompt lost the shared dev-server contract")
 	}
 }
+
+func TestWorkPromptCarriesTheTerminalContract(t *testing.T) {
+	opts, _ := BuildOptions(baseCfg(), baseTrack(state.KindWork), "/sock", "")
+	if !strings.Contains(opts.TaskPrompt, agent.TerminalContract) {
+		t.Error("work prompt lost the shared terminal contract")
+	}
+}

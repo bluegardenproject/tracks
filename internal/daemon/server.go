@@ -540,6 +540,8 @@ func (s *Server) dispatch(ctx context.Context, req Request, emit Emit) Response 
 		return s.handleServiceDown(ctx, req.Params, emit)
 	case MethodServices:
 		return s.handleServices(req.Params)
+	case MethodTerminal:
+		return s.handleTerminal(req.Params)
 	case MethodProxyAdd:
 		return s.handleProxyAdd(req.Params)
 	case MethodProxyRemove:
