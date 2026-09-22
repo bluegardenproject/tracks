@@ -292,17 +292,21 @@ func capturePane(target string) (string, error) {
 // PGID we tear the server's process tree down with.
 func (Client) SplitWindowRight(session, window, command, startDir string, percent int) (paneID string, panePID int, err error) {
 	target := session + ":" + window
+	return runSplit(splitWindowRightArgs(target, command, startDir, percent), "-h")
+}
+
+func splitWindowRightArgs(target, command, startDir string, percent int) []string {
 	args := []string{
 		"split-window", "-h",
 		"-d",
-		"-p", fmt.Sprintf("%d", percent),
+		"-l", fmt.Sprintf("%d%%", percent),
 		"-t", target,
 	}
 	if startDir != "" {
 		args = append(args, "-c", startDir)
 	}
 	args = append(args, "-P", "-F", "#{pane_id} #{pane_pid}", command)
-	return runSplit(args, "-h")
+	return args
 }
 
 // SplitPaneDown opens a horizontal split below the pane identified by
