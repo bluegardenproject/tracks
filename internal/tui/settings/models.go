@@ -265,8 +265,8 @@ func addModelChoice(cfg *config.Config) error {
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Model").
-				Description("An alias (opus, sonnet, haiku, fable), which follows that family's newest release, or a pinned id (claude-opus-4-8), which doesn't.\n\nNote: the CLI does not reliably reject a mistyped name — \"opus4.8\" runs on a different model rather than failing. The dashboard's MODEL column shows what actually ran.").
-				Placeholder("claude-opus-4-8").
+				Description("An alias (opus, sonnet, haiku, fable), which follows that family's newest release, or a pinned id (claude-opus-5-5), which doesn't.\n\nNote: the CLI does not reliably reject a mistyped name — \"opus4.8\" runs on a different model rather than failing. The dashboard's MODEL column shows what actually ran.").
+				Placeholder("claude-opus-5-5").
 				Validate(func(v string) error {
 					if strings.TrimSpace(v) == "" {
 						return errors.New("a model is required")
@@ -280,7 +280,7 @@ func addModelChoice(cfg *config.Config) error {
 			huh.NewInput().
 				Title("Label (optional)").
 				Description("What the picker shows. Empty uses the model itself.").
-				Placeholder("Opus 4.8").
+				Placeholder("Opus 5.5").
 				Value(&label),
 		),
 	)

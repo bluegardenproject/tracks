@@ -275,10 +275,10 @@ func addMessage(total *state.Usage, model string, u *usageJSON) {
 	total.CacheReadTokens += u.CacheReadInputTokens
 	total.CacheCreationTokens += e5m + e1h
 
-	in, out := priceFor(model)
-	total.CostUSD += (float64(u.InputTokens)*in +
-		float64(u.CacheReadInputTokens)*in*cacheReadMult +
-		float64(e5m)*in*cacheWrite5mMult +
-		float64(e1h)*in*cacheWrite1hMult +
-		float64(u.OutputTokens)*out) / 1e6
+	p, _ := lookup(model)
+	total.CostUSD += (float64(u.InputTokens)*p.in +
+		float64(u.CacheReadInputTokens)*p.in*p.cacheReadMultiplier() +
+		float64(e5m)*p.in*cacheWrite5mMult +
+		float64(e1h)*p.in*cacheWrite1hMult +
+		float64(u.OutputTokens)*p.out) / 1e6
 }

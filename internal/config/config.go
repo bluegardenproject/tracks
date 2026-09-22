@@ -94,7 +94,7 @@ type Claude struct {
 	// Model is passed as --model for a track that doesn't name its own.
 	// Either an alias, which floats to the newest release in its family
 	// ("opus", "sonnet", "haiku", "fable"), or a pinned id
-	// ("claude-opus-4-8"), which does not. Empty omits the flag
+	// ("claude-opus-5-5"), which does not. Empty omits the flag
 	// entirely and leaves Claude on its own default.
 	//
 	// Note that a name the CLI doesn't recognise is not necessarily
@@ -111,10 +111,12 @@ type Claude struct {
 	// ModelChoices is what the model picker offers at creation. Empty
 	// falls back to DefaultModelChoices.
 	//
-	// The built-in list is aliases only, on purpose: an alias stays
+	// The built-in list is aliases first, on purpose: an alias stays
 	// correct as models come and go, while a pinned id in the binary
-	// goes stale the way the price table does. Pins belong here, in the
-	// user's own config, where they can be a deliberate choice.
+	// goes stale the way the price table does. Pins mostly belong here,
+	// in the user's own config, where they can be a deliberate choice —
+	// the one in the built-in list is the exception DefaultModelChoices
+	// explains.
 	ModelChoices []ModelChoice `yaml:"model_choices,omitempty"`
 }
 
@@ -153,10 +155,19 @@ var modelKinds = []string{"work", "review", "ask", "plan", "doc"}
 func ModelKinds() []string { return append([]string(nil), modelKinds...) }
 
 // DefaultModelChoices is the built-in picker list: one alias per
-// family, each of which follows that family's newest release.
+// family, each of which follows that family's newest release, plus one
+// pin.
+//
+// The pin is Opus 5.5, the model work tracks default to. It is here so
+// that choosing it means choosing *that* model rather than whatever
+// "opus" points at on the day the track starts — the two are the same
+// today and will diverge at the next Opus. It has to be repinned by
+// hand when that happens, which is the cost of the guarantee; a pin
+// added for any other reason belongs in the user's own config.
 func DefaultModelChoices() []ModelChoice {
 	return []ModelChoice{
 		{Label: "Opus (latest)", Model: "opus"},
+		{Label: "Opus 5.5", Model: "claude-opus-5-5"},
 		{Label: "Sonnet (latest)", Model: "sonnet"},
 		{Label: "Haiku (latest)", Model: "haiku"},
 		{Label: "Fable (latest)", Model: "fable"},
