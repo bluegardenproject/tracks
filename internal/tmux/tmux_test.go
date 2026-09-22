@@ -43,6 +43,16 @@ func TestNewWindowArgsTargetSessionExplicitly(t *testing.T) {
 	}
 }
 
+func TestSplitWindowRightUsesPortablePercentageSyntax(t *testing.T) {
+	args := splitWindowRightArgs("tracks:work", "sleep 60", "/repo", 30)
+	if got := valueAfter(args, "-l"); got != "30%" {
+		t.Errorf("split size = %q, want 30%% via -l", got)
+	}
+	if got := valueAfter(args, "-p"); got != "" {
+		t.Errorf("obsolete -p percentage syntax is still present: %q", got)
+	}
+}
+
 // TestNewWindowLandsInTargetSessionDespiteOtherSessions reproduces the
 // real bug end-to-end: another session is active and owns a window named
 // like our session. The fixed code must create the window in our session
