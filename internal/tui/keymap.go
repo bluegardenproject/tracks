@@ -1,5 +1,5 @@
-// Package tui hosts small helpers shared across the
-// huh-based menu/settings/newtrack packages.
+// Package tui hosts the palette, form theme and small helpers shared
+// by every tracks screen.
 package tui
 
 import (
@@ -13,9 +13,7 @@ import (
 // every other CLI affordance in `tracks` (the menu, the dashboard)
 // uses Esc to back out.
 //
-// Use:
-//
-//	form := huh.NewForm(...).WithKeyMap(tui.EscQuitKeyMap())
+// Forms get it through RunForm, which also applies the tracks theme.
 func EscQuitKeyMap() *huh.KeyMap {
 	km := huh.NewDefaultKeyMap()
 	km.Quit = key.NewBinding(

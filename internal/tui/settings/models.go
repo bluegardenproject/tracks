@@ -79,7 +79,7 @@ func editModels(cfg *config.Config) error {
 					Value(&pick),
 			),
 		)
-		if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if err := tui.RunForm(form); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return nil
 			}
@@ -231,7 +231,7 @@ func editModelChoices(cfg *config.Config) error {
 					Value(&pick),
 			),
 		)
-		if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if err := tui.RunForm(form); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return nil
 			}
@@ -370,10 +370,10 @@ func removeModelChoice(cfg *config.Config) error {
 	return nil
 }
 
-// runSettingsForm runs a form with the shared keymap, translating an
+// runSettingsForm runs a form with the shared theme and keymap, translating an
 // abort into ErrCancelled so callers can treat it as "left unchanged".
 func runSettingsForm(form *huh.Form) error {
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}

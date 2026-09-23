@@ -101,7 +101,7 @@ func PickAction() (Action, error) {
 		),
 	)
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -145,7 +145,7 @@ func PickTrack(client *daemon.Client, title string, filter func(state.Track) boo
 				Value(&pick),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return state.Track{}, ErrCancelled
 		}
@@ -181,7 +181,7 @@ func PickConfigRepo(cfg config.Config, exclude map[string]bool, title string) (s
 				Value(&pick),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -229,7 +229,7 @@ func Confirm(title, description string) (bool, error) {
 				Value(&yes),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return false, ErrCancelled
 		}

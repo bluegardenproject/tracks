@@ -21,6 +21,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
 	"github.com/bluegardenproject/tracks/internal/tmux"
+	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/bluegardenproject/tracks/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -83,11 +84,11 @@ type styles struct {
 
 func defaultStyles() styles {
 	return styles{
-		header:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
-		panelTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("207")),
-		sectionHdr: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")),
+		header:     lipgloss.NewStyle().Bold(true).Foreground(tui.ColorInfo),
+		panelTitle: lipgloss.NewStyle().Bold(true).Foreground(tui.ColorHighlight),
+		sectionHdr: lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent),
 		row:        lipgloss.NewStyle(),
-		rowActive:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236")),
+		rowActive:  lipgloss.NewStyle().Bold(true).Foreground(tui.ColorSelectionFg).Background(tui.ColorSelectionBg),
 		status: map[state.Status]lipgloss.Style{
 			state.StatusPending: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 			state.StatusRunning: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
@@ -112,33 +113,29 @@ func defaultStyles() styles {
 			// it reads as inert next to the active and end-state colors.
 			state.StatusDraft: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "244"}),
 		},
-		// AdaptiveColor picks at render time: a mid-dark gray on
-		// light terminals (where ANSI 8 turns nearly invisible)
-		// and a lighter gray on dark terminals. Same code path
-		// for both, no theme-specific configuration.
-		dim:        lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "245"}),
-		pr:         lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Underline(true),
+		dim:        lipgloss.NewStyle().Foreground(tui.ColorMuted),
+		pr:         lipgloss.NewStyle().Foreground(tui.ColorAccent).Underline(true),
 		branch:     lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		slug:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		repo:       lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
+		repo:       lipgloss.NewStyle().Foreground(tui.ColorAccent),
 		insertions: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		count:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
 		cost:       lipgloss.NewStyle().Foreground(lipgloss.Color("78")),
 		// Muted blue — the model is context, not a signal to act on, so it
 		// must not compete with the status and cost columns beside it.
 		model: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "117"}),
-		ok:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		warn:  lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-		fail:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		ok:    lipgloss.NewStyle().Foreground(tui.ColorOK),
+		warn:  lipgloss.NewStyle().Foreground(tui.ColorWarn),
+		fail:  lipgloss.NewStyle().Foreground(tui.ColorFail),
 		panel: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("14")).
+			BorderForeground(tui.ColorAccent).
 			Padding(0, 1),
 		confirmPanel: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("9")).
+			BorderForeground(tui.ColorFail).
 			Padding(0, 1),
-		confirmTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")),
+		confirmTitle: lipgloss.NewStyle().Bold(true).Foreground(tui.ColorFail),
 	}
 }
 
@@ -940,7 +937,7 @@ func (m *model) renderRow(i int, t state.Track, cols colLayout) string {
 	// Without this, each cell's own Render() appends a hard ANSI
 	// reset that cancels the outer rowActive background before the
 	// next cell starts, leaving all but the first column unlit.
-	activeBg := lipgloss.Color("236")
+	activeBg := tui.ColorSelectionBg
 	addBg := func(s lipgloss.Style) lipgloss.Style {
 		return s.Background(activeBg)
 	}

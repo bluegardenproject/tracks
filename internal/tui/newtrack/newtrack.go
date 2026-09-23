@@ -209,7 +209,7 @@ func PickResumable(client *daemon.Client) (string, error) {
 				Value(&pick),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -227,7 +227,7 @@ func PickResumable(client *daemon.Client) (string, error) {
 // ErrCancelled once the user confirms the discard.
 func runFormWithDiscardConfirm(build func() *huh.Form) error {
 	for {
-		err := build().WithKeyMap(tui.EscQuitKeyMap()).Run()
+		err := tui.RunForm(build())
 		if err == nil {
 			return nil
 		}
@@ -261,7 +261,7 @@ func confirmDiscard() (bool, error) {
 				Value(&discard),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return true, nil
 		}
@@ -301,7 +301,7 @@ func PickFailureAction(reason string) (FailureAction, error) {
 				Value(&save),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return FailureSaveDraft, nil
 		}
@@ -593,7 +593,7 @@ func pickTemplate(showResume bool) (Template, error) {
 				Value(&choice),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
