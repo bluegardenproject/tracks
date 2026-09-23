@@ -18,6 +18,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/config"
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/state"
+	"github.com/bluegardenproject/tracks/internal/tui"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -90,14 +91,14 @@ func newModel(cfg config.Config) *model {
 		screen: screenPorts,
 		input:  ti,
 		styles: styles{
-			title:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")),
-			dim:      lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
-			ok:       lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-			warn:     lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-			rowSel:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("14")),
-			header:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("244")),
+			title:    lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent),
+			dim:      lipgloss.NewStyle().Foreground(tui.ColorMuted),
+			ok:       lipgloss.NewStyle().Foreground(tui.ColorOK),
+			warn:     lipgloss.NewStyle().Foreground(tui.ColorWarn),
+			rowSel:   lipgloss.NewStyle().Bold(true).Foreground(tui.ColorSelectionFg).Background(tui.ColorSelectionBg),
+			header:   lipgloss.NewStyle().Bold(true).Foreground(tui.ColorMuted),
 			hintKey:  lipgloss.NewStyle().Bold(true),
-			hintText: lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
+			hintText: lipgloss.NewStyle().Foreground(tui.ColorMuted),
 		},
 	}
 }

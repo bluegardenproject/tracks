@@ -125,7 +125,7 @@ func pickAction(cfg config.Config) (action, error) {
 				Value(&pick),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return "", ErrCancelled
 		}
@@ -197,7 +197,7 @@ func editRepo(cfg *config.Config) error {
 					Value(&pick),
 			),
 		)
-		if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if err := tui.RunForm(form); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return ErrCancelled
 			}
@@ -282,7 +282,7 @@ func removeRepo(cfg *config.Config) error {
 				Value(&confirm),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
@@ -320,7 +320,7 @@ func pickRepoIndex(cfg config.Config, title string) (int, error) {
 				Value(&idx),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return 0, ErrCancelled
 		}
@@ -450,7 +450,7 @@ func repoForm(cfg *config.Config, r *config.Repo, editing bool) error {
 	// fill in the detected base. We don't have a per-field "on-blur"
 	// hook in huh, so we accept the values after Run and refine
 	// afterwards if the user left base as its default.
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
@@ -548,7 +548,7 @@ func editRepoGeneral(_ *config.Config, r *config.Repo) error {
 		),
 	).WithShowHelp(true)
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
@@ -618,7 +618,7 @@ func editRepoProvision(_ *config.Config, r *config.Repo) error {
 		),
 	).WithShowHelp(true)
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
@@ -668,7 +668,7 @@ func editRepoServices(cfg *config.Config, repoIdx int) error {
 					Value(&pick),
 			),
 		)
-		if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+		if err := tui.RunForm(form); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return ErrCancelled
 			}
@@ -746,7 +746,7 @@ func editRepoServices(cfg *config.Config, repoIdx int) error {
 						Value(&confirm),
 				),
 			)
-			if err := confirmForm.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+			if err := tui.RunForm(confirmForm); err != nil {
 				if errors.Is(err, huh.ErrUserAborted) {
 					continue
 				}
@@ -788,7 +788,7 @@ func pickServiceIndex(svcs []config.Service, title string) (int, error) {
 				Value(&idx),
 		),
 	)
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return 0, ErrCancelled
 		}
@@ -908,7 +908,7 @@ func serviceForm(existingSvcs []config.Service, svc *config.Service, editing boo
 		),
 	).WithShowHelp(true)
 
-	if err := form.WithKeyMap(tui.EscQuitKeyMap()).Run(); err != nil {
+	if err := tui.RunForm(form); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
 		}
