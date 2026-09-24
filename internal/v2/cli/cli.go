@@ -18,7 +18,7 @@ func Execute(ctx context.Context, args []string, version string) error {
 }
 
 func newRoot(version string) *cobra.Command {
-	return &cobra.Command{
+	root := &cobra.Command{
 		Use:           "tracks --new-app",
 		Short:         "Tracks v2 (dev build)",
 		Version:       version,
@@ -30,4 +30,7 @@ func newRoot(version string) *cobra.Command {
 			return err
 		},
 	}
+	root.CompletionOptions.DisableDefaultCmd = true
+	root.AddCommand(newPathsCmd())
+	return root
 }
