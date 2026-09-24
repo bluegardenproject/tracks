@@ -32,6 +32,8 @@ Requires `git`, `tmux`, and the `claude` CLI on `PATH`. Linux and macOS only.
 make install   # builds with Go 1.25 → ~/bin/tracks
 ```
 
+Tracks v2 is in development in the same repo ([plan](docs/v2/masterplan.md)). `make dev && ./tracks --new-app` runs it next to an installed tracks without touching it.
+
 ## Use
 
 ```bash

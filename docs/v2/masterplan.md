@@ -1,6 +1,6 @@
 # Tracks v2 masterplan
 
-Tracks v2 is the next major version of Tracks: a user-friendly terminal app that runs CLI agents (Claude Code, Cursor) in isolated worktrees, with one always-present **Main** window as the command center and one window per track.
+Tracks v2 is the next major version of Tracks: a user-friendly terminal app that runs CLI agents (Claude Code, Cursor) in isolated worktrees, with one always-present **Tracks** window as the command center and one window per track.
 
 This file is the single source of truth for direction, decisions and status. Implementation detail lives in feature plans under [`plans/`](plans/).
 
@@ -14,16 +14,16 @@ This file is the single source of truth for direction, decisions and status. Imp
 
 | # | Chunk | Plan | Status |
 |---|---|---|---|
-| 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | planned |
-| 2 | Global app layout: Main window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | planned |
-| 3 | Main window layout: header and tab navigation, no tab content yet | not written yet | to be designed |
+| 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | planned |
+| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | planned |
+| 3 | Tracks window layout: header and tab navigation, no tab content yet | not written yet | to be designed |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md) | draft |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
-| 7 | Main content: Tracks, Repositories, Proxy, Settings tabs, track actions | not written yet | to be designed |
+| 7 | Tracks window content: tabs (track list, Repositories, Proxy, Settings), track actions | not written yet | to be designed |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
 
-Chunks 1 to 3 come first, in order. After them, the order of 4 to 7 is decided by what the layout work shows.
+Chunks 1 to 3 come first, in order. The [track status model](#track-status-to-be-designed-before-chunk-2) is designed before chunk 2 starts. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
 ## Decisions
 
@@ -32,11 +32,12 @@ Chunks 1 to 3 come first, in order. After them, the order of 4 to 7 is decided b
 - **Dedicated tmux server:** v2 runs on its own socket with a config it generates. The user's personal `~/.tmux.conf` and other sessions are never involved.
 - **Start from a plain terminal:** started inside another tmux, Tracks refuses with a clear message instead of nesting. The prefix stays Ctrl+b; Alt shortcuts cover common actions without it.
 - **UI: Charm v2** (`charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `huh/v2`, `bubblezone/v2`). The import paths differ from v1's, so both coexist in one `go.mod`.
-- **Main is window 0,** always present, the command center with tabs. v2 has no Dashboard window.
+- **The Tracks window is window 0,** always present, the command center with tabs. v2 has no Dashboard or Main window.
 - **Track navigation: a fixed footer** (the tmux status line) on every window, with clickable track slots, first/previous/next/last buttons, attention badges and Alt shortcuts. Hover is not possible in the tmux status line and is accepted as missing.
 - **Popups:** a full menu (`Alt+p`) and a quick switcher (`Alt+s`).
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
+- **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
 - **The layout is proven on fake data first:** `./tracks --new-app --demo` opens a playground with fake tracks. The UI is built in its real packages against a data interface, so the playground becomes the product.
 
 ## Target shape
@@ -45,12 +46,12 @@ Chunks 1 to 3 come first, in order. After them, the order of 4 to 7 is decided b
 flowchart TD
     cli["tracks CLI"] -->|"attach, own socket"| server["tmux server: own socket + generated config"]
     daemon["tracks daemon"] -->|"spawn panes"| server
-    server --> mainWin["window 0: Main (Bubble Tea)"]
+    server --> tracksWin["window 0: Tracks (Bubble Tea)"]
     server --> trackWin["track windows: agent + terminal + dev-server panes"]
     server --> footer["footer on every window: track navigation + info"]
     trackWin -->|"agent hooks"| daemon
     daemon -->|"only writer"| db["SQLite"]
-    mainWin -->|"queries + change stream"| daemon
+    tracksWin -->|"queries + change stream"| daemon
 ```
 
 ## v1 and v2 on `main`
@@ -110,11 +111,12 @@ internal/v2/
   workspace/         worktrees and provisioning
   devservers/        dev servers, proxy, ports
   config/ platform/  v2 config schema; paths, profile, shell and log helpers
+  theme/             design tokens, theme values and loading (no UI library imports)
   ui/
-    theme/           palette and Huh theme
+    style/           Lip Gloss and Huh styles built from theme tokens
     widget/          shared UI pieces, only once 2+ screens use them
     source/          Source interface for UI data; demo and daemon implementations
-    mainview/        the Main window (not `main`: reserved in Go)
+    tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
     menu/ switcher/  popups
   demo/              fake tracks and the fake agent for the playground
 ```
@@ -122,13 +124,25 @@ internal/v2/
 **Dependency rules:**
 - `track` imports nothing internal.
 - `ui` reaches data only through `ui/source` and `rpc`.
+- Colours come only from `theme` tokens. A test fails on colour literals anywhere else in `internal/v2`.
 - Only `app` wires concrete implementations.
 
 **Reused from v1, unchanged at first:** `git`, `provision`, `services`, `proxy`, `ports`, `github`, `notify`, `update`, `usage`, `shellx`, `dlog`.
 
+## Track status (to be designed before chunk 2)
+
+The footer, the Tracks window, notifications and storage all depend on it, so it's designed before the demo tracks are built. Requirements:
+
+- **Defined exactly once:** one place in the `track` domain package declares every status value with its label, colour token, priority and whether it needs attention. Footer, screens, notifications and storage read from there and never list statuses themselves.
+- **Easy to extend:** adding a status value is one new entry in that place, plus its tests.
+- **Combined, not one flat list:** a track can be in several states at once (for example its agent waits for you while its PR is open), and what's shown is derived from them.
+- **Nothing is carried over from v1:** v1's statuses are not a starting point.
+
 ## Open questions
 
-- **Main:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
+- **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). This goes into a glossary here once agreed.
+- **Track list tab:** the Tracks window will have a tab listing tracks. It needs a name that doesn't clash with the window.
+- **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
@@ -144,5 +158,5 @@ internal/v2/
 
 ## Existing work
 
-- [PR #105](https://github.com/bluegardenproject/tracks/pull/105) adds a shared theme and palette to v1 (Charm v1). v2 reuses the palette values, ported to Lip Gloss v2.
+- [PR #105](https://github.com/bluegardenproject/tracks/pull/105) adds a shared palette to v1 (Charm v1). Its values are a starting point for the first v2 theme.
 - The menu rebuild on the `tracks/09ad3c-menu` branch (Charm v1, uncommitted) is the design reference for the v2 menu.

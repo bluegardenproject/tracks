@@ -1,4 +1,4 @@
-.PHONY: build build-all release clean test fmt vet tidy install
+.PHONY: build dev build-all release clean test fmt vet tidy install
 
 BINARY_NAME := tracks
 VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -9,6 +9,14 @@ build:
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 	@echo "Built ./$(BINARY_NAME)"
+
+# `make dev` builds ./tracks with Tracks v2 linked in. Run v2 with
+# `./tracks --new-app`; it doesn't touch an installed tracks. Releases
+# never use the v2 tag.
+dev:
+	@echo "Building $(BINARY_NAME) $(VERSION) with v2..."
+	@go build -tags v2 -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
+	@echo "Built ./$(BINARY_NAME) (run v2 with ./$(BINARY_NAME) --new-app)"
 
 # Cross-compile to dist/ for the 4 release targets. CGO is off so the
 # resulting binaries are fully static and don't depend on libc on the
