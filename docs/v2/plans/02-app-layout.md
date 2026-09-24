@@ -81,19 +81,16 @@ One fixed row, the tmux status line, on every window, the Tracks window included
   - the demo source's status changes trigger it too
 - **Clicks:** a `MouseDown1Status` binding checks `#{mouse_status_range}`. Window ranges select the window. User ranges run `tracks footer nav <first|prev|next|last>`, which selects the target window and its agent pane.
 
-### Keys (no prefix, in the generated config)
+### Keys (behind the prefix, in the generated config)
 
-**To be revised before 2b:** these collide with keys agents and shells use, see "Keys" in the masterplan's open questions.
+Proposal, tried in the playground. Most replace tmux defaults that don't fit Tracks.
 
-- `Alt+1` to `Alt+9`: track by number
-- `Alt+0`: the Tracks window
-- `Alt+,` and `Alt+.`: previous and next track
-- `Alt+<` and `Alt+>`: first and last track
-- `Alt+s`: quick switcher
-- `Alt+p`: full menu
-- `Alt+t`: add a terminal pane
-- `Alt+[` is avoided because it collides with terminal escape sequences.
-- **macOS:** the terminal must send Option as Alt. The README says how.
+- `Ctrl+b 0`: the Tracks window; `Ctrl+b 1` to `9`: track by number (tmux's own window keys)
+- `Ctrl+b p` and `Ctrl+b n`: previous and next track, skipping window 0
+- `Ctrl+b <` and `Ctrl+b >`: first and last track (instead of tmux's window and pane menus)
+- `Ctrl+b s`: quick switcher (instead of tmux's session tree)
+- `Ctrl+b m`: full menu (instead of marking a pane)
+- `Ctrl+b t`: add a terminal pane (built in chunk 1)
 
 ## Tracks window, placeholder (`internal/v2/ui/tracksview`)
 
@@ -105,11 +102,11 @@ A simple first version, just enough to navigate. Chunk 3 designs the real header
 
 ## Popups (`internal/v2/ui/menu`, `internal/v2/ui/switcher`)
 
-- **Full menu (`Alt+p`):**
+- **Full menu (`Ctrl+b m`):**
   - the menu rebuild from the `tracks/09ad3c-menu` branch, ported to Charm v2
   - sections, a filter, shortcuts, breadcrumbs, the track picker table and confirm dialogs
   - in the demo, actions act on fake tracks: switch, end a track, "new" opens the form
-- **Quick switcher (`Alt+s`):** a filterable list of tracks with status. Enter switches, Esc closes. Built for more tracks than `Alt+1..9` covers.
+- **Quick switcher (`Ctrl+b s`):** a filterable list of tracks with status. Enter switches, Esc closes. Built for more tracks than `Ctrl+b 1..9` covers.
 - **New track form (Huh v2):** kind, repos, name, agent. In the demo it creates another fake track window, and the footer picks it up.
 - **Size:** popups open with `display-popup -E` at about 80% of the window. The playground decides the final size.
 

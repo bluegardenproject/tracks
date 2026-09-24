@@ -134,7 +134,7 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
   - `Open(spec)` builds a track window: agent pane on the left, right column at 30% with terminal and dev-server panes stacked. It doesn't switch to the window, and leaves the agent pane active.
   - Splits target pane IDs, never "the active pane". Panes carry their role (`@tracks_role`) and title (`@tracks_title`) as pane options, and the window its directory (`@tracks_dir`).
   - `AddTerminal(window)` adds a shell at the bottom of the column in the track's directory and evens the column's heights. The panes are found by role, so it works wherever focus is.
-  - `Ctrl+b t` runs it through the hidden `trackwin add-terminal`; on the Tracks window it says terminals open in track windows. Closing a pane is plain `exit`. The final key is an open question in the masterplan.
+  - `Ctrl+b t` runs it through the hidden `trackwin add-terminal`; on the Tracks window it says terminals open in track windows. Closing a pane is plain `exit`.
 - **Fake, in `internal/v2/demo`:**
   - four tracks (name, repo, kind, scenario, optional dev server), no statuses until the status model exists
   - a directory per track under the demo data directory, standing in for a worktree
@@ -148,7 +148,7 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
 - **The placeholder Tracks window is the first Bubble Tea v2 program.** It proves the stack inside the v2 tmux server before chunk 2 builds on it:
   - alternate screen and resizing (done)
   - true colour through the generated tmux config (done)
-  - keys, including Alt combinations and extended keys (with the first interactive screen)
+  - keys, including extended keys (with the first interactive screen)
   - mouse clicks, through a `bubblezone` target (with the first interactive screen)
 - **24-bit colour inside the server:** Tracks screens always render with the 24-bit profile (`style.Profile()`), unless `NO_COLOR` is set, and tmux converts per attached terminal. Detection alone would pick 256 colours: inside tmux it asks the attached terminal, and window 0 starts before any terminal attaches.
 - **Checks:** an untagged release build links none of it (`go version -m tracks`), and v1's screens are unchanged. Adding the modules raised some indirect dependencies v1 shares (`x/ansi`, `colorprofile`, `go-runewidth`, ...); v1's tests pass with them.

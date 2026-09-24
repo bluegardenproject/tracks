@@ -34,7 +34,8 @@ Chunks 1 to 3 come first, in order. The [track status model](#track-status-to-be
 - **UI: Charm v2** (`charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `huh/v2`, `bubblezone/v2`). The import paths differ from v1's, so both coexist in one `go.mod`.
 - **The Tracks window is window 0,** always present, the command center with tabs. v2 has no Dashboard or Main window.
 - **Track navigation: a fixed footer** (the tmux status line) on every window, with clickable track slots, first/previous/next/last buttons, attention badges and keyboard shortcuts. Hover is not possible in the tmux status line and is accepted as missing.
-- **Popups:** a full menu and a quick switcher. Their keys are an open question (see Keys).
+- **Popups:** a full menu and a quick switcher.
+- **Tracks keys sit behind the tmux prefix** (`Ctrl+b t`, ...). A key bound without it is taken from every pane, and agents and shells use most Alt keys: Claude Code has `Alt+t` (thinking), `Alt+p` (model), `Alt+o`, `Alt+b`/`f`/`d`, `Alt+y`; shells have `Alt+.` (last argument), `Alt+<`/`Alt+>` (history), `Alt+t`, Alt+digits.
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
 - **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
@@ -147,14 +148,12 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 - **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
-- **Keys:** keys bound without the prefix are taken from every pane, and agents and shells use many Alt keys. Claude Code: `Alt+t` extended thinking, `Alt+p` model, `Alt+o` fast mode, `Alt+b`/`f`/`d` word motion, `Alt+y` paste history. Shells (readline, zle): `Alt+.` last argument, `Alt+<`/`Alt+>` history start and end, `Alt+t` transpose words, Alt+digits. Options: actions behind the prefix (`Ctrl+b t`), a Tracks leader key, or only uncontested Alt keys. Until decided, the prefix is used (`Ctrl+b t` adds a terminal).
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
 - **The v1 menu rebuild** (uncommitted, Charm v1, on the `tracks/09ad3c-menu` branch): ship it to v1 too, or keep it only as the reference for the v2 menu.
 
 ## Risks
 
 - **Nested tmux:** users who start Tracks inside their own tmux are refused and have to open a new terminal tab. This is a deliberate trade-off.
-- **Alt shortcuts on macOS** need the terminal to send Option as Alt (iTerm2 "Esc+", Ghostty `macos-option-as-alt`). The docs must say so.
 - **Server environment:** the Tracks tmux server inherits PATH and other variables from the terminal that starts it first.
 - **The generated tmux config is opinionated.** Overrides go only through a sourced override file.
 - **Agent hook payloads drift** between CLI versions. Hooks read only named fields and fall back to polling.
