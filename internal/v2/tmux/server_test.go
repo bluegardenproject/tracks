@@ -69,7 +69,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	if got := tmuxOut("display-message", "-p", "-t", "tracks:0", "#W"); got != "Tracks" {
 		t.Errorf("window 0 = %q, want Tracks", got)
 	}
-	if err := c.SelectWindow("tracks", "0"); err != nil {
+	if err := c.SelectWindow("tracks:0"); err != nil {
 		t.Error(err)
 	}
 

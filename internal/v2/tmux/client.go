@@ -61,9 +61,10 @@ func (c *Client) NewSession(configFile, name, window, command string) error {
 	return err
 }
 
-// SelectWindow makes window the current window of session.
-func (c *Client) SelectWindow(session, window string) error {
-	_, err := c.run("select-window", "-t", session+":"+window)
+// SelectWindow makes window current in its session. window is an ID
+// ("@3") or "session:index".
+func (c *Client) SelectWindow(window string) error {
+	_, err := c.run("select-window", "-t", window)
 	return err
 }
 
