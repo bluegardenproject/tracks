@@ -41,13 +41,10 @@ type Source interface {
 
 ## Track windows
 
-- **Layout as in v1:**
-  - agent pane on the left
-  - right column at 30% width with terminal and dev-server panes stacked
-  - pane titles on the top border (`agent`, `terminal`, `web:3000`)
-- **Splits target panes explicitly,** by pane ID, never "the active pane", so nothing depends on where focus is.
-- **`Alt+t`** adds a terminal pane (a real shell in the track's temp directory) to the right column. Closing a pane is plain `exit` or tmux's own kill-pane.
+Built in chunk 1 (`internal/v2/trackwin`, see [chunk 1](01-technical-groundwork.md#1d-demo-session)): the agent pane on the left, the right column at 30% with terminal and dev-server panes, titles on the top border, and adding a terminal (`Ctrl+b t` for now).
+
 - **Switching to a track focuses its agent pane.**
+- **Closing panes:** whether `exit` in the last terminal is enough, or a key is needed, is decided in the playground.
 
 ## Footer (`internal/v2/footer`)
 
@@ -85,6 +82,8 @@ One fixed row, the tmux status line, on every window, the Tracks window included
 - **Clicks:** a `MouseDown1Status` binding checks `#{mouse_status_range}`. Window ranges select the window. User ranges run `tracks footer nav <first|prev|next|last>`, which selects the target window and its agent pane.
 
 ### Keys (no prefix, in the generated config)
+
+**To be revised before 2b:** these collide with keys agents and shells use, see "Keys" in the masterplan's open questions.
 
 - `Alt+1` to `Alt+9`: track by number
 - `Alt+0`: the Tracks window
@@ -130,14 +129,14 @@ A simple first version, just enough to navigate. Chunk 3 designs the real header
   - truncation and escaping
   - segment dropping order
 - **Pure navigation logic:** first, previous, next and last with wrap-around off, and number keys past the end.
-- **Throwaway tmux server:** the rendered string is accepted, a window range click selects the window, and `Alt+t` adds a pane in the right column even when focus is elsewhere.
+- **Throwaway tmux server:** the rendered string is accepted, a window range click selects the window, and the navigation keys select the right window.
 - **Screens:**
   - a few golden snapshots (Tracks window placeholder, menu root, switcher with filter)
   - behaviour tests for the ported menu (navigation, filter, confirm, mouse click), carried over from the v1 menu tests
 
 ## PR slices
 
-1. **2a: Huh styles, `Source` and demo source, track window layout, `Alt+t`.**
+1. **2a: Huh styles, `Source` and demo source.**
 2. **2b: footer renderer, refresh, hooks, clicks, navigation keys.**
 3. **2c: footer info segments and attention badges.**
 4. **2d: Tracks window placeholder, full menu popup, quick switcher, New track form.**

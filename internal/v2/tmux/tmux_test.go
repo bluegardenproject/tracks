@@ -91,6 +91,8 @@ func TestConfRender(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			conf.DefaultTerminal = "tmux-256color"
 			conf.OverrideFile = "/home/u/.config/tracks-v2/tmux.conf"
+			conf.Command = "'/opt/tracks' --new-app"
+			conf.Colors = Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan"}
 			got, err := conf.Render()
 			if err != nil {
 				t.Fatal(err)

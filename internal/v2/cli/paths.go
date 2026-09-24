@@ -7,18 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newPathsCmd() *cobra.Command {
-	var demo bool
-	c := &cobra.Command{
+func newPathsCmd(profile profileFunc) *cobra.Command {
+	return &cobra.Command{
 		Use:   "paths",
 		Short: "print where Tracks v2 keeps its files",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			profile := platform.Default
-			if demo {
-				profile = platform.Demo
-			}
-			p, err := platform.Resolve(profile)
+			p, err := platform.Resolve(profile())
 			if err != nil {
 				return err
 			}
@@ -27,6 +22,4 @@ func newPathsCmd() *cobra.Command {
 			return err
 		},
 	}
-	c.Flags().BoolVar(&demo, "demo", false, "show the playground's paths")
-	return c
 }

@@ -17,7 +17,17 @@ func Execute(ctx context.Context, args []string, version string) error {
 	return root.ExecuteContext(ctx)
 }
 
+// profileFunc reports the profile chosen with --demo.
+type profileFunc func() platform.Profile
+
 func newRoot(version string) *cobra.Command {
+	var demo bool
+	profile := func() platform.Profile {
+		if demo {
+			return platform.Demo
+		}
+		return platform.Default
+	}
 	root := &cobra.Command{
 		Use:           "tracks --new-app",
 		Short:         "Tracks v2 (dev build)",
@@ -26,10 +36,17 @@ func newRoot(version string) *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			return start(platform.Default)
+			return start(profile())
 		},
 	}
+	root.PersistentFlags().BoolVar(&demo, "demo", false, "use the playground: a separate session with fake tracks")
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.AddCommand(newPathsCmd(), newStopCmd(), newTracksWindowCmd(version))
+	root.AddCommand(
+		newPathsCmd(profile),
+		newStopCmd(profile),
+		newTracksWindowCmd(version),
+		newTrackwinCmd(profile),
+		newDemoCmd(),
+	)
 	return root
 }

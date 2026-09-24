@@ -15,6 +15,7 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 ## v2 map
 - `cli/` commands and start-up · `platform/` paths and profiles (default, demo)
 - `tmux/` tmux on v2's own socket, generated config · `tmux/tmuxtest/` throwaway servers for tests
+- `trackwin/` a track's window and its panes · `demo/` fake tracks, agent and dev server for `--demo`
 - `theme/` design tokens and theme values (`themes/*.yaml`) · `ui/style/` tokens to Lip Gloss colours
 - `ui/tracksview/` the Tracks window (window 0), Bubble Tea v2
 - Imports point downwards. The planned layout is in the masterplan; add packages here when they land.

@@ -26,6 +26,8 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 		OuterTerm:       "xterm-test",
 		TrueColor:       true,
 		OverrideFile:    filepath.Join(dir, "missing.conf"),
+		Command:         "true",
+		Colors:          tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan"},
 	}
 	if err := conf.Write(confPath); err != nil {
 		t.Fatal(err)
