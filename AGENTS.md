@@ -9,11 +9,14 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 - v2 may import v1 leaf packages unchanged (`git`, `shellx`, ...). If it needs a change, copy the package into `internal/v2/`.
 - The installed tracks may be running: never run `make install` or a bare `./tracks` during v2 work.
 - v2 tests never touch a real tmux server: use `tmuxtest.Socket(t)`. The tmux client panics in tests on any other socket.
-- v2 colours come only from theme tokens, never colour values in code.
+- v2 colours come only from theme tokens (`theme.Token`), never colour values in code; a test enforces it. A new token goes into `theme/tokens.go` and gets a value in every theme file.
+- UI uses Charm v2 (`charm.land/...`). Charm v1 imports (`github.com/charmbracelet/bubbletea`, ...) are v1 only.
 
 ## v2 map
 - `cli/` commands and start-up · `platform/` paths and profiles (default, demo)
 - `tmux/` tmux on v2's own socket, generated config · `tmux/tmuxtest/` throwaway servers for tests
+- `theme/` design tokens and theme values (`themes/*.yaml`) · `ui/style/` tokens to Lip Gloss colours
+- `ui/tracksview/` the Tracks window (window 0), Bubble Tea v2
 - Imports point downwards. The planned layout is in the masterplan; add packages here when they land.
 
 ## Build and test

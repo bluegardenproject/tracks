@@ -136,11 +136,12 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
 
 - **Libraries:** `charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `huh/v2` and `bubblezone/v2`, next to v1's Charm v1 modules in the same `go.mod`. v1 keeps its imports. Each module is added in the PR that first imports it, since `go mod tidy` drops unused ones.
 - **The placeholder Tracks window is the first Bubble Tea v2 program.** It proves the stack inside the v2 tmux server before chunk 2 builds on it:
-  - alternate screen and resizing
-  - true colour through the generated tmux config
-  - keys, including Alt combinations and extended keys
-  - mouse clicks, through a `bubblezone` target
-- **Checks:** an untagged release build links none of it, and v1's screens are unchanged.
+  - alternate screen and resizing (done)
+  - true colour through the generated tmux config (done)
+  - keys, including Alt combinations and extended keys (with the first interactive screen)
+  - mouse clicks, through a `bubblezone` target (with the first interactive screen)
+- **24-bit colour inside the server:** Tracks screens always render with the 24-bit profile (`style.Profile()`), unless `NO_COLOR` is set, and tmux converts per attached terminal. Detection alone would pick 256 colours: inside tmux it asks the attached terminal, and window 0 starts before any terminal attaches.
+- **Checks:** an untagged release build links none of it (`go version -m tracks`), and v1's screens are unchanged. Adding the modules raised some indirect dependencies v1 shares (`x/ansi`, `colorprofile`, `go-runewidth`, ...); v1's tests pass with them.
 
 ## 1f. Design tokens and the first theme (`internal/v2/theme`)
 
@@ -157,8 +158,9 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
   | state | `state.success`, `state.warning`, `state.danger`, `state.info` |
 
 - **Values:** `#rrggbb`, each with a dark and a light variant. The variant is picked from the terminal's background colour, which Bubble Tea v2 reports; dark is the default. Terminals with fewer colours get the nearest match.
-- **The first theme is built in,** with values based on [PR #105](https://github.com/bluegardenproject/tracks/pull/105). Loading theme files from the config directory comes later and reuses the same validation.
-- **Adding a token** is one new name plus a value in the built-in theme. A test fails if any token has no value.
+- **The first theme is built in:** `theme/themes/default.yaml`, embedded in the binary, so colour values stay out of Go code. Loading theme files from the config directory comes later and reuses the same parser and validation.
+- **Adding a token** is one new name in `theme/tokens.go` plus a value in every theme file. Parsing fails on a missing or unknown token, or a value that isn't `#rrggbb`.
+- **The Tracks window shows every token as a swatch,** so the theme can be judged in the real terminal.
 - **Guard test:** a test scans `internal/v2` and fails on colour literals outside `theme` (hex strings, `lipgloss.Color(...)`, tmux `fg=`/`bg=` values, raw ANSI colour escapes). `AGENTS.md` states the rule.
 
 ## Tests
