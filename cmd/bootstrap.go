@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/config"
@@ -132,6 +133,11 @@ func ensureDaemonUp(cfg config.Config) error {
 		if reason == "" {
 			return nil
 		}
+		if self, err := selfBinary(); err == nil {
+			if err := foreignDaemonError(r, self, cfg.Tmux.SessionName); err != nil {
+				return err
+			}
+		}
 		fmt.Fprintf(os.Stderr, "tracks: %s — restarting daemon.\n", reason)
 		_ = cl.Shutdown()
 		// Wait for the socket to actually go away before spawning a
@@ -180,6 +186,31 @@ func daemonStaleReason(r daemon.PingResult) string {
 		return "daemon is running an older build of this binary"
 	}
 	return ""
+}
+
+// foreignDaemonError refuses to restart a daemon that was started from
+// a different binary than self. Restarting stops every live track, so a
+// local build must never take over the daemon of an installed tracks.
+// `tracks update` replaces the binary in place, so its restarts still
+// pass. Nil when the daemon didn't report its path.
+func foreignDaemonError(r daemon.PingResult, self, sessionName string) error {
+	if r.ExePath == "" || samePath(r.ExePath, self) {
+		return nil
+	}
+	return fmt.Errorf("the running daemon (%s) was started from %s, not %s.\n"+
+		"Restarting it would stop its tracks, so tracks leaves it alone.\n"+
+		"  To try a dev build next to it: make dev && ./tracks --new-app\n"+
+		"  To switch binaries, quit Tracks first: tmux kill-session -t %s",
+		r.Version, r.ExePath, self, sessionName)
+}
+
+func samePath(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && ra == rb
 }
 
 // spawnDaemon launches the daemon as a tmux-server background child

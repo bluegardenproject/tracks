@@ -57,6 +57,10 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # Only `make dev` builds with the v2 tag, so vet that variant too.
+      - name: go vet (v2 build)
+        run: go vet -tags v2 ./...
+
       # The release job cross-compiles these exact targets. Build them
       # here too so a platform-specific break fails the PR instead of
       # silently shipping a release with no binaries attached.

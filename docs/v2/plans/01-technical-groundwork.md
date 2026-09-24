@@ -5,12 +5,12 @@ Part of the [v2 masterplan](../masterplan.md). This file is deleted in the PR th
 ## Outcome
 
 `make dev && ./tracks --new-app --demo` opens a v2 session on its own tmux server. It has:
-- a placeholder Main window
+- a placeholder Tracks window, the first screen on the Charm v2 TUI stack
 - several fake track windows (fake agent, real terminal, fake dev-server log)
 
 The installed v1 app keeps running untouched the whole time. Nothing here is visible to v1 users, and release binaries don't contain it.
 
-Out of scope: the footer, menus and the real Main (chunks 2 and 3), real tracks (chunk 5).
+Out of scope: the footer, menus and the real Tracks window (chunks 2 and 3), real tracks (chunk 5).
 
 ## Why the isolation matters
 
@@ -36,26 +36,28 @@ Today a local build is unsafe to run. It reports a different version from the in
 
 **Sync first:** the package list below, and the text of both agent files, are agreed before anything is created.
 
-- **Packages for chunks 1 and 2 only:**
-  - `internal/v2/cli`: cobra root, `--demo`, `demo stop`, hidden helper commands
-  - `internal/v2/platform`: profile, paths, shell helpers
-  - `internal/v2/tmux`
-  - `internal/v2/demo`
-  - `internal/v2/ui/...` (chunk 2)
-  - `internal/v2/footer` (chunk 2)
+- **Packages for chunk 1 (agreed):**
+  - `internal/v2/cli`: commands: the root, `--demo`, `demo stop`, hidden helpers (the fake agent, the placeholder view)
+  - `internal/v2/platform`: profile and paths
+  - `internal/v2/tmux`: tmux client bound to one socket, the generated config, start-up rules, version check
+  - `internal/v2/tmux/tmuxtest`: throwaway tmux servers for tests
+  - `internal/v2/demo`: fake tracks, fake agent scenarios, building the demo session
+  - `internal/v2/theme`: design tokens and theme values
+  - `internal/v2/ui/style`: Lip Gloss styles built from tokens
+  - `internal/v2/ui/tracksview`: the placeholder Tracks window
 
   Everything else from the masterplan layout is created when its chunk starts.
 - **Root `AGENTS.md`** (about one page):
   - the v1/v2 split in its first lines
   - the layout map and dependency rules
   - `make dev`, `go test ./...`
-  - conventions: file size, tests, doc comments
+  - conventions: file size, tests, doc comments, colours only through theme tokens
 - **`CLAUDE.md`** is a one-line import of `AGENTS.md`.
 - **Profile and paths (`platform`)** are resolved once, before any config, daemon or tmux contact:
   - config: `~/.config/tracks-v2/config.yaml`
   - data: `~/.local/state/tracks-v2/` (worktrees, logs, generated tmux config)
-  - daemon socket directory: `tracks-v2-<uid>`
   - tmux socket: `tracks-v2`
+  - no daemon socket yet: v2 runs without a daemon until chunk 5
   - demo: tmux socket `tracks-v2-demo`, data in a temp directory wiped on every start
 - **Global helper files** (Claude skills and agents, the Cursor rule) use `tracks-v2-*` names once v2 writes any, so v1 and v2 never overwrite each other. The v2 proxy port range is separate from v1's.
 
@@ -106,7 +108,7 @@ source-file -q ~/.config/tracks-v2/tmux.conf
 - **Start-up rules:** a pure `planStartup(location, sessionExists)` decides:
   - plain terminal, no session: create the session, then attach
   - plain terminal, session running: attach a second client
-  - inside a Tracks v2 pane: select window 0 (Main)
+  - inside a Tracks v2 pane: select window 0 (Tracks)
   - inside any other tmux: exit 1 with
 
 ```text
@@ -119,7 +121,7 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
 - **`./tracks --new-app --demo`:**
   - wipes the demo data directory and generates the config
   - starts the server on `tracks-v2-demo`
-  - creates window 0, `Main`, running a placeholder `tracks main` view that simply says it's a placeholder (the real one comes in chunks 2 and 3)
+  - creates window 0, `Tracks`, running a placeholder view (a hidden command) that simply says it's a placeholder (the real one comes in chunks 2 and 3)
   - creates 7 fake track windows, then attaches
 - **`./tracks --new-app --demo stop`** kills the demo server.
 - **Fake track window:**
@@ -129,6 +131,35 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
   - pane titles: `agent`, `terminal`, `web:3000`
 - **Scenarios for `demo-agent`:** `running`, `your-turn`, `needs-approval`, `finished`. Each prints scripted, Claude-like output with pauses, so panes look alive without a real agent.
 - **Fake tracks** come from `internal/v2/demo`: plain data with names, kinds, repos and statuses. Chunk 2 puts the `Source` interface in front of it.
+
+## 1e. TUI stack (Charm v2)
+
+- **Libraries:** `charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `huh/v2` and `bubblezone/v2`, next to v1's Charm v1 modules in the same `go.mod`. v1 keeps its imports. Each module is added in the PR that first imports it, since `go mod tidy` drops unused ones.
+- **The placeholder Tracks window is the first Bubble Tea v2 program.** It proves the stack inside the v2 tmux server before chunk 2 builds on it:
+  - alternate screen and resizing
+  - true colour through the generated tmux config
+  - keys, including Alt combinations and extended keys
+  - mouse clicks, through a `bubblezone` target
+- **Checks:** an untagged release build links none of it, and v1's screens are unchanged.
+
+## 1f. Design tokens and the first theme (`internal/v2/theme`)
+
+- **Tokens are the only way to a colour.** A token names a purpose, for example `text.muted` or `bg.hover`. Screens, the footer and the status model use tokens, never colour values.
+- **The package has no UI library imports.** It declares the token names, holds theme values as plain strings, and validates them. Adapters turn values into colours at the edges: `ui/style` for Lip Gloss (chunk 1 needs only what the placeholder uses; Huh comes in chunk 2), and the footer renderer for tmux (chunk 2).
+- **First token set,** extended as screens need more:
+
+  | Group | Tokens |
+  |---|---|
+  | text | `text.default`, `text.muted`, `text.faint`, `text.inverse`, `text.accent` |
+  | background | `bg.base`, `bg.surface`, `bg.overlay`, `bg.selected`, `bg.hover` |
+  | border | `border.default`, `border.focus` |
+  | emphasis | `accent`, `highlight` |
+  | state | `state.success`, `state.warning`, `state.danger`, `state.info` |
+
+- **Values:** `#rrggbb` or an ANSI colour number (0 to 255), each with a dark and a light variant. The variant is picked from the terminal's background colour, which Bubble Tea v2 reports.
+- **The first theme is built in,** with values based on [PR #105](https://github.com/bluegardenproject/tracks/pull/105). Loading theme files from the config directory comes later and reuses the same validation.
+- **Adding a token** is one new name plus a value in the built-in theme. A test fails if any token has no value.
+- **Guard test:** a test scans `internal/v2` and fails on colour literals outside `theme` (hex strings, `lipgloss.Color(...)`, tmux `fg=`/`bg=` values, raw ANSI colour escapes). `AGENTS.md` states the rule.
 
 ## Tests
 
@@ -155,6 +186,6 @@ Tracks runs on its own tmux server. Open a new terminal tab and run it there.
 1. **1a:** build tag, dispatch, `make dev`, v1 daemon guard. This is the only chunk-1 PR that touches v1 files, and it can ship in a v1 release.
 2. **1b:** `internal/v2` skeleton, `AGENTS.md` and `CLAUDE.md`, profile and paths, after syncing on the layout and text.
 3. **1c:** `internal/v2/tmux` with socket, guard, `tmuxtest`, config generation, start-up rules.
-4. **1d:** demo session, fake agent, placeholder Main.
+4. **1d, 1e and 1f:** demo session, fake agent, design tokens with the first theme, and the placeholder Tracks window on Charm v2.
 
-After 1d the maintainer plays with the session before chunk 2 starts.
+The docs changes made during chunk 1 ship with its PRs. After the last slice the maintainer plays with the session before chunk 2 starts.
