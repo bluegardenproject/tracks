@@ -1,23 +1,27 @@
 package cli
 
 import (
-	"fmt"
-
+	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/tracksview"
 	"github.com/spf13/cobra"
 )
 
-// newTracksWindowCmd runs in window 0 until the real Tracks window
-// replaces it.
-func newTracksWindowCmd() *cobra.Command {
+// newTracksWindowCmd runs the Tracks window in window 0.
+func newTracksWindowCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:    "tracks-window",
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			fmt.Fprint(c.OutOrStdout(), "Tracks v2: placeholder for the Tracks window.\n\n"+
-				"Detach: Ctrl+b d    Stop: ./tracks --new-app stop\n")
-			<-c.Context().Done()
-			return nil
+			_, err := tea.NewProgram(tracksview.New(version),
+				tea.WithContext(c.Context()),
+				tea.WithColorProfile(style.Profile()),
+			).Run()
+			if c.Context().Err() != nil {
+				return nil
+			}
+			return err
 		},
 	}
 }

@@ -30,6 +30,6 @@ func newRoot(version string) *cobra.Command {
 		},
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.AddCommand(newPathsCmd(), newStopCmd(), newTracksWindowCmd())
+	root.AddCommand(newPathsCmd(), newStopCmd(), newTracksWindowCmd(version))
 	return root
 }
