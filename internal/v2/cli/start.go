@@ -59,7 +59,7 @@ func start(profile platform.Profile) error {
 	case startRefuse:
 		return errInsideTmux
 	case startSelect:
-		return c.SelectWindow(sessionName, "0")
+		return c.SelectWindow(sessionName + ":0")
 	case startCreate:
 		if err := createSession(c, paths, version); err != nil {
 			return err
