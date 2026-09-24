@@ -5,8 +5,8 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +25,11 @@ func newRoot(version string) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(c.OutOrStdout(), "Tracks v2 %s (dev build): nothing to open yet.\n", version)
-			return err
+		RunE: func(*cobra.Command, []string) error {
+			return start(platform.Default)
 		},
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.AddCommand(newPathsCmd())
+	root.AddCommand(newPathsCmd(), newStopCmd(), newTracksWindowCmd())
 	return root
 }

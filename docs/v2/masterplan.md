@@ -38,6 +38,7 @@ Chunks 1 to 3 come first, in order. The [track status model](#track-status-to-be
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
 - **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
+- **Theme values are exact `#rrggbb` colours,** with a dark and a light variant per token. Tracks has its own look instead of following the terminal's colour scheme. Terminals without 24-bit colour (older macOS Terminal.app, the Linux console) get the nearest colour they support: Lip Gloss and tmux convert automatically.
 - **The layout is proven on fake data first:** `./tracks --new-app --demo` opens a playground with fake tracks. The UI is built in its real packages against a data interface, so the playground becomes the product.
 
 ## Target shape
