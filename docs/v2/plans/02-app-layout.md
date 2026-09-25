@@ -43,7 +43,7 @@ type Source interface {
 
 Built in chunk 1 (`internal/v2/trackwin`, see [chunk 1](01-technical-groundwork.md#1d-demo-session)): the agent pane on the left, the right column at 30% with terminal and dev-server panes, titles on the top border, and adding a terminal (`Ctrl+b t` for now).
 
-- **Switching to a track focuses its agent pane.**
+- **Switching to a track focuses its agent pane,** with keys and footer clicks alike (`trackwin.Switch`).
 - **Closing panes:** whether `exit` in the last terminal is enough, or a key is needed, is decided in the playground.
 
 ## Footer (`internal/v2/footer`)
@@ -81,13 +81,13 @@ Opened with `t` in the Tracks window.
 
 ### Keys (behind the prefix, in the generated config)
 
-Proposal, tried in the playground. Most replace tmux defaults that don't fit Tracks.
+Most replace tmux defaults that don't fit Tracks. The keys run the hidden `trackwin nav` command; `trackwin.Destination` decides where they go.
 
-- `Ctrl+b 0`: the Tracks window; `Ctrl+b 1` to `9`: track by number (tmux's own window keys)
-- `Ctrl+b p` and `Ctrl+b n`: previous and next track, skipping window 0
-- `Ctrl+b <` and `Ctrl+b >`: first and last track (instead of tmux's window and pane menus)
-- `Ctrl+b s`: quick switcher (instead of tmux's session tree)
-- `Ctrl+b m`: full menu (instead of marking a pane)
+- `Ctrl+b 0`: the Tracks window; `Ctrl+b 1` to `9`: track by number, nothing past the last track (built)
+- `Ctrl+b p` and `Ctrl+b n`: previous and next track, skipping window 0 and not wrapping around. From the Tracks window, `n` goes to the first track and `p` to the last (built)
+- `Ctrl+b <` and `Ctrl+b >`: first and last track, instead of tmux's window and pane menus (built)
+- `Ctrl+b s`: quick switcher, instead of tmux's session tree (comes with the popups)
+- `Ctrl+b m`: full menu, instead of marking a pane (comes with the popups)
 - `Ctrl+b t`: add a terminal pane (built in chunk 1)
 
 ## Tracks window, placeholder (`internal/v2/ui/tracksview`)
@@ -127,7 +127,7 @@ A simple first version, just enough to navigate. Chunk 3 designs the real header
 ## PR slices
 
 1. **2a: Huh styles, `Source` and demo source.**
-2. **2b: footer rows, navigation list, system row, theme editor** (done), then the navigation keys.
+2. **2b: footer rows, navigation list, system row, theme editor** (done), then the navigation keys (done).
 3. **2c: footer buttons and attention badges,** once statuses exist.
 4. **2d: Tracks window placeholder, full menu popup, quick switcher, New track form.**
 
