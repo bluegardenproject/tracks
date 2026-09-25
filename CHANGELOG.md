@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.3.0](https://github.com/bluegardenproject/tracks/compare/v1.2.0...v1.3.0) (2026-09-25)
+
+
+### Features
+
+* **tui:** share one palette and form theme across screens ([38909e0](https://github.com/bluegardenproject/tracks/commit/38909e0b8fd6d776de9353f5f6248fcf20d902c1))
+
+
+### Bug Fixes
+
+* **bootstrap:** don't restart a daemon started from another binary ([a9ebf01](https://github.com/bluegardenproject/tracks/commit/a9ebf016592cf98ec0431f280b0a6fb48abcc451))
+
+
+### Documentation
+
+* add Tracks v2 masterplan and first feature plans ([1dd0515](https://github.com/bluegardenproject/tracks/commit/1dd0515a1fff03c5a723527f7fa86d4879ae3f7f))
+
+
+### Miscellaneous
+
+* **deps:** bump bubbles to v1.0.0 and bubbletea to v1.3.10 ([2d16cbc](https://github.com/bluegardenproject/tracks/commit/2d16cbc48285e2a13591783a6dd7b2b88c831a61))
+* **v2:** add AGENTS.md and v2 paths ([850dfea](https://github.com/bluegardenproject/tracks/commit/850dfeacdfef6825a5da409e8d3b19b2de5cf30f))
+* **v2:** add design tokens and a first Tracks window ([0f6b39b](https://github.com/bluegardenproject/tracks/commit/0f6b39b9250183ad4701b7f6af40ebaf49ae8e34))
+* **v2:** demo playground with fake tracks ([5af802f](https://github.com/bluegardenproject/tracks/commit/5af802f43935e2587e6d5a646401078cffff321c))
+* **v2:** four-row footer with track navigation and system info ([de890cc](https://github.com/bluegardenproject/tracks/commit/de890cc6bf2ec9fc9177487dc7a9b674d3067805))
+* **v2:** run v2 on its own tmux server ([61c3a38](https://github.com/bluegardenproject/tracks/commit/61c3a3844b7724a410a37625522860de3071a60c))
+* **v2:** theme creator in the Tracks window ([ca8cb90](https://github.com/bluegardenproject/tracks/commit/ca8cb906e42e706dd2d3b84b529192201118c763))
+* **v2:** Tracks keys behind the tmux prefix ([a812788](https://github.com/bluegardenproject/tracks/commit/a812788e50da2dfbaf419a7e41ec2f18b660a035))
+* **v2:** trackwin builds track windows ([c199619](https://github.com/bluegardenproject/tracks/commit/c199619ab568ae98d778832991d0982a8c9675a9))
+* **v2:** update plans for the footer and theme creator ([91ef18c](https://github.com/bluegardenproject/tracks/commit/91ef18c659079e01344d5ab7fbb220b3947510cf))
+
 ## [1.2.0](https://github.com/bluegardenproject/tracks/compare/v1.1.1...v1.2.0) (2026-09-22)
 
 
