@@ -25,7 +25,7 @@ var (
 )
 
 func TestSettingsShowsEveryToken(t *testing.T) {
-	m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: 120, Height: 40}, shiftTabKey)
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: 40}, shiftTabKey)
 	out := m.View().Content
 	for _, token := range theme.All {
 		if !strings.Contains(out, string(token)) {
@@ -35,7 +35,7 @@ func TestSettingsShowsEveryToken(t *testing.T) {
 }
 
 func TestFollowsTerminalBackground(t *testing.T) {
-	m := update(New("test", theme.Default(), nil), tea.BackgroundColorMsg{Color: color.White})
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.BackgroundColorMsg{Color: color.White})
 	if m.palette.Dark() {
 		t.Error("white background: palette still dark")
 	}
@@ -46,7 +46,7 @@ func TestFollowsTerminalBackground(t *testing.T) {
 }
 
 func TestKeysDontQuit(t *testing.T) {
-	m := New("test", theme.Default(), nil)
+	m := New(Config{Version: "test", Theme: theme.Default()})
 	for _, key := range []tea.KeyPressMsg{{Code: 'q'}, {Code: 'c', Mod: tea.ModCtrl}, {Code: tea.KeyEscape}} {
 		if _, cmd := m.Update(key); cmd != nil {
 			t.Errorf("key %s returned a command", key)
@@ -55,12 +55,12 @@ func TestKeysDontQuit(t *testing.T) {
 }
 
 func TestTinyWindow(t *testing.T) {
-	m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: 10, Height: 3})
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 10, Height: 3})
 	_ = m.View()
 }
 
 func TestTabsWrapAround(t *testing.T) {
-	m := New("test", theme.Default(), nil)
+	m := New(Config{Version: "test", Theme: theme.Default()})
 	for i := range len(tabs) {
 		if m.tab != i {
 			t.Fatalf("after %d Tab presses: tab %d", i, m.tab)
@@ -78,7 +78,7 @@ func TestTabsWrapAround(t *testing.T) {
 func TestFrameFitsWindow(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{120, 40}, {80, 24}, {60, 15}, {200, 60}, {40, 10}} {
 		for tab := range tabs {
-			m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: size.w, Height: size.h})
+			m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: size.w, Height: size.h})
 			m.tab = tab
 			lines := strings.Split(m.View().Content, "\n")
 			if len(lines) != size.h {
@@ -95,7 +95,7 @@ func TestFrameFitsWindow(t *testing.T) {
 }
 
 func TestShortWindowDropsBanner(t *testing.T) {
-	m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: 120, Height: 40})
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: 40})
 	if !strings.Contains(m.View().Content, "v2 dev build") {
 		t.Error("banner missing at 120x40")
 	}
@@ -121,7 +121,7 @@ func clickLabel(t *testing.T, m Model, title string) Model {
 
 func TestClickSelectsTab(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{120, 40}, {120, 12}} {
-		m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: size.w, Height: size.h})
+		m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: size.w, Height: size.h})
 		for i, tb := range tabs {
 			if m = clickLabel(t, m, tb.title); m.tab != i {
 				t.Errorf("%dx%d: clicked %s, tab is %s", size.w, size.h, tb.title, tabs[m.tab].title)
