@@ -62,11 +62,15 @@ func Destination(windows []int, current int, move string) (to int, ok bool) {
 // Switch makes move in session from window current. In a track window
 // it lands on the agent pane.
 func Switch(t Tmux, session, move string, current int) error {
-	windows, err := t.WindowIndexes(session)
+	windows, err := t.ListWindows(session)
 	if err != nil {
 		return err
 	}
-	to, ok := Destination(windows, current, move)
+	indexes := make([]int, len(windows))
+	for i, w := range windows {
+		indexes[i] = w.Index
+	}
+	to, ok := Destination(indexes, current, move)
 	if !ok {
 		return nil
 	}

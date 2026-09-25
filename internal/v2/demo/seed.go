@@ -25,6 +25,8 @@ func Seed(t trackwin.Tmux, session, dataDir, command string) error {
 
 		spec := trackwin.Spec{
 			Name: tr.Name,
+			Kind: tr.Kind,
+			Repo: tr.Repo,
 			Dir:  dir,
 			Agent: trackwin.Process{
 				Title:   "agent",

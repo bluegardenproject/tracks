@@ -69,21 +69,42 @@ func (c *Client) SelectWindow(window string) error {
 	return err
 }
 
-// WindowIndexes returns the indexes of session's windows, in order.
-func (c *Client) WindowIndexes(session string) ([]int, error) {
-	out, err := c.run("list-windows", "-t", "="+session, "-F", "#{window_index}")
+// Window is one window of a session.
+type Window struct {
+	ID    string
+	Index int
+	Name  string
+	// Kind, Repo and Dir are the @tracks_kind, @tracks_repo and
+	// @tracks_dir options of a track's window.
+	Kind, Repo, Dir string
+}
+
+// ListWindows returns session's windows, in order.
+func (c *Client) ListWindows(session string) ([]Window, error) {
+	out, err := c.run("list-windows", "-t", "="+session, "-F",
+		"#{window_id}\t#{window_index}\t#{@tracks_kind}\t#{@tracks_repo}\t#{@tracks_dir}\t#{window_name}")
 	if err != nil {
 		return nil, err
 	}
-	var indexes []int
-	for _, line := range strings.Fields(out) {
-		n, err := strconv.Atoi(line)
-		if err != nil {
-			return nil, fmt.Errorf("window index %q: %w", line, err)
+	var windows []Window
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.SplitN(line, "\t", 6)
+		if len(f) != 6 {
+			continue
 		}
-		indexes = append(indexes, n)
+		index, err := strconv.Atoi(f[1])
+		if err != nil {
+			return nil, fmt.Errorf("window index %q: %w", f[1], err)
+		}
+		windows = append(windows, Window{ID: f[0], Index: index, Kind: f[2], Repo: f[3], Dir: f[4], Name: f[5]})
 	}
-	return indexes, nil
+	return windows, nil
+}
+
+// KillWindow closes window and ends the processes in its panes.
+func (c *Client) KillWindow(window string) error {
+	_, err := c.run("kill-window", "-t", window)
+	return err
 }
 
 // KillServer stops the server and everything in it. Not running is
