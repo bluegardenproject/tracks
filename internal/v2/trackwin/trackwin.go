@@ -20,9 +20,13 @@ const (
 	RoleDevServer = "dev-server"
 )
 
-// dirOption holds the track's working directory on its window, so panes
-// added later start there too.
-const dirOption = "@tracks_dir"
+// Window options of a track's window. dirOption holds its working
+// directory, so panes added later start there too.
+const (
+	dirOption  = "@tracks_dir"
+	kindOption = "@tracks_kind"
+	repoOption = "@tracks_repo"
+)
 
 // Process is a command shown in a pane under a title.
 type Process struct {
@@ -33,6 +37,8 @@ type Process struct {
 // Spec describes a new track window.
 type Spec struct {
 	Name       string // window name
+	Kind       string // feature, fix, review
+	Repo       string
 	Dir        string // working directory of every pane
 	Agent      Process
 	Terminals  int // terminal panes opened with the window
@@ -55,7 +61,7 @@ type Tmux interface {
 	ResizePaneHeight(pane string, rows int) error
 	SetWindowOption(window, name, value string) error
 	WindowOption(window, name string) (string, error)
-	WindowIndexes(session string) ([]int, error)
+	ListWindows(session string) ([]tmux.Window, error)
 	SelectWindow(window string) error
 }
 
@@ -70,8 +76,10 @@ func Open(t Tmux, session string, s Spec) (Window, error) {
 	if err := t.SetWindowOption(id, "automatic-rename", "off"); err != nil {
 		return w, err
 	}
-	if err := t.SetWindowOption(id, dirOption, s.Dir); err != nil {
-		return w, err
+	for name, value := range map[string]string{dirOption: s.Dir, kindOption: s.Kind, repoOption: s.Repo} {
+		if err := t.SetWindowOption(id, name, value); err != nil {
+			return w, err
+		}
 	}
 	if err := label(t, agent, RoleAgent, s.Agent.Title); err != nil {
 		return w, err

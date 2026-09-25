@@ -63,7 +63,7 @@ func TestSwitchLandsOnAgent(t *testing.T) {
 	var agents []string
 	for _, name := range []string{"one", "two"} {
 		w, err := trackwin.Open(c, "tracks", trackwin.Spec{
-			Name: name, Dir: dir, Terminals: 1,
+			Name: name, Kind: "fix", Repo: "shop-" + name, Dir: dir, Terminals: 1,
 			Agent: trackwin.Process{Title: "agent", Command: "sleep 60"},
 		})
 		if err != nil {
@@ -93,6 +93,31 @@ func TestSwitchLandsOnAgent(t *testing.T) {
 		if window != step.window || (step.pane != "" && pane != step.pane) {
 			t.Errorf("after %s: window %s pane %s, want window %s pane %s", step.move, window, pane, step.window, step.pane)
 		}
+	}
+}
+
+func TestListAfterOpen(t *testing.T) {
+	c := tmux.New(tmuxtest.Socket(t))
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"one", "two"} {
+		if _, err := trackwin.Open(c, "tracks", trackwin.Spec{Name: name, Kind: "fix", Repo: "shop-" + name, Dir: dir,
+			Agent: trackwin.Process{Title: "agent", Command: "sleep 60"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := trackwin.List(c, "tracks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Number != 1 || got[0].Name != "one" || got[1].Kind != "fix" || got[1].Repo != "shop-two" {
+		t.Errorf("List = %+v, want tracks one and two with kind and repo, the Tracks window left out", got)
 	}
 }
 
