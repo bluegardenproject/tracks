@@ -9,52 +9,86 @@ import (
 )
 
 const (
-	maxCardContent = 72
-	swatchNameLen  = 18
-	swatchGap      = 2
+	swatchNameLen = 18
+	swatchGap     = 2
+	// bannerBlock is the banner with a blank line above and below.
+	bannerBlock = bannerRows + 2
+	// minContent is how many content lines stay before the banner
+	// gives way.
+	minContent = 5
 )
 
 func (m Model) render() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
-	header := m.header()
-	hints := m.hints()
-	bodyHeight := max(0, m.height-lipgloss.Height(header)-lipgloss.Height(hints))
-	body := lipgloss.Place(m.width, bodyHeight, lipgloss.Center, lipgloss.Center, m.card())
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, hints)
+	var lines []string
+	body := m.height - 1  // the hints
+	chrome := tabRows + 1 // tabs and a blank line
+	if body-bannerBlock-chrome >= minContent && m.width >= bannerWidth+4 {
+		lines = append(lines, m.bannerBlock()...)
+		body -= bannerBlock
+	}
+	lines = append(lines, m.tabBar(m.width)...)
+	lines = append(lines, strings.Repeat(" ", m.width))
+	lines = append(lines, m.content(m.width, max(0, body-chrome))...)
+	lines = append(lines, pad(m.hints(), m.width))
+	if len(lines) > m.height {
+		lines = lines[len(lines)-m.height:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) fg(token theme.Token) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(m.palette.Color(token))
 }
 
-func (m Model) header() string {
-	title := m.fg(theme.Accent).Bold(true).Render("Tracks")
-	build := m.fg(theme.TextFaint).Render("v2 dev build · " + m.version)
-	gap := max(1, m.width-2-lipgloss.Width(title)-lipgloss.Width(build))
-	line := " " + title + strings.Repeat(" ", gap) + build + " "
-	rule := m.fg(theme.BorderDefault).Render(strings.Repeat("─", m.width))
-	return line + "\n" + rule
+// bannerBlock is the banner with the build on the right of its last
+// lines.
+func (m Model) bannerBlock() []string {
+	right := make([]string, bannerRows)
+	right[bannerRows-2] = m.fg(theme.TextFaint).Render("v2 dev build")
+	right[bannerRows-1] = m.fg(theme.TextFaint).Render(m.version)
+	lines := []string{strings.Repeat(" ", m.width)}
+	for i, b := range m.banner() {
+		left := "  " + b
+		gap := m.width - lipgloss.Width(left) - lipgloss.Width(right[i]) - 2
+		if gap < 2 {
+			lines = append(lines, pad(left, m.width))
+			continue
+		}
+		lines = append(lines, left+strings.Repeat(" ", gap)+right[i]+"  ")
+	}
+	return append(lines, strings.Repeat(" ", m.width))
 }
 
-func (m Model) card() string {
-	content := min(maxCardContent, max(20, m.width-8))
-	title := m.fg(theme.TextDefault).Bold(true).Render("The Tracks window")
-	about := m.fg(theme.TextMuted).Width(content).Render(
-		"Your tracks will live here. Chunk 2 adds the track list, track windows and the footer; " +
-			"chunk 3 adds this window's header and tabs.")
-	variant := "light"
-	if m.palette.Dark() {
-		variant = "dark"
+// content is the active tab's placeholder, width by height cells.
+func (m Model) content(width, height int) []string {
+	if height == 0 {
+		return nil
 	}
-	themeLine := m.fg(theme.TextFaint).Render(fmt.Sprintf("Theme: %s (%s background)", m.palette.Theme().Name, variant))
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.palette.Color(theme.BorderDefault)).
-		Padding(1, 2).
-		Render(lipgloss.JoinVertical(lipgloss.Left, title, "", about, "", themeLine, "", m.swatches(content)))
+	t := tabs[m.tab]
+	parts := []string{
+		m.fg(theme.TextDefault).Bold(true).Render(t.title),
+		"",
+		m.fg(theme.TextMuted).Render(t.about),
+	}
+	if m.tab == tabSettings {
+		variant := "light"
+		if m.palette.Dark() {
+			variant = "dark"
+		}
+		parts = append(parts, "",
+			m.fg(theme.TextFaint).Render(fmt.Sprintf("Theme: %s (%s background)", m.palette.Theme().Name, variant)),
+			"", m.swatches(min(width-4, 88)))
+	}
+	block := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	placed := lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
+	lines := strings.Split(placed, "\n")
+	for i := range lines {
+		lines[i] = pad(lines[i], width)
+	}
+	return lines[:min(len(lines), height)]
 }
 
 // swatches shows every token as a coloured block with its name.
@@ -78,7 +112,9 @@ func (m Model) swatches(width int) string {
 func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
-	return " " + key.Render("t") + text.Render(" theme creator    ") +
-		key.Render("Ctrl+b d") + text.Render(" detach    ") +
-		key.Render("./tracks --new-app stop") + text.Render(" stop Tracks v2")
+	sep := text.Render(" · ")
+	return "  " + key.Render("Tab") + text.Render(" next tab") + sep +
+		key.Render("Shift+Tab") + text.Render(" previous tab") + sep +
+		key.Render("t") + text.Render(" theme creator") + sep +
+		key.Render("Ctrl+b n") + text.Render(" next track")
 }

@@ -15,12 +15,20 @@ const (
 	kindColour // a block and sample text
 )
 
+// Text and background tokens outside the text. and bg. groups.
+var (
+	textTokens = map[theme.Token]bool{
+		theme.FooterText: true, theme.FooterMuted: true, theme.FooterFaint: true, theme.FooterActiveText: true,
+		theme.TabText: true, theme.TabActiveText: true,
+	}
+	backgroundTokens = map[theme.Token]bool{theme.FooterBg: true, theme.FooterActiveBg: true, theme.TabActiveBg: true}
+)
+
 func kindOf(token theme.Token) kind {
 	switch {
-	case strings.HasPrefix(string(token), "text."), token == theme.FooterText, token == theme.FooterMuted,
-		token == theme.FooterFaint, token == theme.FooterActiveText:
+	case strings.HasPrefix(string(token), "text."), textTokens[token]:
 		return kindText
-	case strings.HasPrefix(string(token), "bg."), token == theme.FooterBg, token == theme.FooterActiveBg:
+	case strings.HasPrefix(string(token), "bg."), backgroundTokens[token]:
 		return kindBackground
 	default:
 		return kindColour
@@ -34,6 +42,8 @@ func backgroundOf(token theme.Token) theme.Token {
 		return theme.Accent
 	case token == theme.FooterActiveText:
 		return theme.FooterActiveBg
+	case token == theme.TabActiveText:
+		return theme.TabActiveBg
 	case strings.HasPrefix(string(token), "footer."):
 		return theme.FooterBg
 	default:

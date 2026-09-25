@@ -37,6 +37,17 @@ const (
 	FooterFaint      Token = "footer.faint"
 	FooterActiveBg   Token = "footer.active.bg"
 	FooterActiveText Token = "footer.active.text"
+
+	// The Tracks banner fades from top to bottom.
+	BannerTop    Token = "banner.top"
+	BannerBottom Token = "banner.bottom"
+
+	// Tabs of the Tracks window.
+	TabText         Token = "tab.text"
+	TabBorder       Token = "tab.border"
+	TabActiveBg     Token = "tab.active.bg"
+	TabActiveText   Token = "tab.active.text"
+	TabActiveBorder Token = "tab.active.border"
 )
 
 // All lists every token in display order.
@@ -47,4 +58,6 @@ var All = []Token{
 	Accent, Highlight,
 	StateSuccess, StateWarning, StateDanger, StateInfo,
 	FooterBg, FooterText, FooterMuted, FooterFaint, FooterActiveBg, FooterActiveText,
+	BannerTop, BannerBottom,
+	TabText, TabBorder, TabActiveBg, TabActiveText, TabActiveBorder,
 }

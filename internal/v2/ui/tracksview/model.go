@@ -1,6 +1,6 @@
 // Package tracksview is the Tracks window, window 0 of every Tracks
-// session. For now it's a placeholder that shows the build and the
-// theme's tokens, and opens the theme creator.
+// session: the banner, and tabs whose content is a placeholder for
+// now. It also hosts the theme creator.
 package tracksview
 
 import (
@@ -19,6 +19,7 @@ type Model struct {
 	palette       style.Palette
 	apply         ApplyFunc
 	width, height int
+	tab           int
 	creating      bool
 	creator       themecreator.Model
 }
@@ -50,6 +51,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.creating = false
 		return m, nil
 	case tea.KeyPressMsg:
+		if !m.creating {
+			switch msg.String() {
+			case "tab":
+				m.tab = (m.tab + 1) % len(tabs)
+				return m, nil
+			case "shift+tab":
+				m.tab = (m.tab + len(tabs) - 1) % len(tabs)
+				return m, nil
+			}
+		}
 		if !m.creating && msg.String() == "t" {
 			m.creating = true
 			m.creator = themecreator.New(m.palette.Theme(), m.palette.Dark())

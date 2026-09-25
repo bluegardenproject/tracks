@@ -30,3 +30,12 @@ tokens:
   footer.faint:       { dark: "#52525b", light: "#a1a1aa" }
   footer.active.bg:   { dark: "#073542", light: "#dcdce0" }
   footer.active.text: { dark: "#1ccde8", light: "#0e7490" }
+
+  banner.top:         { dark: "#1ccde8", light: "#0891b2" }
+  banner.bottom:      { dark: "#0a515c", light: "#0a515c" }
+
+  tab.text:           { dark: "#a1a1aa", light: "#52525b" }
+  tab.border:         { dark: "#3f3f46", light: "#d4d4d8" }
+  tab.active.bg:      { dark: "#073542", light: "#dcdce0" }
+  tab.active.text:    { dark: "#1ccde8", light: "#0e7490" }
+  tab.active.border:  { dark: "#1ccde8", light: "#0891b2" }
