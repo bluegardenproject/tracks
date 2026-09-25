@@ -21,6 +21,7 @@ const (
 
 	BorderDefault Token = "border.default"
 	BorderFocus   Token = "border.focus"
+	BorderAccent  Token = "border.accent"
 
 	Accent    Token = "accent"
 	Highlight Token = "highlight"
@@ -48,16 +49,25 @@ const (
 	TabActiveBg     Token = "tab.active.bg"
 	TabActiveText   Token = "tab.active.text"
 	TabActiveBorder Token = "tab.active.border"
+
+	// Tables, such as Station's track list.
+	TableTextDefault Token = "table.text.default"
+	TableTextMuted   Token = "table.text.muted"
+	TableTextAccent  Token = "table.text.accent"
+	TableTextFaint   Token = "table.text.faint"
+	TableBgHighlight Token = "table.bg.highlight" // the row under the mouse
+	TableBgSelected  Token = "table.bg.selected"
 )
 
 // All lists every token in display order.
 var All = []Token{
 	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent,
 	BgBase, BgSurface, BgOverlay, BgSelected, BgHover,
-	BorderDefault, BorderFocus,
+	BorderDefault, BorderFocus, BorderAccent,
 	Accent, Highlight,
 	StateSuccess, StateWarning, StateDanger, StateInfo,
 	FooterBg, FooterText, FooterMuted, FooterFaint, FooterActiveBg, FooterActiveText,
 	BannerTop, BannerBottom,
 	TabText, TabBorder, TabActiveBg, TabActiveText, TabActiveBorder,
+	TableTextDefault, TableTextMuted, TableTextAccent, TableTextFaint, TableBgHighlight, TableBgSelected,
 }
