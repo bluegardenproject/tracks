@@ -16,7 +16,7 @@ The goal is to judge the layout by using it, before any real logic exists.
 
 Out of scope: the Tracks window's header and tabs (chunk 3), real tracks (chunk 5), storage and hooks.
 
-**Prerequisite:** the [track status model](../masterplan.md#track-status-to-be-designed-before-chunk-2). The status names and colours below are placeholders until it's designed.
+**Statuses are placeholders** in this chunk. The [track status model](../masterplan.md#track-status-to-be-designed) is designed later, before chunk 3 or after it.
 
 ## Data: the `Source` interface (`internal/v2/ui/source`)
 
@@ -48,38 +48,36 @@ Built in chunk 1 (`internal/v2/trackwin`, see [chunk 1](01-technical-groundwork.
 
 ## Footer (`internal/v2/footer`)
 
-One fixed row, the tmux status line, on every window, the Tracks window included.
+Four tmux status rows on every window, the Tracks window included. Each row is one terminal line; tmux can't change a row's height.
 
 ```text
- ⌂ Tracks │ «  ‹ ●1 │ 3 api-auth │ 4 ui-login │ 5 docs-fix │ 6 billing │ 7 infra │ › » │ ▶ 2 dev  ⇄ proxy │ 192.168.1.20 · 85.14.3.9
+ Tracks                  ‹  1 api-auth   2 ui-login   3 docs-fix  ›
+                                                                  (empty)
+                                                                  (reserved for later use)
+ Tracks <version>        LAN 192.168.1.20  ·  WAN 85.14.3.9  ·  CPU 12%  ·  MEM 9.1 / 16.0 GB
 ```
 
-- **Tracks** (window 0) is pinned on the left.
-- **Track slots:** as many as fit the width, each with its number, status colour and name (truncated with `…`, at most 16 characters). They follow the active track like a list cursor: it's always visible, and the row shifts only when you move past the edge.
-- **Buttons:** `«` first, `‹` previous, `›` next, `»` last.
-- **Off-screen attention:** tracks that need attention but are scrolled out of view show a badge on that side, for example `‹ ●1`.
-- **Stable order:** creation order, never reordered on status changes.
-- **Colours** (placeholders until the status model is designed):
-  - active: accent background
-  - your turn: highlight
-  - needs approval: fail colour, bold
-  - running: normal
-  - finished: dim
-- **Info on the right:** running dev servers, proxy state, LAN IP, WAN IP. On narrow terminals these drop in the order WAN, LAN, proxy, dev, before track slots shrink below 3. In the demo, the dev-server and proxy info is fake, while LAN is read from the network interfaces.
-- **WAN IP** is fetched once at start-up (HTTPS request to a configurable URL, default `https://api.ipify.org`, 3s timeout). It's omitted on failure, and an empty URL in the config turns it off.
-- **No hover:** the tmux status line can't do it. Whether hover is worth a Bubble Tea footer pane per window is decided after trying this.
+- **Navigation row:**
+  - Tracks (window 0) is pinned on the left.
+  - The tracks are centred, using tmux's own window list (`#{W:…}` with `list=`). When they don't fit, it scrolls with `‹` `›` markers and keeps the current track visible.
+  - Clicking a slot selects its window.
+- **Rows 2 and 3** are empty for now.
+- **System row:** the Tracks version on the left. On the right: LAN, WAN, CPU and memory, from the hidden command `tracks footer system`, which tmux runs every 5 seconds (`#(…)`, asynchronous).
+  - LAN is the address of the default route's interface. CPU and memory come from gopsutil, which needs no cgo.
+  - WAN is fetched from `https://api.ipify.org` and cached for 10 minutes in the data directory. The last known address is used on failure.
+- **No track status** in the footer for now.
+- **Colours:** the footer has its own tokens (`footer.*`). Window and border backgrounds use `bg.base`.
+- **Generated from the theme:** the rows and colours are written to `theme.conf` in the data directory, which the main config sources. Applying a theme rewrites and re-sources it, so the change is live.
 
-### How it works
+Not built yet, from the first design: `«` `‹` `›` `»` buttons, badges for off-screen tracks that need attention, status colours, truncating long names, and dropping info on narrow terminals. If tmux's window list can't do these, the navigation row gets its own pure renderer, with window ranges for slots and user ranges for buttons. Hover isn't possible in tmux's status rows; whether it's worth a Bubble Tea footer pane per window is still open.
 
-- **Rendering:** `footer.Render(tracks, activeWindow, width, info, theme) string` is pure. It returns a tmux format string:
-  - `#[range=window|@7]…#[norange]` per track slot
-  - `#[range=user|first]`, `prev`, `next`, `last` for the buttons
-  - it escapes tmux format characters in names (`#`, `[`)
-- **Refresh:** `tracks footer refresh` (a hidden command) reads the source, renders for the narrowest client, stores the result in the session option `@tracks_footer`, and runs `refresh-client -S`. The generated config sets `status-format[0]` to `#{E:@tracks_footer}`.
-- **Triggers, no polling:**
-  - tmux hooks run `run-shell -b "<tracks> footer refresh"` on `session-window-changed`, `client-resized`, `window-linked` and `window-unlinked`
-  - the demo source's status changes trigger it too
-- **Clicks:** a `MouseDown1Status` binding checks `#{mouse_status_range}`. Window ranges select the window. User ranges run `tracks footer nav <first|prev|next|last>`, which selects the target window and its agent pane.
+## Theme editor (`internal/v2/ui/themecreator`)
+
+Opened with `t` in the Tracks window.
+
+- Lists every token with a preview (text, box or colour) and hex fields for its dark and light values. Works with keys and the mouse.
+- **Apply** saves `theme.yaml` in the data directory and applies it live, to the Tracks window and the tmux config. **Cancel** closes. **Copy all** copies the theme as YAML.
+- Later: saving named theme files that users can share or pick.
 
 ### Keys (behind the prefix, in the generated config)
 
@@ -119,12 +117,7 @@ A simple first version, just enough to navigate. Chunk 3 designs the real header
 
 ## Tests
 
-- **Golden tests for `footer.Render`:**
-  - widths from 60 to 240 columns
-  - active track at the start, middle and end
-  - badges on both sides
-  - truncation and escaping
-  - segment dropping order
+- **Footer:** the generated tmux config as golden files, the system row with and without data, and the WAN cache. If the navigation row gets its own renderer: golden tests over widths from 60 to 240 columns, the active track at the start, middle and end, badges, truncation and escaping.
 - **Pure navigation logic:** first, previous, next and last with wrap-around off, and number keys past the end.
 - **Throwaway tmux server:** the rendered string is accepted, a window range click selects the window, and the navigation keys select the right window.
 - **Screens:**
@@ -134,8 +127,8 @@ A simple first version, just enough to navigate. Chunk 3 designs the real header
 ## PR slices
 
 1. **2a: Huh styles, `Source` and demo source.**
-2. **2b: footer renderer, refresh, hooks, clicks, navigation keys.**
-3. **2c: footer info segments and attention badges.**
+2. **2b: footer rows, navigation list, system row, theme editor** (done), then the navigation keys.
+3. **2c: footer buttons and attention badges,** once statuses exist.
 4. **2d: Tracks window placeholder, full menu popup, quick switcher, New track form.**
 
 After each slice the maintainer plays with it, and we adjust before the next.
