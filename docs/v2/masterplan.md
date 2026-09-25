@@ -16,7 +16,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 |---|---|---|---|
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
-| 3 | Tracks window layout: header and tab navigation, no tab content yet | [03-tracks-window-layout.md](plans/03-tracks-window-layout.md) | in progress |
+| 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md) | draft |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |

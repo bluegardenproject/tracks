@@ -2,6 +2,7 @@ package tracksview
 
 import (
 	"image/color"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -101,5 +102,33 @@ func TestShortWindowDropsBanner(t *testing.T) {
 	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 12})
 	if out := m.View().Content; strings.Contains(out, "v2 dev build") || !strings.Contains(out, "Station") {
 		t.Error("at 120x12 the banner should give way to the tabs")
+	}
+}
+
+var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
+
+// clickLabel clicks where title is drawn in the tab row.
+func clickLabel(t *testing.T, m Model, title string) Model {
+	t.Helper()
+	for y, line := range strings.Split(escapes.ReplaceAllString(m.View().Content, ""), "\n") {
+		if x := strings.Index(line, "│  "+title+"  │"); x >= 0 {
+			return update(m, tea.MouseClickMsg{X: len([]rune(line[:x])) + 3, Y: y, Button: tea.MouseLeft})
+		}
+	}
+	t.Fatalf("tab %s not drawn", title)
+	return m
+}
+
+func TestClickSelectsTab(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{120, 40}, {120, 12}} {
+		m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: size.w, Height: size.h})
+		for i, tb := range tabs {
+			if m = clickLabel(t, m, tb.title); m.tab != i {
+				t.Errorf("%dx%d: clicked %s, tab is %s", size.w, size.h, tb.title, tabs[m.tab].title)
+			}
+		}
+		if m = update(m, tea.MouseClickMsg{X: 1, Y: m.tabsTop() + 1, Button: tea.MouseLeft}); m.tab != tabSettings {
+			t.Errorf("%dx%d: a click left of the tabs changed the tab", size.w, size.h)
+		}
 	}
 }

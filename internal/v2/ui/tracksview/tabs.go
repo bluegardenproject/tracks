@@ -31,13 +31,37 @@ var tabs = []tab{
 	tabSettings:     {"Settings", "Tracks settings. For now: the theme."},
 }
 
-// tabRows is the height of the tab row.
-const tabRows = 3
+// The tab row's geometry, in cells. Clicks are mapped with the same
+// numbers.
+const (
+	tabRows  = 3
+	tabsLeft = 2
+	tabGap   = 1
+)
+
+// tabWidth is a tab's box: its title, padding and border.
+func tabWidth(t tab) int { return lipgloss.Width(t.title) + 6 }
+
+// tabAt returns the tab drawn at cell x, y.
+func (m Model) tabAt(x, y int) (int, bool) {
+	top := m.tabsTop()
+	if y < top || y >= top+tabRows {
+		return 0, false
+	}
+	left := tabsLeft
+	for i, t := range tabs {
+		if x >= left && x < left+tabWidth(t) {
+			return i, true
+		}
+		left += tabWidth(t) + tabGap
+	}
+	return 0, false
+}
 
 // tabBar draws every tab in a box of its own, tabRows tall. The active
 // one is filled.
 func (m Model) tabBar(width int) []string {
-	gap := strings.Repeat(" \n", tabRows-1) + " "
+	gap := strings.TrimSuffix(strings.Repeat(strings.Repeat(" ", tabGap)+"\n", tabRows), "\n")
 	var boxes []string
 	for i, t := range tabs {
 		if i > 0 {
@@ -57,7 +81,7 @@ func (m Model) tabBar(width int) []string {
 	}
 	lines := strings.Split(lipgloss.JoinHorizontal(lipgloss.Top, boxes...), "\n")
 	for i := range lines {
-		lines[i] = pad("  "+lines[i], width)
+		lines[i] = pad(strings.Repeat(" ", tabsLeft)+lines[i], width)
 	}
 	return lines
 }
