@@ -44,7 +44,7 @@ func newRoot(version string) *cobra.Command {
 	root.AddCommand(
 		newPathsCmd(profile),
 		newStopCmd(profile),
-		newTracksWindowCmd(version),
+		newTracksWindowCmd(profile, version),
 		newTrackwinCmd(profile),
 		newFooterCmd(profile),
 		newDemoCmd(),
