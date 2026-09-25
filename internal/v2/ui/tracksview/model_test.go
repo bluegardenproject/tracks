@@ -18,7 +18,7 @@ func update(m Model, msgs ...tea.Msg) Model {
 }
 
 func TestRendersEveryToken(t *testing.T) {
-	m := update(New("test"), tea.WindowSizeMsg{Width: 120, Height: 40})
+	m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: 120, Height: 40})
 	out := m.View().Content
 	for _, token := range theme.All {
 		if !strings.Contains(out, string(token)) {
@@ -28,7 +28,7 @@ func TestRendersEveryToken(t *testing.T) {
 }
 
 func TestFollowsTerminalBackground(t *testing.T) {
-	m := update(New("test"), tea.BackgroundColorMsg{Color: color.White})
+	m := update(New("test", theme.Default(), nil), tea.BackgroundColorMsg{Color: color.White})
 	if m.palette.Dark() {
 		t.Error("white background: palette still dark")
 	}
@@ -39,7 +39,7 @@ func TestFollowsTerminalBackground(t *testing.T) {
 }
 
 func TestKeysDontQuit(t *testing.T) {
-	m := New("test")
+	m := New("test", theme.Default(), nil)
 	for _, key := range []tea.KeyPressMsg{{Code: 'q'}, {Code: 'c', Mod: tea.ModCtrl}, {Code: tea.KeyEscape}} {
 		if _, cmd := m.Update(key); cmd != nil {
 			t.Errorf("key %s returned a command", key)
@@ -48,6 +48,6 @@ func TestKeysDontQuit(t *testing.T) {
 }
 
 func TestTinyWindow(t *testing.T) {
-	m := update(New("test"), tea.WindowSizeMsg{Width: 10, Height: 3})
+	m := update(New("test", theme.Default(), nil), tea.WindowSizeMsg{Width: 10, Height: 3})
 	_ = m.View()
 }

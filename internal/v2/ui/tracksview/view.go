@@ -78,6 +78,7 @@ func (m Model) swatches(width int) string {
 func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
-	return " " + key.Render("Ctrl+b d") + text.Render(" detach    ") +
+	return " " + key.Render("t") + text.Render(" theme creator    ") +
+		key.Render("Ctrl+b d") + text.Render(" detach    ") +
 		key.Render("./tracks --new-app stop") + text.Render(" stop Tracks v2")
 }
