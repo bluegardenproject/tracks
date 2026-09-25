@@ -16,14 +16,14 @@ This file is the single source of truth for direction, decisions and status. Imp
 |---|---|---|---|
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
-| 3 | Tracks window layout: header and tab navigation, no tab content yet | not written yet | to be designed |
+| 3 | Tracks window layout: header and tab navigation, no tab content yet | [03-tracks-window-layout.md](plans/03-tracks-window-layout.md) | in progress |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md) | draft |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
-| 7 | Tracks window content: tabs (track list, Repositories, Proxy, Settings), track actions | not written yet | to be designed |
+| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | not written yet | to be designed |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
 
-Chunks 1 to 3 come first, in order. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
+Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
 ## Decisions
 
@@ -146,7 +146,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 ## Open questions
 
 - **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). This goes into a glossary here once agreed.
-- **Track list tab:** the Tracks window will have a tab listing tracks. It needs a name that doesn't clash with the window.
+- **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Proxy, Engines, Settings.
 - **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
