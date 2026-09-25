@@ -55,6 +55,8 @@ type Tmux interface {
 	ResizePaneHeight(pane string, rows int) error
 	SetWindowOption(window, name, value string) error
 	WindowOption(window, name string) (string, error)
+	WindowIndexes(session string) ([]int, error)
+	SelectWindow(window string) error
 }
 
 // Open creates the window for s in session, without switching to it.

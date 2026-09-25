@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -66,6 +67,23 @@ func (c *Client) NewSession(configFile, name, window, command string) error {
 func (c *Client) SelectWindow(window string) error {
 	_, err := c.run("select-window", "-t", window)
 	return err
+}
+
+// WindowIndexes returns the indexes of session's windows, in order.
+func (c *Client) WindowIndexes(session string) ([]int, error) {
+	out, err := c.run("list-windows", "-t", "="+session, "-F", "#{window_index}")
+	if err != nil {
+		return nil, err
+	}
+	var indexes []int
+	for _, line := range strings.Fields(out) {
+		n, err := strconv.Atoi(line)
+		if err != nil {
+			return nil, fmt.Errorf("window index %q: %w", line, err)
+		}
+		indexes = append(indexes, n)
+	}
+	return indexes, nil
 }
 
 // KillServer stops the server and everything in it. Not running is
