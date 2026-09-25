@@ -16,6 +16,8 @@ const (
 	// minContent is how many content lines stay before the banner
 	// gives way.
 	minContent = 5
+	// tabsChrome is the tabs with a blank line below.
+	tabsChrome = tabRows + 1
 )
 
 func (m Model) render() string {
@@ -23,20 +25,33 @@ func (m Model) render() string {
 		return ""
 	}
 	var lines []string
-	body := m.height - 1  // the hints
-	chrome := tabRows + 1 // tabs and a blank line
-	if body-bannerBlock-chrome >= minContent && m.width >= bannerWidth+4 {
+	content := m.height - 1 - tabsChrome
+	if m.showBanner() {
 		lines = append(lines, m.bannerBlock()...)
-		body -= bannerBlock
+		content -= bannerBlock
 	}
 	lines = append(lines, m.tabBar(m.width)...)
 	lines = append(lines, strings.Repeat(" ", m.width))
-	lines = append(lines, m.content(m.width, max(0, body-chrome))...)
+	lines = append(lines, m.content(m.width, max(0, content))...)
 	lines = append(lines, pad(m.hints(), m.width))
 	if len(lines) > m.height {
 		lines = lines[len(lines)-m.height:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// showBanner reports whether the banner fits above the tabs: the hint
+// row, the tabs and minContent lines of content come first.
+func (m Model) showBanner() bool {
+	return m.height-1-tabsChrome-bannerBlock >= minContent && m.width >= bannerWidth+4
+}
+
+// tabsTop is the screen line the tabs start on.
+func (m Model) tabsTop() int {
+	if m.showBanner() {
+		return bannerBlock
+	}
+	return 0
 }
 
 func (m Model) fg(token theme.Token) lipgloss.Style {

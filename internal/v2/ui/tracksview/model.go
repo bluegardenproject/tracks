@@ -1,6 +1,8 @@
 // Package tracksview is the Tracks window, window 0 of every Tracks
-// session: the banner, and tabs whose content is a placeholder for
-// now. It also hosts the theme creator.
+// session: the banner, and the tabs Station, Repositories, Proxy,
+// Engines and Settings, switched with Tab, Shift+Tab or a click. Their
+// content is a placeholder until chunk 7. It also hosts the theme
+// creator (`t`).
 package tracksview
 
 import (
@@ -50,6 +52,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case themecreator.CloseMsg:
 		m.creating = false
 		return m, nil
+	case tea.MouseClickMsg:
+		if mouse := msg.Mouse(); !m.creating && mouse.Button == tea.MouseLeft {
+			if i, ok := m.tabAt(mouse.X, mouse.Y); ok {
+				m.tab = i
+			}
+			return m, nil
+		}
 	case tea.KeyPressMsg:
 		if !m.creating {
 			switch msg.String() {
@@ -92,9 +101,7 @@ func (m Model) View() tea.View {
 		content = m.creator.View()
 	}
 	v := tea.NewView(content)
-	if m.creating {
-		v.MouseMode = tea.MouseModeCellMotion
-	}
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	v.WindowTitle = "Tracks"
 	return v
