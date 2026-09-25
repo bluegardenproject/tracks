@@ -91,6 +91,12 @@ func (c *Client) ListPanes(window string) ([]Pane, error) {
 	return panes, nil
 }
 
+// SourceFile loads a config file into the running server.
+func (c *Client) SourceFile(path string) error {
+	_, err := c.run("source-file", path)
+	return err
+}
+
 // DisplayMessage shows msg in the status line of the server's clients.
 func (c *Client) DisplayMessage(msg string) error {
 	_, err := c.run("display-message", "-l", msg)

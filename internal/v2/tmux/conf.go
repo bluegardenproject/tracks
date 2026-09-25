@@ -22,21 +22,15 @@ type Conf struct {
 	// nearest colour they support.
 	OuterTerm string
 	TrueColor bool
+	// ThemeFile holds the colours and the footer (ThemeConf). It's
+	// sourced on start and again whenever the theme changes.
+	ThemeFile string
 	// OverrideFile is the user's own tmux config for this server,
 	// sourced last when it exists.
 	OverrideFile string
 	// Command runs this Tracks from key bindings: the quoted binary
 	// and its profile flags.
 	Command string
-	// Colors come from theme tokens.
-	Colors Colors
-}
-
-// Colors are what tmux draws borders and titles with, as tmux colour
-// values; Tracks passes theme values ("#rrggbb").
-type Colors struct {
-	Border, BorderActive string
-	Title, TitleActive   string
 }
 
 var confTemplate = template.Must(template.New("tmux.conf").Funcs(template.FuncMap{
@@ -55,34 +49,42 @@ set -g mouse on
 set -g set-clipboard on
 set -g history-limit 50000
 set -g renumber-windows on
+set -g status-interval 5
+set -g pane-border-status top
 set-environment -g COLORTERM truecolor
 set-environment -g TRACKS_NEW_APP 1
 set-environment -gu TRACKS_ID
 set-environment -gu TRACKS_SOCKET_DIR
-
-set -g pane-border-status top
-set -g pane-border-format " #{?pane_active,#[fg={{.Colors.TitleActive}}]#[bold],#[fg={{.Colors.Title}}]}#{@tracks_title}#[default] "
-set -g pane-border-style "fg={{.Colors.Border}}"
-set -g pane-active-border-style "fg={{.Colors.BorderActive}}"
 bind-key t run-shell -b "{{.Command}} trackwin add-terminal '#{window_id}'"
 {{- if .Version.AtLeast (v 3 4)}}
 set -as terminal-features ",*:hyperlinks"
+{{- end}}
+{{- if .ThemeFile}}
+source-file "{{.ThemeFile}}"
 {{- end}}
 source-file -q "{{.OverrideFile}}"
 `))
 
 // Render returns the config file content.
 func (c Conf) Render() (string, error) {
-	var b bytes.Buffer
-	if err := confTemplate.Execute(&b, c); err != nil {
-		return "", fmt.Errorf("render tmux config: %w", err)
-	}
-	return b.String(), nil
+	return render(confTemplate, c)
 }
 
 // Write renders the config to path, creating its directory.
 func (c Conf) Write(path string) error {
-	content, err := c.Render()
+	return write(confTemplate, c, path)
+}
+
+func render(t *template.Template, data any) (string, error) {
+	var b bytes.Buffer
+	if err := t.Execute(&b, data); err != nil {
+		return "", fmt.Errorf("render %s: %w", t.Name(), err)
+	}
+	return b.String(), nil
+}
+
+func write(t *template.Template, data any, path string) error {
+	content, err := render(t, data)
 	if err != nil {
 		return err
 	}

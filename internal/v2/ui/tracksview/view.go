@@ -10,7 +10,7 @@ import (
 
 const (
 	maxCardContent = 72
-	swatchNameLen  = 15
+	swatchNameLen  = 18
 	swatchGap      = 2
 )
 

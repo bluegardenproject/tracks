@@ -29,6 +29,14 @@ const (
 	StateWarning Token = "state.warning"
 	StateDanger  Token = "state.danger"
 	StateInfo    Token = "state.info"
+
+	// The footer has its own set, so it can stand apart from the windows.
+	FooterBg         Token = "footer.bg"
+	FooterText       Token = "footer.text"
+	FooterMuted      Token = "footer.muted"
+	FooterFaint      Token = "footer.faint"
+	FooterActiveBg   Token = "footer.active.bg"
+	FooterActiveText Token = "footer.active.text"
 )
 
 // All lists every token in display order.
@@ -38,4 +46,5 @@ var All = []Token{
 	BorderDefault, BorderFocus,
 	Accent, Highlight,
 	StateSuccess, StateWarning, StateDanger, StateInfo,
+	FooterBg, FooterText, FooterMuted, FooterFaint, FooterActiveBg, FooterActiveText,
 }

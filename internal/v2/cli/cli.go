@@ -36,7 +36,7 @@ func newRoot(version string) *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			return start(profile())
+			return start(profile(), version)
 		},
 	}
 	root.PersistentFlags().BoolVar(&demo, "demo", false, "use the playground: a separate session with fake tracks")
@@ -46,6 +46,7 @@ func newRoot(version string) *cobra.Command {
 		newStopCmd(profile),
 		newTracksWindowCmd(version),
 		newTrackwinCmd(profile),
+		newFooterCmd(profile),
 		newDemoCmd(),
 	)
 	return root
