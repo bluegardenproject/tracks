@@ -19,6 +19,7 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 - `theme/` design tokens and theme values (`themes/*.yaml`) · `ui/style/` tokens to Lip Gloss colours
 - `footer/` the footer's tmux status rows · `sysinfo/` LAN, WAN, CPU and memory for the footer
 - `ui/tracksview/` the Tracks window (window 0), Bubble Tea v2 · `ui/themecreator/` theme editor (`t` there)
+- `ui/source/` the data screens read (tracks); reads track windows until the daemon exists
 - Imports point downwards. The planned layout is in the masterplan; add packages here when they land.
 
 ## Build and test
