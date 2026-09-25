@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"charm.land/lipgloss/v2"
-	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/v2/demo"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
@@ -47,8 +46,8 @@ var errInsideTmux = errors.New("you're inside another tmux session.\n" +
 
 // start opens Tracks for profile: it starts the tmux server when needed
 // and attaches this terminal to it.
-func start(profile platform.Profile) error {
-	version, err := tmux.InstalledVersion()
+func start(profile platform.Profile, version string) error {
+	tmuxVersion, err := tmux.InstalledVersion()
 	if err != nil {
 		return err
 	}
@@ -64,36 +63,44 @@ func start(profile platform.Profile) error {
 	case startSelect:
 		return c.SelectWindow(sessionName + ":0")
 	case startCreate:
-		if err := createSession(c, profile, paths, version); err != nil {
+		if err := createSession(c, profile, paths, tmuxVersion, version); err != nil {
 			return err
 		}
 	}
 	return c.Attach(sessionName)
 }
 
-func createSession(c *tmux.Client, profile platform.Profile, paths platform.Paths, version tmux.Version) error {
-	self, err := os.Executable()
+func createSession(c *tmux.Client, profile platform.Profile, paths platform.Paths, tmuxVersion tmux.Version, version string) error {
+	command, err := selfCommand(profile)
 	if err != nil {
-		return fmt.Errorf("find own binary: %w", err)
+		return err
 	}
-	command := shellx.QuoteIfNeeded(self) + " --new-app"
 	if profile == platform.Demo {
-		command += " --demo"
 		// Every playground starts from scratch.
 		if err := os.RemoveAll(paths.DataDir); err != nil {
 			return fmt.Errorf("reset playground: %w", err)
 		}
 	}
 
+	t, err := theme.Load(themePath(paths))
+	if err != nil {
+		return err
+	}
+	// tmux can't follow the background later, so colours are fixed for
+	// the terminal that starts the server.
+	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	if err := writeThemeConf(paths, t, dark, version, command); err != nil {
+		return err
+	}
 	colorterm := os.Getenv("COLORTERM")
 	conf := tmux.Conf{
-		Version:         version,
+		Version:         tmuxVersion,
 		DefaultTerminal: defaultTerminal(),
 		OuterTerm:       os.Getenv("TERM"),
 		TrueColor:       colorterm == "truecolor" || colorterm == "24bit",
+		ThemeFile:       themeConfPath(paths),
 		OverrideFile:    filepath.Join(paths.ConfigDir, "tmux.conf"),
 		Command:         command,
-		Colors:          tmuxColors(theme.Default(), lipgloss.HasDarkBackground(os.Stdin, os.Stdout)),
 	}
 	confPath := filepath.Join(paths.DataDir, "tmux.conf")
 	if err := conf.Write(confPath); err != nil {
@@ -109,19 +116,6 @@ func createSession(c *tmux.Client, profile platform.Profile, paths platform.Path
 		return demo.Seed(c, sessionName, paths.DataDir, command)
 	}
 	return nil
-}
-
-// tmuxColors picks the colours tmux draws pane borders and titles with.
-// tmux can't follow the background later, so they're fixed for the
-// terminal that starts the server.
-func tmuxColors(t theme.Theme, dark bool) tmux.Colors {
-	c := func(token theme.Token) string { return t.Value(token).For(dark) }
-	return tmux.Colors{
-		Border:       c(theme.BorderDefault),
-		BorderActive: c(theme.BorderFocus),
-		Title:        c(theme.TextMuted),
-		TitleActive:  c(theme.TextAccent),
-	}
 }
 
 // defaultTerminal prefers tmux-256color, whose terminfo entry is

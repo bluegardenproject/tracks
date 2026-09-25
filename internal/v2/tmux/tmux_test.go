@@ -92,24 +92,42 @@ func TestConfRender(t *testing.T) {
 			conf.DefaultTerminal = "tmux-256color"
 			conf.OverrideFile = "/home/u/.config/tracks-v2/tmux.conf"
 			conf.Command = "'/opt/tracks' --new-app"
-			conf.Colors = Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan"}
+			conf.ThemeFile = "/home/u/.local/state/tracks-v2/theme.conf"
 			got, err := conf.Render()
 			if err != nil {
 				t.Fatal(err)
 			}
-			golden := filepath.Join("testdata", name+".conf")
-			if *update {
-				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got != string(want) {
-				t.Errorf("config differs from %s (run with -update to accept):\n%s", golden, got)
-			}
+			checkGolden(t, name+".conf", got)
 		})
+	}
+}
+
+func TestThemeConfRender(t *testing.T) {
+	got, err := testThemeConf.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkGolden(t, "theme.conf", got)
+}
+
+var testThemeConf = ThemeConf{
+	Colors: Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Background: "black"},
+	Footer: []string{"#[align=left] nav", "", "#(echo \"hi\")"},
+}
+
+func checkGolden(t *testing.T, name, got string) {
+	t.Helper()
+	golden := filepath.Join("testdata", name)
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Errorf("output differs from %s (run with -update to accept):\n%s", golden, got)
 	}
 }

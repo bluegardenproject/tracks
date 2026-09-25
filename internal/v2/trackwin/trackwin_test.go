@@ -14,9 +14,7 @@ func TestOpenAndAddTerminal(t *testing.T) {
 	c := tmux.New(tmuxtest.Socket(t))
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "tmux.conf")
-	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true", Colors: tmux.Colors{
-		Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan",
-	}}).Write(conf); err != nil {
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {

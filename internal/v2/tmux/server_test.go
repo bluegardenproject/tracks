@@ -27,9 +27,16 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 		TrueColor:       true,
 		OverrideFile:    filepath.Join(dir, "missing.conf"),
 		Command:         "true",
-		Colors:          tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan"},
+		ThemeFile:       filepath.Join(dir, "theme.conf"),
 	}
 	if err := conf.Write(confPath); err != nil {
+		t.Fatal(err)
+	}
+	themeConf := tmux.ThemeConf{
+		Colors: tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Background: "black"},
+		Footer: []string{"top", "", "", `#(echo "system")`},
+	}
+	if err := themeConf.Write(conf.ThemeFile); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,7 +61,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	}
 	// source-file fails on any config error, which new-session doesn't.
 	tmuxOut("source-file", confPath)
-	for option, want := range map[string]string{"escape-time": "0", "mouse": "on", "extended-keys": "on", "default-terminal": "screen-256color"} {
+	for option, want := range map[string]string{"escape-time": "0", "mouse": "on", "extended-keys": "on", "default-terminal": "screen-256color", "status": "4"} {
 		if got := tmuxOut("show-options", "-gv", option); got != want {
 			t.Errorf("option %s = %q, want %q", option, got, want)
 		}
@@ -64,6 +71,9 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 		if got := tmuxOut("show-environment", "-g", name); got != want {
 			t.Errorf("environment = %q, want %s", got, want)
 		}
+	}
+	if got := tmuxOut("show-options", "-gv", "status-format[3]"); got != `#(echo "system")` {
+		t.Errorf("footer row = %q, want it unchanged", got)
 	}
 	if got := tmuxOut("show-options", "-gv", "terminal-features"); !strings.Contains(got, "xterm-test:RGB") {
 		t.Errorf("terminal-features = %q, want 24-bit colour for xterm-test only", got)
