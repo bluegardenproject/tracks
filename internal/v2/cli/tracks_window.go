@@ -1,10 +1,16 @@
 package cli
 
 import (
+	"errors"
+	"strconv"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/v2/demo"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/tracksview"
 	"github.com/spf13/cobra"
@@ -16,7 +22,7 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 		Use:    "tracks-window",
 		Hidden: true,
 		Args:   cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			paths, err := platform.Resolve(profile())
 			if err != nil {
 				return err
@@ -26,14 +32,33 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 				return err
 			}
 			t, _ := theme.Load(themePath(paths))
-			apply := func(t theme.Theme, dark bool) error {
-				return applyTheme(tmux.New(paths.TmuxSocket), paths, t, dark, version, command)
+			c := tmux.New(paths.TmuxSocket)
+			var tracks source.Source = source.Windows{Tmux: c, Session: sessionName}
+			openURL := openBrowser
+			if profile() == platform.Demo {
+				tracks = demo.Source{Windows: tracks}
+				openURL = func(string) error { return errors.New("the playground's pull requests are made up") }
 			}
-			_, err = tea.NewProgram(tracksview.New(version, t, apply),
-				tea.WithContext(c.Context()),
+			window := tracksview.New(tracksview.Config{
+				Version: version,
+				Theme:   t,
+				Apply: func(t theme.Theme, dark bool) error {
+					return applyTheme(c, paths, t, dark, version, command)
+				},
+				Tracks: tracks,
+				Open: func(number int) error {
+					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
+				},
+				End: func(number int) error {
+					return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
+				},
+				OpenURL: openURL,
+			})
+			_, err = tea.NewProgram(window,
+				tea.WithContext(cmd.Context()),
 				tea.WithColorProfile(style.Profile()),
 			).Run()
-			if c.Context().Err() != nil {
+			if cmd.Context().Err() != nil {
 				return nil
 			}
 			return err

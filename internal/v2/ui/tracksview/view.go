@@ -25,14 +25,12 @@ func (m Model) render() string {
 		return ""
 	}
 	var lines []string
-	content := m.height - 1 - tabsChrome
 	if m.showBanner() {
 		lines = append(lines, m.bannerBlock()...)
-		content -= bannerBlock
 	}
 	lines = append(lines, m.tabBar(m.width)...)
 	lines = append(lines, strings.Repeat(" ", m.width))
-	lines = append(lines, m.content(m.width, max(0, content))...)
+	lines = append(lines, m.content(m.width, m.contentHeight())...)
 	lines = append(lines, pad(m.hints(), m.width))
 	if len(lines) > m.height {
 		lines = lines[len(lines)-m.height:]
@@ -44,6 +42,16 @@ func (m Model) render() string {
 // row, the tabs and minContent lines of content come first.
 func (m Model) showBanner() bool {
 	return m.height-1-tabsChrome-bannerBlock >= minContent && m.width >= bannerWidth+4
+}
+
+// contentHeight is the height of the tab's content, between the tabs
+// and the hint row.
+func (m Model) contentHeight() int {
+	h := m.height - 1 - tabsChrome
+	if m.showBanner() {
+		h -= bannerBlock
+	}
+	return max(0, h)
 }
 
 // tabsTop is the screen line the tabs start on.
@@ -81,6 +89,9 @@ func (m Model) bannerBlock() []string {
 func (m Model) content(width, height int) []string {
 	if height == 0 {
 		return nil
+	}
+	if m.tab == tabStation {
+		return m.stationView(width, height)
 	}
 	t := tabs[m.tab]
 	parts := []string{
@@ -128,7 +139,18 @@ func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
 	sep := text.Render(" · ")
-	return "  " + key.Render("Tab") + text.Render(" next tab") + sep +
+	if n := m.station.notice; m.tab == tabStation && n.text != "" {
+		color := theme.StateSuccess
+		if n.err {
+			color = theme.StateDanger
+		}
+		return "  " + m.fg(color).Render(n.text)
+	}
+	station := ""
+	if m.tab == tabStation && len(m.station.tracks) > 0 {
+		station = key.Render("↑/↓") + text.Render(" select") + sep + key.Render("Enter") + text.Render(" open") + sep
+	}
+	return "  " + station + key.Render("Tab") + text.Render(" next tab") + sep +
 		key.Render("Shift+Tab") + text.Render(" previous tab") + sep +
 		key.Render("t") + text.Render(" theme creator") + sep +
 		key.Render("Ctrl+b n") + text.Render(" next track")
