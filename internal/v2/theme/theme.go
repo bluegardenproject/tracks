@@ -52,7 +52,10 @@ var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // Parse reads a theme file. It fails unless every token has a valid
 // dark and light value and no unknown token appears.
-func Parse(data []byte) (Theme, error) {
+func Parse(data []byte) (Theme, error) { return parse(data, nil) }
+
+// parse reads a theme file; tokens it lacks come from base, if given.
+func parse(data []byte, base *Theme) (Theme, error) {
 	var file struct {
 		Name   string           `yaml:"name"`
 		Tokens map[string]Value `yaml:"tokens"`
@@ -74,9 +77,13 @@ func Parse(data []byte) (Theme, error) {
 		t.values[token] = v
 	}
 	for _, token := range All {
-		if _, ok := t.values[token]; !ok {
+		if _, ok := t.values[token]; ok {
+			continue
+		}
+		if base == nil {
 			return Theme{}, fmt.Errorf("theme %q: token %q has no value", file.Name, token)
 		}
+		t.values[token] = base.values[token]
 	}
 	return t, nil
 }

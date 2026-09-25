@@ -40,8 +40,10 @@ func (t Theme) YAML() []byte {
 	return b.Bytes()
 }
 
-// Load reads the theme file at path. It returns the built-in theme when
-// there is none, and along with the error when it can't be used.
+// Load reads the theme file at path; tokens it lacks, such as ones added
+// since it was saved, keep their built-in values. It returns the
+// built-in theme when there is none, and along with the error when it
+// can't be used.
 func Load(path string) (Theme, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -50,9 +52,10 @@ func Load(path string) (Theme, error) {
 	if err != nil {
 		return Default(), err
 	}
-	t, err := Parse(data)
+	def := Default()
+	t, err := parse(data, &def)
 	if err != nil {
-		return Default(), err
+		return def, err
 	}
 	return t, nil
 }

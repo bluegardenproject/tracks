@@ -26,9 +26,9 @@ var (
 
 func kindOf(token theme.Token) kind {
 	switch {
-	case strings.HasPrefix(string(token), "text."), textTokens[token]:
+	case strings.HasPrefix(string(token), "text."), strings.HasPrefix(string(token), "table.text."), textTokens[token]:
 		return kindText
-	case strings.HasPrefix(string(token), "bg."), backgroundTokens[token]:
+	case strings.HasPrefix(string(token), "bg."), strings.HasPrefix(string(token), "table.bg."), backgroundTokens[token]:
 		return kindBackground
 	default:
 		return kindColour

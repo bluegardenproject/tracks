@@ -43,3 +43,19 @@ func TestLoadOfBrokenFileIsDefault(t *testing.T) {
 		t.Errorf("Load of a broken file = %v, %v; want the built-in theme and an error", got.Value(Accent), err)
 	}
 }
+
+func TestLoadFillsNewTokens(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "theme.yaml")
+	old := "name: mine\ntokens:\n  accent: { dark: \"#123456\", light: \"#abcdef\" }\n"
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Value(Accent) != (Value{Dark: "#123456", Light: "#abcdef"}) || got.Value(TableBgSelected) != Default().Value(TableBgSelected) {
+		t.Errorf("Load of a theme without newer tokens: accent %v, table.bg.selected %v; want its accent and the built-in rest",
+			got.Value(Accent), got.Value(TableBgSelected))
+	}
+}
