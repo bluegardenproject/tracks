@@ -1,6 +1,6 @@
 # Draft: agent hooks instead of screen polling (chunk 6)
 
-**Status: draft.** This is worked out in design, but not yet a feature plan. Part of the [v2 masterplan](../../masterplan.md). Track status names here are placeholders; the [track status model](../../masterplan.md#track-status-to-be-designed-before-chunk-2) defines them.
+**Status: draft.** This is worked out in design, but not yet a feature plan. Part of the [v2 masterplan](../../masterplan.md). Track status names here are placeholders; the [track status model](../../masterplan.md#track-status-to-be-designed) defines them.
 
 Claude Code and Cursor report their own state through hooks. One direction for now: agent to Tracks. Talking back (injecting context, holding a Stop until the review gate passes) is a later step.
 

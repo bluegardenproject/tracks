@@ -1,6 +1,6 @@
 # Draft: storage on SQLite (chunk 4)
 
-**Status: draft.** This is worked out in design, but not yet a feature plan. Part of the [v2 masterplan](../../masterplan.md). How status is stored follows the [track status model](../../masterplan.md#track-status-to-be-designed-before-chunk-2); the `status` column below is a placeholder.
+**Status: draft.** This is worked out in design, but not yet a feature plan. Part of the [v2 masterplan](../../masterplan.md). How status is stored follows the [track status model](../../masterplan.md#track-status-to-be-designed); the `status` column below is a placeholder.
 
 ## Why
 

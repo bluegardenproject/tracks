@@ -14,8 +14,8 @@ This file is the single source of truth for direction, decisions and status. Imp
 
 | # | Chunk | Plan | Status |
 |---|---|---|---|
-| 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | planned |
-| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | planned |
+| 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
+| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
 | 3 | Tracks window layout: header and tab navigation, no tab content yet | not written yet | to be designed |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md) | draft |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
@@ -23,7 +23,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 7 | Tracks window content: tabs (track list, Repositories, Proxy, Settings), track actions | not written yet | to be designed |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
 
-Chunks 1 to 3 come first, in order. The [track status model](#track-status-to-be-designed-before-chunk-2) is designed before chunk 2 starts. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
+Chunks 1 to 3 come first, in order. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
 ## Decisions
 
@@ -110,7 +110,8 @@ internal/v2/
   supervise/         per-track liveness and fallback checks
   tmux/              client with socket, generated config, tmuxtest helper
   trackwin/          a track's window: agent pane, right column of terminal and dev-server panes
-  footer/            footer layout rendered as a tmux format string (pure)
+  footer/            footer rows rendered as tmux format strings (pure)
+  sysinfo/           what the footer shows about the machine: LAN, WAN, CPU, memory
   workspace/         worktrees and provisioning
   devservers/        dev servers, proxy, ports
   config/ platform/  v2 config schema; paths, profile, shell and log helpers
@@ -120,6 +121,7 @@ internal/v2/
     widget/          shared UI pieces, only once 2+ screens use them
     source/          Source interface for UI data; demo and daemon implementations
     tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
+    themecreator/    theme editor: every token with preview and dark/light values
     menu/ switcher/  popups
   demo/              fake tracks and the fake agent for the playground
 ```
@@ -132,9 +134,9 @@ internal/v2/
 
 **Reused from v1, unchanged at first:** `git`, `provision`, `services`, `proxy`, `ports`, `github`, `notify`, `update`, `usage`, `shellx`, `dlog`.
 
-## Track status (to be designed before chunk 2)
+## Track status (to be designed)
 
-The footer, the Tracks window, notifications and storage all depend on it, so it's designed before the demo tracks are built. Requirements:
+The footer, the Tracks window, notifications and storage all depend on it, so it has to be designed before real tracks are built. Requirements:
 
 - **Defined exactly once:** one place in the `track` domain package declares every status value with its label, colour token, priority and whether it needs attention. Footer, screens, notifications and storage read from there and never list statuses themselves.
 - **Easy to extend:** adding a status value is one new entry in that place, plus its tests.
@@ -149,6 +151,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
+- **Terminal padding:** terminals like Ghostty draw their own padding in their background colour, a frame around Tracks. Options: document `window-padding-color = extend`, or have Tracks set the terminal background with OSC 11 while it runs.
 - **The v1 menu rebuild** (uncommitted, Charm v1, on the `tracks/09ad3c-menu` branch): ship it to v1 too, or keep it only as the reference for the v2 menu.
 
 ## Risks
