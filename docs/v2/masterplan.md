@@ -17,10 +17,10 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
-| 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md) | draft |
+| 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
-| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | not written yet | to be designed |
+| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md) | started: Station, Repositories |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
