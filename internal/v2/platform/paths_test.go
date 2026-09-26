@@ -18,18 +18,24 @@ func TestResolve(t *testing.T) {
 	}{
 		{"default", Default, base, Paths{
 			ConfigDir:  "/home/u/.config/tracks-v2",
+			Settings:   "/home/u/.config/tracks-v2/settings.yaml",
+			ThemesDir:  "/home/u/.config/tracks-v2/themes",
 			DataDir:    "/home/u/.local/state/tracks-v2",
 			Database:   "/home/u/.local/state/tracks-v2/tracks.db",
 			TmuxSocket: "tracks-v2",
 		}},
 		{"XDG dirs", Default, env{home: "/home/u", xdgConfig: "/xc", xdgState: "/xs"}, Paths{
 			ConfigDir:  "/xc/tracks-v2",
+			Settings:   "/xc/tracks-v2/settings.yaml",
+			ThemesDir:  "/xc/tracks-v2/themes",
 			DataDir:    "/xs/tracks-v2",
 			Database:   "/xs/tracks-v2/tracks.db",
 			TmuxSocket: "tracks-v2",
 		}},
 		{"demo", Demo, base, Paths{
 			ConfigDir:  "/home/u/.config/tracks-v2",
+			Settings:   "/home/u/.config/tracks-v2/settings.yaml",
+			ThemesDir:  "/home/u/.config/tracks-v2/themes",
 			DataDir:    "/tmp/tracks-v2-demo-501",
 			Database:   "/home/u/.local/state/tracks-v2/tracks.db",
 			TmuxSocket: "tracks-v2-demo",
