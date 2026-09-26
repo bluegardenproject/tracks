@@ -18,10 +18,10 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
-| 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
+| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
 | 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md) | started: Station, Repositories, Settings |
-| 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
+| 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
@@ -38,8 +38,20 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
 - **Tracks keys sit behind the tmux prefix** (`Ctrl+b t`, ...). A key bound without it is taken from every pane, and agents and shells use most Alt keys: Claude Code has `Alt+t` (thinking), `Alt+p` (model), `Alt+o`, `Alt+b`/`f`/`d`, `Alt+y`; shells have `Alt+.` (last argument), `Alt+<`/`Alt+>` (history), `Alt+t`, Alt+digits.
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
-- **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger.text`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
-- **Theme values are exact `#rrggbb` colours,** with a dark and a light variant per token. Tracks has its own look instead of following the terminal's colour scheme. Terminals without 24-bit colour (older macOS Terminal.app, the Linux console) get the nearest colour they support: Lip Gloss and tmux convert automatically.
+- **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger.text`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. Built-in themes ship with the binary; users add their own as files in the themes folder ([04-settings.md](plans/04-settings.md)).
+- **Theme values are exact `#rrggbb` colours,** one per token. A light look is a theme of its own (Default Light), not a variant of every token. Tracks has its own look instead of following the terminal's colour scheme. Terminals without 24-bit colour (older macOS Terminal.app, the Linux console) get the nearest colour they support: Lip Gloss and tmux convert automatically.
+- **Agent prompts: v1's text is kept.** v1's prompts work very well, so v2 sends agents the same text v1 sends for the same kind of track, word for word. That covers everything Tracks adds around the user's task:
+  - the per-engine task suffixes: Claude's in `internal/claude/spawn.go`, Cursor's in `internal/cursor/prompt.go`
+  - the doc-review template and the review candor lines, per engine
+  - the shared parts in `internal/agent`: dev servers, terminals, the read-only and draft-PR lines, and the doc write contract, save flow and response style
+  - the global helpers v1 installs: the `tracks-reviewer` and `tracks-docs-reviewer` agents and the `tracks-add-repo` skill (`internal/daemon/skill.go`), and the Cursor rule (`internal/daemon/cursorrule.go`)
+  - the new-track templates (`internal/tui/newtrack/templates.go`)
+
+  v2 copies these texts unchanged, and a test compares v2's assembled prompts with v1's for the same track, so a drift fails CI; from v2.0.0, when v1 is deleted, golden files take over. Only names that must differ while v1 and v2 run side by side (such as the helpers' file names) may change, and each such change is listed here. Improving a prompt is a decision of its own, discussed and agreed first, never a side effect of other work. Letting users edit the prompts comes later, with v1's text as the default.
+- **Install with Homebrew:** `brew install` is offered next to `scripts/install.sh`, by v2.0.0 at the latest. Requirements:
+  - The formula installs the release binaries the release workflow already builds and checks against `SHA256SUMS`, and each release updates it automatically.
+  - It depends on tmux, so a brew install brings everything Tracks needs to start.
+  - A brew-installed Tracks leaves updates to `brew upgrade`: `tracks update` and the update check say so instead of replacing the binary.
 - **The layout is proven on fake data first:** `./tracks --new-app --demo` opens a playground with fake tracks. The UI is built in its real packages against a data interface, so the playground becomes the product.
 
 ## Target shape
@@ -121,7 +133,7 @@ internal/v2/
     widget/          shared UI pieces, only once 2+ screens use them
     source/          Source interface for UI data; demo and daemon implementations
     tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
-    themecreator/    theme editor: every token with preview and dark/light values
+    themecreator/    theme editor: every token with its value, a preview and examples
     menu/ switcher/  popups
   demo/              fake tracks and the fake agent for the playground
 ```
@@ -149,6 +161,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 - **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Proxy, Engines, Settings.
 - **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
 - **v1 data:** fresh start, or a read-only import into History at release.
+- **Homebrew:** our own tap (`bluegardenproject/tap`) or homebrew-core, which needs a build from source and wider use first. And whether v1 gets the formula before v2.0.0, since the release workflow is shared.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
 - **Terminal padding:** terminals like Ghostty draw their own padding in their background colour, a frame around Tracks. Options: document `window-padding-color = extend`, or have Tracks set the terminal background with OSC 11 while it runs.
