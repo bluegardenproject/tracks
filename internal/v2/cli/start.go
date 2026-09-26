@@ -7,10 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/demo"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
-	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 )
 
@@ -82,14 +80,8 @@ func createSession(c *tmux.Client, profile platform.Profile, paths platform.Path
 		}
 	}
 
-	t, err := theme.Load(themePath(paths))
-	if err != nil {
-		return err
-	}
-	// tmux can't follow the background later, so colours are fixed for
-	// the terminal that starts the server.
-	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-	if err := writeThemeConf(paths, t, dark, version, command); err != nil {
+	t, _ := loadTheme(paths)
+	if err := writeThemeConf(paths, t, version, command); err != nil {
 		return err
 	}
 	colorterm := os.Getenv("COLORTERM")

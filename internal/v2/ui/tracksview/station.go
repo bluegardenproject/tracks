@@ -55,7 +55,9 @@ type station struct {
 	lastClick  time.Time
 	hover      int  // the track under the mouse, -1 for none
 	confirming bool // asking whether to end the selected track
-	notice     notice
+	// hoverButton is the details button under the mouse, -1 for none.
+	hoverButton actionID
+	notice      notice
 }
 
 // notice is a short message in the hint row, until the next key or
@@ -221,7 +223,7 @@ func (m Model) stationView(width, height int) []string {
 	s := m.station
 	switch {
 	case s.err != nil:
-		return m.message(width, height, m.fg(theme.StateDanger).Render("Couldn't read the tracks: "+s.err.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the tracks: "+s.err.Error()))
 	case len(s.tracks) == 0:
 		return m.message(width, height, m.fg(theme.TextMuted).Render("No tracks yet."))
 	}

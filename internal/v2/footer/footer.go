@@ -10,8 +10,8 @@ import (
 
 // Rows returns the footer rows, top to bottom. systemCommand prints the
 // system data; tmux reruns it every status-interval.
-func Rows(t theme.Theme, dark bool, version, systemCommand string) []string {
-	p := palette{t, dark}
+func Rows(t theme.Theme, version, systemCommand string) []string {
+	p := palette{t}
 	return []string{
 		nav(p),
 		"",
@@ -26,14 +26,9 @@ func escape(s string) string { return strings.ReplaceAll(s, "#", "##") }
 
 type palette struct {
 	theme theme.Theme
-	dark  bool
 }
 
 // fg and bg return tmux styles for token.
-func (p palette) fg(token theme.Token) string {
-	return "#[fg=" + p.theme.Value(token).For(p.dark) + "]"
-}
+func (p palette) fg(token theme.Token) string { return "#[fg=" + p.theme.Value(token) + "]" }
 
-func (p palette) bg(token theme.Token) string {
-	return "#[bg=" + p.theme.Value(token).For(p.dark) + "]"
-}
+func (p palette) bg(token theme.Token) string { return "#[bg=" + p.theme.Value(token) + "]" }

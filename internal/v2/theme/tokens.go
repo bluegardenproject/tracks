@@ -23,13 +23,25 @@ const (
 	BorderFocus   Token = "border.focus"
 	BorderAccent  Token = "border.accent"
 
-	Accent    Token = "accent"
-	Highlight Token = "highlight"
-
-	StateSuccess Token = "state.success"
-	StateWarning Token = "state.warning"
-	StateDanger  Token = "state.danger"
-	StateInfo    Token = "state.info"
+	// States, four each: text on the window, a soft background with
+	// text readable on it, and a solid badge (bg.accent) with the text
+	// drawn on it (text.accent).
+	StateSuccessText       Token = "state.success.text"
+	StateSuccessTextAccent Token = "state.success.text.accent"
+	StateSuccessBg         Token = "state.success.bg"
+	StateSuccessBgAccent   Token = "state.success.bg.accent"
+	StateWarningText       Token = "state.warning.text"
+	StateWarningTextAccent Token = "state.warning.text.accent"
+	StateWarningBg         Token = "state.warning.bg"
+	StateWarningBgAccent   Token = "state.warning.bg.accent"
+	StateDangerText        Token = "state.danger.text"
+	StateDangerTextAccent  Token = "state.danger.text.accent"
+	StateDangerBg          Token = "state.danger.bg"
+	StateDangerBgAccent    Token = "state.danger.bg.accent"
+	StateInfoText          Token = "state.info.text"
+	StateInfoTextAccent    Token = "state.info.text.accent"
+	StateInfoBg            Token = "state.info.bg"
+	StateInfoBgAccent      Token = "state.info.bg.accent"
 
 	// The footer has its own set, so it can stand apart from the windows.
 	FooterBg         Token = "footer.bg"
@@ -60,6 +72,27 @@ const (
 
 	// Text inputs.
 	InputBg Token = "input.bg"
+
+	// Buttons: default ones, the focused or primary one (accent), and
+	// ones that destroy something (danger).
+	ButtonBgDefault     Token = "button.bg.default"
+	ButtonBgHover       Token = "button.bg.hover"
+	ButtonBgDanger      Token = "button.bg.danger"
+	ButtonBgDangerHover Token = "button.bg.danger.hover"
+	ButtonBgAccent      Token = "button.bg.accent"
+	ButtonBgAccentHover Token = "button.bg.accent.hover"
+	ButtonTextDefault   Token = "button.text.default"
+	ButtonTextDanger    Token = "button.text.danger"
+	ButtonTextAccent    Token = "button.text.accent"
+
+	// List items, such as the Settings sidebar's sections: the one
+	// under the mouse (hover) and the chosen one (active).
+	ListItemBgDefault   Token = "listItem.bg.default"
+	ListItemTextDefault Token = "listItem.text.default"
+	ListItemBgHover     Token = "listItem.bg.hover"
+	ListItemTextHover   Token = "listItem.text.hover"
+	ListItemBgActive    Token = "listItem.bg.active"
+	ListItemTextActive  Token = "listItem.text.active"
 )
 
 // All lists every token in display order.
@@ -67,11 +100,16 @@ var All = []Token{
 	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent,
 	BgBase, BgSurface, BgOverlay, BgSelected, BgHover,
 	BorderDefault, BorderFocus, BorderAccent,
-	Accent, Highlight,
-	StateSuccess, StateWarning, StateDanger, StateInfo,
+	StateSuccessText, StateSuccessTextAccent, StateSuccessBg, StateSuccessBgAccent,
+	StateWarningText, StateWarningTextAccent, StateWarningBg, StateWarningBgAccent,
+	StateDangerText, StateDangerTextAccent, StateDangerBg, StateDangerBgAccent,
+	StateInfoText, StateInfoTextAccent, StateInfoBg, StateInfoBgAccent,
 	FooterBg, FooterText, FooterMuted, FooterFaint, FooterActiveBg, FooterActiveText,
 	BannerTop, BannerBottom,
 	TabText, TabBorder, TabActiveBg, TabActiveText, TabActiveBorder,
 	TableTextDefault, TableTextMuted, TableTextAccent, TableTextFaint, TableBgHighlight, TableBgSelected,
 	InputBg,
+	ButtonBgDefault, ButtonBgHover, ButtonBgDanger, ButtonBgDangerHover, ButtonBgAccent, ButtonBgAccentHover,
+	ButtonTextDefault, ButtonTextDanger, ButtonTextAccent,
+	ListItemBgDefault, ListItemTextDefault, ListItemBgHover, ListItemTextHover, ListItemBgActive, ListItemTextActive,
 }

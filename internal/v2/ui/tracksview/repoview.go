@@ -10,7 +10,8 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
-const newButton = " + New "
+// newButton adds a repo, and a Fast Track on the Settings tab.
+var newButton = widget.NewButton("+ New", widget.ButtonDefault)
 
 var repoColumns = []string{"Name", "Base"}
 
@@ -61,11 +62,11 @@ func (m Model) repoRows() int { return max(0, m.contentHeight()-3) }
 func (m Model) reposView(width, height int) []string {
 	switch {
 	case m.reposErr != nil:
-		return m.message(width, height, m.fg(theme.StateDanger).Render("Couldn't open the database: "+m.reposErr.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't open the database: "+m.reposErr.Error()))
 	case m.repoSource == nil:
 		return m.message(width, height, m.fg(theme.TextMuted).Render("No database."))
 	case m.repos.err != nil:
-		return m.message(width, height, m.fg(theme.StateDanger).Render("Couldn't read the repositories: "+m.repos.err.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the repositories: "+m.repos.err.Error()))
 	}
 	rp := m.repoPanes()
 	var left, right []string
@@ -109,12 +110,14 @@ func (m Model) reposView(width, height int) []string {
 
 func (m Model) repoList(width, height int) []string {
 	r := m.repos
-	button := lipgloss.NewStyle().Background(m.palette.Color(theme.BgSurface)).Foreground(m.palette.Color(theme.TextDefault))
+	button := newButton
+	button.Hover = r.hoverNew
+	view := button.View(m.palette)
 	if r.selected == -1 {
-		button = lipgloss.NewStyle().Background(m.palette.Color(theme.TableBgSelected)).
-			Foreground(m.palette.Color(theme.TableTextDefault)).Bold(true)
+		view = lipgloss.NewStyle().Background(m.palette.Color(theme.TableBgSelected)).
+			Foreground(m.palette.Color(theme.TableTextDefault)).Bold(true).Render(" " + button.Label + " ")
 	}
-	lines := []string{button.Render(newButton), ""}
+	lines := []string{view, ""}
 	rows := make([][]string, len(r.entries))
 	for i, e := range r.entries {
 		rows[i] = []string{e.Name, e.BaseBranch}
@@ -150,7 +153,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 		bracket := theme.BorderDefault
 		switch {
 		case f.errs[in.key] != "":
-			bracket = theme.StateDanger
+			bracket = theme.StateDangerText
 		case focused(in.field):
 			bracket = theme.BorderFocus
 		}
@@ -159,7 +162,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 		at(in.field, 0, width)
 		lines = append(lines, widget.Input(m.palette, f.inputs[in.field], m.inputWidth(), bracket))
 		if msg := f.errs[in.key]; msg != "" {
-			wrapped := m.fg(theme.StateDanger).Width(max(1, width)).Render(msg)
+			wrapped := m.fg(theme.StateDangerText).Width(max(1, width)).Render(msg)
 			lines = append(lines, strings.Split(wrapped, "\n")...)
 		}
 		if in.field == fieldPath && f.remote != "" {
@@ -195,21 +198,21 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 
 	switch {
 	case m.repos.leaving != nil:
-		lines = append(lines, m.fg(theme.StateWarning).Render("Unsaved changes."))
+		lines = append(lines, m.fg(theme.StateWarningText).Render("Unsaved changes."))
 		lines, hits = m.formButtons(lines, hits, []formButton{
-			{fieldPromptSave, "Save", false}, {fieldPromptDiscard, "Discard", false}, {fieldPromptCancel, "Cancel", false}})
+			{fieldPromptSave, "Save", widget.ButtonDefault}, {fieldPromptDiscard, "Discard", widget.ButtonDefault}, {fieldPromptCancel, "Cancel", widget.ButtonDefault}})
 	case f.dirty():
-		lines, hits = m.formButtons(lines, hits, []formButton{{fieldSave, "Save", false}})
+		lines, hits = m.formButtons(lines, hits, []formButton{{fieldSave, "Save", widget.ButtonDefault}})
 	}
 
 	if f.id != 0 {
 		var bottom []string
 		var bottomHits []formHit
-		buttons := []formButton{{fieldDelete, "Delete", false}}
+		buttons := []formButton{{fieldDelete, "Delete", widget.ButtonDanger}}
 		if f.confirming {
-			question := m.fg(theme.StateWarning).Width(max(1, width)).Render("Delete " + f.original.Name + "? Past tracks keep their history.")
+			question := m.fg(theme.StateWarningText).Width(max(1, width)).Render("Delete " + f.original.Name + "? Past tracks keep their history.")
 			bottom = strings.Split(question, "\n")
-			buttons = []formButton{{fieldConfirmDelete, "Delete repository", true}, {fieldCancelDelete, "Cancel", false}}
+			buttons = []formButton{{fieldConfirmDelete, "Delete repository", widget.ButtonDanger}, {fieldCancelDelete, "Cancel", widget.ButtonDefault}}
 		}
 		bottom, bottomHits = m.formButtons(bottom, nil, buttons)
 		start := max(len(lines), height-len(bottom))
@@ -226,32 +229,24 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 }
 
 type formButton struct {
-	field  formField
-	label  string
-	danger bool
+	field formField
+	label string
+	kind  widget.ButtonKind
 }
 
-// formButtons appends a row of buttons to lines.
+// formButtons appends a row of buttons to lines. The focused one is
+// drawn in its hover shade.
 func (m Model) formButtons(lines []string, hits []formHit, buttons []formButton) ([]string, []formHit) {
-	row, col := "", 0
-	for _, b := range buttons {
-		s := lipgloss.NewStyle().Background(m.palette.Color(theme.BgSurface)).Foreground(m.palette.Color(theme.TextDefault))
-		switch {
-		case m.repos.editing && m.repos.form.focus == b.field:
-			s = s.Background(m.palette.Color(theme.Accent)).Foreground(m.palette.Color(theme.TextInverse)).Bold(true)
-		case b.danger:
-			s = s.Background(m.palette.Color(theme.StateDanger)).Foreground(m.palette.Color(theme.TextInverse)).Bold(true)
-		}
-		text := s.Render(" " + b.label + " ")
-		if col > 0 {
-			row += strings.Repeat(" ", buttonGap)
-			col += buttonGap
-		}
-		hits = append(hits, formHit{b.field, len(lines), col, lipgloss.Width(text)})
-		row += text
-		col += lipgloss.Width(text)
+	row := make([]widget.Button, len(buttons))
+	for i, b := range buttons {
+		row[i] = widget.NewButton(b.label, b.kind)
+		row[i].Hover = (m.repos.editing && m.repos.form.focus == b.field) || m.repos.hoverField == b.field
 	}
-	return append(lines, row), hits
+	line, starts := widget.ButtonRow(m.palette, row...)
+	for i, b := range buttons {
+		hits = append(hits, formHit{b.field, len(lines), starts[i], row[i].Width()})
+	}
+	return append(lines, line), hits
 }
 
 // repoRowAt returns the repo drawn at cell x, y.
@@ -265,10 +260,31 @@ func (m Model) repoRowAt(x, y int) (int, bool) {
 	return row, true
 }
 
+// onNewRepo reports whether cell x, y is on the list's New button.
+func (m Model) onNewRepo(x, y int) bool {
+	rp := m.repoPanes()
+	return rp.list && y == m.contentTop() && x >= rp.listX && x < rp.listX+newButton.Width()
+}
+
+// repoFieldAt returns the form field drawn at cell x, y.
+func (m Model) repoFieldAt(x, y int) (formField, bool) {
+	rp := m.repoPanes()
+	if !rp.form {
+		return 0, false
+	}
+	top := m.contentTop() + 1
+	_, hits := m.repoForm(rp.formW-4, m.contentHeight()-2)
+	for _, h := range hits {
+		if y == top+h.row && x >= rp.formX+2+h.col && x < rp.formX+2+h.col+h.w {
+			return h.field, true
+		}
+	}
+	return 0, false
+}
+
 func (m Model) repoClick(x, y int) (Model, tea.Cmd) {
 	m.repos.notice = notice{}
-	rp := m.repoPanes()
-	if rp.list && y == m.contentTop() && x >= rp.listX && x < rp.listX+lipgloss.Width(newButton) {
+	if m.onNewRepo(x, y) {
 		return m.request(leave{kind: leaveNew})
 	}
 	if row, ok := m.repoRowAt(x, y); ok {
@@ -277,28 +293,20 @@ func (m Model) repoClick(x, y int) (Model, tea.Cmd) {
 		}
 		return m.request(leave{kind: leaveRow, row: row})
 	}
-	if !rp.form {
-		return m, nil
-	}
-	top := m.contentTop() + 1
-	_, hits := m.repoForm(rp.formW-4, m.contentHeight()-2)
-	for _, h := range hits {
-		if y != top+h.row || x < rp.formX+2+h.col || x >= rp.formX+2+h.col+h.w {
-			continue
-		}
-		prompt := h.field >= fieldPromptSave
+	if field, ok := m.repoFieldAt(x, y); ok {
+		prompt := field >= fieldPromptSave
 		if (m.repos.leaving != nil) != prompt {
 			return m, nil
 		}
 		m.repos.editing = true
-		if h.field <= fieldBase {
-			return m, m.repos.form.setFocus(h.field)
+		if field <= fieldBase {
+			return m, m.repos.form.setFocus(field)
 		}
-		m.repos.form.focus = h.field
+		m.repos.form.focus = field
 		for i := range m.repos.form.inputs {
 			m.repos.form.inputs[i].Blur()
 		}
-		return m.pressField(h.field)
+		return m.pressField(field)
 	}
 	return m, nil
 }

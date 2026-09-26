@@ -46,7 +46,7 @@ func Input(p style.Palette, in textinput.Model, width int, bracket theme.Token) 
 		s := in.Styles()
 		s.Focused.Text = bg.Foreground(p.Color(theme.TextDefault))
 		s.Focused.Placeholder = bg.Foreground(p.Color(theme.TextFaint))
-		s.Cursor.Color = p.Color(theme.Accent)
+		s.Cursor.Color = p.Color(theme.TextAccent)
 		in.SetStyles(s)
 		text = in.View()
 	case in.Value() == "":

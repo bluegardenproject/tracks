@@ -10,8 +10,8 @@ import (
 
 // System is the system data shown for s. Values that couldn't be read
 // are left out.
-func System(s sysinfo.Snapshot, t theme.Theme, dark bool) string {
-	p := palette{t, dark}
+func System(s sysinfo.Snapshot, t theme.Theme) string {
+	p := palette{t}
 	var items []string
 	add := func(label, value string) {
 		items = append(items, p.fg(theme.FooterMuted)+label+" "+p.fg(theme.FooterText)+value)

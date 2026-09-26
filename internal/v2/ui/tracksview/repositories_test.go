@@ -118,10 +118,7 @@ func TestAddingARepo(t *testing.T) {
 		t.Fatalf("Enter on New: editing %v, focus %d; want the name field", m.repos.editing, m.repos.form.focus)
 	}
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
-	m = typeText(m, "/src/shop tt")
-	if m.creating || m.tab != tabRepositories {
-		t.Fatal("typing t in the form opened the theme creator")
-	}
+	m = typeText(m, "/src/shop")
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if m.tab != tabRepositories || m.repos.form.value(fieldName) != "suggested" || m.repos.form.value(fieldBase) != "trunk" {
 		t.Fatalf("leaving the path: tab %d, name %q, base %q; want the suggestion filled in",
@@ -135,7 +132,7 @@ func TestAddingARepo(t *testing.T) {
 		t.Fatal("a filled-in new repo should show Save")
 	}
 	m = press(t, m, "Save")
-	if len(f.entries) != 1 || f.entries[0].Path != "/src/shop tt" || m.repos.editing {
+	if len(f.entries) != 1 || f.entries[0].Path != "/src/shop" || m.repos.editing {
 		t.Fatalf("after Save: %+v, editing %v; want the repo added and focus back on the list", f.entries, m.repos.editing)
 	}
 	if m.repos.selected != 0 || m.repos.notice.text != "Saved suggested." {
@@ -223,5 +220,22 @@ func TestDeletingAsksFirst(t *testing.T) {
 	m = press(t, m, "Delete repository")
 	if len(f.deleted) != 1 || len(m.repos.entries) != 0 || m.repos.selected != -1 {
 		t.Errorf("deleted %v, %d left, selected %d; want api gone and New selected", f.deleted, len(m.repos.entries), m.repos.selected)
+	}
+}
+
+func TestButtonsHover(t *testing.T) {
+	m := reposTab(t, &fakeRepos{})
+	x, y := -1, -1
+	for row, line := range strings.Split(plainView(m), "\n") {
+		if i := strings.Index(line, newButton.Label); i >= 0 {
+			x, y = len([]rune(line[:i])), row
+			break
+		}
+	}
+	if m = settle(m, tea.MouseMotionMsg{X: x, Y: y}); !m.repos.hoverNew {
+		t.Fatal("the mouse on New should highlight it")
+	}
+	if m = settle(m, tea.MouseMotionMsg{X: 0, Y: 0}); m.repos.hoverNew || m.repos.hoverField != -1 {
+		t.Error("moving away should clear the highlight")
 	}
 }

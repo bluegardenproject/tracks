@@ -1,6 +1,7 @@
 package themecreator
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
@@ -15,22 +16,17 @@ const (
 	kindColour // a block and sample text
 )
 
-// Text and background tokens outside the text. and bg. groups.
-var (
-	textTokens = map[theme.Token]bool{
-		theme.FooterText: true, theme.FooterMuted: true, theme.FooterFaint: true, theme.FooterActiveText: true,
-		theme.TabText: true, theme.TabActiveText: true,
-	}
-	backgroundTokens = map[theme.Token]bool{
-		theme.FooterBg: true, theme.FooterActiveBg: true, theme.TabActiveBg: true, theme.InputBg: true,
-	}
-)
+// textTokens are text tokens without "text" in their name.
+var textTokens = map[theme.Token]bool{theme.FooterMuted: true, theme.FooterFaint: true}
 
+// kindOf reads a token's kind from its name: a "text" part makes it
+// text, a "bg" part a background.
 func kindOf(token theme.Token) kind {
+	parts := strings.Split(string(token), ".")
 	switch {
-	case strings.HasPrefix(string(token), "text."), strings.HasPrefix(string(token), "table.text."), textTokens[token]:
+	case slices.Contains(parts, "text"), textTokens[token]:
 		return kindText
-	case strings.HasPrefix(string(token), "bg."), strings.HasPrefix(string(token), "table.bg."), backgroundTokens[token]:
+	case slices.Contains(parts, "bg"):
 		return kindBackground
 	default:
 		return kindColour
@@ -41,11 +37,19 @@ func kindOf(token theme.Token) kind {
 func backgroundOf(token theme.Token) theme.Token {
 	switch {
 	case token == theme.TextInverse:
-		return theme.Accent
+		return theme.ButtonBgAccent
 	case token == theme.FooterActiveText:
 		return theme.FooterActiveBg
 	case token == theme.TabActiveText:
 		return theme.TabActiveBg
+	case strings.HasPrefix(string(token), "state."), strings.HasPrefix(string(token), "listItem."):
+		return theme.Token(strings.Replace(string(token), ".text", ".bg", 1))
+	case token == theme.ButtonTextDefault:
+		return theme.ButtonBgDefault
+	case token == theme.ButtonTextDanger:
+		return theme.ButtonBgDanger
+	case token == theme.ButtonTextAccent:
+		return theme.ButtonBgAccent
 	case strings.HasPrefix(string(token), "footer."):
 		return theme.FooterBg
 	default:
