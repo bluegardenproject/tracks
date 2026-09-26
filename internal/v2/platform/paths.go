@@ -27,6 +27,9 @@ type Paths struct {
 	ConfigDir string
 	// DataDir holds state, logs and generated files.
 	DataDir string
+	// Database is the SQLite database. Shared by all profiles: the
+	// playground's fake tracks never reach it, its repos are real.
+	Database string
 	// TmuxSocket is the tmux socket name (`tmux -L`).
 	TmuxSocket string
 }
@@ -56,18 +59,19 @@ func resolve(profile Profile, e env) Paths {
 	if configHome == "" {
 		configHome = filepath.Join(e.home, ".config")
 	}
-	p := Paths{ConfigDir: filepath.Join(configHome, "tracks-v2")}
+	stateHome := e.xdgState
+	if stateHome == "" {
+		stateHome = filepath.Join(e.home, ".local", "state")
+	}
+	state := filepath.Join(stateHome, "tracks-v2")
+	p := Paths{ConfigDir: filepath.Join(configHome, "tracks-v2"), Database: filepath.Join(state, "tracks.db")}
 
 	switch profile {
 	case Demo:
 		p.DataDir = filepath.Join(e.tempDir, fmt.Sprintf("tracks-v2-demo-%d", e.uid))
 		p.TmuxSocket = "tracks-v2-demo"
 	default:
-		stateHome := e.xdgState
-		if stateHome == "" {
-			stateHome = filepath.Join(e.home, ".local", "state")
-		}
-		p.DataDir = filepath.Join(stateHome, "tracks-v2")
+		p.DataDir = state
 		p.TmuxSocket = "tracks-v2"
 	}
 	return p
