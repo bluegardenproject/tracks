@@ -186,3 +186,26 @@ func TestFastTracksEmptyState(t *testing.T) {
 		t.Errorf("clicking the dummy button: notice %q; want %q", m.settings.notice.text, fastTracksLater)
 	}
 }
+
+func TestFirstClickInTheScrolledCreator(t *testing.T) {
+	m := openSettings(t, newFakeThemes())
+	m = settle(m, downKey, downKey)
+	for range 10 {
+		m = settle(m, tea.MouseWheelMsg{X: 60, Y: 20, Button: tea.MouseWheelDown})
+	}
+	token := theme.FooterText
+	x, y := -1, -1
+	for row, line := range strings.Split(plainView(m), "\n") {
+		if i := strings.Index(line, string(token)); i >= 0 {
+			x, y = len([]rune(line[:i])), row
+		}
+	}
+	if y < 0 {
+		t.Fatalf("%s not shown after scrolling", token)
+	}
+	x += 30 // on its value
+	m = settle(m, tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if !strings.Contains(strings.Split(plainView(m), "\n")[y], string(token)) || !m.creatorFocused() {
+		t.Errorf("the first click scrolled the list away from %s", token)
+	}
+}
