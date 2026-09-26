@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.1](https://github.com/bluegardenproject/tracks/compare/v1.3.0...v1.3.1) (2026-09-26)
+
+
+### Miscellaneous
+
+* **v2:** add a data source for screens, with fake details for demo tracks ([1e4acbc](https://github.com/bluegardenproject/tracks/commit/1e4acbc9f7894c99750d4d95dffc34f12394388d))
+* **v2:** add repo rules checked against git ([d42ca14](https://github.com/bluegardenproject/tracks/commit/d42ca14a0a7a612d260c7912ea72702f5150e711))
+* **v2:** add table and accent border colour tokens ([55c8a9a](https://github.com/bluegardenproject/tracks/commit/55c8a9a001acfd8ab8a552073c50c0e2dc622480))
+* **v2:** add the settings file and the themes folder ([752c22f](https://github.com/bluegardenproject/tracks/commit/752c22fdfd5f8121a67f74bb771e86e507cfe66c))
+* **v2:** add the SQLite store with forward migrations ([ac14f2a](https://github.com/bluegardenproject/tracks/commit/ac14f2a471d34c99d5f7952bd6c229d786d5be47))
+* **v2:** build the Repositories tab ([167bdc0](https://github.com/bluegardenproject/tracks/commit/167bdc0073debc2b5a11a36b28c0de318535c167))
+* **v2:** build the Settings tab with theme files ([d12d9d9](https://github.com/bluegardenproject/tracks/commit/d12d9d9beec656034f1972b1a384911b7e626cf1))
+* **v2:** document the Repositories tab and storage ([ba4f02a](https://github.com/bluegardenproject/tracks/commit/ba4f02adcebbcc8950849c7d1f79911c8583138b))
+* **v2:** document the Settings tab ([51b8af2](https://github.com/bluegardenproject/tracks/commit/51b8af29f38bc3c644a9249848b142d3da6f1026))
+* **v2:** document the Station tab ([55eb6e2](https://github.com/bluegardenproject/tracks/commit/55eb6e257fc29ba64a243c16dfb1112fbce350e2))
+* **v2:** keep the creator's scroll on the first click ([1fc90be](https://github.com/bluegardenproject/tracks/commit/1fc90be1089d0ab9fc458569763e990a1e4f7846))
+* **v2:** list the tmux prefix keys in one place ([171f519](https://github.com/bluegardenproject/tracks/commit/171f519ff6009db5b18d985e26952a1c09a40d70))
+* **v2:** list track windows with their kind, repo and directory ([817e607](https://github.com/bluegardenproject/tracks/commit/817e607c15f41aa8248cfb98e8cf46215bdf8748))
+* **v2:** share the table and text input between screens ([93ea96b](https://github.com/bluegardenproject/tracks/commit/93ea96bb43f4f93070c66e8a9694ec3358eb99e1))
+* **v2:** show the track list, details and Fast Track placeholder on Station ([82acf19](https://github.com/bluegardenproject/tracks/commit/82acf1946a6dfa7694494a57823aa5d8387400c3))
+* **v2:** sort theme files by file name and fix creator hover ([01cdee7](https://github.com/bluegardenproject/tracks/commit/01cdee7beae24f89d95b6158caa33c7a53534298))
+
 ## [1.3.0](https://github.com/bluegardenproject/tracks/compare/v1.2.0...v1.3.0) (2026-09-25)
 
 
