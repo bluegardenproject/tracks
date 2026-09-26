@@ -21,7 +21,9 @@ var (
 		theme.FooterText: true, theme.FooterMuted: true, theme.FooterFaint: true, theme.FooterActiveText: true,
 		theme.TabText: true, theme.TabActiveText: true,
 	}
-	backgroundTokens = map[theme.Token]bool{theme.FooterBg: true, theme.FooterActiveBg: true, theme.TabActiveBg: true}
+	backgroundTokens = map[theme.Token]bool{
+		theme.FooterBg: true, theme.FooterActiveBg: true, theme.TabActiveBg: true, theme.InputBg: true,
+	}
 )
 
 func kindOf(token theme.Token) kind {

@@ -47,3 +47,5 @@ tokens:
   table.text.faint:   { dark: "#71717a", light: "#a1a1aa" }
   table.bg.highlight: { dark: "#102547", light: "#ececef" }
   table.bg.selected:  { dark: "#102547", light: "#e4e4e7" }
+
+  input.bg:           { dark: "#0b1d3a", light: "#f4f4f5" }
