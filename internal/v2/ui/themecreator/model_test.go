@@ -248,12 +248,12 @@ func TestExampleButtonsHover(t *testing.T) {
 	y := listTop + tokenLine[slices.Index(theme.All, theme.ButtonBgDefault)] - 1
 	_, starts := widget.ButtonRow(m.palette(), sampleButtons(-1)...)
 	m, _ = send(m, tea.MouseMotionMsg{X: exampleX + starts[1] + 1, Y: y})
-	if m.sampleHover != 1 {
-		t.Fatalf("mouse on the accent example: hover %d, want 1", m.sampleHover)
+	if got := m.sampleAt(m.mouseX, m.mouseY); got != 1 {
+		t.Fatalf("mouse on the accent example: hover %d, want 1", got)
 	}
 	m, _ = send(m, tea.MouseMotionMsg{X: 0, Y: y})
-	if m.sampleHover != -1 {
-		t.Errorf("mouse off the examples: hover %d, want none", m.sampleHover)
+	if got := m.sampleAt(m.mouseX, m.mouseY); got != -1 {
+		t.Errorf("mouse off the examples: hover %d, want none", got)
 	}
 }
 

@@ -100,7 +100,7 @@ func (m Model) tokenList(p style.Palette) []string {
 			out[line-1] = lipgloss.NewStyle().Foreground(p.Color(theme.TextDefault)).Bold(true).Render(g)
 			switch g {
 			case buttonGroup:
-				examples = []string{buttonSamples(preview, m.sampleHover)}
+				examples = []string{buttonSamples(preview, m.sampleAt(m.mouseX, m.mouseY))}
 			case stateGroup:
 				examples = []string{stateSamples(preview, false), stateSamples(preview, true)}
 			}
@@ -244,9 +244,10 @@ func (m Model) buttonsX() int {
 func (m Model) buttonRow(p style.Palette) string {
 	focused, onButton := m.focusedButton()
 	var row []widget.Button
+	hover := m.buttonAt(m.mouseX, m.mouseY)
 	for i, b := range m.buttons() {
 		button := widget.NewButton(buttonLabels[b], widget.ButtonDefault)
-		button.Hover = (m.focused && onButton && b == focused) || i == m.buttonHover
+		button.Hover = (m.focused && onButton && b == focused) || i == hover
 		row = append(row, button)
 	}
 	line, _ := widget.ButtonRow(p, row...)

@@ -54,7 +54,7 @@ type Entry struct {
 	Err  error  // why the file isn't a valid theme
 }
 
-// List returns the built-in themes, then the files in dir by name.
+// List returns the built-in themes, then the files in dir by file name.
 // A missing dir has no files.
 func List(dir string) ([]Entry, error) {
 	var entries []Entry
@@ -75,9 +75,7 @@ func List(dir string) ([]Entry, error) {
 		}
 		own = append(own, read(dir, strings.TrimSuffix(f.Name(), ext)))
 	}
-	slices.SortFunc(own, func(a, b Entry) int {
-		return strings.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName))
-	})
+	slices.SortFunc(own, func(a, b Entry) int { return strings.Compare(a.ID, b.ID) })
 	return append(entries, own...), nil
 }
 
