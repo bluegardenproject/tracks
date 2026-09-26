@@ -90,8 +90,11 @@ func (m Model) content(width, height int) []string {
 	if height == 0 {
 		return nil
 	}
-	if m.tab == tabStation {
+	switch m.tab {
+	case tabStation:
 		return m.stationView(width, height)
+	case tabRepositories:
+		return m.reposView(width, height)
 	}
 	t := tabs[m.tab]
 	parts := []string{
@@ -138,20 +141,35 @@ func (m Model) swatches(width int) string {
 func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
-	sep := text.Render(" · ")
-	if n := m.station.notice; m.tab == tabStation && n.text != "" {
+	n := m.station.notice
+	if m.tab == tabRepositories {
+		n = m.repos.notice
+	}
+	if n.text != "" && (m.tab == tabStation || m.tab == tabRepositories) {
 		color := theme.StateSuccess
 		if n.err {
 			color = theme.StateDanger
 		}
 		return "  " + m.fg(color).Render(n.text)
 	}
-	station := ""
-	if m.tab == tabStation && len(m.station.tracks) > 0 {
-		station = key.Render("↑/↓") + text.Render(" select") + sep + key.Render("Enter") + text.Render(" open") + sep
+	var keys [][2]string
+	switch {
+	case m.tab == tabStation && len(m.station.tracks) > 0:
+		keys = [][2]string{{"↑/↓", "select"}, {"Enter", "open"}}
+	case m.tab == tabRepositories && m.repos.editing:
+		keys = [][2]string{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Esc", "back to the list"}}
+		return "  " + joinKeys(key, text, keys)
+	case m.tab == tabRepositories:
+		keys = [][2]string{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	}
-	return "  " + station + key.Render("Tab") + text.Render(" next tab") + sep +
-		key.Render("Shift+Tab") + text.Render(" previous tab") + sep +
-		key.Render("t") + text.Render(" theme creator") + sep +
-		key.Render("Ctrl+b n") + text.Render(" next track")
+	keys = append(keys, [][2]string{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}, {"t", "theme creator"}, {"Ctrl+b n", "next track"}}...)
+	return "  " + joinKeys(key, text, keys)
+}
+
+func joinKeys(key, text lipgloss.Style, keys [][2]string) string {
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = key.Render(k[0]) + text.Render(" "+k[1])
+	}
+	return strings.Join(parts, text.Render(" · "))
 }
