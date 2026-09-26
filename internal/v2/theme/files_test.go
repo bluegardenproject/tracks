@@ -94,19 +94,19 @@ func TestListShowsBuiltInsThenFiles(t *testing.T) {
 	for _, e := range list {
 		got = append(got, e.ID)
 	}
-	want := []string{"default", "default_light", "zeta", "beta", "default"}
+	want := []string{"default", "default_light", "beta", "default", "zeta"}
 	if len(got) != len(want) {
 		t.Fatalf("listed %v; want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("listed %v; want %v (built-ins, then files by name)", got, want)
+			t.Fatalf("listed %v; want %v (built-ins, then files by file name)", got, want)
 		}
 	}
-	if list[2].Err != nil || list[2].DisplayName != "Alpha" || list[2].Path == "" {
-		t.Errorf("zeta.yaml: %+v; want the valid theme Alpha", list[2].Err)
+	if list[4].Err != nil || list[4].DisplayName != "Alpha" || list[4].Path == "" {
+		t.Errorf("zeta.yaml: %+v; want the valid theme Alpha", list[4].Err)
 	}
-	if list[3].Err == nil || list[4].Err == nil {
+	if list[2].Err == nil || list[3].Err == nil {
 		t.Error("a bad value and a built-in's id should make files invalid")
 	}
 

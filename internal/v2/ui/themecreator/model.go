@@ -78,25 +78,26 @@ type field struct {
 // Model is the creator. Focus runs through the fields, in the order of
 // theme.All, then the buttons of the current mode.
 type Model struct {
-	applied       theme.Theme // colours the creator itself
-	edit          theme.Theme // the theme being edited, as saved
-	fields        []field
-	mode          mode
-	focus         int
-	focused       bool // the host gave the creator focus
-	offset        int  // first visible line of the token list
-	name          textinput.Model
-	saving        bool // a save was asked for before leaving
-	sampleHover   int  // the example button under the mouse, -1 for none
-	buttonHover   int  // the index of the button under the mouse, -1 for none
-	width, height int
-	status        string
-	statusErr     bool
+	applied theme.Theme // colours the creator itself
+	edit    theme.Theme // the theme being edited, as saved
+	fields  []field
+	mode    mode
+	focus   int
+	focused bool // the host gave the creator focus
+	offset  int  // first visible line of the token list
+	name    textinput.Model
+	saving  bool // a save was asked for before leaving
+	// mouseX and mouseY are where the mouse was last seen, -1 when
+	// outside the pane; hover is worked out from them when drawing.
+	mouseX, mouseY int
+	width, height  int
+	status         string
+	statusErr      bool
 }
 
 // New returns a creator editing t, drawn in the colours of applied.
 func New(t, applied theme.Theme) Model {
-	m := Model{applied: applied, name: widget.NewInput(64, "My theme"), sampleHover: -1, buttonHover: -1}
+	m := Model{applied: applied, name: widget.NewInput(64, "My theme"), mouseX: -1, mouseY: -1}
 	m.Open(t)
 	return m
 }
@@ -184,8 +185,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m.wheel(msg), nil
 	case tea.MouseMotionMsg:
 		mouse := msg.Mouse()
-		m.sampleHover = m.sampleAt(mouse.X, mouse.Y)
-		m.buttonHover = m.buttonAt(mouse.X, mouse.Y)
+		m.mouseX, m.mouseY = mouse.X, mouse.Y
 		return m, nil
 	}
 	return m.updateInput(msg)
