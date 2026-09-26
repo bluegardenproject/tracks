@@ -131,6 +131,13 @@ func (m *Model) Focus() tea.Cmd {
 	return m.setFocus(m.focus)
 }
 
+// FocusHere is Focus without scrolling to the focused value, for a
+// click that is about to say where focus goes.
+func (m *Model) FocusHere() tea.Cmd {
+	m.focused = true
+	return m.focusInput()
+}
+
 func (m *Model) Blur() {
 	m.focused = false
 	m.blurAll()
@@ -410,6 +417,12 @@ func (m *Model) setFocus(i int) tea.Cmd {
 	}
 	m.focus = (i + n) % n
 	m.scrollToFocus()
+	return m.focusInput()
+}
+
+// focusInput focuses the input that has focus, if any.
+func (m *Model) focusInput() tea.Cmd {
+	m.blurAll()
 	if !m.focused {
 		return nil
 	}

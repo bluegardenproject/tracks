@@ -252,7 +252,7 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 		var focus tea.Cmd
 		if !s.editing {
 			s.editing = true
-			focus = s.creator.Focus()
+			focus = s.creator.FocusHere()
 		}
 		var cmd tea.Cmd
 		s.creator, cmd = s.creator.Update(tea.MouseClickMsg{X: bx, Y: by, Button: tea.MouseLeft})
