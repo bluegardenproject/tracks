@@ -22,9 +22,12 @@ const (
 
 // Paths are the locations for one profile.
 type Paths struct {
-	// ConfigDir holds config.yaml and user overrides. Shared by all
-	// profiles.
+	// ConfigDir holds the settings, the user's themes and overrides.
+	// Shared by all profiles.
 	ConfigDir string
+	// Settings is the preferences file, and ThemesDir holds the user's
+	// themes, one file each.
+	Settings, ThemesDir string
 	// DataDir holds state, logs and generated files.
 	DataDir string
 	// Database is the SQLite database. Shared by all profiles: the
@@ -64,7 +67,13 @@ func resolve(profile Profile, e env) Paths {
 		stateHome = filepath.Join(e.home, ".local", "state")
 	}
 	state := filepath.Join(stateHome, "tracks-v2")
-	p := Paths{ConfigDir: filepath.Join(configHome, "tracks-v2"), Database: filepath.Join(state, "tracks.db")}
+	config := filepath.Join(configHome, "tracks-v2")
+	p := Paths{
+		ConfigDir: config,
+		Settings:  filepath.Join(config, "settings.yaml"),
+		ThemesDir: filepath.Join(config, "themes"),
+		Database:  filepath.Join(state, "tracks.db"),
+	}
 
 	switch profile {
 	case Demo:
