@@ -26,8 +26,6 @@ const (
 	// detailsMin is the narrowest details frame; narrower windows show
 	// the list alone.
 	detailsMin = 34
-	// columnGap is the gap between the list's columns.
-	columnGap = 2
 	// fastTrackRows is the Fast Track frame's height, above the details.
 	fastTrackRows = 10
 )
@@ -200,36 +198,6 @@ func (m Model) stationTop() int { return m.contentTop() + 2 }
 
 func (m Model) stationRows() int { return max(0, m.contentHeight()-3) }
 
-// listWidths are the widths of the list's columns, filling width: the
-// slug gets half the spare room, or is cut when there is none.
-func (m Model) listWidths(width int) []int {
-	widths := make([]int, len(columns))
-	for i, c := range columns {
-		widths[i] = lipgloss.Width(c)
-	}
-	for _, t := range m.station.tracks {
-		for i, c := range cells(t) {
-			widths[i] = max(widths[i], lipgloss.Width(c))
-		}
-	}
-	total := columnGap * (len(widths) - 1)
-	for _, w := range widths {
-		total += w
-	}
-	spare := width - total
-	if spare < 0 {
-		widths[0] = max(4, widths[0]+spare)
-		return widths
-	}
-	widths[0] += spare / 2
-	rest := spare - spare/2
-	for i := 1; i < len(widths); i++ {
-		widths[i] += rest / (len(widths) - 1)
-	}
-	widths[len(widths)-1] += rest % (len(widths) - 1)
-	return widths
-}
-
 // rowAt returns the track drawn at cell x, y.
 func (m Model) rowAt(x, y int) (int, bool) {
 	p := m.panes()
@@ -243,13 +211,7 @@ func (m Model) rowAt(x, y int) (int, bool) {
 
 // scrollStation keeps the selected row on screen.
 func (m Model) scrollStation() Model {
-	rows := m.stationRows()
-	s := &m.station
-	s.offset = min(s.offset, s.selected)
-	if rows > 0 && s.selected >= s.offset+rows {
-		s.offset = s.selected - rows + 1
-	}
-	s.offset = max(0, min(s.offset, len(s.tracks)-rows))
+	m.station.offset = keepVisible(m.station.selected, m.station.offset, m.stationRows(), len(m.station.tracks))
 	return m
 }
 
@@ -313,58 +275,11 @@ func (m Model) frame(title string, color theme.Token, body []string, width, heig
 // list draws the header and the visible tracks, width by height cells.
 func (m Model) list(width, height int) []string {
 	s := m.station
-	widths := m.listWidths(width)
-	row := func(values []string, fill lipgloss.Style, style func(col int) lipgloss.Style) string {
-		var b strings.Builder
-		used := 0
-		for i, v := range values {
-			if i > 0 {
-				b.WriteString(fill.Render(strings.Repeat(" ", columnGap)))
-				used += columnGap
-			}
-			v = cut(v, widths[i])
-			if i == costColumn {
-				v = strings.Repeat(" ", widths[i]-lipgloss.Width(v)) + v
-			}
-			b.WriteString(style(i).Render(pad(v, widths[i])))
-			used += widths[i]
-		}
-		b.WriteString(fill.Render(strings.Repeat(" ", max(0, width-used))))
-		return b.String()
+	rows := make([][]string, len(s.tracks))
+	for i, t := range s.tracks {
+		rows[i] = cells(t)
 	}
-
-	plain := lipgloss.NewStyle()
-	lines := []string{row(columns, plain, func(int) lipgloss.Style { return m.fg(theme.TableTextFaint) })}
-	end := min(len(s.tracks), s.offset+height-1)
-	for i := s.offset; i < end; i++ {
-		fill := plain
-		switch i {
-		case s.selected:
-			fill = fill.Background(m.palette.Color(theme.TableBgSelected))
-		case s.hover:
-			fill = fill.Background(m.palette.Color(theme.TableBgHighlight))
-		}
-		lines = append(lines, row(cells(s.tracks[i]), fill, func(col int) lipgloss.Style {
-			st := fill.Foreground(m.palette.Color(theme.TableTextMuted))
-			if col == 0 {
-				st = fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(i == s.selected)
-			}
-			return st
-		}))
-	}
-	return lines
-}
-
-// cut shortens s to width, ending it with an ellipsis.
-func cut(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:max(0, width-1)]) + "…"
+	return table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset}.draw(m, width, height)
 }
 
 // message centres one line in width by height cells.

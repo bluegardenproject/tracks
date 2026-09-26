@@ -57,6 +57,9 @@ const (
 	TableTextFaint   Token = "table.text.faint"
 	TableBgHighlight Token = "table.bg.highlight" // the row under the mouse
 	TableBgSelected  Token = "table.bg.selected"
+
+	// Text inputs.
+	InputBg Token = "input.bg"
 )
 
 // All lists every token in display order.
@@ -70,4 +73,5 @@ var All = []Token{
 	BannerTop, BannerBottom,
 	TabText, TabBorder, TabActiveBg, TabActiveText, TabActiveBorder,
 	TableTextDefault, TableTextMuted, TableTextAccent, TableTextFaint, TableBgHighlight, TableBgSelected,
+	InputBg,
 }

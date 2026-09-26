@@ -3,10 +3,10 @@ package themecreator
 import (
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
 const (
@@ -125,22 +125,7 @@ func (m Model) input(p style.Palette, i int) string {
 	case i == m.focus:
 		bracket = theme.BorderFocus
 	}
-	b := lipgloss.NewStyle().Foreground(p.Color(bracket))
-	text := lipgloss.NewStyle().Foreground(p.Color(theme.TextMuted)).Render(f.input.Value())
-	if i == m.focus {
-		text = focusedInput(p, f.input)
-	}
-	return b.Render("[") + pad(text, len("#rrggbb")+1) + b.Render("]")
-}
-
-// focusedInput renders the focused value in the theme's colours; the
-// input's own styles would override them.
-func focusedInput(p style.Palette, in textinput.Model) string {
-	s := in.Styles()
-	s.Focused.Text = lipgloss.NewStyle().Foreground(p.Color(theme.TextDefault))
-	s.Cursor.Color = p.Color(theme.Accent)
-	in.SetStyles(s)
-	return in.View()
+	return widget.Input(p, f.input, len("#rrggbb")+1, bracket)
 }
 
 func (m Model) buttons(p style.Palette) string {

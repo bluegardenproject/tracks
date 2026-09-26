@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
 // ApplyMsg asks the host to apply Theme. The host answers with
@@ -63,14 +64,9 @@ func New(t theme.Theme, dark bool) Model {
 }
 
 func newField(token theme.Token, dark bool, value string) field {
-	in := textinput.New()
-	in.Prompt = ""
-	in.CharLimit = len("#rrggbb")
+	in := widget.NewInput(len("#rrggbb"), "")
 	in.SetWidth(len("#rrggbb"))
 	in.SetValue(value)
-	s := in.Styles()
-	s.Cursor.Blink = false
-	in.SetStyles(s)
 	return field{token: token, dark: dark, input: in}
 }
 
