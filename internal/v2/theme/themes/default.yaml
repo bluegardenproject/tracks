@@ -1,51 +1,77 @@
-# The built-in Tracks theme. Every token needs a dark and a light value.
-name: Tracks
+# Built-in theme, read-only. Copy it with Save as new in the Theme Creator.
+display_name: Default
 tokens:
-  text.default:       { dark: "#e4e4e7", light: "#27272a" }
-  text.muted:         { dark: "#a1a1aa", light: "#52525b" }
-  text.faint:         { dark: "#71717a", light: "#a1a1aa" }
-  text.inverse:       { dark: "#18181b", light: "#fafafa" }
-  text.accent:        { dark: "#1ccde8", light: "#0e7490" }
+  text.default:       "#e4e4e7"
+  text.muted:         "#a1a1aa"
+  text.faint:         "#71717a"
+  text.inverse:       "#18181b"
+  text.accent:        "#1ccde8"
 
-  bg.base:            { dark: "#041228", light: "#fafafa" }
-  bg.surface:         { dark: "#27272a", light: "#f4f4f5" }
-  bg.overlay:         { dark: "#303036", light: "#ffffff" }
-  bg.selected:        { dark: "#3f3f46", light: "#e4e4e7" }
-  bg.hover:           { dark: "#2f2f35", light: "#ececef" }
+  bg.base:            "#041228"
+  bg.surface:         "#27272a"
+  bg.overlay:         "#303036"
+  bg.selected:        "#3f3f46"
+  bg.hover:           "#2f2f35"
 
-  border.default:     { dark: "#1ccde8", light: "#d4d4d8" }
-  border.focus:       { dark: "#f5d000", light: "#0891b2" }
-  border.accent:      { dark: "#d18b00", light: "#0891b2" }
+  border.default:     "#1ccde8"
+  border.focus:       "#f5d000"
+  border.accent:      "#d18b00"
 
-  accent:             { dark: "#1ccde8", light: "#0891b2" }
-  highlight:          { dark: "#f472b6", light: "#db2777" }
+  state.success.text:        "#46eb00"
+  state.success.text.accent: "#154500"
+  state.success.bg:          "#154500"
+  state.success.bg.accent:   "#46eb00"
+  state.warning.text:        "#d18b00"
+  state.warning.text.accent: "#1f1300"
+  state.warning.bg:          "#2e2505"
+  state.warning.bg.accent:   "#d18b00"
+  state.danger.text:         "#ff2e6d"
+  state.danger.text.accent:  "#400013"
+  state.danger.bg:           "#400013"
+  state.danger.bg.accent:    "#ff2e6d"
+  state.info.text:           "#1ccde8"
+  state.info.text.accent:    "#073542"
+  state.info.bg:             "#073542"
+  state.info.bg.accent:      "#1ccde8"
 
-  state.success:      { dark: "#4ade80", light: "#16a34a" }
-  state.warning:      { dark: "#facc15", light: "#ca8a04" }
-  state.danger:       { dark: "#f87171", light: "#dc2626" }
-  state.info:         { dark: "#60a5fa", light: "#2563eb" }
+  footer.bg:          "#041228"
+  footer.text:        "#d4d4d8"
+  footer.muted:       "#8b8b94"
+  footer.faint:       "#52525b"
+  footer.active.bg:   "#073542"
+  footer.active.text: "#1ccde8"
 
-  footer.bg:          { dark: "#041228", light: "#ececef" }
-  footer.text:        { dark: "#d4d4d8", light: "#3f3f46" }
-  footer.muted:       { dark: "#8b8b94", light: "#71717a" }
-  footer.faint:       { dark: "#52525b", light: "#a1a1aa" }
-  footer.active.bg:   { dark: "#073542", light: "#dcdce0" }
-  footer.active.text: { dark: "#1ccde8", light: "#0e7490" }
+  banner.top:         "#1ccde8"
+  banner.bottom:      "#0a515c"
 
-  banner.top:         { dark: "#1ccde8", light: "#0891b2" }
-  banner.bottom:      { dark: "#0a515c", light: "#0a515c" }
+  tab.text:           "#a1a1aa"
+  tab.border:         "#3f3f46"
+  tab.active.bg:      "#073542"
+  tab.active.text:    "#1ccde8"
+  tab.active.border:  "#1ccde8"
 
-  tab.text:           { dark: "#a1a1aa", light: "#52525b" }
-  tab.border:         { dark: "#3f3f46", light: "#d4d4d8" }
-  tab.active.bg:      { dark: "#073542", light: "#dcdce0" }
-  tab.active.text:    { dark: "#1ccde8", light: "#0e7490" }
-  tab.active.border:  { dark: "#1ccde8", light: "#0891b2" }
+  table.text.default: "#a1d2e3"
+  table.text.muted:   "#4da5c4"
+  table.text.accent:  "#d18b00"
+  table.text.faint:   "#71717a"
+  table.bg.highlight: "#102547"
+  table.bg.selected:  "#102547"
 
-  table.text.default: { dark: "#a1d2e3", light: "#27272a" }
-  table.text.muted:   { dark: "#4da5c4", light: "#52525b" }
-  table.text.accent:  { dark: "#d18b00", light: "#0e7490" }
-  table.text.faint:   { dark: "#71717a", light: "#a1a1aa" }
-  table.bg.highlight: { dark: "#102547", light: "#ececef" }
-  table.bg.selected:  { dark: "#102547", light: "#e4e4e7" }
+  input.bg:           "#0b1d3a"
 
-  input.bg:           { dark: "#0b1d3a", light: "#f4f4f5" }
+  button.bg.default:        "#113d5c"
+  button.bg.hover:          "#135280"
+  button.bg.danger:         "#400013"
+  button.bg.danger.hover:   "#61021e"
+  button.bg.accent:         "#073542"
+  button.bg.accent.hover:   "#09576e"
+  button.text.default:      "#e4e4e7"
+  button.text.danger:       "#ff2e6d"
+  button.text.accent:       "#1ccde8"
+
+  listItem.bg.default:      "#041228"
+  listItem.text.default:    "#e4e4e7"
+  listItem.bg.hover:        "#073542"
+  listItem.text.hover:      "#e4e4e7"
+  listItem.bg.active:       "#073542"
+  listItem.text.active:     "#1ccde8"

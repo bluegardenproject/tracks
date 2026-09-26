@@ -1,159 +1,272 @@
 package themecreator
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
-
-// press sends keys and returns what the last one's command sends.
-// Earlier commands, such as cursor blinks, aren't run.
-func press(t *testing.T, m Model, keys ...tea.KeyPressMsg) (Model, tea.Msg) {
-	t.Helper()
-	var cmd tea.Cmd
-	for _, k := range keys {
-		m, cmd = m.Update(k)
-	}
-	if cmd == nil || keys[len(keys)-1] != enter && keys[len(keys)-1] != esc {
-		return m, nil
-	}
-	return m, cmd()
-}
-
-func typed(s string) []tea.KeyPressMsg {
-	keys := make([]tea.KeyPressMsg, 0, len(s))
-	for _, r := range s {
-		keys = append(keys, tea.KeyPressMsg{Code: r, Text: string(r)})
-	}
-	return keys
-}
-
-func clearField() []tea.KeyPressMsg {
-	keys := make([]tea.KeyPressMsg, 8)
-	for i := range keys {
-		keys[i] = tea.KeyPressMsg{Code: tea.KeyBackspace}
-	}
-	return keys
-}
 
 var (
 	tab   = tea.KeyPressMsg{Code: tea.KeyTab}
 	down  = tea.KeyPressMsg{Code: tea.KeyDown}
 	enter = tea.KeyPressMsg{Code: tea.KeyEnter}
 	esc   = tea.KeyPressMsg{Code: tea.KeyEscape}
-	right = tea.KeyPressMsg{Code: tea.KeyRight}
 )
 
-// toApply moves focus from the first field to the Apply button.
-func toApply() []tea.KeyPressMsg {
-	keys := make([]tea.KeyPressMsg, len(theme.All))
+func key(s string) tea.KeyPressMsg { r := []rune(s)[0]; return tea.KeyPressMsg{Code: r, Text: s} }
+
+// send delivers msgs and returns the messages the last one's command
+// leads to, batches unpacked. Earlier commands, such as cursor blinks,
+// aren't run.
+func send(m Model, msgs ...tea.Msg) (Model, []tea.Msg) {
+	var cmd tea.Cmd
+	for _, msg := range msgs {
+		m, cmd = m.Update(msg)
+	}
+	var out []tea.Msg
+	queue := []tea.Cmd{cmd}
+	for len(queue) > 0 {
+		c := queue[0]
+		queue = queue[1:]
+		if c == nil {
+			continue
+		}
+		msg := c()
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			queue = append(queue, batch...)
+			continue
+		}
+		out = append(out, msg)
+	}
+	return m, out
+}
+
+func typed(s string) []tea.Msg {
+	var keys []tea.Msg
+	for _, r := range s {
+		keys = append(keys, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	return keys
+}
+
+func clearField() []tea.Msg {
+	keys := make([]tea.Msg, 8)
+	for i := range keys {
+		keys[i] = tea.KeyPressMsg{Code: tea.KeyBackspace}
+	}
+	return keys
+}
+
+func find[T any](msgs []tea.Msg) (T, bool) {
+	for _, msg := range msgs {
+		if t, ok := msg.(T); ok {
+			return t, true
+		}
+	}
+	var zero T
+	return zero, false
+}
+
+// creator is a focused creator editing t, 90 by 30 cells.
+func creator(t theme.Theme) Model {
+	m := New(t, theme.Default())
+	m.SetSize(90, 30)
+	m.Focus()
+	return m
+}
+
+// mine is a user theme.
+func mine() theme.Theme {
+	t := theme.Default()
+	t.ID, t.DisplayName, t.BuiltIn = "mine", "Mine", false
+	return t
+}
+
+// toButtons moves focus from the first field to the first button.
+func toButtons() []tea.Msg {
+	keys := make([]tea.Msg, len(theme.All))
 	for i := range keys {
 		keys[i] = down
 	}
 	return keys
 }
 
-func TestApplySendsEditedTheme(t *testing.T) {
-	edit := theme.Default().Value(theme.StateDanger).Dark
-	m := New(theme.Default(), true)
-	m, _ = press(t, m, clearField()...)
-	m, _ = press(t, m, typed(edit)...)
-	m, _ = press(t, m, tab)
-	m, _ = press(t, m, clearField()...)
-	m, _ = press(t, m, typed("#12")...) // invalid: keeps the old value
-
-	m, _ = press(t, m, toApply()...)
-	_, msg := press(t, m, enter)
-	apply, ok := msg.(ApplyMsg)
+func TestSaveSendsTheEditedTheme(t *testing.T) {
+	m := creator(mine())
+	m, _ = send(m, clearField()...)
+	m, _ = send(m, typed("#123456")...)
+	m, _ = send(m, tab)
+	m, _ = send(m, clearField()...)
+	m, _ = send(m, typed("#12")...) // invalid: keeps the saved value
+	if !m.Dirty() || slices.Index(m.buttons(), buttonSave) != 1 {
+		t.Fatalf("after an edit: dirty %v, buttons %v; want Save after Load", m.Dirty(), m.buttons())
+	}
+	m, _ = send(m, toButtons()...)
+	m, msgs := send(m, tea.KeyPressMsg{Code: tea.KeyRight}, enter)
+	save, ok := find[SaveMsg](msgs)
 	if !ok {
-		t.Fatalf("Enter on Apply sent %T, want ApplyMsg", msg)
+		t.Fatalf("Enter on Save sent %v, want SaveMsg", msgs)
 	}
-	got := apply.Theme.Value(theme.TextDefault)
-	if got.Dark != edit {
-		t.Errorf("dark text.default = %q, want the edit", got.Dark)
+	if got := save.Theme.Value(theme.All[0]); got != "#123456" {
+		t.Errorf("%s = %s, want the edit", theme.All[0], got)
 	}
-	if want := theme.Default().Value(theme.TextDefault).Light; got.Light != want {
-		t.Errorf("light text.default = %q, want the old %q while the edit is invalid", got.Light, want)
+	if got, want := save.Theme.Value(theme.All[1]), mine().Value(theme.All[1]); got != want {
+		t.Errorf("%s = %s, want the saved %s while the edit is invalid", theme.All[1], got, want)
+	}
+
+	m, _ = send(m, SavedMsg{Theme: save.Theme})
+	if m.Dirty() || m.status != "Saved Mine." {
+		t.Errorf("after saving: dirty %v, status %q", m.Dirty(), m.status)
 	}
 }
 
-func TestCancelAndEscClose(t *testing.T) {
-	m := New(theme.Default(), true)
-	if _, msg := press(t, m, esc); msg != (CloseMsg{}) {
-		t.Errorf("Esc sent %v, want CloseMsg", msg)
+func TestBuiltInsSaveAsNew(t *testing.T) {
+	m := creator(theme.Default())
+	m, _ = send(m, clearField()...)
+	m, _ = send(m, typed("#123456")...)
+	if slices.Contains(m.buttons(), buttonSave) {
+		t.Fatal("a built-in offers Save")
 	}
-	m, _ = press(t, m, toApply()...)
-	m, _ = press(t, m, right)
-	if _, msg := press(t, m, enter); msg != (CloseMsg{}) {
-		t.Errorf("Enter on Cancel sent %v, want CloseMsg", msg)
+	if m.Leave() || m.mode != modeLeave {
+		t.Fatal("leaving with edits should ask")
+	}
+	m, _ = send(m, key("s"))
+	if m.mode != modeName {
+		t.Fatalf("Save on a built-in: mode %d, want naming a new theme", m.mode)
+	}
+	m, _ = send(m, typed("My Theme")...)
+	m, msgs := send(m, enter)
+	create, ok := find[CreateMsg](msgs)
+	if !ok || create.Name != "My Theme" || create.Theme.Value(theme.All[0]) != "#123456" {
+		t.Fatalf("Enter on the name sent %v, want CreateMsg with the edit", msgs)
+	}
+
+	m, _ = send(m, SavedMsg{Err: errors.New("a theme with this name exists")})
+	if m.mode != modeName || !m.statusErr {
+		t.Errorf("a failed create: mode %d, error %v; want to stay on the name", m.mode, m.statusErr)
+	}
+	created := create.Theme
+	created.ID, created.DisplayName, created.BuiltIn = "my_theme", "My Theme", false
+	_, msgs = send(m, SavedMsg{Theme: created})
+	if _, ok := find[DoneMsg](msgs); !ok {
+		t.Errorf("saving before leaving sent %v, want DoneMsg", msgs)
 	}
 }
 
-func TestListScrollsToFocus(t *testing.T) {
-	m := New(theme.Default(), true)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 90, Height: 16})
-	keys := make([]tea.KeyPressMsg, len(theme.All)-1)
-	for i := range keys {
-		keys[i] = down
+func TestLeaving(t *testing.T) {
+	m := creator(mine())
+	if _, msgs := send(m, esc); len(msgs) != 1 || msgs[0] != (DoneMsg{}) {
+		t.Errorf("Esc without edits sent %v, want DoneMsg", msgs)
 	}
-	m, _ = press(t, m, keys...)
-	last := string(theme.All[len(theme.All)-1])
-	if out := m.View(); !strings.Contains(out, last) || strings.Count(out, "\n") != 15 {
-		t.Errorf("focused on %s in a 16-line window: token not visible or wrong height:\n%s", last, out)
+	m, _ = send(m, clearField()...)
+	m, _ = send(m, typed("#123456")...)
+	m, _ = send(m, esc)
+	if m.mode != modeLeave || !strings.Contains(m.View(), "Unsaved changes.") {
+		t.Fatal("Esc with edits should ask")
+	}
+	m, msgs := send(m, key("c"))
+	if _, ok := find[StayMsg](msgs); !ok || m.mode != modeEdit || !m.Dirty() {
+		t.Errorf("Cancel: %v, mode %d, dirty %v; want StayMsg and the edits kept", msgs, m.mode, m.Dirty())
+	}
+	m.Leave()
+	m, msgs = send(m, key("d"))
+	if _, ok := find[DoneMsg](msgs); !ok || m.Dirty() {
+		t.Errorf("Discard: %v, dirty %v; want DoneMsg and the edits gone", msgs, m.Dirty())
 	}
 }
 
-func click(m Model, x, y int) (Model, tea.Cmd) {
-	return m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+func TestLoad(t *testing.T) {
+	m := creator(theme.Default())
+	m, out := send(m, toButtons()...)
+	m, out = send(m, enter)
+	if !slices.ContainsFunc(out, func(msg tea.Msg) bool { _, ok := msg.(LoadMsg); return ok }) {
+		t.Fatalf("Load sent %v; want LoadMsg, for the host to offer the themes", out)
+	}
+	light := theme.BuiltIns()[1]
+	m.Load(light)
+	if m.mode != modeEdit || m.Editing().ID != light.ID || m.Dirty() {
+		t.Errorf("mode %d, editing %s; want %s in the editor", m.mode, m.Editing().ID, light.ID)
+	}
+}
+
+func click(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
 }
 
 func TestMouse(t *testing.T) {
-	m := New(theme.Default(), true)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 90, Height: 20})
+	m := creator(mine())
 	_, tokenLine := layout()
 	bgBase := slices.Index(theme.All, theme.BgBase)
 
-	m, _ = click(m, lightInputX+2, listTop+tokenLine[bgBase])
-	if f := m.fields[m.focus]; f.token != theme.BgBase || f.dark {
-		t.Fatalf("clicked bg.base's light value, focus is on %s (dark %v)", f.token, f.dark)
+	m, _ = send(m, click(inputX+2, listTop+tokenLine[bgBase]))
+	if m.fields[m.focus].token != theme.BgBase {
+		t.Fatalf("clicked bg.base's value, focus is on %s", m.fields[m.focus].token)
 	}
 
+	m.SetSize(90, 16)
 	before := m.focus
-	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m, _ = send(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if m.offset == 0 || m.focus != before {
 		t.Errorf("wheel: offset %d, focus %d; want the list scrolled and focus kept", m.offset, m.focus)
 	}
 
-	_, cmd := click(m, 2, m.buttonsY())
-	first := cmd()
-	msgs := []tea.Msg{first}
-	if batch, ok := first.(tea.BatchMsg); ok {
-		for _, c := range batch {
-			if c != nil {
-				if msg := c(); msg != nil {
-					msgs = append(msgs, msg)
-				}
-			}
-		}
-	}
-	if !slices.ContainsFunc(msgs, func(msg tea.Msg) bool { _, ok := msg.(ApplyMsg); return ok }) {
-		t.Errorf("clicking Apply sent %v, want an ApplyMsg", msgs)
+	x := m.buttonsX() + buttonWidth(buttonLoad) + widget.ButtonGap + 1
+	m, _ = send(m, click(x, m.buttonsY()))
+	if m.mode != modeName {
+		t.Errorf("clicking Save as new: mode %d, want naming", m.mode)
 	}
 }
 
 func TestLeftFieldKeepsNoCursor(t *testing.T) {
-	m := New(theme.Default(), true)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 90, Height: 50})
+	m := creator(mine())
+	m.SetSize(90, 60)
 	_, tokenLine := layout()
 	i := slices.Index(theme.All, theme.BgBase)
-	m, _ = click(m, lightInputX+3, listTop+tokenLine[i])
-	m, _ = click(m, darkInputX+3, listTop+tokenLine[i+1])
+	m, _ = send(m, click(inputX+3, listTop+tokenLine[i]), click(inputX+3, listTop+tokenLine[i+1]))
+	if v := mine().Value(theme.BgBase); !strings.Contains(m.View(), v) {
+		t.Errorf("the field that lost focus doesn't show %s in one piece", v)
+	}
+}
 
-	light := theme.Default().Value(theme.BgBase).Light
-	if !strings.Contains(m.View(), light) {
-		t.Errorf("the field that lost focus doesn't show %s in one piece", light)
+func TestTokenNamesFitTheirColumn(t *testing.T) {
+	for _, token := range theme.All {
+		if len(token) >= nameWidth {
+			t.Errorf("%s is %d long; nameWidth %d leaves no gap", token, len(token), nameWidth)
+		}
+	}
+}
+
+func TestExampleButtonsHover(t *testing.T) {
+	m := creator(theme.Default())
+	m.SetSize(100, 200)
+	_, tokenLine := layout()
+	y := listTop + tokenLine[slices.Index(theme.All, theme.ButtonBgDefault)] - 1
+	_, starts := widget.ButtonRow(m.palette(), sampleButtons(-1)...)
+	m, _ = send(m, tea.MouseMotionMsg{X: exampleX + starts[1] + 1, Y: y})
+	if m.sampleHover != 1 {
+		t.Fatalf("mouse on the accent example: hover %d, want 1", m.sampleHover)
+	}
+	m, _ = send(m, tea.MouseMotionMsg{X: 0, Y: y})
+	if m.sampleHover != -1 {
+		t.Errorf("mouse off the examples: hover %d, want none", m.sampleHover)
+	}
+}
+
+func TestCtrlCCopiesTheValue(t *testing.T) {
+	m := creator(theme.Default())
+	_, out := send(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if len(out) != 1 {
+		t.Fatalf("Ctrl+C on a value sent %v; want the clipboard write", out)
+	}
+	if m, _ = send(m, toButtons()...); m.focus < len(m.fields) {
+		t.Fatal("focus should be on the buttons")
+	}
+	if _, out = send(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); len(out) != 0 {
+		t.Errorf("Ctrl+C on a button sent %v; want nothing", out)
 	}
 }

@@ -1,7 +1,6 @@
 package tracksview
 
 import (
-	"image/color"
 	"regexp"
 	"strings"
 	"testing"
@@ -23,27 +22,6 @@ var (
 	tabKey      = tea.KeyPressMsg{Code: tea.KeyTab}
 	shiftTabKey = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 )
-
-func TestSettingsShowsEveryToken(t *testing.T) {
-	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: 40}, shiftTabKey)
-	out := m.View().Content
-	for _, token := range theme.All {
-		if !strings.Contains(out, string(token)) {
-			t.Errorf("token %s missing from the view", token)
-		}
-	}
-}
-
-func TestFollowsTerminalBackground(t *testing.T) {
-	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.BackgroundColorMsg{Color: color.White})
-	if m.palette.Dark() {
-		t.Error("white background: palette still dark")
-	}
-	m = update(m, tea.BackgroundColorMsg{Color: color.Black})
-	if !m.palette.Dark() {
-		t.Error("black background: palette not dark")
-	}
-}
 
 func TestKeysDontQuit(t *testing.T) {
 	m := New(Config{Version: "test", Theme: theme.Default()})

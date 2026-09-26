@@ -19,7 +19,11 @@ type repoTab struct {
 	// want is the repo to select once the list reloads.
 	want    int64
 	editing bool // focus is in the form
-	form    repoForm
+	// hoverNew and hoverField are the New button and the form field
+	// under the mouse; hoverField is -1 for none.
+	hoverNew   bool
+	hoverField formField
+	form       repoForm
 	// leaving holds what to do once unsaved changes are saved or
 	// discarded, while asking.
 	leaving *leave
@@ -184,6 +188,12 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "ctrl+c":
+		if int(f.focus) < len(f.inputs) {
+			m.repos.notice = notice{text: "Copied the value to the clipboard."}
+			return m, tea.SetClipboard(f.inputs[f.focus].Value())
+		}
+		return m, nil
 	case "esc":
 		return m.request(leave{kind: leaveForm})
 	case "tab", "down":
@@ -209,8 +219,9 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// repoPaste types pasted text into the focused input.
-func (m Model) repoPaste(msg tea.PasteMsg) (Model, tea.Cmd) {
+// repoPaste gives the focused input a paste, or the clipboard it read
+// for Ctrl+V.
+func (m Model) repoPaste(msg tea.Msg) (Model, tea.Cmd) {
 	f := &m.repos.form
 	if !m.repos.editing || f.focus > fieldBase || m.repos.leaving != nil {
 		return m, nil

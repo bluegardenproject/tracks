@@ -23,7 +23,7 @@ func TestSystem(t *testing.T) {
 		{"nothing", sysinfo.Snapshot{}, ""},
 	}
 	for _, tt := range tests {
-		got := styles.ReplaceAllString(System(tt.s, theme.Default(), true), "")
+		got := styles.ReplaceAllString(System(tt.s, theme.Default()), "")
 		if got != tt.want {
 			t.Errorf("%s:\n got %q\nwant %q", tt.name, got, tt.want)
 		}

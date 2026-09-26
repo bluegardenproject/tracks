@@ -9,11 +9,16 @@ import (
 	"testing"
 )
 
-func TestDefaultThemeIsComplete(t *testing.T) {
-	d := Default()
-	for _, token := range All {
-		if v := d.Value(token); v.Dark == "" || v.Light == "" {
-			t.Errorf("token %s has no value", token)
+func TestBuiltInsAreComplete(t *testing.T) {
+	got := BuiltIns()
+	if len(got) != 2 || got[0].ID != DefaultID || got[0].DisplayName != "Default" || got[1].ID != "default_light" {
+		t.Fatalf("built-ins %v; want Default, then Default Light", got)
+	}
+	for _, b := range got {
+		for _, token := range All {
+			if b.Value(token) == "" {
+				t.Errorf("%s: token %s has no value", b.ID, token)
+			}
 		}
 	}
 }
@@ -21,9 +26,9 @@ func TestDefaultThemeIsComplete(t *testing.T) {
 func TestParseRejects(t *testing.T) {
 	complete := func() string {
 		var b strings.Builder
-		b.WriteString("name: t\ntokens:\n")
+		b.WriteString("display_name: t\ntokens:\n")
 		for _, token := range All {
-			b.WriteString("  " + string(token) + `: { dark: "#000000", light: "#ffffff" }` + "\n")
+			b.WriteString("  " + string(token) + `: "#000000"` + "\n")
 		}
 		return b.String()
 	}()
@@ -31,10 +36,11 @@ func TestParseRejects(t *testing.T) {
 		t.Fatalf("complete theme rejected: %v", err)
 	}
 	tests := map[string]string{
-		"missing token": strings.Replace(complete, "  accent:", "  # accent:", 1),
-		"unknown token": complete + `  text.shiny: { dark: "#000000", light: "#ffffff" }` + "\n",
-		"not hex":       strings.Replace(complete, `accent: { dark: "#000000"`, `accent: { dark: "12"`, 1),
-		"short hex":     strings.Replace(complete, `accent: { dark: "#000000"`, `accent: { dark: "#000"`, 1),
+		"missing token": strings.Replace(complete, "  text.accent:", "  # text.accent:", 1),
+		"unknown token": complete + `  text.shiny: "#000000"` + "\n",
+		"not hex":       strings.Replace(complete, `text.accent: "#000000"`, `text.accent: "12"`, 1),
+		"short hex":     strings.Replace(complete, `text.accent: "#000000"`, `text.accent: "#000"`, 1),
+		"old format":    strings.Replace(complete, `text.accent: "#000000"`, `text.accent: { dark: "#000000", light: "#ffffff" }`, 1),
 		"not yaml":      "tokens: [",
 	}
 	for name, data := range tests {
@@ -45,7 +51,7 @@ func TestParseRejects(t *testing.T) {
 }
 
 // Colours come only from tokens, so no colour value may appear in v2
-// code outside this package.
+// code outside this package. Tests may use values as data.
 func TestNoColourLiteralsOutsideTheme(t *testing.T) {
 	literal := regexp.MustCompile(`"#[0-9a-fA-F]{3,8}"|lipgloss\.Color\("|\\x1b\[[34]8;|\\033\[[34]8;|\b[fb]g=(#|colou?r\d)`)
 	root, err := filepath.Abs("..")
@@ -63,7 +69,7 @@ func TestNoColourLiteralsOutsideTheme(t *testing.T) {
 		if d.IsDir() && path == self {
 			return filepath.SkipDir
 		}
-		if d.IsDir() || filepath.Ext(path) != ".go" {
+		if d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		data, err := os.ReadFile(path)

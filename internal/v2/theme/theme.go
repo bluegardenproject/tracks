@@ -4,75 +4,95 @@
 package theme
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 	"regexp"
 	"slices"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Value is a token's colour on dark and on light terminal backgrounds,
-// as "#rrggbb".
-type Value struct {
-	Dark  string `yaml:"dark"`
-	Light string `yaml:"light"`
-}
-
-// For returns the variant for the terminal background.
-func (v Value) For(dark bool) string {
-	if dark {
-		return v.Dark
-	}
-	return v.Light
-}
-
-// Theme assigns a value to every token.
+// Theme assigns a colour, "#rrggbb", to every token.
 type Theme struct {
-	Name   string
-	values map[Token]Value
+	// ID names the theme: its file name without ".yaml", or a
+	// built-in's id.
+	ID string
+	// DisplayName is what Tracks shows for the theme: display_name in
+	// its file, or the id when that's empty.
+	DisplayName string
+	BuiltIn     bool
+	values      map[Token]string
 }
 
-// Value returns the value for token.
-func (t Theme) Value(token Token) Value { return t.values[token] }
+// Value returns the colour for token.
+func (t Theme) Value(token Token) string { return t.values[token] }
 
-//go:embed themes/default.yaml
-var defaultYAML []byte
+// DefaultID is the built-in theme used when none is chosen or the
+// chosen one can't be read.
+const DefaultID = "default"
 
-// Default is the built-in theme.
-func Default() Theme {
-	t, err := Parse(defaultYAML)
-	if err != nil {
-		panic("built-in theme: " + err.Error())
+// builtinIDs are the built-in themes in the order they're listed.
+var builtinIDs = []string{DefaultID, "default_light"}
+
+//go:embed themes/*.yaml
+var builtinFiles embed.FS
+
+var builtins = sync.OnceValue(func() []Theme {
+	themes := make([]Theme, len(builtinIDs))
+	for i, id := range builtinIDs {
+		data, err := builtinFiles.ReadFile("themes/" + id + ".yaml")
+		if err != nil {
+			panic("built-in theme " + id + ": " + err.Error())
+		}
+		t, err := Parse(data)
+		if err != nil {
+			panic("built-in theme " + id + ": " + err.Error())
+		}
+		t.ID, t.BuiltIn = id, true
+		themes[i] = t
 	}
-	return t
+	return themes
+})
+
+// BuiltIns returns the built-in themes.
+func BuiltIns() []Theme { return slices.Clone(builtins()) }
+
+// Default is the Default theme.
+func Default() Theme { return builtins()[0] }
+
+func builtin(id string) (Theme, bool) {
+	for _, t := range builtins() {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return Theme{}, false
 }
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // Parse reads a theme file. It fails unless every token has a valid
-// dark and light value and no unknown token appears.
+// value and no unknown token appears.
 func Parse(data []byte) (Theme, error) { return parse(data, nil) }
 
 // parse reads a theme file; tokens it lacks come from base, if given.
 func parse(data []byte, base *Theme) (Theme, error) {
 	var file struct {
-		Name   string           `yaml:"name"`
-		Tokens map[string]Value `yaml:"tokens"`
+		Name   string            `yaml:"display_name"`
+		Tokens map[string]string `yaml:"tokens"`
 	}
 	if err := yaml.Unmarshal(data, &file); err != nil {
-		return Theme{}, fmt.Errorf("parse theme: %w", err)
+		return Theme{}, fmt.Errorf("not a theme file: %w", err)
 	}
-	t := Theme{Name: file.Name, values: make(map[Token]Value, len(All))}
+	t := Theme{DisplayName: file.Name, values: make(map[Token]string, len(All))}
 	for name, v := range file.Tokens {
 		token := Token(name)
 		if !slices.Contains(All, token) {
-			return Theme{}, fmt.Errorf("theme %q: unknown token %q", file.Name, name)
+			return Theme{}, fmt.Errorf("unknown token %q", name)
 		}
-		for _, c := range []string{v.Dark, v.Light} {
-			if !hexColor.MatchString(c) {
-				return Theme{}, fmt.Errorf("theme %q: token %q: %q is not #rrggbb", file.Name, name, c)
-			}
+		if !hexColor.MatchString(v) {
+			return Theme{}, fmt.Errorf("token %q: %q is not #rrggbb", name, v)
 		}
 		t.values[token] = v
 	}
@@ -81,7 +101,7 @@ func parse(data []byte, base *Theme) (Theme, error) {
 			continue
 		}
 		if base == nil {
-			return Theme{}, fmt.Errorf("theme %q: token %q has no value", file.Name, token)
+			return Theme{}, fmt.Errorf("token %q has no value", token)
 		}
 		t.values[token] = base.values[token]
 	}

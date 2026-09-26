@@ -10,7 +10,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/repos"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
-	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
@@ -34,7 +33,7 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			t, _ := theme.Load(themePath(paths))
+			t, _ := loadTheme(paths)
 			c := tmux.New(paths.TmuxSocket)
 			var tracks source.Source = source.Windows{Tmux: c, Session: sessionName}
 			openURL := openBrowser
@@ -53,19 +52,19 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 			window := tracksview.New(tracksview.Config{
 				Version: version,
 				Theme:   t,
-				Apply: func(t theme.Theme, dark bool) error {
-					return applyTheme(c, paths, t, dark, version, command)
-				},
-				Tracks: tracks,
+				Tracks:  tracks,
 				Open: func(number int) error {
 					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
 				},
 				End: func(number int) error {
 					return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
 				},
-				OpenURL:  openURL,
-				Repos:    repoSource,
-				ReposErr: dbErr,
+				OpenURL:   openURL,
+				Repos:     repoSource,
+				ReposErr:  dbErr,
+				Themes:    themes{c: c, paths: paths, version: version, command: command},
+				ThemesDir: paths.ThemesDir,
+				About:     about(profile(), paths),
 			})
 			_, err = tea.NewProgram(window,
 				tea.WithContext(cmd.Context()),
@@ -76,6 +75,23 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 			}
 			return err
 		},
+	}
+}
+
+// about is what Settings shows under About.
+func about(profile platform.Profile, paths platform.Paths) [][2]string {
+	name := "normal"
+	if profile == platform.Demo {
+		name = "playground"
+	}
+	return [][2]string{
+		{"Profile", name},
+		{"Config folder", paths.ConfigDir},
+		{"Settings file", paths.Settings},
+		{"Themes folder", paths.ThemesDir},
+		{"Data folder", paths.DataDir},
+		{"Database", paths.Database},
+		{"tmux socket", paths.TmuxSocket},
 	}
 }
 

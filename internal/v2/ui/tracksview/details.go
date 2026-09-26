@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
 // labelWidth is the width of the details' label column.
@@ -101,7 +102,7 @@ func (m Model) details(width int) ([]string, []hit) {
 
 	buttons := actions
 	if m.station.confirming {
-		lines = append(lines, m.fg(theme.StateWarning).Render("End "+t.Name+"? Its window and agent close."), "")
+		lines = append(lines, m.fg(theme.StateWarningText).Render("End "+t.Name+"? Its window and agent close."), "")
 		buttons = confirmActions
 	}
 	row, hits := m.buttonRows(buttons, t, width, len(lines))
@@ -130,14 +131,17 @@ func (m Model) buttonRows(buttons []action, t source.Track, width, top int) ([]s
 	var hits []hit
 	line, col := "", 0
 	for _, a := range buttons {
-		b := m.button(a, m.enabled(a.id, t))
-		w := lipgloss.Width(b)
-		if col > 0 && col+buttonGap+w > width {
+		button := widget.Button{Label: a.label, Hot: a.hot, Disabled: !m.enabled(a.id, t), Hover: a.id == m.station.hoverButton}
+		if a.id == actionConfirmEnd {
+			button.Kind = widget.ButtonDanger
+		}
+		b, w := button.View(m.palette), button.Width()
+		if col > 0 && col+widget.ButtonGap+w > width {
 			rows, line, col = append(rows, line), "", 0
 		}
 		if col > 0 {
-			line += strings.Repeat(" ", buttonGap)
-			col += buttonGap
+			line += strings.Repeat(" ", widget.ButtonGap)
+			col += widget.ButtonGap
 		}
 		if m.enabled(a.id, t) {
 			hits = append(hits, hit{a.id, top + len(rows), col, w})
@@ -146,22 +150,6 @@ func (m Model) buttonRows(buttons []action, t source.Track, width, top int) ([]s
 		col += w
 	}
 	return append(rows, line), hits
-}
-
-const buttonGap = 2
-
-func (m Model) button(a action, enabled bool) string {
-	s := lipgloss.NewStyle().Background(m.palette.Color(theme.BgSurface)).Foreground(m.palette.Color(theme.TextDefault))
-	switch {
-	case !enabled:
-		s = s.Foreground(m.palette.Color(theme.TextFaint))
-	case a.id == actionConfirmEnd:
-		s = s.Background(m.palette.Color(theme.StateDanger)).Foreground(m.palette.Color(theme.TextInverse)).Bold(true)
-	}
-	if a.hot < 0 || !enabled {
-		return s.Render(" " + a.label + " ")
-	}
-	return s.Render(" "+a.label[:a.hot]) + s.Underline(true).Render(a.label[a.hot:a.hot+1]) + s.Render(a.label[a.hot+1:]+" ")
 }
 
 func (m Model) enabled(id actionID, t source.Track) bool {

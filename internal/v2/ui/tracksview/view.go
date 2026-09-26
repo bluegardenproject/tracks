@@ -1,7 +1,6 @@
 package tracksview
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -9,8 +8,6 @@ import (
 )
 
 const (
-	swatchNameLen = 18
-	swatchGap     = 2
 	// bannerBlock is the banner with a blank line above and below.
 	bannerBlock = bannerRows + 2
 	// minContent is how many content lines stay before the banner
@@ -85,7 +82,8 @@ func (m Model) bannerBlock() []string {
 	return append(lines, strings.Repeat(" ", m.width))
 }
 
-// content is the active tab's placeholder, width by height cells.
+// content is the active tab, width by height cells; tabs without
+// content yet show a placeholder.
 func (m Model) content(width, height int) []string {
 	if height == 0 {
 		return nil
@@ -95,23 +93,15 @@ func (m Model) content(width, height int) []string {
 		return m.stationView(width, height)
 	case tabRepositories:
 		return m.reposView(width, height)
+	case tabSettings:
+		return m.settingsView(width, height)
 	}
 	t := tabs[m.tab]
-	parts := []string{
+	block := lipgloss.JoinVertical(lipgloss.Left,
 		m.fg(theme.TextDefault).Bold(true).Render(t.title),
 		"",
 		m.fg(theme.TextMuted).Render(t.about),
-	}
-	if m.tab == tabSettings {
-		variant := "light"
-		if m.palette.Dark() {
-			variant = "dark"
-		}
-		parts = append(parts, "",
-			m.fg(theme.TextFaint).Render(fmt.Sprintf("Theme: %s (%s background)", m.palette.Theme().Name, variant)),
-			"", m.swatches(min(width-4, 88)))
-	}
-	block := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	)
 	placed := lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
 	lines := strings.Split(placed, "\n")
 	for i := range lines {
@@ -120,56 +110,52 @@ func (m Model) content(width, height int) []string {
 	return lines[:min(len(lines), height)]
 }
 
-// swatches shows every token as a coloured block with its name.
-func (m Model) swatches(width int) string {
-	cell := 2 + 1 + swatchNameLen + swatchGap
-	cols := max(1, width/cell)
-	var rows []string
-	var row []string
-	for i, token := range theme.All {
-		block := lipgloss.NewStyle().Background(m.palette.Color(token)).Render("  ")
-		name := m.fg(theme.TextMuted).Width(swatchNameLen + swatchGap).Render(string(token))
-		row = append(row, block+" "+name)
-		if len(row) == cols || i == len(theme.All)-1 {
-			rows = append(rows, strings.Join(row, ""))
-			row = nil
-		}
-	}
-	return strings.Join(rows, "\n")
-}
-
+// hints is the bottom row: the tab's notice, or the keys that work
+// right now.
 func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
-	n := m.station.notice
-	if m.tab == tabRepositories {
+	var n notice
+	switch m.tab {
+	case tabStation:
+		n = m.station.notice
+	case tabRepositories:
 		n = m.repos.notice
+	case tabSettings:
+		n = m.settings.notice
 	}
-	if n.text != "" && (m.tab == tabStation || m.tab == tabRepositories) {
-		color := theme.StateSuccess
+	if n.text != "" {
+		color := theme.StateSuccessText
 		if n.err {
-			color = theme.StateDanger
+			color = theme.StateDangerText
 		}
 		return "  " + m.fg(color).Render(n.text)
 	}
-	var keys [][2]string
+	var keys []keyHelp
+	s := m.settings
 	switch {
 	case m.tab == tabStation && len(m.station.tracks) > 0:
-		keys = [][2]string{{"↑/↓", "select"}, {"Enter", "open"}}
+		keys = stationKeys
 	case m.tab == tabRepositories && m.repos.editing:
-		keys = [][2]string{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Esc", "back to the list"}}
-		return "  " + joinKeys(key, text, keys)
+		return "  " + joinKeys(key, text, repoFormKeys)
 	case m.tab == tabRepositories:
-		keys = [][2]string{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
+		keys = repoListKeys
+	case s.picker != nil:
+		return "  " + joinKeys(key, text, pickerKeys)
+	case m.tab == tabSettings && s.editing:
+		switch s.section {
+		case sectionGeneral:
+			return "  " + joinKeys(key, text, themeFieldKeys)
+		case sectionCreator:
+			return "  " + joinKeys(key, text, creatorKeys)
+		}
+		return "  " + joinKeys(key, text, scrollKeys)
+	case m.tab == tabSettings && s.section != sectionFastTracks && s.section != sectionAbout:
+		keys = settingsListKeys
+	case m.tab == tabSettings:
+		keys = settingsListKeys[:1]
 	}
-	keys = append(keys, [][2]string{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}, {"t", "theme creator"}, {"Ctrl+b n", "next track"}}...)
+	keys = append(append([]keyHelp{}, keys...), tabKeys...)
+	keys = append(keys, prefixKeys()[0])
 	return "  " + joinKeys(key, text, keys)
-}
-
-func joinKeys(key, text lipgloss.Style, keys [][2]string) string {
-	parts := make([]string, len(keys))
-	for i, k := range keys {
-		parts[i] = key.Render(k[0]) + text.Render(" "+k[1])
-	}
-	return strings.Join(parts, text.Render(" · "))
 }
