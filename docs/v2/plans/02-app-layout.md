@@ -74,11 +74,7 @@ Not built yet, from the first design: `«` `‹` `›` `»` buttons, badges for 
 
 ## Theme editor (`internal/v2/ui/themecreator`)
 
-Opened with `t` in the Tracks window.
-
-- Lists every token with a preview (text, box or colour) and hex fields for its dark and light values. Works with keys and the mouse.
-- **Apply** saves `theme.yaml` in the data directory and applies it live, to the Tracks window and the tmux config. **Cancel** closes. **Copy all** copies the theme as YAML.
-- Later: saving named theme files that users can share or pick.
+Moved into the Settings tab, and themes became files: see [04-settings.md](04-settings.md).
 
 ### Keys (behind the prefix, in the generated config)
 

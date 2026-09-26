@@ -20,7 +20,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
 | 5 | Real tracks: v2 daemon, agents, create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
-| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md) | started: Station, Repositories |
+| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
@@ -38,7 +38,7 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
 - **Tracks keys sit behind the tmux prefix** (`Ctrl+b t`, ...). A key bound without it is taken from every pane, and agents and shells use most Alt keys: Claude Code has `Alt+t` (thinking), `Alt+p` (model), `Alt+o`, `Alt+b`/`f`/`d`, `Alt+y`; shells have `Alt+.` (last argument), `Alt+<`/`Alt+>` (history), `Alt+t`, Alt+digits.
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
-- **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
+- **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger.text`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. The first theme ships with the binary; loading user theme files comes later.
 - **Theme values are exact `#rrggbb` colours,** with a dark and a light variant per token. Tracks has its own look instead of following the terminal's colour scheme. Terminals without 24-bit colour (older macOS Terminal.app, the Linux console) get the nearest colour they support: Lip Gloss and tmux convert automatically.
 - **The layout is proven on fake data first:** `./tracks --new-app --demo` opens a playground with fake tracks. The UI is built in its real packages against a data interface, so the playground becomes the product.
 
@@ -160,6 +160,14 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 - **Server environment:** the Tracks tmux server inherits PATH and other variables from the terminal that starts it first.
 - **The generated tmux config is opinionated.** Overrides go only through a sourced override file.
 - **Agent hook payloads drift** between CLI versions. Hooks read only named fields and fall back to polling.
+
+## Follow-ups
+
+Known gaps left on purpose, each with when it has to be done. Remove an entry in the PR that fixes it.
+
+- **Database permissions:** `tracks.db` and its folder are readable by other users of the machine (folder 0755, file per umask). Harmless for repo paths; make the folder 0700 and the files (database, WAL, backups) 0600 before prompts, session IDs or costs are stored (chunk 4 or 5).
+- **Repo links by name:** running tracks record their repo by name in the `@tracks_repo` window option, so a repo can't be renamed while tracks use it. Switch to the repo ID when tracks move into the database (chunk 4 or 5), then allow renaming.
+- **Case-insensitive repo names fold only A–Z:** SQLite's `NOCASE` treats `Über` and `über` as different names. Add a normalized name column if that ever matters.
 
 ## Existing work
 
