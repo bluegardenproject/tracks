@@ -18,7 +18,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md); popups in [06-add-track.md](plans/06-add-track.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
-| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md) | started: form layout |
+| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md) | started: form layout, creating and ending tracks |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
 | 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
@@ -47,7 +47,7 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
   - the global helpers v1 installs: the `tracks-reviewer` and `tracks-docs-reviewer` agents and the `tracks-add-repo` skill (`internal/daemon/skill.go`), and the Cursor rule (`internal/daemon/cursorrule.go`)
   - the new-track templates (`internal/tui/newtrack/templates.go`)
 
-  v2 copies these texts unchanged, and a test compares v2's assembled prompts with v1's for the same track, so a drift fails CI; from v2.0.0, when v1 is deleted, golden files take over. Only names that must differ while v1 and v2 run side by side (such as the helpers' file names) may change, and each such change is listed here. Improving a prompt is a decision of its own, discussed and agreed first, never a side effect of other work. Letting users edit the prompts comes later, with v1's text as the default.
+  v2 copies these texts unchanged, and a test compares v2's assembled prompts with v1's for the same track, so a drift fails CI; from v2.0.0, when v1 is deleted, golden files take over. Only names that must differ while v1 and v2 run side by side (such as the helpers' file names) may change, and each such change is listed here: the `tracks-reviewer` agent is `tracks-v2-reviewer` in v2, and `tracks-docs-reviewer` is `tracks-v2-docs-reviewer`. Improving a prompt is a decision of its own, discussed and agreed first, never a side effect of other work. Letting users edit the prompts comes later, with v1's text as the default.
 - **Install with Homebrew:** `brew install` is offered next to `scripts/install.sh`, by v2.0.0 at the latest. Requirements:
   - The formula installs the release binaries the release workflow already builds and checks against `SHA256SUMS`, and each release updates it automatically.
   - It depends on tmux, so a brew install brings everything Tracks needs to start.
@@ -131,7 +131,7 @@ internal/v2/
   ui/
     style/           Lip Gloss styles built from theme tokens
     widget/          shared UI pieces, only once 2+ screens use them
-    source/          Source interface for UI data; tmux windows now, the daemon later
+    source/          Source interface for UI data, from the daemon and the store
     tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
     themecreator/    theme editor: every token with its value, a preview and examples
     quickaccess/     Quick Access popup
@@ -179,8 +179,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 
 Known gaps left on purpose, each with when it has to be done. Remove an entry in the PR that fixes it.
 
-- **Database permissions:** `tracks.db` and its folder are readable by other users of the machine (folder 0755, file per umask). Harmless for repo paths; make the folder 0700 and the files (database, WAL, backups) 0600 before prompts, session IDs or costs are stored (chunk 4 or 5).
-- **Repo links by name:** running tracks record their repo by name in the `@tracks_repo` window option, so a repo can't be renamed while tracks use it. Switch to the repo ID when tracks move into the database (chunk 4 or 5), then allow renaming.
+- **Renaming a repo that tracks use:** tracks now link their repos by ID, but a repo's name and path still can't change while running tracks use it, since their windows and worktrees were made from them. Allow it once repos are written through the daemon.
 - **Case-insensitive repo names fold only A–Z:** SQLite's `NOCASE` treats `Über` and `über` as different names. Add a normalized name column if that ever matters.
 
 ## Existing work
