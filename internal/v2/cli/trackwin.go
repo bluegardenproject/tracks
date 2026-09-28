@@ -12,13 +12,13 @@ import (
 
 // newTrackwinCmd holds the commands key bindings run. They report in
 // the tmux status line, since run-shell output would cover the pane.
-func newTrackwinCmd(profile profileFunc) *cobra.Command {
+func newTrackwinCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "trackwin", Hidden: true}
 	cmd.AddCommand(&cobra.Command{
 		Use:  "add-terminal <window-id>",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			paths, err := platform.Resolve(profile())
+			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}
@@ -37,7 +37,7 @@ func newTrackwinCmd(profile profileFunc) *cobra.Command {
 		Use:  "nav <first|prev|next|last|number> <current-window-index>",
 		Args: cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			paths, err := platform.Resolve(profile())
+			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}

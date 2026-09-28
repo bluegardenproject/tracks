@@ -4,7 +4,7 @@ Part of the [v2 masterplan](../masterplan.md). Builds on [chunk 1](01-technical-
 
 ## Outcome
 
-The demo session feels like the real app, all on fake data:
+The session feels like the real app. It was first built on fake data, in a playground that's removed now that tracks are created for real:
 - a navigation footer on every window
 - track windows with agent, terminal and dev-server panes that can be added and closed
 - a simple Tracks window
@@ -45,7 +45,7 @@ type Source interface {
 Built in chunk 1 (`internal/v2/trackwin`, see [chunk 1](01-technical-groundwork.md#1d-demo-session)): the agent pane on the left, the right column at 30% with terminal and dev-server panes, titles on the top border, and adding a terminal (`Ctrl+b t` for now).
 
 - **Switching to a track focuses its agent pane,** with keys and footer clicks alike (`trackwin.Switch`).
-- **Closing panes:** whether `exit` in the last terminal is enough, or a key is needed, is decided in the playground.
+- **Closing panes:** whether `exit` in the last terminal is enough, or a key is needed, is decided by using it.
 
 ## Footer (`internal/v2/footer`)
 
@@ -94,8 +94,7 @@ The Station tab shows titled frames: the track list on 3/5 of the width (slug, t
 - Up and down (or `j`/`k`), the mouse wheel and clicks select a row. Enter or a double click switches to the track's window, landing on its agent pane.
 - Tracks opened or closed elsewhere show up within 2 seconds.
 - **Details:** the track's ID (its window number), repos with branch and worktree path, engine and model, session ID and pull request. Windows too narrow for both show the list alone.
-- **Actions:** buttons, each with an underlined key: Open (`o`, Enter), End (`e`, asks first; closes the window for now), Copy path (`c`), Copy session (`s`) and Open PR (`p`). The playground's pull requests are made up, so Open PR only reports that.
-- **Demo data:** `demo.Source` adds the fake details (branch, engine, model, session, cost, PR) to what the windows know, so the tmux options hold nothing fake.
+- **Actions:** buttons, each with an underlined key: Open (`o`, Enter), End (`e`, asks first; closes the window for now), Copy path (`c`), Copy session (`s`) and Open PR (`p`).
 
 ### Next: Fast Track
 
@@ -110,12 +109,11 @@ Templates that preset a new track, so starting one only needs a slug and a promp
 - **Full menu (`Ctrl+b m`):**
   - the menu rebuild from the `tracks/09ad3c-menu` branch, ported to Charm v2
   - sections, a filter, shortcuts, breadcrumbs, the track picker table and confirm dialogs
-  - in the demo, actions act on fake tracks: switch, end a track, "new" opens the form
 - **Quick switcher (`Ctrl+b s`):** a filterable list of tracks with status. Enter switches, Esc closes. Built for more tracks than `Ctrl+b 1..9` covers.
-- **New track form (Huh v2):** kind, repos, name, agent. In the demo it creates another fake track window, and the footer picks it up.
-- **Size:** popups open with `display-popup -E` at about 80% of the window. The playground decides the final size.
+- **New track form (Huh v2):** kind, repos, name, agent.
+- **Size:** popups open with `display-popup -E` at about 80% of the window.
 
-## What the playground should decide
+## Still to decide by using it
 
 - Footer: slot width, colours, buttons, info segments, whether hover is worth a pane.
 - Track window: right column width, pane titles, how adding and closing terminals feels.

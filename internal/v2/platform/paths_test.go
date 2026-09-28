@@ -9,14 +9,12 @@ import (
 )
 
 func TestResolve(t *testing.T) {
-	base := env{home: "/home/u", tempDir: "/tmp", uid: 501}
 	tests := []struct {
-		name    string
-		profile Profile
-		env     env
-		want    Paths
+		name string
+		env  env
+		want Paths
 	}{
-		{"default", Default, base, Paths{
+		{"default", env{home: "/home/u"}, Paths{
 			ConfigDir:  "/home/u/.config/tracks-v2",
 			Settings:   "/home/u/.config/tracks-v2/settings.yaml",
 			ThemesDir:  "/home/u/.config/tracks-v2/themes",
@@ -24,7 +22,7 @@ func TestResolve(t *testing.T) {
 			Database:   "/home/u/.local/state/tracks-v2/tracks.db",
 			TmuxSocket: "tracks-v2",
 		}},
-		{"XDG dirs", Default, env{home: "/home/u", xdgConfig: "/xc", xdgState: "/xs"}, Paths{
+		{"XDG dirs", env{home: "/home/u", xdgConfig: "/xc", xdgState: "/xs"}, Paths{
 			ConfigDir:  "/xc/tracks-v2",
 			Settings:   "/xc/tracks-v2/settings.yaml",
 			ThemesDir:  "/xc/tracks-v2/themes",
@@ -32,18 +30,10 @@ func TestResolve(t *testing.T) {
 			Database:   "/xs/tracks-v2/tracks.db",
 			TmuxSocket: "tracks-v2",
 		}},
-		{"demo", Demo, base, Paths{
-			ConfigDir:  "/home/u/.config/tracks-v2",
-			Settings:   "/home/u/.config/tracks-v2/settings.yaml",
-			ThemesDir:  "/home/u/.config/tracks-v2/themes",
-			DataDir:    "/tmp/tracks-v2-demo-501",
-			Database:   "/home/u/.local/state/tracks-v2/tracks.db",
-			TmuxSocket: "tracks-v2-demo",
-		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolve(tt.profile, tt.env); got != tt.want {
+			if got := resolve(tt.env); got != tt.want {
 				t.Errorf("resolve() = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -67,20 +57,18 @@ func TestPathsStayOutOfV1(t *testing.T) {
 	}
 	v1Dirs := []string{filepath.Dir(v1ConfigFile), v1StateDir}
 
-	for _, profile := range []Profile{Default, Demo} {
-		p, err := Resolve(profile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, v2 := range []string{p.ConfigDir, p.DataDir} {
-			for _, v1 := range v1Dirs {
-				if v2 == v1 || strings.HasPrefix(v2, v1+string(filepath.Separator)) {
-					t.Errorf("profile %d: %s is inside v1's %s", profile, v2, v1)
-				}
+	p, err := Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v2 := range []string{p.ConfigDir, p.DataDir} {
+		for _, v1 := range v1Dirs {
+			if v2 == v1 || strings.HasPrefix(v2, v1+string(filepath.Separator)) {
+				t.Errorf("%s is inside v1's %s", v2, v1)
 			}
 		}
-		if p.TmuxSocket == "default" || p.TmuxSocket == "" {
-			t.Errorf("profile %d: tmux socket %q is the default server", profile, p.TmuxSocket)
-		}
+	}
+	if p.TmuxSocket == "default" || p.TmuxSocket == "" {
+		t.Errorf("tmux socket %q is the default server", p.TmuxSocket)
 	}
 }

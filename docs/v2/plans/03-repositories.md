@@ -13,7 +13,6 @@
 - **New:** the details show an empty form, name first. Once the path is filled in, Tracks checks it's a git checkout and fills in whatever is still empty: the name (the folder's) and the base branch (what `origin/HEAD` points to).
 - **Focus:** Enter or a click on the details moves focus into the form; Tab and Shift+Tab move between its fields and buttons; Esc goes back to the list. The form's frame uses `border.accent` while it has focus.
 - **Unsaved changes:** selecting another repo, Esc or switching tabs asks: Save, Discard or Cancel.
-- Works in both `--new-app` and `--new-app --demo`: the database is always the real one. Demo tracks stay fake tmux windows and never reach the database.
 
 ## Rules (`internal/v2/repos`)
 

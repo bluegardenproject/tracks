@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/bluegardenproject/tracks/internal/v2/demo"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 )
@@ -42,14 +41,14 @@ func planStartup(loc tmux.Location, sessionExists bool) startAction {
 var errInsideTmux = errors.New("you're inside another tmux session.\n" +
 	"Tracks runs on its own tmux server. Open a new terminal tab and run it there.")
 
-// start opens Tracks for profile: it starts the tmux server when needed
-// and attaches this terminal to it.
-func start(profile platform.Profile, version string) error {
+// start opens Tracks: it starts the tmux server when needed and attaches
+// this terminal to it.
+func start(version string) error {
 	tmuxVersion, err := tmux.InstalledVersion()
 	if err != nil {
 		return err
 	}
-	paths, err := platform.Resolve(profile)
+	paths, err := platform.Resolve()
 	if err != nil {
 		return err
 	}
@@ -61,23 +60,17 @@ func start(profile platform.Profile, version string) error {
 	case startSelect:
 		return c.SelectWindow(sessionName + ":0")
 	case startCreate:
-		if err := createSession(c, profile, paths, tmuxVersion, version); err != nil {
+		if err := createSession(c, paths, tmuxVersion, version); err != nil {
 			return err
 		}
 	}
 	return c.Attach(sessionName)
 }
 
-func createSession(c *tmux.Client, profile platform.Profile, paths platform.Paths, tmuxVersion tmux.Version, version string) error {
-	command, err := selfCommand(profile)
+func createSession(c *tmux.Client, paths platform.Paths, tmuxVersion tmux.Version, version string) error {
+	command, err := selfCommand()
 	if err != nil {
 		return err
-	}
-	if profile == platform.Demo {
-		// Every playground starts from scratch.
-		if err := os.RemoveAll(paths.DataDir); err != nil {
-			return fmt.Errorf("reset playground: %w", err)
-		}
 	}
 
 	t, _ := loadTheme(paths)
@@ -101,13 +94,7 @@ func createSession(c *tmux.Client, profile platform.Profile, paths platform.Path
 	if err := c.NewSession(confPath, sessionName, tracksWindow, command+" tracks-window"); err != nil {
 		return err
 	}
-	if err := c.SetWindowOption(sessionName+":0", "pane-border-status", "off"); err != nil {
-		return err
-	}
-	if profile == platform.Demo {
-		return demo.Seed(c, sessionName, paths.DataDir, command)
-	}
-	return nil
+	return c.SetWindowOption(sessionName+":0", "pane-border-status", "off")
 }
 
 // defaultTerminal prefers tmux-256color, whose terminfo entry is

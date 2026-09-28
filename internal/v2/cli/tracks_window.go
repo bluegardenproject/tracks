@@ -2,11 +2,9 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/bluegardenproject/tracks/internal/v2/demo"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/repos"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
@@ -19,35 +17,28 @@ import (
 )
 
 // newTracksWindowCmd runs the Tracks window in window 0.
-func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
+func newTracksWindowCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:    "tracks-window",
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			paths, err := platform.Resolve(profile())
+			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}
-			command, err := selfCommand(profile())
+			command, err := selfCommand()
 			if err != nil {
 				return err
 			}
 			t, _ := loadTheme(paths)
 			c := tmux.New(paths.TmuxSocket)
 			var tracks source.Source = source.Windows{Tmux: c, Session: sessionName}
-			openURL := openBrowser
-			uses := trackUses(c)
-			if profile() == platform.Demo {
-				tracks = demo.Source{Windows: tracks}
-				openURL = func(string) error { return errors.New("the playground's pull requests are made up") }
-				uses = nil
-			}
 			var repoSource source.Repos
 			db, dbErr := store.Open(cmd.Context(), paths.Database)
 			if dbErr == nil {
 				defer db.Close()
-				repoSource = repos.Service{Store: db, Git: repos.Exec{}, Uses: uses}
+				repoSource = repos.Service{Store: db, Git: repos.Exec{}, Uses: trackUses(c)}
 			}
 			window := tracksview.New(tracksview.Config{
 				Version: version,
@@ -59,13 +50,13 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 				End: func(number int) error {
 					return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
 				},
-				OpenURL:   openURL,
+				OpenURL:   openBrowser,
 				Repos:     repoSource,
 				ReposErr:  dbErr,
 				Themes:    themes{c: c, paths: paths, version: version, command: command},
 				ThemesDir: paths.ThemesDir,
 				Engines:   engines{path: paths.Settings},
-				About:     about(profile(), paths),
+				About:     about(paths),
 			})
 			_, err = tea.NewProgram(window,
 				tea.WithContext(cmd.Context()),
@@ -80,13 +71,8 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 }
 
 // about is what Settings shows under About.
-func about(profile platform.Profile, paths platform.Paths) [][2]string {
-	name := "normal"
-	if profile == platform.Demo {
-		name = "playground"
-	}
+func about(paths platform.Paths) [][2]string {
 	return [][2]string{
-		{"Profile", name},
 		{"Config folder", paths.ConfigDir},
 		{"Settings file", paths.Settings},
 		{"Themes folder", paths.ThemesDir},
