@@ -5,6 +5,9 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/addtrack"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/quickaccess"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
 // keyHelp is a key and what it does. The hints and the Keys section
@@ -57,7 +60,17 @@ func keyGroups() []keyGroup {
 		{"Theme picker", pickerKeys},
 		{"Theme Creator", creatorKeys},
 		{"Every window", append(prefixKeys(), keyHelp{"Click", "a track in the footer to switch to it"})},
+		{"Quick Access", fromWidget(quickaccess.Keys)},
+		{"New track", fromWidget(addtrack.Keys)},
 	}
+}
+
+func fromWidget(keys []widget.KeyHelp) []keyHelp {
+	out := make([]keyHelp, len(keys))
+	for i, k := range keys {
+		out[i] = keyHelp{k.Key, k.Help}
+	}
+	return out
 }
 
 func joinKeys(key, text lipgloss.Style, keys []keyHelp) string {

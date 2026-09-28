@@ -34,6 +34,8 @@ func newRoot(version string) *cobra.Command {
 		newStopCmd(),
 		newTracksWindowCmd(version),
 		newTrackwinCmd(),
+		newQuickAccessCmd(),
+		newPopupCmd(),
 		newFooterCmd(),
 	)
 	return root
