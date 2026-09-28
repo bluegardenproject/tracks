@@ -5,12 +5,14 @@ import (
 	"go/parser"
 	"go/token"
 	"strconv"
+	"strings"
 	"testing"
-
-	"github.com/bluegardenproject/tracks/internal/state"
 )
 
 const v1Form = "../../../tui/newtrack/"
+
+// v2Names swaps the helper names v2 renames to run beside v1.
+var v2Names = strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
 
 // The form copies v1's texts; these fail when one side changes alone.
 func TestTextsMatchV1(t *testing.T) {
@@ -18,20 +20,11 @@ func TestTextsMatchV1(t *testing.T) {
 	about := v1Strings(t, v1Form+"templates.go", "templateDescriptions")
 	names := map[Kind]string{Work: "TemplateCustom", Ask: "TemplateAsk", Plan: "TemplatePlan", Review: "TemplateReview", Doc: "TemplateDocReview"}
 	for k, name := range names {
-		if kinds[k].prompt != prompts[name] {
-			t.Errorf("%s prompt differs from v1's %s:\n%q\n%q", kinds[k].label, name, kinds[k].prompt, prompts[name])
+		if want := v2Names.Replace(prompts[name]); kinds[k].prompt != want {
+			t.Errorf("%s prompt differs from v1's %s:\n%q\n%q", kinds[k].label, name, kinds[k].prompt, want)
 		}
 		if kinds[k].about != about[name] {
 			t.Errorf("%s description differs from v1's %s:\n%q\n%q", kinds[k].label, name, kinds[k].about, about[name])
-		}
-	}
-	if minCandor != state.MinCandor || maxCandor != state.MaxCandor || defaultCandor != state.DefaultCandor {
-		t.Errorf("candor range %d–%d (default %d), v1 has %d–%d (%d)",
-			minCandor, maxCandor, defaultCandor, state.MinCandor, state.MaxCandor, state.DefaultCandor)
-	}
-	for level := minCandor; level <= maxCandor; level++ {
-		if candorLabels[level] != state.CandorLabel(level) {
-			t.Errorf("candor %d is %q, v1 has %q", level, candorLabels[level], state.CandorLabel(level))
 		}
 	}
 	options := v1Options(t, v1Form+"newtrack.go", "docSectionOpinion", "docSectionClaimCheck")

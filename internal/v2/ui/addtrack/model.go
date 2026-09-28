@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
@@ -23,10 +24,11 @@ type Config struct {
 	// why they couldn't be read.
 	Repos    []string
 	ReposErr error
+	// Engine and Model are what new tracks run on: the default engine's
+	// name, "" with none added, and its model, "" for its own default.
+	Engine, Model string
+	Create        CreateFunc
 }
-
-// notBuilt is what Create says while it can't create tracks.
-const notBuilt = "Creating tracks isn't built yet."
 
 // Model is the form.
 type Model struct {
@@ -54,6 +56,12 @@ type Model struct {
 	// discard is the open "Discard this track?" question.
 	discard *question
 
+	engine, model string
+	create        CreateFunc
+	creating      *creation
+	failure       string // why the last Create failed
+	made          *Created
+
 	width, height, offset int
 }
 
@@ -71,10 +79,13 @@ func New(c Config) Model {
 		document: widget.NewInput(1000, placeholders[ctlDocument]),
 		name:     widget.NewInput(60, namePlaceholder(Work)),
 		sections: []bool{true, true},
-		candor:   defaultCandor,
+		candor:   track.DefaultCandor,
 		prompt:   newPrompt(),
 		hover:    noHit,
 		errs:     map[control]string{},
+		engine:   c.Engine,
+		model:    c.Model,
+		create:   c.Create,
 	}
 	m.setPrompt(kinds[Work].prompt)
 	return m
@@ -104,9 +115,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+	case createEvent:
+		m, cmd = m.created(msg)
 	case tea.KeyPressMsg:
+		if m.creating != nil {
+			return m.creatingKey(msg.String())
+		}
 		m, cmd = m.key(msg)
 	case tea.MouseClickMsg:
+		if m.creating != nil {
+			return m, nil
+		}
 		m, cmd = m.click(msg.Mouse())
 	case tea.MouseMotionMsg:
 		m = m.motion(msg.Mouse())
@@ -115,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.wheel(msg.Mouse())
 		return m, nil
 	default:
-		if m.picker == nil && m.discard == nil {
+		if m.picker == nil && m.discard == nil && m.creating == nil {
 			m, cmd = m.edit(msg)
 		}
 	}
@@ -165,9 +184,9 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		case "enter", "space":
 			m = m.openCandor()
 		case "left":
-			m.candor = max(minCandor, m.candor-1)
+			m.candor = max(track.MinCandor, m.candor-1)
 		case "right":
-			m.candor = min(maxCandor, m.candor+1)
+			m.candor = min(track.MaxCandor, m.candor+1)
 		case "up":
 			return m.move(-1, false)
 		case "down":
@@ -365,8 +384,7 @@ func (m Model) press(c control) (Model, tea.Cmd) {
 			}
 		}
 	}
-	m.notice = notBuilt
-	return m, nil
+	return m.startCreate()
 }
 
 // close quits, asking first when something was entered.
@@ -382,7 +400,7 @@ func (m Model) close() (Model, tea.Cmd) {
 func (m Model) dirty() bool {
 	prompt := strings.TrimSpace(m.prompt.Value())
 	return m.target.Value() != "" || m.document.Value() != "" || m.name.Value() != "" ||
-		len(m.pickedRepos()) > 0 || m.terminal || m.candor != defaultCandor || slices.Contains(m.sections, false) ||
+		len(m.pickedRepos()) > 0 || m.terminal || m.candor != track.DefaultCandor || slices.Contains(m.sections, false) ||
 		prompt != "" && prompt != strings.TrimSpace(kinds[m.kind].prompt)
 }
 
@@ -410,15 +428,15 @@ func (m Model) answer(choice int) (Model, tea.Cmd) {
 }
 
 func (m Model) openCandor() Model {
-	items := make([]widget.PickerItem, 0, maxCandor)
-	for level := minCandor; level <= maxCandor; level++ {
-		label := candorLabels[level]
-		if level == defaultCandor {
+	items := make([]widget.PickerItem, 0, track.MaxCandor)
+	for level := track.MinCandor; level <= track.MaxCandor; level++ {
+		label := track.CandorLabel(level)
+		if level == track.DefaultCandor {
 			label += " (default)"
 		}
 		items = append(items, widget.PickerItem{Label: strconv.Itoa(level), Detail: label})
 	}
-	p := widget.NewPicker("Candor", items, m.candor-minCandor)
+	p := widget.NewPicker("Candor", items, m.candor-track.MinCandor)
 	m.picker = &p
 	return m
 }
@@ -432,7 +450,7 @@ func (m Model) pickerKey(key string) Model {
 func (m Model) pickerDone(r widget.PickerResult) Model {
 	switch r {
 	case widget.PickerChosen:
-		m.candor = m.picker.Cursor + minCandor
+		m.candor = m.picker.Cursor + track.MinCandor
 		m.picker = nil
 	case widget.PickerClosed:
 		m.picker = nil
