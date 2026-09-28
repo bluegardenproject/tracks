@@ -131,3 +131,15 @@ func checkGolden(t *testing.T, name, got string) {
 		t.Errorf("output differs from %s (run with -update to accept):\n%s", golden, got)
 	}
 }
+
+func TestPopupArgs(t *testing.T) {
+	p := Popup{Client: "/dev/ttys001", Width: "36", Height: "7", Command: "tracks popup", Background: "#101010"}
+	old := popupArgs(p, Version{3, 2})
+	if want := []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "tracks popup"}; !slices.Equal(old, want) {
+		t.Errorf("tmux 3.2: %q, want %q", old, want)
+	}
+	styled := popupArgs(p, Version{3, 3})
+	if want := []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "-B", "-s", "bg=#101010", "tracks popup"}; !slices.Equal(styled, want) {
+		t.Errorf("tmux 3.3: %q, want %q", styled, want)
+	}
+}
