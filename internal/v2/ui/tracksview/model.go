@@ -28,7 +28,9 @@ type Config struct {
 	Tracks  source.Source
 	// Open switches to a track, End closes it.
 	Open, End TrackFunc
-	OpenURL   func(url string) error
+	// NewTrack opens the New track form and returns once it closes.
+	NewTrack func() error
+	OpenURL  func(url string) error
 	// Repos manages the repositories; ReposErr is why there are none,
 	// such as a database that didn't open.
 	Repos    source.Repos
@@ -50,6 +52,7 @@ type Model struct {
 	palette       style.Palette
 	source        source.Source
 	open, end     TrackFunc
+	newTrack      func() error
 	openURL       func(url string) error
 	repoSource    source.Repos
 	reposErr      error
@@ -73,7 +76,7 @@ type Model struct {
 // New returns the Tracks window for c.
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
-		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, openURL: c.OpenURL,
+		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, engines: newEnginesTab()}
@@ -267,6 +270,7 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 func (m Model) hover(mouse tea.Mouse) Model {
 	m.station.hover, m.repos.hover = -1, -1
 	m.station.hoverButton, m.repos.hoverField, m.repos.hoverNew = -1, -1, false
+	m.station.hoverAdd = false
 	m.engines.hover = engineControl{}
 	switch m.tab {
 	case tabStation:
@@ -276,6 +280,7 @@ func (m Model) hover(mouse tea.Mouse) Model {
 		if id, ok := m.buttonAt(mouse.X, mouse.Y); ok {
 			m.station.hoverButton = id
 		}
+		m.station.hoverAdd = m.onAddTrack(mouse.X, mouse.Y)
 	case tabRepositories:
 		if row, ok := m.repoRowAt(mouse.X, mouse.Y); ok {
 			m.repos.hover = row

@@ -17,6 +17,7 @@ type keyHelp struct{ key, help string }
 var (
 	tabKeys          = []keyHelp{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}}
 	stationKeys      = []keyHelp{{"↑/↓", "select"}, {"Enter", "open"}}
+	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	repoFormKeys     = []keyHelp{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back to the list"}}
 	settingsListKeys = []keyHelp{{"↑/↓", "section"}, {"Enter", "open"}}

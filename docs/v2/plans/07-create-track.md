@@ -15,6 +15,7 @@
   - A terminal pane opens beside it when Terminal is ticked.
   - The window is named after the track's name, or else, for Doc, from the document's name, or else from the prompt, as in v1. A name already taken gets `-2`, `-3` and so on.
 - **Station** lists the tracks from the database while their window is open: name, kind, repos with branch and worktree, engine, model and session. End closes the window as before; the daemon records it.
+- **Station without tracks** keeps its layout: the Tracks frame with an empty list and an **Add new Track** button in its centre, which opens the New track form (Enter does too), and the Fast Track frame on the right.
 
 ## How a track is created
 
@@ -144,7 +145,7 @@ Changed:
 - `trackwin`: a `@tracks_id` window option, and v1's kind names.
 - `platform`: the socket, lock, log and `bin` paths.
 - `ui/addtrack`: Create, progress, and the engine line.
-- `ui/tracksview`: Make default.
+- `ui/tracksview`: Make default, and Station's empty state.
 - `ui/source`: tracks from the daemon, and the Repositories tab's in-use check by repo ID.
 - `cli`: the daemon command, start and stop, the popup, and Station's source.
 

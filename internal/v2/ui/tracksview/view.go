@@ -140,6 +140,8 @@ func (m Model) hints() string {
 	switch {
 	case m.tab == tabStation && len(m.station.tracks) > 0:
 		keys = stationKeys
+	case m.tab == tabStation && m.station.err == nil:
+		keys = emptyStationKeys
 	case m.tab == tabRepositories && m.repos.editing:
 		return "  " + joinKeys(key, text, repoFormKeys)
 	case m.tab == tabRepositories:

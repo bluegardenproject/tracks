@@ -57,6 +57,7 @@ type station struct {
 	confirming bool // asking whether to end the selected track
 	// hoverButton is the details button under the mouse, -1 for none.
 	hoverButton actionID
+	hoverAdd    bool // the mouse is on Add new Track
 	notice      notice
 }
 
@@ -124,6 +125,9 @@ func (m Model) done(msg doneMsg) (Model, tea.Cmd) {
 // doesn't use.
 func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 	m.station.notice = notice{}
+	if len(m.station.tracks) == 0 && m.station.err == nil && key == "enter" {
+		return m, m.openNewTrack(), true
+	}
 	if m.station.confirming {
 		m.station.confirming = false
 		switch key {
@@ -153,6 +157,9 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 // click on a row soon after the first opens its track.
 func (m Model) stationClick(x, y int) (Model, tea.Cmd) {
 	m.station.notice = notice{}
+	if m.onAddTrack(x, y) {
+		return m, m.openNewTrack()
+	}
 	if id, ok := m.buttonAt(x, y); ok {
 		next, cmd, _ := m.press(id)
 		return next, cmd
@@ -220,22 +227,14 @@ func (m Model) scrollStation() Model {
 // stationView draws the list frame and, when it fits, the details
 // frame: width by height cells.
 func (m Model) stationView(width, height int) []string {
-	s := m.station
-	switch {
-	case s.err != nil:
-		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the tracks: "+s.err.Error()))
-	case len(s.tracks) == 0:
-		return m.message(width, height, m.fg(theme.TextMuted).Render("No tracks yet."))
+	if m.station.err != nil {
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the tracks: "+m.station.err.Error()))
 	}
 	p := m.panes()
 	list := m.frame("Tracks", theme.BorderDefault, m.list(p.listWidth-4, height-2), p.listWidth, height)
 	var details []string
 	if p.details {
-		body, _ := m.details(p.detailsWidth - 4)
-		if ft := m.fastTrackHeight(len(body)); ft > 0 {
-			details = m.frame("Fast Track", theme.BorderAccent, m.fastTrack(p.detailsWidth-4), p.detailsWidth, ft)
-		}
-		details = append(details, m.frame("Details", theme.BorderDefault, body, p.detailsWidth, height-len(details))...)
+		details = m.detailsColumn(p.detailsWidth, height)
 	}
 	margin := strings.Repeat(" ", stationLeft)
 	lines := make([]string, len(list))
@@ -247,6 +246,24 @@ func (m Model) stationView(width, height int) []string {
 		lines[i] = pad(line, width)
 	}
 	return lines
+}
+
+// detailsColumn is the Fast Track frame over the selected track's
+// details, width by height cells. Without tracks it's Fast Track alone.
+func (m Model) detailsColumn(width, height int) []string {
+	var lines []string
+	if len(m.station.tracks) == 0 {
+		lines = m.frame("Fast Track", theme.BorderAccent, m.fastTrack(width-4), width, min(fastTrackRows, height))
+		for len(lines) < height {
+			lines = append(lines, strings.Repeat(" ", width))
+		}
+		return lines
+	}
+	body, _ := m.details(width - 4)
+	if ft := m.fastTrackHeight(len(body)); ft > 0 {
+		lines = m.frame("Fast Track", theme.BorderAccent, m.fastTrack(width-4), width, ft)
+	}
+	return append(lines, m.frame("Details", theme.BorderDefault, body, width, height-len(lines))...)
 }
 
 // frame draws a rounded border in color, with title in its top line,
@@ -281,7 +298,11 @@ func (m Model) list(width, height int) []string {
 	for i, t := range s.tracks {
 		rows[i] = cells(t)
 	}
-	return table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset}.draw(m, width, height)
+	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset}.draw(m, width, height)
+	if len(s.tracks) == 0 {
+		return m.emptyList(lines, width, height)
+	}
+	return lines
 }
 
 // message centres one line in width by height cells.
