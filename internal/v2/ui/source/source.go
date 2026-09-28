@@ -1,12 +1,12 @@
 // Package source is where screens get their data from. Screens depend
-// on Source only; until the daemon exists, Windows reads the tracks
-// from their tmux windows.
+// on Source only; Daemon reads the tracks from the daemon.
 package source
 
 import (
 	"context"
 
-	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
+	"github.com/bluegardenproject/tracks/internal/v2/agents"
+	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
 // Track is what screens show about a track.
@@ -23,7 +23,8 @@ type Track struct {
 	PR                     *PR     // nil without a pull request
 }
 
-// Repo is one repository of a track, checked out in a worktree.
+// Repo is one repository of a track; Path is its worktree, or the
+// primary checkout for a track without worktrees.
 type Repo struct {
 	Name   string
 	Branch string
@@ -45,23 +46,29 @@ type Source interface {
 // Running is the status every track has until the status model exists.
 const Running = "running"
 
-// Windows reads the tracks of a tmux session from their windows, which
-// know the track's kind, repo and worktree.
-type Windows struct {
-	Tmux    trackwin.Tmux
-	Session string
+// Daemon reads the open tracks from the daemon, with List.
+type Daemon struct {
+	List func(ctx context.Context) ([]tracks.Listed, error)
 }
 
-// Tracks lists the session's tracks in window order.
-func (w Windows) Tracks(context.Context) ([]Track, error) {
-	infos, err := trackwin.List(w.Tmux, w.Session)
+// Tracks lists the open tracks in window order.
+func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
+	listed, err := d.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	tracks := make([]Track, len(infos))
-	for i, in := range infos {
-		tracks[i] = Track{Number: in.Number, Name: in.Name, Kind: in.Kind, Status: Running,
-			Repos: []Repo{{Name: in.Repo, Path: in.Dir}}}
+	out := make([]Track, len(listed))
+	for i, l := range listed {
+		repos := make([]Repo, len(l.Repos))
+		for j, r := range l.Repos {
+			repos[j] = Repo{Name: r.Name, Branch: r.Branch, Path: r.Dir()}
+		}
+		engine := l.Engine
+		if e, ok := agents.ByID(l.Engine); ok {
+			engine = e.Name
+		}
+		out[i] = Track{Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: Running, Repos: repos,
+			Engine: engine, Model: l.Model, Session: l.Session}
 	}
-	return tracks, nil
+	return out, nil
 }
