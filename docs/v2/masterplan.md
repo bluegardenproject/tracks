@@ -20,7 +20,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | not written yet | to be designed |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
-| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md) | started: Station, Repositories, Settings |
+| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
