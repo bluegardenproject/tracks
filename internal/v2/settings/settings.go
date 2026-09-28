@@ -9,13 +9,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Settings are the preferences. The zero value is the defaults.
 type Settings struct {
-	Theme string `yaml:"theme,omitempty"` // the chosen theme's id
+	Theme   string  `yaml:"theme,omitempty"` // the chosen theme's id
+	Engines Engines `yaml:"engines,omitempty"`
 }
 
 // Load reads the file at path. A missing file gives the defaults.
@@ -34,8 +36,8 @@ func Load(path string) (Settings, error) {
 	return s, nil
 }
 
-// Save writes s to path, keeping the keys and comments of the file
-// that's there.
+// Save writes s to path, keeping the comments of the file that's there
+// and the keys this build doesn't know, at every level.
 func Save(path string, s Settings) error {
 	var doc yaml.Node
 	data, err := os.ReadFile(path)
@@ -59,38 +61,12 @@ func Save(path string, s Settings) error {
 	if err := ours.Encode(s); err != nil {
 		return err
 	}
-	for i := 0; i+1 < len(ours.Content); i += 2 {
-		set(root, ours.Content[i], ours.Content[i+1])
-	}
-	if s.Theme == "" {
-		remove(root, "theme")
-	}
+	merge(root, &ours, reflect.TypeOf(s))
 	out, err := yaml.Marshal(&doc)
 	if err != nil {
 		return err
 	}
 	return write(path, out)
-}
-
-// set puts key: value into the mapping m, replacing an existing value.
-func set(m, key, value *yaml.Node) {
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key.Value {
-			value.HeadComment, value.LineComment = m.Content[i+1].HeadComment, m.Content[i+1].LineComment
-			m.Content[i+1] = value
-			return
-		}
-	}
-	m.Content = append(m.Content, key, value)
-}
-
-func remove(m *yaml.Node, key string) {
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			m.Content = append(m.Content[:i], m.Content[i+2:]...)
-			return
-		}
-	}
 }
 
 // write replaces path atomically.
