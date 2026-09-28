@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ type Store struct {
 // Open opens the database at path, creating it if needed, and migrates
 // it to the current schema.
 func Open(ctx context.Context, path string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := private(path); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("sqlite", dsn(path))
@@ -52,6 +53,32 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	return &Store{db: db}, nil
+}
+
+// private keeps the database to its owner: it holds prompts and session
+// IDs. The folder gets 0700 and the files 0600; SQLite gives the WAL and
+// shared-memory files it creates the database's mode.
+func private(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close closes the database.

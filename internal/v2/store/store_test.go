@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -101,6 +102,9 @@ func TestMigratingBacksUpFirst(t *testing.T) {
 	backups, _ := filepath.Glob(path + ".*.bak")
 	if len(backups) != 1 {
 		t.Fatalf("backups %v, want one", backups)
+	}
+	if info, err := os.Stat(backups[0]); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("the backup's mode is %v, %v; want 0600", info.Mode().Perm(), err)
 	}
 	var v, version int
 	b := rawDB(t, backups[0])
