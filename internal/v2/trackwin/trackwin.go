@@ -23,9 +23,10 @@ const (
 // Window options of a track's window. dirOption holds its working
 // directory, so panes added later start there too.
 const (
-	dirOption  = "@tracks_dir"
-	kindOption = "@tracks_kind"
-	repoOption = "@tracks_repo"
+	trackOption = "@tracks_id"
+	dirOption   = "@tracks_dir"
+	kindOption  = "@tracks_kind"
+	repoOption  = "@tracks_repo"
 )
 
 // Process is a command shown in a pane under a title.
@@ -36,9 +37,10 @@ type Process struct {
 
 // Spec describes a new track window.
 type Spec struct {
+	Track      string // the track's ID
 	Name       string // window name
-	Kind       string // feature, fix, review
-	Repo       string
+	Kind       string // work, ask, plan, review, doc
+	Repo       string // the repos' names, comma-separated
 	Dir        string // working directory of every pane
 	Agent      Process
 	Terminals  int // terminal panes opened with the window
@@ -76,7 +78,7 @@ func Open(t Tmux, session string, s Spec) (Window, error) {
 	if err := t.SetWindowOption(id, "automatic-rename", "off"); err != nil {
 		return w, err
 	}
-	for name, value := range map[string]string{dirOption: s.Dir, kindOption: s.Kind, repoOption: s.Repo} {
+	for name, value := range map[string]string{trackOption: s.Track, dirOption: s.Dir, kindOption: s.Kind, repoOption: s.Repo} {
 		if err := t.SetWindowOption(id, name, value); err != nil {
 			return w, err
 		}

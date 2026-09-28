@@ -96,6 +96,37 @@ func TestEnginesKeepWhatThisBuildDoesntKnow(t *testing.T) {
 	}
 }
 
+func TestDefaultEngine(t *testing.T) {
+	var e Engines
+	if id := e.DefaultID(); id != "" {
+		t.Errorf("no engines: default %q", id)
+	}
+	e.Cursor = &Engine{}
+	if id := e.DefaultID(); id != "cursor" {
+		t.Errorf("only Cursor: default %q", id)
+	}
+	e.Claude = &Engine{}
+	if id := e.DefaultID(); id != "claude" {
+		t.Errorf("both, none made default: default %q", id)
+	}
+	e.Default = "cursor"
+	if id := e.DefaultID(); id != "cursor" {
+		t.Errorf("Cursor made default: default %q", id)
+	}
+	e.Cursor = nil
+	if id := e.DefaultID(); id != "claude" {
+		t.Errorf("the default removed: default %q", id)
+	}
+
+	path := filepath.Join(t.TempDir(), "settings.yaml")
+	if err := Save(path, Settings{Engines: Engines{Default: "cursor", Cursor: &Engine{}}}); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Load(path); err != nil || s.Engines.Default != "cursor" {
+		t.Errorf("default after a round trip: %q, %v", s.Engines.Default, err)
+	}
+}
+
 func TestRemovingTheLastEngineKeepsUnknownOnes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.yaml")
 	if err := os.WriteFile(path, []byte("engines:\n  claude:\n    effort: high\n  codex: {}\n"), 0o644); err != nil {
