@@ -4,6 +4,7 @@ package trackwin
 type Info struct {
 	Number int // the window index, which navigation keys use
 	Window string
+	Track  string // the track's ID
 	Name   string
 	Kind   string
 	Repo   string
@@ -22,7 +23,7 @@ func List(t Tmux, session string) ([]Info, error) {
 		if w.Index == 0 {
 			continue
 		}
-		tracks = append(tracks, Info{Number: w.Index, Window: w.ID, Name: w.Name, Kind: w.Kind, Repo: w.Repo, Dir: w.Dir})
+		tracks = append(tracks, Info{Number: w.Index, Window: w.ID, Track: w.Track, Name: w.Name, Kind: w.Kind, Repo: w.Repo, Dir: w.Dir})
 	}
 	return tracks, nil
 }

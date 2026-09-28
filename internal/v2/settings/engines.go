@@ -5,8 +5,24 @@ import "slices"
 // Engines are the agent CLIs set up on the Engines tab, by engine id.
 // A nil one hasn't been added.
 type Engines struct {
-	Claude *Engine `yaml:"claude,omitempty"`
-	Cursor *Engine `yaml:"cursor,omitempty"`
+	// Default is the engine made default on the Engines tab.
+	Default string  `yaml:"default,omitempty"`
+	Claude  *Engine `yaml:"claude,omitempty"`
+	Cursor  *Engine `yaml:"cursor,omitempty"`
+}
+
+// DefaultID is the engine new tracks run on: the one made default, else
+// the only one added, else Claude. It's "" with none added.
+func (e Engines) DefaultID() string {
+	switch {
+	case e.Get(e.Default) != nil:
+		return e.Default
+	case e.Claude != nil:
+		return "claude"
+	case e.Cursor != nil:
+		return "cursor"
+	}
+	return ""
 }
 
 // Engine is one engine's settings.
@@ -43,7 +59,7 @@ func (e *Engines) Set(id string, engine *Engine) {
 
 // Clone copies e deeply, so the copy can be saved while e changes.
 func (e Engines) Clone() Engines {
-	return Engines{Claude: e.Claude.clone(), Cursor: e.Cursor.clone()}
+	return Engines{Default: e.Default, Claude: e.Claude.clone(), Cursor: e.Cursor.clone()}
 }
 
 func (e *Engine) clone() *Engine {

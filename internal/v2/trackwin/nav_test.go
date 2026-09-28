@@ -63,7 +63,7 @@ func TestSwitchLandsOnAgent(t *testing.T) {
 	var agents []string
 	for _, name := range []string{"one", "two"} {
 		w, err := trackwin.Open(c, "tracks", trackwin.Spec{
-			Name: name, Kind: "fix", Repo: "shop-" + name, Dir: dir, Terminals: 1,
+			Name: name, Kind: "work", Repo: "shop-" + name, Dir: dir, Terminals: 1,
 			Agent: trackwin.Process{Title: "agent", Command: "sleep 60"},
 		})
 		if err != nil {
@@ -107,7 +107,7 @@ func TestListAfterOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"one", "two"} {
-		if _, err := trackwin.Open(c, "tracks", trackwin.Spec{Name: name, Kind: "fix", Repo: "shop-" + name, Dir: dir,
+		if _, err := trackwin.Open(c, "tracks", trackwin.Spec{Track: "id-" + name, Name: name, Kind: "work", Repo: "shop-" + name, Dir: dir,
 			Agent: trackwin.Process{Title: "agent", Command: "sleep 60"}}); err != nil {
 			t.Fatal(err)
 		}
@@ -116,8 +116,8 @@ func TestListAfterOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Number != 1 || got[0].Name != "one" || got[1].Kind != "fix" || got[1].Repo != "shop-two" {
-		t.Errorf("List = %+v, want tracks one and two with kind and repo, the Tracks window left out", got)
+	if len(got) != 2 || got[0].Number != 1 || got[0].Name != "one" || got[0].Track != "id-one" || got[1].Kind != "work" || got[1].Repo != "shop-two" {
+		t.Errorf("List = %+v, want tracks one and two with ID, kind and repo, the Tracks window left out", got)
 	}
 }
 
