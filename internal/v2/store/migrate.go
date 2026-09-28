@@ -99,6 +99,9 @@ func backup(ctx context.Context, db *sql.DB, path string, version int) error {
 	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", to); err != nil {
 		return err
 	}
+	if err := os.Chmod(to, 0o600); err != nil {
+		return err
+	}
 	old, err := filepath.Glob(path + ".*.bak")
 	if err != nil {
 		return err
