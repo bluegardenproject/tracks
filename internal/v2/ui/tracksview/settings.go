@@ -32,10 +32,6 @@ type settingsTab struct {
 	fastHover      int  // the Fast Tracks button under the mouse
 	keysOffset     int
 	creator        themecreator.Model
-	// picker, when set, is open over the window, choosing the theme
-	// to use or, for the creator, to load.
-	picker    *widget.Picker
-	pickerFor int
 	// leaving is where to go once the creator has let go.
 	leaving *settingsLeave
 	notice  notice
@@ -52,6 +48,7 @@ type settingsLeave struct {
 const (
 	pickUse = iota
 	pickLoad
+	pickModel // an engine's default model
 )
 
 type (
@@ -83,9 +80,9 @@ func (m Model) loadThemes() tea.Cmd {
 func (m Model) setThemes(msg themesMsg) Model {
 	s := &m.settings
 	s.themes, s.themesErr = msg.entries, msg.err
-	if s.picker != nil {
-		s.picker.SetItems(m.pickerItems())
-		s.picker.Marked = m.themeIndex(m.pickerMarks())
+	if m.picker != nil && m.pickerFor != pickModel {
+		m.picker.SetItems(m.pickerItems())
+		m.picker.Marked = m.themeIndex(m.pickerMarks())
 	}
 	return m
 }
@@ -125,7 +122,7 @@ func (m Model) pickerItems() []widget.PickerItem {
 // pickerMarks is the theme the picker marks: the one in use, or the
 // one the creator edits.
 func (m Model) pickerMarks() theme.Theme {
-	if m.settings.pickerFor == pickLoad {
+	if m.pickerFor == pickLoad {
 		return m.settings.creator.Editing()
 	}
 	return m.palette.Theme()
@@ -133,27 +130,29 @@ func (m Model) pickerMarks() theme.Theme {
 
 // openPicker shows the themes over the window, reading them again.
 func (m Model) openPicker(purpose int) (Model, tea.Cmd) {
-	s := &m.settings
-	s.pickerFor = purpose
+	m.pickerFor = purpose
 	title := "Choose a theme"
 	if purpose == pickLoad {
 		title = "Load a theme"
 	}
 	p := widget.NewPicker(title, m.pickerItems(), m.themeIndex(m.pickerMarks()))
-	s.picker = &p
+	m.picker = &p
 	return m, m.loadThemes()
 }
 
 // picked acts on what the picker did.
 func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
+	if m.pickerFor == pickModel {
+		return m.modelPicked(r)
+	}
 	s := &m.settings
 	switch r {
 	case widget.PickerClosed:
-		s.picker = nil
+		m.picker = nil
 	case widget.PickerChosen:
-		i := s.picker.Cursor
-		s.picker = nil
-		if s.pickerFor == pickLoad {
+		i := m.picker.Cursor
+		m.picker = nil
+		if m.pickerFor == pickLoad {
 			return m, s.creator.Load(s.themes[i].Theme)
 		}
 		return m.choose(i)
@@ -162,7 +161,7 @@ func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
 }
 
 func (m Model) pickerKey(key string) (Model, tea.Cmd) {
-	return m.picked(m.settings.picker.Key(key))
+	return m.picked(m.picker.Key(key))
 }
 
 // choose makes the theme at row i the one in use.

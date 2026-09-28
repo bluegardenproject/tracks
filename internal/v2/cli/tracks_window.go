@@ -64,6 +64,7 @@ func newTracksWindowCmd(profile profileFunc, version string) *cobra.Command {
 				ReposErr:  dbErr,
 				Themes:    themes{c: c, paths: paths, version: version, command: command},
 				ThemesDir: paths.ThemesDir,
+				Engines:   engines{path: paths.Settings},
 				About:     about(profile(), paths),
 			})
 			_, err = tea.NewProgram(window,

@@ -154,15 +154,8 @@ func (m Model) themeField(width int) string {
 	if i := m.themeIndex(t); i >= 0 {
 		e = s.themes[i]
 	}
-	bracket := theme.BorderDefault
-	if s.fieldHover || (s.editing && s.section == sectionGeneral) {
-		bracket = theme.BorderFocus
-	}
-	b := m.fg(bracket)
-	bg := lipgloss.NewStyle().Background(m.palette.Color(theme.InputBg))
 	fw := m.themeFieldWidth()
-	field := b.Render("[") + bg.Foreground(m.palette.Color(theme.TextDefault)).Render(pad(" "+cut(fileName(e), fw-4), fw-2)) +
-		bg.Foreground(m.palette.Color(theme.TextMuted)).Render("▾ ") + b.Render("]")
+	field := m.selectField(fileName(e), fw, s.fieldHover || (s.editing && s.section == sectionGeneral))
 	name := t.DisplayName
 	if t.BuiltIn {
 		name += ", built-in"
@@ -303,14 +296,14 @@ func (m Model) settingsHover(x, y int) Model {
 
 // pickerBox is where the picker is drawn: centred on the window.
 func (m Model) pickerBox() (x, y, w, h int) {
-	w, h = m.settings.picker.Size(m.width, m.height)
+	w, h = m.picker.Size(m.width, m.height)
 	return (m.width - w) / 2, (m.height - h) / 2, w, h
 }
 
 // pickerMouse handles the mouse while the picker is open: it takes
 // every event, and a click outside closes it.
 func (m Model) pickerMouse(msg tea.Msg) (Model, tea.Cmd) {
-	p := m.settings.picker
+	p := m.picker
 	x, y, w, h := m.pickerBox()
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
@@ -337,10 +330,23 @@ func (m Model) pickerMouse(msg tea.Msg) (Model, tea.Cmd) {
 
 // withPicker draws the open picker over content.
 func (m Model) withPicker(content string) string {
-	if m.settings.picker == nil {
+	if m.picker == nil {
 		return content
 	}
 	x, y, w, h := m.pickerBox()
-	box := m.settings.picker.View(m.palette, w, h)
+	box := m.picker.View(m.palette, w, h)
 	return lipgloss.NewCompositor(lipgloss.NewLayer(content), lipgloss.NewLayer(box).X(x).Y(y).Z(1)).Render()
+}
+
+// selectField draws value in a field that opens a picker, inner cells
+// between its brackets; lit brackets it in the focus colour.
+func (m Model) selectField(value string, inner int, lit bool) string {
+	bracket := theme.BorderDefault
+	if lit {
+		bracket = theme.BorderFocus
+	}
+	b := m.fg(bracket)
+	bg := lipgloss.NewStyle().Background(m.palette.Color(theme.InputBg))
+	return b.Render("[") + bg.Foreground(m.palette.Color(theme.TextDefault)).Render(pad(" "+cut(value, inner-4), inner-2)) +
+		bg.Foreground(m.palette.Color(theme.TextMuted)).Render("▾ ") + b.Render("]")
 }

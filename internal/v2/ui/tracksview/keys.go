@@ -21,6 +21,9 @@ var (
 	pickerKeys       = []keyHelp{{"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 	creatorKeys      = []keyHelp{{"Tab", "next"}, {"↑/↓", "token"}, {"Enter", "next or press"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back"}}
 	scrollKeys       = []keyHelp{{"↑/↓", "scroll"}, {"Esc", "back"}}
+	engineListKeys   = []keyHelp{{"↑/↓", "scroll"}, {"Enter", "to the controls"}}
+	engineKeys       = []keyHelp{{"Tab", "next"}, {"Shift+Tab", "previous"}, {"Enter", "press"}, {"Esc", "back"}}
+	modelPickerKeys  = []keyHelp{{"Type", "to filter"}, {"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 )
 
 // prefixKeys are the keys every window of the session has, behind the
@@ -48,6 +51,8 @@ func keyGroups() []keyGroup {
 		{"Tracks window", tabKeys},
 		{"Station", station},
 		{"Repositories", append(append([]keyHelp{}, repoListKeys...), repoFormKeys...)},
+		{"Engines", append(append([]keyHelp{}, engineListKeys...), engineKeys...)},
+		{"Model picker", modelPickerKeys},
 		{"Settings", append(append([]keyHelp{}, settingsListKeys...), themeFieldKeys...)},
 		{"Theme picker", pickerKeys},
 		{"Theme Creator", creatorKeys},

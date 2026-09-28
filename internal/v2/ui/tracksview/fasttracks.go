@@ -39,17 +39,27 @@ func (m Model) fastTracks(width int) []string {
 	button.Hover = s.fastHover == fastNew
 	lines := append([]string{button.View(m.palette), ""}, m.fastTracksAbout(width)...)
 
-	x, _, w := m.fastCreateBox(width)
+	x, _, _ := m.fastCreateBox(width)
+	lines = append(lines, "")
+	for _, l := range m.framedButton(fastTracksCreate, s.fastHover == fastCreate) {
+		lines = append(lines, strings.Repeat(" ", x)+l)
+	}
+	return lines
+}
+
+// framedButton draws label in a frame, 3 lines and the label plus 4
+// cells wide; lit frames it in the focus colour.
+func (m Model) framedButton(label string, lit bool) []string {
+	w := lipgloss.Width(label) + 4
 	border := m.fg(theme.BorderDefault)
-	if s.fastHover == fastCreate {
+	if lit {
 		border = m.fg(theme.BorderFocus)
 	}
-	indent := strings.Repeat(" ", x)
-	return append(lines, "",
-		indent+border.Render("╭"+strings.Repeat("─", w-2)+"╮"),
-		indent+border.Render("│")+m.fg(theme.TextDefault).Render(" "+fastTracksCreate+" ")+border.Render("│"),
-		indent+border.Render("╰"+strings.Repeat("─", w-2)+"╯"),
-	)
+	return []string{
+		border.Render("╭" + strings.Repeat("─", w-2) + "╮"),
+		border.Render("│") + m.fg(theme.TextDefault).Render(" "+label+" ") + border.Render("│"),
+		border.Render("╰" + strings.Repeat("─", w-2) + "╯"),
+	}
 }
 
 // fastButtonAt returns the Fast Tracks button at cell x, y.
