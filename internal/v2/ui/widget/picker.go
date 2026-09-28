@@ -21,6 +21,7 @@ const (
 	PickerOpen   PickerResult = iota // still choosing
 	PickerChosen                     // Cursor is the choice
 	PickerClosed                     // closed without a choice
+	PickerRetry                      // Enter on an error Message: load the items again
 )
 
 // Picker is a framed list to choose one item from, drawn over the
@@ -29,10 +30,18 @@ type Picker struct {
 	Title  string
 	Items  []PickerItem
 	Marked int
-	Cursor int
-	hover  int
-	offset int
-	rows   int // rows shown, from the last Size
+	Cursor int // an index into Items
+	// Filter lets typing narrow the list to items whose label or
+	// detail contains the text; the arrow keys still move.
+	Filter bool
+	// Message replaces the rows while it's set, such as "Loading…";
+	// Problem makes it an error that Enter retries.
+	Message string
+	Problem bool
+	query   string
+	hover   int
+	offset  int // into the shown items
+	rows    int // rows shown, from the last Size
 }
 
 // The box around the rows is just its borders; the screen's hint row
@@ -57,6 +66,18 @@ func (p *Picker) SetItems(items []PickerItem) {
 	p.scroll()
 }
 
+// shown are the indexes of the items that match the filter.
+func (p Picker) shown() []int {
+	q := strings.ToLower(p.query)
+	var out []int
+	for i, it := range p.Items {
+		if q == "" || strings.Contains(strings.ToLower(it.Label+" "+it.Detail), q) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 // Size is the box's size on a screen of width by height cells. It
 // fixes how many rows show, so call it before drawing or clicking.
 func (p *Picker) Size(width, height int) (w, h int) {
@@ -65,7 +86,7 @@ func (p *Picker) Size(width, height int) (w, h int) {
 	for _, it := range p.Items {
 		w = max(w, 4+markWidth+label+pickerGap+lipgloss.Width(p.detail(it)))
 	}
-	w = max(0, min(w, width-4))
+	w = max(0, min(max(w, lipgloss.Width(p.Message)+4), width-4))
 	p.rows = max(1, min(len(p.Items), height-2-pickerChrome))
 	p.scroll()
 	return w, min(height, p.rows+pickerChrome)
@@ -73,11 +94,38 @@ func (p *Picker) Size(width, height int) (w, h int) {
 
 // Key handles a key press.
 func (p *Picker) Key(key string) PickerResult {
+	if p.Message != "" {
+		switch {
+		case key == "esc":
+			return PickerClosed
+		case key == "enter" && p.Problem:
+			return PickerRetry
+		}
+		return PickerOpen
+	}
+	if p.Filter {
+		switch r := []rune(key); {
+		case key == "backspace":
+			if q := []rune(p.query); len(q) > 0 {
+				p.query = string(q[:len(q)-1])
+			}
+			p.follow()
+			return PickerOpen
+		case key == "space":
+			p.query += " "
+			p.follow()
+			return PickerOpen
+		case len(r) == 1:
+			p.query += key
+			p.follow()
+			return PickerOpen
+		}
+	}
 	switch key {
 	case "up", "k":
-		p.Cursor = max(0, p.Cursor-1)
+		p.move(-1)
 	case "down", "j":
-		p.Cursor = min(len(p.Items)-1, p.Cursor+1)
+		p.move(1)
 	case "enter", "space":
 		return p.choose()
 	case "esc":
@@ -85,6 +133,37 @@ func (p *Picker) Key(key string) PickerResult {
 	}
 	p.scroll()
 	return PickerOpen
+}
+
+// move steps the cursor through the shown items.
+func (p *Picker) move(step int) {
+	shown := p.shown()
+	if len(shown) == 0 {
+		return
+	}
+	at := 0
+	for i, item := range shown {
+		if item == p.Cursor {
+			at = i
+		}
+	}
+	p.Cursor = shown[max(0, min(len(shown)-1, at+step))]
+}
+
+// follow keeps the cursor on a shown item after the filter changed.
+func (p *Picker) follow() {
+	p.offset = 0
+	shown := p.shown()
+	for _, i := range shown {
+		if i == p.Cursor {
+			p.scroll()
+			return
+		}
+	}
+	if len(shown) > 0 {
+		p.Cursor = shown[0]
+	}
+	p.scroll()
 }
 
 // Click handles a click at x, y relative to the box, w wide.
@@ -107,32 +186,45 @@ func (p *Picker) Hover(x, y, w int) {
 
 // Wheel scrolls by step rows.
 func (p *Picker) Wheel(step int) {
-	p.offset = max(0, min(p.offset+step, len(p.Items)-p.rows))
+	p.offset = max(0, min(p.offset+step, len(p.shown())-p.rows))
 }
 
 func (p *Picker) choose() PickerResult {
-	if p.Cursor < 0 || p.Cursor >= len(p.Items) || p.Items[p.Cursor].Problem != "" {
+	if p.Message != "" || p.Cursor < 0 || p.Cursor >= len(p.Items) || p.Items[p.Cursor].Problem != "" {
 		return PickerOpen
 	}
-	return PickerChosen
+	for _, i := range p.shown() {
+		if i == p.Cursor {
+			return PickerChosen
+		}
+	}
+	return PickerOpen
 }
 
 func (p Picker) rowAt(x, y, w int) (int, bool) {
+	shown := p.shown()
 	i := p.offset + y - 1
-	if x < 1 || x >= w-1 || y < 1 || y > p.rows || i >= len(p.Items) {
+	if p.Message != "" || x < 1 || x >= w-1 || y < 1 || y > p.rows || i >= len(shown) {
 		return 0, false
 	}
-	return i, true
+	return shown[i], true
 }
 
 func (p *Picker) scroll() {
-	if p.Cursor < p.offset {
-		p.offset = p.Cursor
+	shown := p.shown()
+	at := 0
+	for i, item := range shown {
+		if item == p.Cursor {
+			at = i
+		}
 	}
-	if p.rows > 0 && p.Cursor >= p.offset+p.rows {
-		p.offset = p.Cursor - p.rows + 1
+	if at < p.offset {
+		p.offset = at
 	}
-	p.offset = max(0, min(p.offset, len(p.Items)-p.rows))
+	if p.rows > 0 && at >= p.offset+p.rows {
+		p.offset = at - p.rows + 1
+	}
+	p.offset = max(0, min(p.offset, len(shown)-p.rows))
 }
 
 func (p Picker) labelWidth() int {
@@ -157,44 +249,63 @@ func (p Picker) View(pal style.Palette, w, h int) string {
 	}
 	bg := lipgloss.NewStyle().Background(pal.Color(theme.BgOverlay))
 	border := bg.Foreground(pal.Color(theme.BorderDefault))
-	title := cutTo(p.Title, w-6)
+	title := p.Title
+	if p.query != "" {
+		title += " · " + p.query
+	}
+	title = cutTo(title, w-6)
 	lines := []string{border.Render("╭─ " + title + " " + strings.Repeat("─", max(0, w-5-lipgloss.Width(title))) + "╮")}
 	body := func(s string, fill lipgloss.Style) string {
 		return border.Render("│") + fill.Render(" ") + s + fill.Render(strings.Repeat(" ", max(0, w-3-lipgloss.Width(s)))) + border.Render("│")
 	}
-	label := p.labelWidth()
 	inner := w - 4
+	shown := p.shown()
 	for r := range p.rows {
-		i := p.offset + r
-		if i >= len(p.Items) {
+		switch {
+		case r == 0 && p.Message != "":
+			color := theme.TextMuted
+			if p.Problem {
+				color = theme.StateDangerText
+			}
+			lines = append(lines, body(bg.Foreground(pal.Color(color)).Render(cutTo(p.Message, inner)), bg))
+		case r == 0 && len(shown) == 0:
+			lines = append(lines, body(bg.Foreground(pal.Color(theme.TextFaint)).Render(cutTo("Nothing matches.", inner)), bg))
+		case p.Message != "" || p.offset+r >= len(shown):
 			lines = append(lines, body("", bg))
-			continue
+		default:
+			row, fill := p.row(pal, shown[p.offset+r], inner, bg)
+			lines = append(lines, body(row, fill))
 		}
-		it := p.Items[i]
-		fill := bg
-		switch i {
-		case p.Cursor:
-			fill = fill.Background(pal.Color(theme.TableBgSelected))
-		case p.hover:
-			fill = fill.Background(pal.Color(theme.TableBgHighlight))
-		}
-		mark := strings.Repeat(" ", markWidth)
-		if i == p.Marked {
-			mark = pickerMark
-		}
-		name := fill.Foreground(pal.Color(theme.TableTextDefault)).Bold(i == p.Cursor)
-		detail := fill.Foreground(pal.Color(theme.TableTextMuted))
-		if it.Problem != "" {
-			name = fill.Foreground(pal.Color(theme.TableTextFaint))
-			detail = fill.Foreground(pal.Color(theme.StateDangerText))
-		}
-		room := max(0, inner-markWidth-label-pickerGap)
-		row := fill.Foreground(pal.Color(theme.TableTextMuted)).Render(mark) +
-			name.Render(padTo(cutTo(it.Label, label), label+pickerGap)) + detail.Render(cutTo(p.detail(it), room))
-		lines = append(lines, body(row+fill.Render(strings.Repeat(" ", max(0, inner-lipgloss.Width(row)))), fill))
 	}
 	lines = append(lines, border.Render("╰"+strings.Repeat("─", w-2)+"╯"))
 	return strings.Join(lines, "\n")
+}
+
+// row draws item i, inner cells wide, on bg, and the fill it used.
+func (p Picker) row(pal style.Palette, i, inner int, bg lipgloss.Style) (string, lipgloss.Style) {
+	it := p.Items[i]
+	fill := bg
+	switch i {
+	case p.Cursor:
+		fill = fill.Background(pal.Color(theme.TableBgSelected))
+	case p.hover:
+		fill = fill.Background(pal.Color(theme.TableBgHighlight))
+	}
+	mark := strings.Repeat(" ", markWidth)
+	if i == p.Marked {
+		mark = pickerMark
+	}
+	name := fill.Foreground(pal.Color(theme.TableTextDefault)).Bold(i == p.Cursor)
+	detail := fill.Foreground(pal.Color(theme.TableTextMuted))
+	if it.Problem != "" {
+		name = fill.Foreground(pal.Color(theme.TableTextFaint))
+		detail = fill.Foreground(pal.Color(theme.StateDangerText))
+	}
+	label := p.labelWidth()
+	room := max(0, inner-markWidth-label-pickerGap)
+	row := fill.Foreground(pal.Color(theme.TableTextMuted)).Render(mark) +
+		name.Render(padTo(cutTo(it.Label, label), label+pickerGap)) + detail.Render(cutTo(p.detail(it), room))
+	return row + fill.Render(strings.Repeat(" ", max(0, inner-lipgloss.Width(row)))), fill
 }
 
 func padTo(s string, width int) string {
