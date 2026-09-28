@@ -20,6 +20,11 @@ type Paths struct {
 	DataDir string
 	// Database is the SQLite database.
 	Database string
+	// Worktrees holds the tracks' worktrees, a folder per track.
+	Worktrees string
+	// Socket, Lock and Log are the daemon's; BinDir goes first on a
+	// track's PATH.
+	Socket, Lock, Log, BinDir string
 	// TmuxSocket is the tmux socket name (`tmux -L`).
 	TmuxSocket string
 }
@@ -56,6 +61,11 @@ func resolve(e env) Paths {
 		ThemesDir:  filepath.Join(config, "themes"),
 		DataDir:    state,
 		Database:   filepath.Join(state, "tracks.db"),
+		Worktrees:  filepath.Join(state, "worktrees"),
+		Socket:     filepath.Join(state, "daemon.sock"),
+		Lock:       filepath.Join(state, "daemon.lock"),
+		Log:        filepath.Join(state, "daemon.log"),
+		BinDir:     filepath.Join(state, "bin"),
 		TmuxSocket: "tracks-v2",
 	}
 }

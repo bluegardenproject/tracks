@@ -1,0 +1,127 @@
+package daemon
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/bluegardenproject/tracks/internal/shellx"
+	"github.com/bluegardenproject/tracks/internal/v2/agents/claude"
+	"github.com/bluegardenproject/tracks/internal/v2/rpc"
+	"github.com/bluegardenproject/tracks/internal/v2/tracks"
+)
+
+func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
+	ping := rpc.PingResult{Version: c.Version, PID: os.Getpid()}
+	if exe, err := os.Executable(); err == nil {
+		ping.Exe = exe
+		if info, err := os.Stat(exe); err == nil {
+			ping.ExeModified = info.ModTime().UnixNano()
+		}
+	}
+	return map[string]rpc.Handler{
+		rpc.Ping: func(context.Context, *rpc.Call) (any, error) { return ping, nil },
+		rpc.Shutdown: func(context.Context, *rpc.Call) (any, error) {
+			shutdown()
+			return nil, nil
+		},
+		rpc.Create: c.create,
+		rpc.List: func(ctx context.Context, _ *rpc.Call) (any, error) {
+			listed, err := c.Tracks.List(ctx)
+			return rpc.ListResult{Tracks: listed}, err
+		},
+		rpc.End: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.EndParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return nil, c.Tracks.End(ctx, p.ID)
+		},
+	}
+}
+
+func (c Config) create(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.CreateParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	created, err := c.Tracks.Create(ctx, p.Request, call.Progress)
+	if err != nil {
+		c.Log.Printf("creating a %s track failed: %v", p.Kind, err)
+	} else {
+		c.Log.Printf("created %s, %s", created.Track.ID, created.Track.Name)
+	}
+	select {
+	case <-call.Gone:
+		// The form was closed while the track was being made.
+		if p.Client != "" {
+			if err := c.Tmux.Tell(p.Client, c.outcome(created, err)); err != nil {
+				c.Log.Printf("telling %s: %v", p.Client, err)
+			}
+		}
+	default:
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID}, nil
+}
+
+// outcome is how a creation went, for a status line.
+func (c Config) outcome(created tracks.Created, err error) string {
+	if err != nil {
+		return "Couldn't create the track: " + err.Error()
+	}
+	msg := created.Track.Name + " is ready"
+	if infos, err := c.Tracks.Windows.List(); err == nil {
+		for _, in := range infos {
+			if in.Window == created.Window.ID && in.Number <= 9 {
+				msg += fmt.Sprintf(": Ctrl+b %d", in.Number)
+			}
+		}
+	}
+	return msg
+}
+
+// helpers installs what the prompts rely on: the reviewer subagents,
+// and a `tracks` on the tracks' PATH that runs this build's v2 app.
+func (c Config) helpers() {
+	skipped, err := claude.InstallReviewers(c.Home)
+	if err != nil {
+		c.Log.Printf("installing the reviewer subagents: %v", err)
+	}
+	for _, path := range skipped {
+		c.Log.Printf("not overwriting %s: it lacks the x-tracks-managed marker, so it isn't Tracks'", path)
+	}
+	if err := writeShim(c.Paths.BinDir); err != nil {
+		c.Log.Printf("writing the tracks command: %v", err)
+	}
+}
+
+func writeShim(dir string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".tracks-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	script := "#!/bin/sh\nexec " + shellx.Quote(exe) + " --new-app \"$@\"\n"
+	if _, err := tmp.WriteString(script); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), filepath.Join(dir, "tracks"))
+}
