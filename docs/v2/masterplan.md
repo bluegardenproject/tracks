@@ -15,10 +15,10 @@ This file is the single source of truth for direction, decisions and status. Imp
 | # | Chunk | Plan | Status |
 |---|---|---|---|
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
-| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md) | in progress |
+| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md); popups in [06-add-track.md](plans/06-add-track.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
-| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | not written yet | to be designed |
+| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md) | started: form layout |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
 | 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
@@ -31,10 +31,10 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
 - **Engine: tmux stays.** It renders agent TUIs faithfully, splits panes next to an agent, keeps sessions alive when the UI closes, and works over SSH.
 - **Dedicated tmux server:** v2 runs on its own socket with a config it generates. The user's personal `~/.tmux.conf` and other sessions are never involved.
 - **Start from a plain terminal:** started inside another tmux, Tracks refuses with a clear message instead of nesting. The prefix stays Ctrl+b.
-- **UI: Charm v2** (`charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `huh/v2`, `bubblezone/v2`). The import paths differ from v1's, so both coexist in one `go.mod`.
+- **UI: Charm v2** (`charm.land/bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`, `bubblezone/v2`). The import paths differ from v1's, so both coexist in one `go.mod`. Forms use Tracks' own widgets, not Huh.
 - **The Tracks window is window 0,** always present, the command center with tabs. v2 has no Dashboard or Main window.
 - **Track navigation: a fixed footer** (the tmux status line) on every window, with clickable track slots, first/previous/next/last buttons, attention badges and keyboard shortcuts. Hover is not possible in the tmux status line and is accepted as missing.
-- **Popups:** a full menu and a quick switcher.
+- **Popups:** Quick Access (`Ctrl+b q`), which replaces the planned full menu, and a quick switcher.
 - **Tracks keys sit behind the tmux prefix** (`Ctrl+b t`, ...). A key bound without it is taken from every pane, and agents and shells use most Alt keys: Claude Code has `Alt+t` (thinking), `Alt+p` (model), `Alt+o`, `Alt+b`/`f`/`d`, `Alt+y`; shells have `Alt+.` (last argument), `Alt+<`/`Alt+>` (history), `Alt+t`, Alt+digits.
 - **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
@@ -129,12 +129,14 @@ internal/v2/
   config/ platform/  v2 config schema; paths, profile, shell and log helpers
   theme/             design tokens, theme values and loading (no UI library imports)
   ui/
-    style/           Lip Gloss and Huh styles built from theme tokens
+    style/           Lip Gloss styles built from theme tokens
     widget/          shared UI pieces, only once 2+ screens use them
     source/          Source interface for UI data; tmux windows now, the daemon later
     tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
     themecreator/    theme editor: every token with its value, a preview and examples
-    menu/ switcher/  popups
+    quickaccess/     Quick Access popup
+    addtrack/        New track form popup
+    switcher/        quick switcher popup
 ```
 
 **Dependency rules:**
@@ -164,7 +166,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
 - **Terminal padding:** terminals like Ghostty draw their own padding in their background colour, a frame around Tracks. Options: document `window-padding-color = extend`, or have Tracks set the terminal background with OSC 11 while it runs.
-- **The v1 menu rebuild** (uncommitted, Charm v1, on the `tracks/09ad3c-menu` branch): ship it to v1 too, or keep it only as the reference for the v2 menu.
+- **The v1 menu rebuild** (uncommitted, Charm v1, on the `tracks/09ad3c-menu` branch): ship it to v1 too, or keep it only as the reference for Quick Access.
 
 ## Risks
 
@@ -184,4 +186,4 @@ Known gaps left on purpose, each with when it has to be done. Remove an entry in
 ## Existing work
 
 - [PR #105](https://github.com/bluegardenproject/tracks/pull/105) adds a shared palette to v1 (Charm v1). Its values are a starting point for the first v2 theme.
-- The menu rebuild on the `tracks/09ad3c-menu` branch (Charm v1, uncommitted) is the design reference for the v2 menu.
+- The menu rebuild on the `tracks/09ad3c-menu` branch (Charm v1, uncommitted) is the design reference for Quick Access.
