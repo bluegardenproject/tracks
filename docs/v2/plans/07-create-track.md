@@ -1,6 +1,6 @@
 # Plan: creating tracks
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). The New track form ([06-add-track.md](06-add-track.md)) creates real tracks: the v2 daemon makes the worktrees and starts the engine with v1's prompts in the track's window.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). The New track form ([06-add-track.md](06-add-track.md)) creates real tracks: the v2 daemon makes the worktrees and starts the engine with v1's prompts in the track's window.
 
 ## What users get
 
