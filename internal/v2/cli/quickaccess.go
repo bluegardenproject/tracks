@@ -12,7 +12,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
-	"github.com/bluegardenproject/tracks/internal/v2/ui/addtrack"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/quickaccess"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
 	"github.com/spf13/cobra"
@@ -84,14 +83,14 @@ func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
 	case quickaccess.NewTrack:
 		popup.Width = strconv.Itoa(min(width, max(formMinWidth, width*formShare/100)))
 		popup.Height = strconv.Itoa(min(height, max(formMinHeight, height*formShare/100)))
-		popup.Command = command + " popup add-track"
+		popup.Command = command + " popup add-track " + shellx.Quote(client)
 		return c.Popup(popup, version)
 	}
 	return nil
 }
 
 // newPopupCmd holds what runs inside the popups.
-func newPopupCmd() *cobra.Command {
+func newPopupCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{Use: "popup", Hidden: true}
 	cmd.AddCommand(&cobra.Command{
 		Use:  "quick-access <choice-file>",
@@ -114,17 +113,10 @@ func newPopupCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:  "add-track",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			paths, err := platform.Resolve()
-			if err != nil {
-				return err
-			}
-			t, _ := loadTheme(paths)
-			names, err := repoNames(cmd.Context(), paths)
-			_, err = runPopup(cmd.Context(), addtrack.New(addtrack.Config{Theme: t, Repos: names, ReposErr: err}))
-			return err
+		Use:  "add-track <client>",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return addTrack(cmd.Context(), version, args[0])
 		},
 	})
 	return cmd

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
+	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,9 @@ func newStopCmd() *cobra.Command {
 			server := tmux.New(paths.TmuxSocket)
 			if !server.HasSession(sessionName) {
 				_, err := fmt.Fprintf(c.OutOrStdout(), "%s isn't running.\n", name)
+				return err
+			}
+			if err := stopDaemon(c.Context(), rpc.Client{Socket: paths.Socket}); err != nil {
 				return err
 			}
 			if err := server.KillServer(); err != nil {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -54,15 +55,21 @@ func start(version string) error {
 	}
 	c := tmux.New(paths.TmuxSocket)
 
-	switch planStartup(tmux.LocationOf(os.Getenv("TMUX"), paths.TmuxSocket), c.HasSession(sessionName)) {
+	action := planStartup(tmux.LocationOf(os.Getenv("TMUX"), paths.TmuxSocket), c.HasSession(sessionName))
+	switch action {
 	case startRefuse:
 		return errInsideTmux
-	case startSelect:
-		return c.SelectWindow(sessionName + ":0")
 	case startCreate:
 		if err := createSession(c, paths, tmuxVersion, version); err != nil {
 			return err
 		}
+	}
+	// Without a daemon Tracks still opens; creating a track says why.
+	if _, err := ensureDaemon(context.Background(), c, paths, version); err != nil {
+		fmt.Fprintln(os.Stderr, "tracks:", err)
+	}
+	if action == startSelect {
+		return c.SelectWindow(sessionName + ":0")
 	}
 	return c.Attach(sessionName)
 }

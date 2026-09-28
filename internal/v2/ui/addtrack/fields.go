@@ -1,10 +1,9 @@
 package addtrack
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
 // title is c's heading on k's form.
@@ -97,40 +96,10 @@ func namePlaceholder(k Kind) string {
 	return "e.g. rate-bug-investigation"
 }
 
-// Office formats the agent can't read, as in v1.
-var unreadable = map[string]string{
-	".pptx": "PowerPoint", ".ppt": "PowerPoint", ".key": "Keynote", ".odp": "OpenDocument presentation",
-	".docx": "Word", ".doc": "Word", ".odt": "OpenDocument text",
-	".xlsx": "Excel", ".xls": "Excel", ".numbers": "Numbers", ".pages": "Pages",
-}
-
-// documentProblem is why path can't be reviewed, as v1 checks it: it
-// has to exist and not be an office file. It's "" for a good path.
+// documentProblem is why path can't be reviewed, "" for a good path.
 func documentProblem(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "Enter the document's path."
-	}
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "Couldn't find your home folder for ~: " + err.Error()
-		}
-		path = filepath.Join(home, strings.TrimPrefix(path[1:], "/"))
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "Couldn't resolve the path: " + err.Error()
-	}
-	info, err := os.Stat(abs)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return "There's no file or folder at " + abs + "."
-	case err != nil:
-		return "Couldn't read it: " + err.Error()
-	}
-	if format, bad := unreadable[strings.ToLower(filepath.Ext(abs))]; bad && !info.IsDir() {
-		return format + " files can't be read directly. Export it to PDF and pick that."
+	if _, err := tracks.ResolveDocument(path); err != nil {
+		return err.Error()
 	}
 	return ""
 }

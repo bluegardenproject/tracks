@@ -109,6 +109,15 @@ func (m Model) body(width int) ([]string, []hit) {
 		}
 		b.end(c)
 	}
+	if line := m.engineLine(); line != "" {
+		b.wrapped(theme.TextMuted, line)
+	}
+	if m.failure != "" {
+		b.wrapped(theme.StateDangerText, m.failure)
+	}
+	if m.engineLine() != "" || m.failure != "" {
+		b.add("")
+	}
 	b.buttons()
 	return b.lines, b.hits
 }
@@ -313,6 +322,10 @@ var Keys = []widget.KeyHelp{
 
 // hints is the bottom row: the notice, or the keys the focus takes.
 func (m Model) hints() string {
+	if m.creating != nil {
+		return " " + m.fg(theme.StateInfoText).Render(m.notice) + "  " +
+			widget.Hints(m.fg(theme.TextAccent), m.fg(theme.TextFaint), []widget.KeyHelp{{Key: "Esc", Help: "close, it goes on"}})
+	}
 	if m.notice != "" {
 		return " " + m.fg(theme.StateInfoText).Render(m.notice)
 	}

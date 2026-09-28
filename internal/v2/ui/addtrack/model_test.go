@@ -1,9 +1,6 @@
 package addtrack
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -110,22 +107,6 @@ func TestCreateChecksTheFieldsAsV1(t *testing.T) {
 	}
 }
 
-func TestCreateSaysItIsNotBuiltAndStays(t *testing.T) {
-	m := form("tracks")
-	m = m.setFocus(ctlRepos)
-	m, _ = send(m, space)
-	m = m.setFocus(ctlPrompt)
-	m, _ = send(m, typed("Fix the rate bug")...)
-	m = m.setFocus(ctlCreate)
-	m, cmd := send(m, enter)
-	if len(m.errs) != 0 || m.notice != notBuilt || quits(cmd) {
-		t.Errorf("problems %v, notice %q, quit %v", m.errs, m.notice, quits(cmd))
-	}
-	if !strings.Contains(m.hints(), notBuilt) {
-		t.Errorf("hint row %q doesn't show the notice", m.hints())
-	}
-}
-
 func TestEscAsksBeforeDiscarding(t *testing.T) {
 	if _, cmd := send(form("tracks"), esc); !quits(cmd) {
 		t.Fatal("Esc on an untouched form didn't close it")
@@ -143,28 +124,6 @@ func TestEscAsksBeforeDiscarding(t *testing.T) {
 	m, _ = send(m, esc, left)
 	if _, cmd = send(m, enter); !quits(cmd) {
 		t.Error("Discard didn't close the form")
-	}
-}
-
-func TestDocumentProblem(t *testing.T) {
-	dir := t.TempDir()
-	doc := filepath.Join(dir, "spec.md")
-	deck := filepath.Join(dir, "deck.pptx")
-	for _, f := range []string{doc, deck} {
-		if err := os.WriteFile(f, nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for path, want := range map[string]string{
-		doc:                        "",
-		dir:                        "",
-		deck:                       "PowerPoint files can't be read directly. Export it to PDF and pick that.",
-		"":                         "Enter the document's path.",
-		filepath.Join(dir, "gone"): "There's no file or folder at " + filepath.Join(dir, "gone") + ".",
-	} {
-		if got := documentProblem(path); got != want {
-			t.Errorf("documentProblem(%q) = %q, want %q", path, got, want)
-		}
 	}
 }
 

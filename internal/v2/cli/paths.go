@@ -17,8 +17,8 @@ func newPathsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "config dir   %s\ndata dir     %s\ntmux socket  %s\n",
-				p.ConfigDir, p.DataDir, p.TmuxSocket)
+			_, err = fmt.Fprintf(c.OutOrStdout(), "config dir   %s\ndata dir     %s\nworktrees    %s\ndaemon log   %s\ntmux socket  %s\n",
+				p.ConfigDir, p.DataDir, p.Worktrees, p.Log, p.TmuxSocket)
 			return err
 		},
 	}

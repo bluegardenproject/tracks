@@ -1,6 +1,10 @@
 package addtrack
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/bluegardenproject/tracks/internal/v2/track"
+)
 
 // Kind is what a track does, picked on the form's Type row.
 type Kind int
@@ -73,7 +77,7 @@ diff you want to review.
 Invoke the dedicated review subagent rather than reviewing yourself:
 
   Task({
-    subagent_type: "tracks-reviewer",
+    subagent_type: "tracks-v2-reviewer",
     prompt: "Review the current branch against its base and report findings."
   })
 
@@ -110,28 +114,7 @@ func controls(k Kind) []control {
 	return append(out, ctlCreate, ctlCancel)
 }
 
-// Candor runs from radical candor to honest but gently framed, as in v1.
-const (
-	minCandor     = 1
-	maxCandor     = 10
-	defaultCandor = 3
-)
-
-// candorLabels are v1's, word for word.
-var candorLabels = [maxCandor + 1]string{
-	1:  "radical candor — lead with the problem, no cushioning",
-	2:  "radical candor — blunt, with minimal framing",
-	3:  "direct — plain statements, no hedging",
-	4:  "direct — states the problem, adds the why",
-	5:  "measured — neutral and even-handed",
-	6:  "measured — findings posed as shared problems",
-	7:  "diplomatic — leads with what works, findings as suggestions",
-	8:  "diplomatic — soft framing, problems posed as questions",
-	9:  "gently framed — heavily cushioned, nothing stated flatly",
-	10: "gently framed — maximally kind wording, still nothing omitted",
-}
-
-func candorLabel(level int) string { return fmt.Sprintf("%d — %s", level, candorLabels[level]) }
+func candorLabel(level int) string { return fmt.Sprintf("%d — %s", level, track.CandorLabel(level)) }
 
 // sections are a doc review's optional parts, v1's labels word for word.
 var sections = []string{
