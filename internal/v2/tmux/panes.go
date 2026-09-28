@@ -131,3 +131,50 @@ func (c *Client) SetWindowOption(window, name, value string) error {
 func (c *Client) WindowOption(window, name string) (string, error) {
 	return c.run("show-options", "-w", "-v", "-q", "-t", window, name)
 }
+
+// Popup is a popup over a client, sized in cells or percentages
+// ("80%"), running Command.
+type Popup struct {
+	Client, Width, Height, Command string
+	// Background replaces the terminal's own background in the popup.
+	Background string
+}
+
+// PopupBorder is how many cells tmux v's popup border takes each way,
+// size included. From 3.3 popups have none, as their programs draw
+// their own, and take p's background; older ones keep the terminal's.
+func PopupBorder(v Version) int {
+	if v.AtLeast(Version{3, 3}) {
+		return 0
+	}
+	return 2
+}
+
+// Popup opens p on tmux v and returns once it closes.
+func (c *Client) Popup(p Popup, v Version) error {
+	_, err := c.run(popupArgs(p, v)...)
+	return err
+}
+
+func popupArgs(p Popup, v Version) []string {
+	args := []string{"display-popup", "-E", "-c", p.Client, "-w", p.Width, "-h", p.Height}
+	if PopupBorder(v) == 0 {
+		args = append(args, "-B")
+		if p.Background != "" {
+			args = append(args, "-s", "bg="+p.Background)
+		}
+	}
+	return append(args, p.Command)
+}
+
+// ClientSize is client's terminal size in cells.
+func (c *Client) ClientSize(client string) (width, height int, err error) {
+	out, err := c.run("display-message", "-p", "-c", client, "#{client_width} #{client_height}")
+	if err != nil {
+		return 0, 0, err
+	}
+	if _, err := fmt.Sscan(out, &width, &height); err != nil {
+		return 0, 0, fmt.Errorf("tmux client size %q: %w", out, err)
+	}
+	return width, height, nil
+}
