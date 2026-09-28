@@ -35,14 +35,14 @@ func clone(t *testing.T, name string) string {
 	return filepath.Join(root, name)
 }
 
-func service(t *testing.T, uses ...Use) Service {
+func service(t *testing.T) Service {
 	t.Helper()
 	s, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tracks.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	return Service{Store: s, Git: Exec{}, Uses: func(context.Context) ([]Use, error) { return uses, nil }}
+	return Service{Store: s, Git: Exec{}}
 }
 
 func field(err error) string {
@@ -132,12 +132,13 @@ func TestAddChecksEveryField(t *testing.T) {
 
 func TestRunningTracksPinTheRepo(t *testing.T) {
 	ctx := context.Background()
-	s := service(t, Use{Repo: "Shop", Track: "fix-login"})
+	s := service(t)
 	dir := clone(t, "shop")
 	r, err := s.Add(ctx, store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.Uses = func(context.Context) ([]Use, error) { return []Use{{RepoID: r.ID, Track: "fix-login"}}, nil }
 	git(t, dir, "remote", "set-url", "origin", "git@github.com:acme/shop.git")
 	list, err := s.List(ctx)
 	if err != nil || len(list) != 1 || !slices.Equal(list[0].Tracks, []string{"fix-login"}) ||

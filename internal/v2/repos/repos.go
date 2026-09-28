@@ -23,8 +23,8 @@ type Store interface {
 
 // Use is a running track in a repo.
 type Use struct {
-	Repo  string // the repo's name
-	Track string
+	RepoID int64
+	Track  string
 }
 
 // UsesFunc lists the running tracks' repos.
@@ -68,7 +68,7 @@ func (s Service) List(ctx context.Context) ([]Entry, error) {
 	}
 	entries := make([]Entry, len(all))
 	for i, r := range all {
-		entries[i] = Entry{Repo: r, Remote: s.remote(ctx, r.Path), Tracks: tracksOf(uses, r.Name)}
+		entries[i] = Entry{Repo: r, Remote: s.remote(ctx, r.Path), Tracks: tracksOf(uses, r.ID)}
 	}
 	return entries, nil
 }
@@ -95,7 +95,7 @@ func (s Service) Update(ctx context.Context, r store.Repo) (store.Repo, error) {
 		return store.Repo{}, err
 	}
 	if r.Name != old.Name || r.Path != old.Path {
-		if err := s.idle(ctx, old.Name); err != nil {
+		if err := s.idle(ctx, old.ID); err != nil {
 			return store.Repo{}, fmt.Errorf("can't change the name or path: %w", err)
 		}
 	}
@@ -109,7 +109,7 @@ func (s Service) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := s.idle(ctx, r.Name); err != nil {
+	if err := s.idle(ctx, r.ID); err != nil {
 		return fmt.Errorf("can't delete %s: %w", r.Name, err)
 	}
 	return s.Store.DeleteRepo(ctx, id)
@@ -122,22 +122,22 @@ func (s Service) uses(ctx context.Context) ([]Use, error) {
 	return s.Uses(ctx)
 }
 
-// idle fails when running tracks use the repo called name.
-func (s Service) idle(ctx context.Context, name string) error {
+// idle fails when running tracks use the repo with id.
+func (s Service) idle(ctx context.Context, id int64) error {
 	uses, err := s.uses(ctx)
 	if err != nil {
 		return err
 	}
-	if tracks := tracksOf(uses, name); len(tracks) > 0 {
+	if tracks := tracksOf(uses, id); len(tracks) > 0 {
 		return fmt.Errorf("%w (%s)", ErrInUse, strings.Join(tracks, ", "))
 	}
 	return nil
 }
 
-func tracksOf(uses []Use, name string) []string {
+func tracksOf(uses []Use, id int64) []string {
 	var tracks []string
 	for _, u := range uses {
-		if strings.EqualFold(u.Repo, name) {
+		if u.RepoID == id {
 			tracks = append(tracks, u.Track)
 		}
 	}

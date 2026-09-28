@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/repos"
+	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
@@ -33,23 +34,21 @@ func newTracksWindowCmd(version string) *cobra.Command {
 			}
 			t, _ := loadTheme(paths)
 			c := tmux.New(paths.TmuxSocket)
-			var tracks source.Source = source.Windows{Tmux: c, Session: sessionName}
+			daemon := daemonCalls{tmux: c, paths: paths, version: version}
 			var repoSource source.Repos
 			db, dbErr := store.Open(cmd.Context(), paths.Database)
 			if dbErr == nil {
 				defer db.Close()
-				repoSource = repos.Service{Store: db, Git: repos.Exec{}, Uses: trackUses(c)}
+				repoSource = repos.Service{Store: db, Git: repos.Exec{}, Uses: trackUses(daemon)}
 			}
 			window := tracksview.New(tracksview.Config{
 				Version: version,
 				Theme:   t,
-				Tracks:  tracks,
+				Tracks:  source.Daemon{List: daemon.list},
 				Open: func(number int) error {
 					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
 				},
-				End: func(number int) error {
-					return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
-				},
+				End:       func(number int) error { return endTrack(cmd.Context(), daemon, c, number) },
 				OpenURL:   openBrowser,
 				Repos:     repoSource,
 				ReposErr:  dbErr,
@@ -78,21 +77,40 @@ func about(paths platform.Paths) [][2]string {
 		{"Themes folder", paths.ThemesDir},
 		{"Data folder", paths.DataDir},
 		{"Database", paths.Database},
+		{"Worktrees folder", paths.Worktrees},
+		{"Daemon log", paths.Log},
 		{"tmux socket", paths.TmuxSocket},
 	}
 }
 
-// trackUses lists the repos of the session's track windows.
-func trackUses(c *tmux.Client) repos.UsesFunc {
-	return func(context.Context) ([]repos.Use, error) {
-		infos, err := trackwin.List(c, sessionName)
+// endTrack ends the track in window number through the daemon, which
+// records it. A window without a track is only closed.
+func endTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, number int) error {
+	listed, err := daemon.list(ctx)
+	if err != nil {
+		return err
+	}
+	for _, l := range listed {
+		if l.Number == number {
+			return daemon.do(ctx, func(client rpc.Client) error { return client.End(ctx, l.ID) })
+		}
+	}
+	return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
+}
+
+// trackUses lists the repos of the open tracks.
+func trackUses(daemon daemonCalls) repos.UsesFunc {
+	return func(ctx context.Context) ([]repos.Use, error) {
+		listed, err := daemon.list(ctx)
 		if err != nil {
 			return nil, err
 		}
-		uses := make([]repos.Use, 0, len(infos))
-		for _, in := range infos {
-			if in.Repo != "" {
-				uses = append(uses, repos.Use{Repo: in.Repo, Track: in.Name})
+		var uses []repos.Use
+		for _, l := range listed {
+			for _, r := range l.Repos {
+				if r.RepoID != 0 {
+					uses = append(uses, repos.Use{RepoID: r.RepoID, Track: l.Name})
+				}
 			}
 		}
 		return uses, nil

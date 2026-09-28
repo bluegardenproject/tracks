@@ -86,6 +86,29 @@ func TestAddingAnEngine(t *testing.T) {
 	}
 }
 
+func TestMakeDefault(t *testing.T) {
+	f := &fakeEngines{saved: settings.Engines{Claude: &settings.Engine{}}, found: claudeFound()}
+	m := openEngines(t, f)
+	if view := plainView(m); strings.Contains(view, "Make default") || strings.Contains(view, "They run here") {
+		t.Error("with one engine there's no default to choose")
+	}
+	f.found["cursor"] = agents.Found{Path: "/bin/agent"}
+	m = press(t, m, "Add Cursor to Engines")
+	if view := plainView(m); strings.Count(view, "Make default") != 1 || !strings.Contains(view, "default   They run here.") {
+		t.Fatalf("with both engines Claude Code should be the default and Cursor offer Make default:\n%s", view)
+	}
+	m = press(t, m, "Make default")
+	if f.saved.Default != "cursor" {
+		t.Errorf("saved default %q, want cursor", f.saved.Default)
+	}
+	m = press(t, m, "Remove Cursor")
+	x, y := cellOf(t, m, " Remove    Cancel ")
+	settle(m, tea.MouseClickMsg{X: x + 1, Y: y, Button: tea.MouseLeft})
+	if f.saved.Default != "" || f.saved.Cursor != nil {
+		t.Errorf("removing the default engine should clear it: %+v", f.saved)
+	}
+}
+
 func TestOpeningTheTabChecksAgain(t *testing.T) {
 	on := false
 	f := &fakeEngines{saved: settings.Engines{Claude: &settings.Engine{Auto: &on}}, found: claudeFound()}
