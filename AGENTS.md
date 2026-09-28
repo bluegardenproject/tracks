@@ -21,6 +21,7 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 - `theme/` design tokens, built-in themes (`themes/*.yaml`) and user theme files · `settings/` `settings.yaml` (the chosen theme, the engines) · `ui/style/` tokens to Lip Gloss colours
 - `footer/` the footer's tmux status rows · `sysinfo/` LAN, WAN, CPU and memory for the footer
 - `ui/tracksview/` the Tracks window (window 0), Bubble Tea v2 · `ui/themecreator/` theme editor, a pane of the Settings tab
+- `ui/quickaccess/` the Quick Access popup (`Ctrl+b q`) · `ui/addtrack/` the New track form popup
 - `ui/source/` the data screens read (tracks, repos, themes, engines); reads track windows until the daemon exists
 - `store/` SQLite: schema, migrations (`migrations/*.sql`, one per change), queries · `repos/` rules for adding, changing and removing repos
 - `agents/` the agent CLIs (engines): finding one, its version, its models, its MCP servers

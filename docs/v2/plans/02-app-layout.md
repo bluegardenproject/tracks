@@ -8,7 +8,7 @@ The session feels like the real app. It was first built on fake data, in a playg
 - a navigation footer on every window
 - track windows with agent, terminal and dev-server panes that can be added and closed
 - a simple Tracks window
-- the full menu popup
+- Quick Access, a popup that opens from any window
 - the quick switcher
 - a "New track" form
 
@@ -36,7 +36,7 @@ type Source interface {
 ## Styles (`internal/v2/ui/style`)
 
 - Builds on the design tokens from chunk 1 (`internal/v2/theme`). New tokens are added there as screens need them.
-- Adds the Huh v2 form theme, built from tokens.
+- Forms use Tracks' own widgets (`internal/v2/ui/widget`) in the theme's colours, not Huh.
 - Status colours come from the status model, which names a token for each status. The footer turns token values into tmux colours.
 - Library-neutral helpers (control-character stripping) sit in a package without Charm imports, so v1 can share them later if wanted.
 
@@ -84,7 +84,7 @@ Most replace tmux defaults that don't fit Tracks. The keys run the hidden `track
 - `Ctrl+b p` and `Ctrl+b n`: previous and next track, skipping window 0 and not wrapping around. From the Tracks window, `n` goes to the first track and `p` to the last (built)
 - `Ctrl+b <` and `Ctrl+b >`: first and last track, instead of tmux's window and pane menus (built)
 - `Ctrl+b s`: quick switcher, instead of tmux's session tree (comes with the popups)
-- `Ctrl+b m`: full menu, instead of marking a pane (comes with the popups)
+- `Ctrl+b q`: Quick Access, instead of tmux's pane numbers (built, see [06-add-track.md](06-add-track.md))
 - `Ctrl+b t`: add a terminal pane (built in chunk 1)
 
 ## Tracks window: Station (`internal/v2/ui/tracksview`) (built)
@@ -104,20 +104,18 @@ Templates that preset a new track, so starting one only needs a slug and a promp
 - A template can preset repos, kind, engine and hooks (setup commands).
 - How to start one is still open.
 
-## Popups (`internal/v2/ui/menu`, `internal/v2/ui/switcher`)
+## Popups (`internal/v2/ui/quickaccess`, `internal/v2/ui/addtrack`, `internal/v2/ui/switcher`)
 
-- **Full menu (`Ctrl+b m`):**
-  - the menu rebuild from the `tracks/09ad3c-menu` branch, ported to Charm v2
-  - sections, a filter, shortcuts, breadcrumbs, the track picker table and confirm dialogs
+- **Quick Access (`Ctrl+b q`)** (built): a short list of things to open, starting with New track. It replaces the full menu planned for `Ctrl+b m`; entries join it over time. See [06-add-track.md](06-add-track.md).
 - **Quick switcher (`Ctrl+b s`):** a filterable list of tracks with status. Enter switches, Esc closes. Built for more tracks than `Ctrl+b 1..9` covers.
-- **New track form (Huh v2):** kind, repos, name, agent.
-- **Size:** popups open with `display-popup -E` at about 80% of the window.
+- **New track form** (layout built): the type and its fields, as in v1. Creating the track comes with chunk 5. See [06-add-track.md](06-add-track.md).
+- **Size:** popups open with `display-popup -E`. Quick Access fits its entries; the form takes about 80% of the window.
 
 ## Still to decide by using it
 
 - Footer: slot width, colours, buttons, info segments, whether hover is worth a pane.
 - Track window: right column width, pane titles, how adding and closing terminals feels.
-- Popups: size, full menu vs quick switcher, the creation form.
+- Popups: the quick switcher, and which entries Quick Access gets.
 - What the Tracks window needs, as input for chunk 3.
 
 ## Tests
@@ -126,14 +124,13 @@ Templates that preset a new track, so starting one only needs a slug and a promp
 - **Pure navigation logic:** first, previous, next and last with wrap-around off, and number keys past the end.
 - **Throwaway tmux server:** the rendered string is accepted, a window range click selects the window, and the navigation keys select the right window.
 - **Screens:**
-  - a few golden snapshots (Tracks window placeholder, menu root, switcher with filter)
-  - behaviour tests for the ported menu (navigation, filter, confirm, mouse click), carried over from the v1 menu tests
+  - a few golden snapshots (Tracks window placeholder, switcher with filter)
 
 ## PR slices
 
-1. **2a: `Source` and the Station list** (done). Huh styles come with the New track form.
+1. **2a: `Source` and the Station list** (done).
 2. **2b: footer rows, navigation list, system row, theme editor** (done), then the navigation keys (done).
 3. **2c: footer buttons and attention badges,** once statuses exist.
-4. **2d: full menu popup, quick switcher, New track form,** after the discussion about track details and Fast Track templates.
+4. **2d: Quick Access and the New track form** (done, [06-add-track.md](06-add-track.md)), **then the quick switcher.**
 
 After each slice the maintainer plays with it, and we adjust before the next.
