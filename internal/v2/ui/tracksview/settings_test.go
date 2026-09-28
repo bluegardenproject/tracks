@@ -71,12 +71,12 @@ func TestChoosingATheme(t *testing.T) {
 		}
 	}
 	m = settle(m, enterKey, enterKey)
-	if m.settings.picker == nil || !strings.Contains(plainView(m), "default_light.yaml") {
+	if m.picker == nil || !strings.Contains(plainView(m), "default_light.yaml") {
 		t.Fatal("Enter on the theme field should open the picker with every theme file")
 	}
 	m = settle(m, downKey, enterKey)
-	if len(f.chosen) != 1 || f.chosen[0] != "default_light" || m.settings.picker != nil {
-		t.Fatalf("chose %v, picker open %v; want default_light and the picker closed", f.chosen, m.settings.picker != nil)
+	if len(f.chosen) != 1 || f.chosen[0] != "default_light" || m.picker != nil {
+		t.Fatalf("chose %v, picker open %v; want default_light and the picker closed", f.chosen, m.picker != nil)
 	}
 	if got := m.palette.Theme().ID; got != "default_light" {
 		t.Errorf("window drawn in %s, want default_light", got)
@@ -92,11 +92,11 @@ func TestInvalidThemesCantBeChosen(t *testing.T) {
 		t.Error("the picker should show why a theme is invalid")
 	}
 	m = settle(m, downKey, downKey, enterKey)
-	if len(f.chosen) != 0 || m.settings.picker == nil {
+	if len(f.chosen) != 0 || m.picker == nil {
 		t.Errorf("chose %v; want nothing chosen and the picker still open", f.chosen)
 	}
 	m = settle(m, tea.MouseClickMsg{X: 0, Y: 0, Button: tea.MouseLeft})
-	if m.settings.picker != nil || len(f.chosen) != 0 {
+	if m.picker != nil || len(f.chosen) != 0 {
 		t.Error("a click outside the picker should close it without choosing")
 	}
 }
@@ -104,7 +104,7 @@ func TestInvalidThemesCantBeChosen(t *testing.T) {
 func TestCreatorLoadsThroughThePicker(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
 	m = settle(m, downKey, downKey, enterKey, themecreator.LoadMsg{})
-	if m.settings.picker == nil || m.settings.pickerFor != pickLoad {
+	if m.picker == nil || m.pickerFor != pickLoad {
 		t.Fatal("the creator's Load should open the picker")
 	}
 	m = settle(m, downKey, enterKey)

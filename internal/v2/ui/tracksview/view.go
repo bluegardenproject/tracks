@@ -93,6 +93,8 @@ func (m Model) content(width, height int) []string {
 		return m.stationView(width, height)
 	case tabRepositories:
 		return m.reposView(width, height)
+	case tabEngines:
+		return m.enginesView(width, height)
 	case tabSettings:
 		return m.settingsView(width, height)
 	}
@@ -121,6 +123,8 @@ func (m Model) hints() string {
 		n = m.station.notice
 	case tabRepositories:
 		n = m.repos.notice
+	case tabEngines:
+		n = m.engines.notice
 	case tabSettings:
 		n = m.settings.notice
 	}
@@ -140,8 +144,14 @@ func (m Model) hints() string {
 		return "  " + joinKeys(key, text, repoFormKeys)
 	case m.tab == tabRepositories:
 		keys = repoListKeys
-	case s.picker != nil:
+	case m.picker != nil && m.pickerFor == pickModel:
+		return "  " + joinKeys(key, text, modelPickerKeys)
+	case m.picker != nil:
 		return "  " + joinKeys(key, text, pickerKeys)
+	case m.tab == tabEngines && m.engines.editing:
+		return "  " + joinKeys(key, text, engineKeys)
+	case m.tab == tabEngines:
+		keys = engineListKeys
 	case m.tab == tabSettings && s.editing:
 		switch s.section {
 		case sectionGeneral:
