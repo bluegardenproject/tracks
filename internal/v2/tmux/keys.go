@@ -30,6 +30,7 @@ var Bindings = func() []Binding {
 		digits[i] = strconv.Itoa(i + 1)
 	}
 	return []Binding{
+		{Keys: []string{"q"}, Help: "Quick Access", args: func(string) string { return "quick-access '#{client_name}'" }},
 		{Keys: []string{"n"}, Help: "next track", args: nav("next")},
 		{Keys: []string{"p"}, Help: "previous track", args: nav("prev")},
 		{Keys: []string{"<"}, Help: "first track", args: nav("first")},
