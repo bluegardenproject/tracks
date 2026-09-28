@@ -34,7 +34,7 @@
 - **Built-ins,** embedded and read-only, listed as if they were files: **Default** (`default.yaml`, the dark values) and **Default Light** (`default_light.yaml`). The themes folder holds only user files.
 - **User themes:** `~/.config/tracks-v2/themes/<id>.yaml`, the id being the file name. Save as new turns the display name into the id (`My Theme` → `my_theme.yaml`, like the built-ins) and refuses one that exists.
 - **Valid:** YAML with known tokens and `#rrggbb` values. Tokens a file lacks, such as ones added later, come from Default. An unknown token, a bad value or an id a built-in has makes the file invalid.
-- **The choice** is `theme: <id>` in `~/.config/tracks-v2/settings.yaml`, shared by `--new-app` and `--demo`. A missing or invalid choice falls back to Default.
+- **The choice** is `theme: <id>` in `~/.config/tracks-v2/settings.yaml`. A missing or invalid choice falls back to Default.
 - Every process that draws (Tracks window, footer, track windows) reads the choice and its theme. `<data>/theme.yaml` is no longer read; nothing was released, so there's no migration.
 
 ## Keys, defined once

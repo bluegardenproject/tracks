@@ -7,13 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newPathsCmd(profile profileFunc) *cobra.Command {
+func newPathsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "paths",
 		Short: "print where Tracks v2 keeps its files",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			p, err := platform.Resolve(profile())
+			p, err := platform.Resolve()
 			if err != nil {
 				return err
 			}

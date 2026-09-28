@@ -15,14 +15,14 @@ import (
 const wanLookup = "https://api.ipify.org"
 
 // newFooterCmd holds the commands the footer's rows run.
-func newFooterCmd(profile profileFunc) *cobra.Command {
+func newFooterCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "footer", Hidden: true}
 
 	system := &cobra.Command{
 		Use:  "system",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			paths, err := platform.Resolve(profile())
+			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}

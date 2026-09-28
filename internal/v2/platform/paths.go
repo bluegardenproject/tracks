@@ -9,55 +9,37 @@ import (
 	"path/filepath"
 )
 
-// Profile selects a set of locations.
-type Profile int
-
-const (
-	// Default is the real app.
-	Default Profile = iota
-	// Demo is the playground: its own tmux server and a throwaway data
-	// directory.
-	Demo
-)
-
-// Paths are the locations for one profile.
+// Paths are where Tracks v2 keeps its files.
 type Paths struct {
 	// ConfigDir holds the settings, the user's themes and overrides.
-	// Shared by all profiles.
 	ConfigDir string
 	// Settings is the preferences file, and ThemesDir holds the user's
 	// themes, one file each.
 	Settings, ThemesDir string
 	// DataDir holds state, logs and generated files.
 	DataDir string
-	// Database is the SQLite database. Shared by all profiles: the
-	// playground's fake tracks never reach it, its repos are real.
+	// Database is the SQLite database.
 	Database string
 	// TmuxSocket is the tmux socket name (`tmux -L`).
 	TmuxSocket string
 }
 
-// Resolve returns the paths for profile in the current environment.
-func Resolve(profile Profile) (Paths, error) {
+// Resolve returns the paths in the current environment.
+func Resolve() (Paths, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Paths{}, fmt.Errorf("find home directory: %w", err)
 	}
-	return resolve(profile, env{
+	return resolve(env{
 		home:      home,
 		xdgConfig: os.Getenv("XDG_CONFIG_HOME"),
 		xdgState:  os.Getenv("XDG_STATE_HOME"),
-		tempDir:   os.TempDir(),
-		uid:       os.Getuid(),
 	}), nil
 }
 
-type env struct {
-	home, xdgConfig, xdgState, tempDir string
-	uid                                int
-}
+type env struct{ home, xdgConfig, xdgState string }
 
-func resolve(profile Profile, e env) Paths {
+func resolve(e env) Paths {
 	configHome := e.xdgConfig
 	if configHome == "" {
 		configHome = filepath.Join(e.home, ".config")
@@ -68,20 +50,12 @@ func resolve(profile Profile, e env) Paths {
 	}
 	state := filepath.Join(stateHome, "tracks-v2")
 	config := filepath.Join(configHome, "tracks-v2")
-	p := Paths{
-		ConfigDir: config,
-		Settings:  filepath.Join(config, "settings.yaml"),
-		ThemesDir: filepath.Join(config, "themes"),
-		Database:  filepath.Join(state, "tracks.db"),
+	return Paths{
+		ConfigDir:  config,
+		Settings:   filepath.Join(config, "settings.yaml"),
+		ThemesDir:  filepath.Join(config, "themes"),
+		DataDir:    state,
+		Database:   filepath.Join(state, "tracks.db"),
+		TmuxSocket: "tracks-v2",
 	}
-
-	switch profile {
-	case Demo:
-		p.DataDir = filepath.Join(e.tempDir, fmt.Sprintf("tracks-v2-demo-%d", e.uid))
-		p.TmuxSocket = "tracks-v2-demo"
-	default:
-		p.DataDir = state
-		p.TmuxSocket = "tracks-v2"
-	}
-	return p
 }

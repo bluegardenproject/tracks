@@ -15,7 +15,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | # | Chunk | Plan | Status |
 |---|---|---|---|
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
-| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus, on demo data | [02-app-layout.md](plans/02-app-layout.md) | in progress |
+| 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | not written yet | to be designed |
@@ -52,7 +52,7 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
   - The formula installs the release binaries the release workflow already builds and checks against `SHA256SUMS`, and each release updates it automatically.
   - It depends on tmux, so a brew install brings everything Tracks needs to start.
   - A brew-installed Tracks leaves updates to `brew upgrade`: `tracks update` and the update check say so instead of replacing the binary.
-- **The layout is proven on fake data first:** `./tracks --new-app --demo` opens a playground with fake tracks. The UI is built in its real packages against a data interface, so the playground becomes the product.
+- **The layout was proven on fake data first:** a playground (`--demo`) with fake tracks, built in the real packages against a data interface. It was removed once tracks started being created for real.
 
 ## Target shape
 
@@ -131,11 +131,10 @@ internal/v2/
   ui/
     style/           Lip Gloss and Huh styles built from theme tokens
     widget/          shared UI pieces, only once 2+ screens use them
-    source/          Source interface for UI data; demo and daemon implementations
+    source/          Source interface for UI data; tmux windows now, the daemon later
     tracksview/      the Tracks window (not `tracks/`, which is too close to the `track` domain package)
     themecreator/    theme editor: every token with its value, a preview and examples
     menu/ switcher/  popups
-  demo/              fake tracks and the fake agent for the playground
 ```
 
 **Dependency rules:**
@@ -159,7 +158,7 @@ The footer, the Tracks window, notifications and storage all depend on it, so it
 
 - **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). This goes into a glossary here once agreed.
 - **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Proxy, Engines, Settings.
-- **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by the playground.
+- **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by using it.
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Homebrew:** our own tap (`bluegardenproject/tap`) or homebrew-core, which needs a build from source and wider use first. And whether v1 gets the formula before v2.0.0, since the release workflow is shared.
 - **Final paths at release:** keep the `-v2` names or take over the plain ones.

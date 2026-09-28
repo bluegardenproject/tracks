@@ -9,15 +9,15 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 - v2 may import v1 leaf packages unchanged (`git`, `shellx`, ...). If it needs a change, copy the package into `internal/v2/`.
 - The installed tracks may be running: never run `make install` or a bare `./tracks` during v2 work.
 - v2 tests never touch a real tmux server: use `tmuxtest.Socket(t)`. The tmux client panics in tests on any other socket.
-- The v2 database is `~/.local/state/tracks-v2/tracks.db`, shared by `--new-app` and `--demo`. Tests use a temp file; end-to-end runs set `XDG_STATE_HOME`.
+- The v2 database is `~/.local/state/tracks-v2/tracks.db`. Tests use a temp file; end-to-end runs set `XDG_STATE_HOME`.
 - A schema change is a new file in `store/migrations/`; applied migrations are never edited.
 - v2 colours come only from theme tokens (`theme.Token`), never colour values in code (tests may use them as data); a test enforces it. A new token goes into `theme/tokens.go` and gets a value in both built-in themes (`theme/themes/*.yaml`).
 - UI uses Charm v2 (`charm.land/...`). Charm v1 imports (`github.com/charmbracelet/bubbletea`, ...) are v1 only.
 
 ## v2 map
-- `cli/` commands and start-up · `platform/` paths and profiles (default, demo)
+- `cli/` commands and start-up · `platform/` paths
 - `tmux/` tmux on v2's own socket, generated config, the prefix keys (`keys.go`) · `tmux/tmuxtest/` throwaway servers for tests
-- `trackwin/` a track's window and its panes · `demo/` fake tracks, agent and dev server for `--demo`
+- `trackwin/` a track's window and its panes
 - `theme/` design tokens, built-in themes (`themes/*.yaml`) and user theme files · `settings/` `settings.yaml` (the chosen theme, the engines) · `ui/style/` tokens to Lip Gloss colours
 - `footer/` the footer's tmux status rows · `sysinfo/` LAN, WAN, CPU and memory for the footer
 - `ui/tracksview/` the Tracks window (window 0), Bubble Tea v2 · `ui/themecreator/` theme editor, a pane of the Settings tab

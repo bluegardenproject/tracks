@@ -8,17 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newStopCmd(profile profileFunc) *cobra.Command {
+func newStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
 		Short: "stop Tracks v2 and its tmux server",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			name := "Tracks v2"
-			if profile() == platform.Demo {
-				name = "The Tracks v2 playground"
-			}
-			paths, err := platform.Resolve(profile())
+			const name = "Tracks v2"
+			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}
