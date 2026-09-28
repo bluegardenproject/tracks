@@ -95,10 +95,33 @@ func TestStationScrollsToSelection(t *testing.T) {
 }
 
 func TestStationEmptyAndFailing(t *testing.T) {
-	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 100, Height: 30}, tracksMsg{})
-	if !strings.Contains(m.View().Content, "No tracks yet.") {
-		t.Error("no tracks: missing the empty message")
+	opened := 0
+	m := update(New(Config{Version: "test", Theme: theme.Default(), NewTrack: func() error {
+		opened++
+		return nil
+	}}), tea.WindowSizeMsg{Width: 100, Height: 30}, tracksMsg{})
+	view := plainView(m)
+	for _, want := range []string{"Tracks", "Slug", "Add new Track", "Fast Track", "Enter add a new track"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("no tracks: missing %q:\n%s", want, view)
+		}
 	}
+	if strings.Contains(view, "Details") {
+		t.Error("no tracks: there are no details to show")
+	}
+	x, y := cellOf(t, m, "Add new Track")
+	if m = update(m, tea.MouseMotionMsg{X: x, Y: y}); !m.station.hoverAdd {
+		t.Error("hovering Add new Track should light it")
+	}
+	m = press(t, m, "Add new Track")
+	m = run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if opened != 2 {
+		t.Errorf("a click and Enter opened the form %d times, want 2", opened)
+	}
+	if narrow := update(m, tea.WindowSizeMsg{Width: 50, Height: 30}); !strings.Contains(plainView(narrow), "Add new Track") {
+		t.Error("a narrow window should still offer Add new Track")
+	}
+
 	m = update(m, tracksMsg{err: errors.New("server gone")})
 	if !strings.Contains(m.View().Content, "server gone") {
 		t.Error("failing source: missing the error")

@@ -17,13 +17,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// The New track form takes most of the window, and all of a small one.
-const (
-	formShare     = 80 // percent
-	formMinWidth  = 72
-	formMinHeight = 30
-)
-
 // newQuickAccessCmd is what Ctrl+b q runs: Quick Access over client,
 // then what was picked in it. A popup can't open another, so it opens
 // them one after the other, each waiting for the last to close.
@@ -81,10 +74,7 @@ func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
 	}
 	switch strings.TrimSpace(string(picked)) {
 	case quickaccess.NewTrack:
-		popup.Width = strconv.Itoa(min(width, max(formMinWidth, width*formShare/100)))
-		popup.Height = strconv.Itoa(min(height, max(formMinHeight, height*formShare/100)))
-		popup.Command = command + " popup add-track " + shellx.Quote(client)
-		return c.Popup(popup, version)
+		return openNewTrack(c, paths, client)
 	}
 	return nil
 }
