@@ -75,6 +75,8 @@ func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
 	switch strings.TrimSpace(string(picked)) {
 	case quickaccess.NewTrack:
 		return openNewTrack(c, paths, client)
+	case quickaccess.TracksFilter:
+		return openTracksFilter(c, paths, client)
 	}
 	return nil
 }
@@ -100,6 +102,13 @@ func newPopupCmd(version string) *cobra.Command {
 				chosen = m.Chosen()
 			}
 			return os.WriteFile(args[0], []byte(chosen), 0o600)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:  "tracks-filter <result-file>",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return tracksFilter(cmd.Context(), version, args[0])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
