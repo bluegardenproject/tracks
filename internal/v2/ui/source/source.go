@@ -22,6 +22,7 @@ type Track struct {
 	// Cleanable says Clean can remove the worktrees: the track ended and
 	// has some.
 	Cleanable bool
+	Archived  bool // taken out of Station
 	Repos     []Repo
 	// Engine is the agent CLI, Model its model; Session is the agent's
 	// session ID, which resumes it.
@@ -102,7 +103,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 			engine = e.Name
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: l.Status(),
-			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Repos: repos,
+			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}
 	return out, nil

@@ -27,14 +27,17 @@ type (
 		err      error
 		events   <-chan resumeEvent
 	}
-	// checkedMsg is the unsaved work Clean's check found in track id,
-	// cleanedMsg what Clean did.
+	// checkedMsg is the unsaved work Clean's check found in track id
+	// before kind, askClean or askArchive; cleanedMsg is what Clean did,
+	// archivedMsg what Archive did.
 	checkedMsg struct {
 		id, name string
+		kind     asked
 		unsaved  []string
 		err      error
 	}
-	cleanedMsg checkedMsg
+	cleanedMsg  checkedMsg
+	archivedMsg checkedMsg
 )
 
 // startResume resumes track id, showing its progress in the hint row.
@@ -75,8 +78,9 @@ func (m Model) resumed(e resumeEvent) (Model, tea.Cmd) {
 	return m, m.loadTracks(false)
 }
 
-// checkClean looks for unsaved work in t's worktrees, and then asks.
-func (m Model) checkClean(t source.Track) (Model, tea.Cmd) {
+// checkUnsaved looks for unsaved work in t's worktrees, and then asks
+// kind.
+func (m Model) checkUnsaved(t source.Track, kind asked) (Model, tea.Cmd) {
 	if m.unsaved == nil {
 		return m, nil
 	}
@@ -84,7 +88,7 @@ func (m Model) checkClean(t source.Track) (Model, tea.Cmd) {
 	m.station.notice = notice{text: "Checking the worktrees of " + t.Name + "…", busy: true}
 	return m, func() tea.Msg {
 		found, err := unsaved(t.ID)
-		return checkedMsg{t.ID, t.Name, found, err}
+		return checkedMsg{id: t.ID, name: t.Name, kind: kind, unsaved: found, err: err}
 	}
 }
 
@@ -94,7 +98,7 @@ func (m Model) checked(msg checkedMsg) Model {
 		return m
 	}
 	m.station.notice = notice{}
-	return m.ask(question{id: msg.id, name: msg.name, kind: askClean, lines: msg.unsaved})
+	return m.ask(question{id: msg.id, name: msg.name, kind: msg.kind, lines: msg.unsaved})
 }
 
 // ask puts q to the user while its track is still the selected one.
@@ -113,7 +117,7 @@ func (m Model) clean(q question) tea.Cmd {
 	clean := m.cleanFn
 	return func() tea.Msg {
 		found, err := clean(q.id, len(q.lines) > 0)
-		return cleanedMsg{q.id, q.name, found, err}
+		return cleanedMsg{id: q.id, name: q.name, unsaved: found, err: err}
 	}
 }
 

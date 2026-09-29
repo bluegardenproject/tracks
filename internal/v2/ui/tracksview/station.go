@@ -61,8 +61,8 @@ type station struct {
 	notice      notice
 }
 
-// question is what Station asks before ending or cleaning a track, or
-// when resuming one finds a worktree gone.
+// question is what Station asks before ending, cleaning or archiving a
+// track, or when resuming one finds a worktree gone.
 type question struct {
 	id, name string // the track's
 	kind     asked
@@ -75,12 +75,13 @@ const (
 	askEnd asked = iota
 	askClean
 	askRecreate
+	askArchive
 )
 
 // enterConfirms says Enter answers yes. Removing unsaved work and a
 // worktree that's gone take y, not the Enter that resumes.
 func (q question) enterConfirms() bool {
-	return q.kind == askEnd || q.kind == askClean && len(q.lines) == 0
+	return q.kind == askEnd || (q.kind == askClean || q.kind == askArchive) && len(q.lines) == 0
 }
 
 // confirm does what q asked about.
@@ -90,6 +91,8 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 		return m, m.clean(q)
 	case askRecreate:
 		return m.startResume(q.id, q.name, true)
+	case askArchive:
+		return m, m.archive(q)
 	}
 	return m, m.act(actionEnd)
 }
