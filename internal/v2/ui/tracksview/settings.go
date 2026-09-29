@@ -14,14 +14,14 @@ import (
 // Settings sections, in display order.
 const (
 	sectionGeneral    = iota
-	sectionTrack      // a placeholder for each track type's defaults
+	sectionTracks     // each track type's defaults
 	sectionFastTracks // empty until Fast Tracks are built
 	sectionCreator
 	sectionKeys
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Track", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Tracks", "Fast Tracks", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
@@ -31,6 +31,7 @@ type settingsTab struct {
 	themesErr      error
 	fieldHover     bool // the mouse is on General's theme field
 	fastHover      int  // the Fast Tracks button under the mouse
+	types          typesState
 	keysOffset     int
 	creator        themecreator.Model
 	// leaving is where to go once the creator has let go.
@@ -49,7 +50,9 @@ type settingsLeave struct {
 const (
 	pickUse = iota
 	pickLoad
-	pickModel // an engine's default model
+	pickModel     // an engine's default model
+	pickAgent     // a track type's agent
+	pickTypeModel // a track type's model
 )
 
 type (
@@ -64,7 +67,7 @@ type (
 )
 
 func newSettingsTab(applied theme.Theme) settingsTab {
-	return settingsTab{hover: -1, creator: themecreator.New(applied, applied)}
+	return settingsTab{hover: -1, types: typesState{hover: typeHit{-1, -1}}, creator: themecreator.New(applied, applied)}
 }
 
 func (m Model) loadThemes() tea.Cmd {
@@ -81,7 +84,7 @@ func (m Model) loadThemes() tea.Cmd {
 func (m Model) setThemes(msg themesMsg) Model {
 	s := &m.settings
 	s.themes, s.themesErr = msg.entries, msg.err
-	if m.picker != nil && m.pickerFor != pickModel {
+	if m.picker != nil && (m.pickerFor == pickUse || m.pickerFor == pickLoad) {
 		m.picker.SetItems(m.pickerItems())
 		m.picker.Marked = m.themeIndex(m.pickerMarks())
 	}
@@ -143,8 +146,11 @@ func (m Model) openPicker(purpose int) (Model, tea.Cmd) {
 
 // picked acts on what the picker did.
 func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
-	if m.pickerFor == pickModel {
+	switch m.pickerFor {
+	case pickModel, pickTypeModel:
 		return m.modelPicked(r)
+	case pickAgent:
+		return m.agentPicked(r)
 	}
 	s := &m.settings
 	switch r {
@@ -216,7 +222,7 @@ func (m Model) showSection(i int) Model {
 func (m Model) editSection() (Model, tea.Cmd) {
 	s := &m.settings
 	switch s.section {
-	case sectionTrack, sectionFastTracks, sectionAbout:
+	case sectionFastTracks, sectionAbout:
 		return m, nil
 	case sectionCreator:
 		s.editing = true
@@ -286,6 +292,8 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		if key == "enter" || key == "space" {
 			return m.openPicker(pickUse)
 		}
+	case sectionTracks:
+		return m.typesKey(key)
 	case sectionKeys:
 		switch key {
 		case "up", "k":

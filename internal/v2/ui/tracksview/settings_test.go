@@ -171,8 +171,8 @@ func tabCell(t *testing.T, m Model, title string) (int, int) {
 func TestFastTracksEmptyState(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
 	m = settle(m, downKey)
-	if !strings.Contains(plainView(m), trackSettingsLater) {
-		t.Error("Track should say it comes later")
+	if !strings.Contains(plainView(m), "Track type default models") {
+		t.Error("Tracks should show the track types' defaults")
 	}
 	m = settle(m, downKey)
 	view := plainView(m)

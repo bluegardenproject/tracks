@@ -66,13 +66,14 @@ func newTracksWindowCmd(version string) *cobra.Command {
 					}
 					return openNewTrack(c, paths, client)
 				},
-				OpenURL:   openBrowser,
-				Repos:     repoSource,
-				ReposErr:  dbErr,
-				Themes:    themes{c: c, paths: paths, version: version, command: command},
-				ThemesDir: paths.ThemesDir,
-				Engines:   engines{path: paths.Settings},
-				About:     about(paths),
+				OpenURL:    openBrowser,
+				Repos:      repoSource,
+				ReposErr:   dbErr,
+				Themes:     themes{c: c, paths: paths, version: version, command: command},
+				ThemesDir:  paths.ThemesDir,
+				Engines:    engines{path: paths.Settings},
+				TrackTypes: trackTypes{path: paths.Settings},
+				About:      about(paths),
 			})
 			_, err = tea.NewProgram(window,
 				tea.WithContext(cmd.Context()),
