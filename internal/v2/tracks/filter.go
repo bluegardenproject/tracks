@@ -1,7 +1,9 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
+	"slices"
 
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
@@ -10,7 +12,9 @@ import (
 const filtered = 500
 
 // Station is what Station lists, and the filter it's under: with none
-// on, List's tracks; else every track the filter picks, newest first.
+// on, List's tracks; else every track the filter picks. Either way
+// they're in the order they were created, so a track keeps its place
+// when its status changes.
 func (s *Service) Station(ctx context.Context) ([]Listed, track.Filter, error) {
 	f, err := s.Store.Filter(ctx)
 	if err != nil {
@@ -18,6 +22,7 @@ func (s *Service) Station(ctx context.Context) ([]Listed, track.Filter, error) {
 	}
 	if !f.On() {
 		listed, err := s.List(ctx)
+		byCreation(listed)
 		return listed, f, err
 	}
 	found, err := s.Store.FilteredTracks(ctx, f, s.now(), filtered)
@@ -37,7 +42,16 @@ func (s *Service) Station(ctx context.Context) ([]Listed, track.Filter, error) {
 			}
 		}
 	}
+	byCreation(out)
 	return out, f, nil
+}
+
+// byCreation sorts listed oldest first. IDs start with the time a
+// track was created, so they settle ties.
+func byCreation(listed []Listed) {
+	slices.SortFunc(listed, func(a, b Listed) int {
+		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID, b.ID))
+	})
 }
 
 // Filter is Station's filter; the zero Filter when none is on.
