@@ -1,12 +1,13 @@
-// Package tracks creates and ends tracks: the steps from the New track
-// form to an agent running in the track's window, and undoing them
-// when one fails.
+// Package tracks creates, ends, resumes and cleans tracks: the steps
+// from the New track form to an agent running in the track's window,
+// and undoing them when one fails.
 package tracks
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
+	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
 // Problem is why a request can't be done, worded for the user.
@@ -28,14 +30,23 @@ const ErrNoEngine Problem = "Add an engine on the Engines tab first."
 type Store interface {
 	Repos(ctx context.Context) ([]store.Repo, error)
 	AddTrack(ctx context.Context, t track.Track) error
+	Track(ctx context.Context, id string) (track.Track, error)
 	OpenTracks(ctx context.Context) ([]track.Track, error)
+	EndedTracks(ctx context.Context, limit int) ([]track.Track, error)
 	CloseTrack(ctx context.Context, id string, at time.Time) error
+	ReopenTrack(ctx context.Context, id, name string) error
+	CleanTrack(ctx context.Context, id string, at time.Time) error
 }
 
 // Worktrees makes and removes a track's worktrees.
 type Worktrees interface {
 	Add(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
+	// Remove undoes Add, branches included.
 	Remove(ctx context.Context, t track.Track) error
+	Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
+	Unsaved(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
+	// RemoveWorktrees removes the worktrees and keeps the branches.
+	RemoveWorktrees(ctx context.Context, id string, repos []track.Repo) error
 }
 
 // Windows opens and closes the tracks' windows.
@@ -62,9 +73,53 @@ type Service struct {
 	NewID func() string
 
 	mu sync.Mutex
-	// claimed are the window names of tracks being created, whose
-	// windows don't exist yet.
+	// claimed are the window names of tracks being created or resumed,
+	// whose windows don't exist yet.
 	claimed map[string]bool
+	// busy are the tracks being resumed, cleaned or ended.
+	busy map[string]bool
+}
+
+// ended is how many ended tracks List returns, the most recent ones.
+const ended = 100
+
+// hold claims track id for one Resume, Clean or End at a time, until
+// release.
+func (s *Service) hold(ctx context.Context, id string) (t track.Track, release func(), err error) {
+	if t, err = s.Store.Track(ctx, id); errors.Is(err, store.ErrNotFound) {
+		return t, nil, Problem("That track is gone.")
+	} else if err != nil {
+		return t, nil, err
+	}
+	s.mu.Lock()
+	taken := s.busy[id]
+	if !taken {
+		if s.busy == nil {
+			s.busy = map[string]bool{}
+		}
+		s.busy[id] = true
+	}
+	s.mu.Unlock()
+	if taken {
+		return t, nil, Problem(t.Name + " is busy.")
+	}
+	release = func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.busy, id)
+	}
+	// Read again: what the holder before changed is saved by now.
+	if t, err = s.Store.Track(ctx, id); err != nil {
+		release()
+		return t, nil, err
+	}
+	return t, release, nil
+}
+
+func (s *Service) isBusy(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.busy[id]
 }
 
 func (s *Service) now() time.Time {

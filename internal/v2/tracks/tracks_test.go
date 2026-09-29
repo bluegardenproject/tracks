@@ -15,6 +15,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
+	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
 var errStep = errors.New("step failed")
@@ -31,9 +32,18 @@ func (s *failingStore) AddTrack(ctx context.Context, t track.Track) error {
 	return s.Store.AddTrack(ctx, t)
 }
 
+func (s *failingStore) ReopenTrack(ctx context.Context, id, name string) error {
+	if s.fail {
+		return errStep
+	}
+	return s.Store.ReopenTrack(ctx, id, name)
+}
+
 type fakeWorktrees struct {
-	fail    bool
-	removed []string
+	fail, failRestore bool
+	removed           []string // Remove's tracks
+	cleaned           []string // RemoveWorktrees' tracks, when it had some
+	unsaved           []workspace.Unsaved
 }
 
 func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
@@ -52,6 +62,31 @@ func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(stri
 
 func (w *fakeWorktrees) Remove(_ context.Context, t track.Track) error {
 	w.removed = append(w.removed, t.ID)
+	return nil
+}
+
+// Restore re-creates every worktree of a cleaned track.
+func (w *fakeWorktrees) Restore(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
+	if w.failRestore {
+		return nil, errStep
+	}
+	if !t.Cleaned() {
+		return nil, nil
+	}
+	for _, r := range t.Repos {
+		progress("Re-creating the worktree for " + r.Name + "…")
+	}
+	return t.Repos, nil
+}
+
+func (w *fakeWorktrees) Unsaved(context.Context, track.Track) ([]workspace.Unsaved, error) {
+	return w.unsaved, nil
+}
+
+func (w *fakeWorktrees) RemoveWorktrees(_ context.Context, id string, repos []track.Repo) error {
+	if len(repos) > 0 {
+		w.cleaned = append(w.cleaned, id)
+	}
 	return nil
 }
 
@@ -338,8 +373,13 @@ func TestSweepAndEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed) != 1 || listed[0].ID != ids[2] || listed[0].Window != "@three" {
-		t.Errorf("listed = %+v, want only three", listed)
+	if len(listed) != 3 || listed[0].ID != ids[2] || listed[0].Window != "@three" {
+		t.Fatalf("listed = %+v, want three open, then the ended ones", listed)
+	}
+	for _, l := range listed[1:] {
+		if l.Open() || l.Window != "" || l.Number != 0 {
+			t.Errorf("ended track listed as %+v", l)
+		}
 	}
 	if saved := f.saved(t); len(saved) != 1 {
 		t.Errorf("open in the database: %d, want 1", len(saved))
