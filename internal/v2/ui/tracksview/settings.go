@@ -32,6 +32,7 @@ type settingsTab struct {
 	fieldHover     bool // the mouse is on General's theme field
 	fastHover      int  // the Fast Tracks button under the mouse
 	types          typesState
+	history        historyState
 	keysOffset     int
 	creator        themecreator.Model
 	// leaving is where to go once the creator has let go.
@@ -53,6 +54,7 @@ const (
 	pickModel     // an engine's default model
 	pickAgent     // a track type's agent
 	pickTypeModel // a track type's model
+	pickUnsaved   // what auto-archive does with unsaved work
 )
 
 type (
@@ -151,6 +153,8 @@ func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
 		return m.modelPicked(r)
 	case pickAgent:
 		return m.agentPicked(r)
+	case pickUnsaved:
+		return m.unsavedPicked(r)
 	}
 	s := &m.settings
 	switch r {

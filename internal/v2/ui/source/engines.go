@@ -13,6 +13,12 @@ type TrackTypes interface {
 	Save(settings.Tracks) error
 }
 
+// History keeps Tracks History, the auto-archive settings.
+type History interface {
+	Load() (settings.History, error)
+	Save(settings.History) error
+}
+
 // Engines keeps the engines' settings and asks their CLIs.
 type Engines interface {
 	Load() (settings.Engines, error)
