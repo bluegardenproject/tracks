@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
@@ -82,6 +83,10 @@ func (s *Service) Sweep(ctx context.Context) error {
 	infos, err := s.Windows.List()
 	if err != nil {
 		return err
+	}
+	if !slices.Equal(infos, s.windows) {
+		s.windows = slices.Clone(infos)
+		s.Changes.Notify()
 	}
 	live := map[string]bool{}
 	for _, in := range infos {

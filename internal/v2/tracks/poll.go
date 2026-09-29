@@ -36,7 +36,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			}
 			for _, pr := range prs {
 				pr.CheckedAt = s.now()
-				if err := s.Store.SavePR(ctx, t.ID, pr, pr.CheckedAt); err != nil {
+				if _, err := s.Store.SavePR(ctx, t.ID, pr, pr.CheckedAt); err != nil {
 					return err
 				}
 				asked[[2]string{t.ID, pr.URL}] = true
@@ -60,7 +60,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			continue
 		}
 		p.State, p.CheckedAt = state, s.now()
-		if err := s.Store.SavePR(ctx, p.TrackID, p.PR, p.CheckedAt); err != nil {
+		if _, err := s.Store.SavePR(ctx, p.TrackID, p.PR, p.CheckedAt); err != nil {
 			return err
 		}
 	}
