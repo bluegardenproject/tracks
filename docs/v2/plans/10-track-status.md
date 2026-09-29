@@ -36,7 +36,7 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 
 ## How a status changes
 
-**One way in:** everything reports an event to the daemon, and one pure function decides the new status: `track.Apply(Status, Event) Status`. The daemon stores the result and sets the footer's option. Nothing else writes a status.
+**One way in:** everything reports an event to the daemon, and one pure function decides what changes: `track.State.Apply(Event, at)`. A track's `State` is the facts its status comes from (when it closed, when it was cleaned, whether its agent waits), and `State.Status()` derives the status. The daemon stores the new state and sets the footer's option. Nothing else writes a state.
 
 | Event | From | Effect |
 |---|---|---|
@@ -85,15 +85,14 @@ The daemon's 2-second tick already sweeps the windows. It also reads the agent's
 
 ## Storage
 
-Migration `0004_status.sql`:
-- `tracks.waiting`: the agent's dialog state, `0` or `1`, with `waiting_at`.
-- `track_prs`, as above, keyed by track and URL.
+- `0004_waiting.sql`: `tracks.waiting`, the agent's dialog state, `0` or `1`.
+- `0005_prs.sql` (with the PRs): `track_prs`, as above, keyed by track and URL.
 
 ## Packages
 
 - **New: `hooks`:** the per-engine event mapping, the settings file and plugin it installs, and `tracks hook`'s payload reading. No UI imports.
 - `track`: `status.go`, the two groups, `Event` and `Apply`.
-- `store`: the migration, the waiting state and the PRs.
+- `store`: the migrations, the state and the PRs.
 - `tracks`: `Report`, the pane check and the PR poll; Create and Resume install the hooks.
 - `agents/claude`, `agents/cursor`: the `--settings` and `--plugin-dir` arguments.
 - `rpc`, `daemon`: the `report` method; the poll's timer.
@@ -124,6 +123,6 @@ Sync before building: the new `hooks` package.
 ## Delivery
 
 Three branches, each its own PR, rebased onto the last:
-1. **`feat/v2-status`:** this plan; `track` statuses and `Apply`; the migration; `Report` for created, resumed, ended and cleaned; Station and the details. Playable: statuses show for real tracks.
+1. **`feat/v2-status`:** this plan; `track` statuses and `Apply`; the `waiting` migration; `Report` for created, resumed, ended and cleaned; Station and the details. Playable: statuses show for real tracks.
 2. **`feat/v2-status-hooks`:** `hooks`, `tracks hook`, installing them; action required and back; the pane check; the footer badge.
 3. **`feat/v2-status-prs`:** `track_prs`, PRs from hooks, the poll; docs and the masterplan.

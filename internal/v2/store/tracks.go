@@ -9,7 +9,7 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting"
 
 // AddTrack stores t and its repos in one transaction.
 func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
@@ -18,9 +18,9 @@ func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt))
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting)
 	if err != nil {
 		return err
 	}
@@ -61,15 +61,15 @@ func (s *Store) EndedTracks(ctx context.Context, limit int) ([]track.Track, erro
 	return s.tracks(ctx, "WHERE closed_at IS NOT NULL ORDER BY closed_at DESC, created_at DESC LIMIT ?", limit)
 }
 
-// ReopenTrack records that id's window is open again, under name, with
-// its worktrees back.
-func (s *Store) ReopenTrack(ctx context.Context, id, name string) error {
-	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = NULL, cleaned_at = NULL, name = ? WHERE id = ?", name, id)
+// SetState records st as id's state.
+func (s *Store) SetState(ctx context.Context, id string, st track.State) error {
+	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = ?, cleaned_at = ?, waiting = ? WHERE id = ?",
+		millis(st.ClosedAt), millis(st.CleanedAt), st.Waiting, id)
 }
 
-// CleanTrack records that id's worktrees were removed at at.
-func (s *Store) CleanTrack(ctx context.Context, id string, at time.Time) error {
-	return s.updateTrack(ctx, id, "UPDATE tracks SET cleaned_at = ? WHERE id = ?", at.UnixMilli(), id)
+// Rename records that id's window is now called name.
+func (s *Store) Rename(ctx context.Context, id, name string) error {
+	return s.updateTrack(ctx, id, "UPDATE tracks SET name = ? WHERE id = ?", name, id)
 }
 
 // SetBranch records that track id's repo at position is on branch.
@@ -87,23 +87,6 @@ func (s *Store) updateTrack(ctx context.Context, id, query string, args ...any) 
 		return err
 	} else if n == 0 {
 		return ErrNotFound
-	}
-	return nil
-}
-
-// CloseTrack records that id's window closed at at. A track already
-// closed keeps its time.
-func (s *Store) CloseTrack(ctx context.Context, id string, at time.Time) error {
-	res, err := s.db.ExecContext(ctx, "UPDATE tracks SET closed_at = ? WHERE id = ? AND closed_at IS NULL", at.UnixMilli(), id)
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n == 0 {
-		if _, err := s.Track(ctx, id); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -171,7 +154,7 @@ func scanTrack(row scanner) (track.Track, error) {
 	var created int64
 	var closed, cleaned sql.NullInt64
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
-		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned)
+		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting)
 	t.Kind = track.Kind(kind)
 	t.CreatedAt = time.UnixMilli(created)
 	if closed.Valid {

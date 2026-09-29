@@ -66,7 +66,7 @@ func (s *Service) End(ctx context.Context, id string) error {
 			}
 		}
 	}
-	return s.Store.CloseTrack(ctx, id, s.now())
+	return s.Report(ctx, id, track.Ended)
 }
 
 // Sweep keeps the records in step with the windows: an open track
@@ -91,7 +91,7 @@ func (s *Service) Sweep(ctx context.Context) error {
 	for _, t := range open {
 		isOpen[t.ID] = true
 		if !live[t.ID] && !s.isBusy(t.ID) {
-			if err := s.Store.CloseTrack(ctx, t.ID, s.now()); err != nil {
+			if err := s.Report(ctx, t.ID, track.Ended); err != nil {
 				return err
 			}
 		}
@@ -107,7 +107,7 @@ func (s *Service) Sweep(ctx context.Context) error {
 			return err
 		}
 		if !t.Open() {
-			if err := s.Store.ReopenTrack(ctx, t.ID, in.Name); err != nil {
+			if err := s.reopen(ctx, t.ID, in.Name); err != nil {
 				return err
 			}
 		}

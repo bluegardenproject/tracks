@@ -33,9 +33,8 @@ type Store interface {
 	Track(ctx context.Context, id string) (track.Track, error)
 	OpenTracks(ctx context.Context) ([]track.Track, error)
 	EndedTracks(ctx context.Context, limit int) ([]track.Track, error)
-	CloseTrack(ctx context.Context, id string, at time.Time) error
-	ReopenTrack(ctx context.Context, id, name string) error
-	CleanTrack(ctx context.Context, id string, at time.Time) error
+	SetState(ctx context.Context, id string, st track.State) error
+	Rename(ctx context.Context, id, name string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 }
 
@@ -84,6 +83,8 @@ type Service struct {
 	claimed map[string]bool
 	// busy are the tracks being resumed, cleaned or ended.
 	busy map[string]bool
+	// reporting keeps one Report reading and writing a state at a time.
+	reporting sync.Mutex
 }
 
 // ended is how many ended tracks List returns, the most recent ones.
