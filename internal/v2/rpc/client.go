@@ -140,6 +140,13 @@ func (c Client) Archive(ctx context.Context, p ArchiveParams) ([]string, error) 
 	return r.Unsaved, c.Call(ctx, Archive, p, &r, nil)
 }
 
+// Derail returns the work that would be lost instead of deleting the
+// track, when p.Check or there's some and not p.Force.
+func (c Client) Derail(ctx context.Context, p DerailParams) ([]string, error) {
+	var r CleanResult
+	return r.Unsaved, c.Call(ctx, Derail, p, &r, nil)
+}
+
 // Clean returns the unsaved work it found instead of removing it,
 // unless p.Force.
 func (c Client) Clean(ctx context.Context, p CleanParams) ([]string, error) {

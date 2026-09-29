@@ -101,6 +101,10 @@ func (w watched) SetState(ctx context.Context, id string, st track.State) error 
 	return w.notify(w.Store.SetState(ctx, id, st))
 }
 
+func (w watched) DeleteTrack(ctx context.Context, id string) error {
+	return w.notify(w.Store.DeleteTrack(ctx, id))
+}
+
 func (w watched) Rename(ctx context.Context, id, name string) error {
 	return w.notify(w.Store.Rename(ctx, id, name))
 }

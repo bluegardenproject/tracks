@@ -39,6 +39,7 @@ type Store interface {
 	Filter(ctx context.Context) (track.Filter, error)
 	SetFilter(ctx context.Context, f track.Filter) error
 	SetState(ctx context.Context, id string, st track.State) error
+	DeleteTrack(ctx context.Context, id string) error
 	Rename(ctx context.Context, id, name string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
@@ -60,6 +61,10 @@ type Worktrees interface {
 	Branches(ctx context.Context, t track.Track) []track.Repo
 	// RemoveWorktrees removes the worktrees and keeps the branches.
 	RemoveWorktrees(ctx context.Context, id string, repos []track.Repo) error
+	// Lost is what Derail would lose; Derail removes the worktrees and
+	// a work track's branches.
+	Lost(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
+	Derail(ctx context.Context, t track.Track) error
 }
 
 // Windows opens and closes the tracks' windows.

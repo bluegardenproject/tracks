@@ -23,6 +23,7 @@ const (
 	Unarchive = "unarchive"
 	Filter    = "filter"
 	Report    = "report"
+	Derail    = "derail"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
@@ -141,6 +142,15 @@ type CleanParams struct {
 // worktrees even with unsaved work in them; the result is a CleanResult.
 type ArchiveParams struct {
 	ID    string `json:"id"`
+	Force bool   `json:"force,omitempty"`
+}
+
+// DerailParams names the ended track to delete for good. Check only
+// looks for work that would be lost; Force deletes it even with some.
+// The result is a CleanResult.
+type DerailParams struct {
+	ID    string `json:"id"`
+	Check bool   `json:"check,omitempty"`
 	Force bool   `json:"force,omitempty"`
 }
 
