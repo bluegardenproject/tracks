@@ -8,14 +8,19 @@
 - **When it's ready,** the popup closes and the user lands in the new track's window, on the agent pane.
 - **Esc while it's being created** closes the form, and creation goes on. The status line says when it's ready ("rate-bug is ready: Ctrl+b 3") or why it failed.
 - **A failure** rolls back what was made so far: the window, the worktrees and a Work track's new branch. The form stays open with the error, and Create tries again. Nothing is saved.
-- **The engine:** the form shows what runs the track above its buttons ("Runs on Claude Code, model opus"). With no engine added, Create says "Add an engine on the Engines tab first."
-- **Engines tab:** with both engines added, each box gets a **Make default** button, and the default one shows a **default** badge. With one engine added, it's the default.
+- **The engine:** new tracks run on Claude Code when it's added, else on Cursor. The form shows what runs the track above its buttons ("Runs on Claude Code, model opus"). With no engine added, Create says "Add an engine on the Engines tab first." A default engine per track type comes later.
 - **The track's window:**
   - The agent pane runs the engine with v1's prompt.
   - A terminal pane opens beside it when Terminal is ticked.
   - The window is named after the track's name, or else, for Doc, from the document's name, or else from the prompt, as in v1. A name already taken gets `-2`, `-3` and so on.
 - **Station** lists the tracks from the database while their window is open: name, kind, repos with branch and worktree, engine, model and session. End closes the window as before; the daemon records it.
 - **Station without tracks** keeps its layout: the Tracks frame with an empty list and an **Add new Track** button in its centre, which opens the New track form (Enter does too), and the Fast Track frame on the right.
+- **Repos in the form** are a select list instead of a checkbox list:
+  - The field starts as **Select repos**. Enter or a click opens the picker, where typing filters, and Space or a click ticks any number of repos. **OK** or Enter closes it, and so do Esc and a click outside; the ticks stay either way.
+  - The ticked repos show in a row under the field, each with an ✕ that removes it. Left and right walk them, and Enter or Backspace removes one.
+  - Review's **Repo** is the same field showing its one repo; the picker chooses one.
+- **Settings** gets a **Track** section above Fast Tracks, a placeholder until each track type gets its defaults.
+- **Overlay tokens:** the picker, and the popups' background and frames, use their own `overlay.*` tokens, which start from the values drawn before. `bg.overlay` becomes `overlay.bg`. What the popups hold keeps its tokens.
 
 ## How a track is created
 
@@ -119,15 +124,6 @@ CREATE INDEX track_repos_repo ON track_repos (repo_id);
 - **Performance:** Station's list is an indexed query on open tracks plus one window listing, every 2 s.
 - **Permissions:** prompts and session IDs are stored from now on, so the database follow-up is done here. The data folder becomes 0700, and the database 0600; SQLite gives its WAL and shared-memory files the database's mode. Backups get 0600 too.
 
-## Settings
-
-```yaml
-engines:
-  default: cursor   # written by Make default; without it, the only engine added, else Claude
-  claude: {...}
-  cursor: {...}
-```
-
 ## Packages
 
 New, to agree first:
@@ -141,11 +137,13 @@ New, to agree first:
 Changed:
 - `agents/`: the shared parts, meaning command-line quoting, the pane wrapper and the shared prompt texts.
 - `store`: the tracks tables and queries, and the permissions.
-- `settings`: the default engine.
+- `settings`: the engine new tracks run on.
+- `theme`: the `overlay` tokens; the picker, `ui/quickaccess` and `ui/themecreator`'s previews use them.
 - `trackwin`: a `@tracks_id` window option, and v1's kind names.
 - `platform`: the socket, lock, log and `bin` paths.
-- `ui/addtrack`: Create, progress, and the engine line.
-- `ui/tracksview`: Make default, and Station's empty state.
+- `ui/addtrack`: Create, progress, the engine line, the repos' select list, and the overlay frames.
+- `ui/widget`: the picker ticks several items when asked, with an OK button.
+- `ui/tracksview`: Station's empty state, and Settings' Track section.
 - `ui/source`: tracks from the daemon, and the Repositories tab's in-use check by repo ID.
 - `cli`: the daemon command, start and stop, the popup, and Station's source.
 
@@ -156,7 +154,7 @@ Changed:
 - Provisioning (env files, dependencies), submodules, dev servers and ports.
 - Failed creations saved as drafts.
 - The add-repo skill, the Cursor rule, and the commands the prompts mention.
-- Default models per kind; choosing the engine or model in the form.
+- Default engines and models per track type; choosing the engine or model in the form.
 - Repos written through the daemon; renaming a repo that tracks use.
 
 ## Tests
@@ -175,4 +173,4 @@ Changed:
 
 ## Delivery
 
-One branch, `feat/v2-create-track`, with these commits: this plan; `track` and `store`; the prompts in `agents`; `workspace`; `tracks`; `rpc` and `daemon`; the CLI and the form; Station and the Engines tab; docs.
+One branch, `feat/v2-create-track`, with these commits: this plan; `track` and `store`; the prompts in `agents`; `workspace`; `tracks`; `rpc` and `daemon`; the CLI and the form; Station; docs.

@@ -26,7 +26,7 @@
   | Doc review | Document, Repos for grounding (optional), Name, Sections, Candor, Prompt |
 
 - **The fields:**
-  - **Repos:** a checkbox list of the repos on the Repositories tab. Review picks exactly one. With no repos yet: "Add a repo on the Repositories tab first."
+  - **Repos:** a select list of the repos on the Repositories tab ([07](07-create-track.md) replaced the checkbox list). Review picks exactly one. With no repos yet: "Add a repo on the Repositories tab first."
   - **Name:** optional; it names the track's window. (v1 calls it the slug.)
   - **Terminal:** a checkbox, "Open a shell in the worktree, beside the agent."
   - **PR or branch** and **Document:** text inputs with v1's placeholders.
