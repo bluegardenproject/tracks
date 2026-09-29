@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
@@ -58,5 +59,41 @@ func TestCheckScreens(t *testing.T) {
 	check()
 	if status() != track.Active || f.windows.attention[window] {
 		t.Errorf("after two checks without the dialog the track is %s, marked %v", status().ID, f.windows.attention[window])
+	}
+}
+
+func TestCheckScreensOpensCursorDialogs(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	f.engines = settings.Engines{Cursor: &settings.Engine{}}
+	got, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, window := got.Track.ID, got.Window.ID
+	status := func() track.Status {
+		t.Helper()
+		if err := f.svc.CheckScreens(ctx); err != nil {
+			t.Fatal(err)
+		}
+		tr, err := f.store.Track(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr.Status()
+	}
+
+	f.windows.screens = map[string]string{window: "  → Add a follow-up"}
+	if status() != track.Active {
+		t.Fatal("no dialog, no waiting")
+	}
+	f.windows.screens[window] = " Run this command?\n  → Run (once) (y)"
+	if status() != track.ActionRequired || !f.windows.attention[window] {
+		t.Fatal("Cursor has no hook for an open dialog: the screen tells it")
+	}
+	f.windows.screens[window] = "  → Add a follow-up"
+	status()
+	if status() != track.Active {
+		t.Error("the closed dialog is told the same way as Claude's")
 	}
 }

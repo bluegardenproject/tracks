@@ -14,7 +14,8 @@ const closedAfter = 2
 
 // CheckScreens looks at the agent panes of tracks waiting on a dialog,
 // and reports those whose dialog closed without a hook saying so, such
-// as one dismissed with Esc.
+// as one dismissed with Esc. It also reports the dialogs that open on
+// engines without a hook for it.
 func (s *Service) CheckScreens(ctx context.Context) error {
 	open, err := s.Store.OpenTracks(ctx)
 	if err != nil {
@@ -31,14 +32,21 @@ func (s *Service) CheckScreens(ctx context.Context) error {
 	gone := map[string]int{}
 	for _, t := range open {
 		window, ok := windows[t.ID]
-		if !t.Waiting || !ok || s.isBusy(t.ID) {
+		if !(t.Waiting || hooks.ScreenOpens(t.Engine)) || !ok || s.isBusy(t.ID) {
 			continue
 		}
 		screen, err := s.Windows.Screen(window)
 		if err != nil {
 			continue
 		}
-		if dialog, known := hooks.DialogOpen(t.Engine, screen); !known || dialog {
+		dialog, known := hooks.DialogOpen(t.Engine, screen)
+		switch {
+		case !known || dialog == t.Waiting:
+			continue
+		case dialog:
+			if err := s.Report(ctx, t.ID, track.AgentWaiting); err != nil {
+				return err
+			}
 			continue
 		}
 		if gone[t.ID] = s.dialogGone(t.ID) + 1; gone[t.ID] >= closedAfter {
