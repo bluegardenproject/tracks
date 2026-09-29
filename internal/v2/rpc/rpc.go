@@ -16,6 +16,8 @@ const (
 	Create   = "create"
 	List     = "list"
 	End      = "end"
+	Resume   = "resume"
+	Clean    = "clean"
 )
 
 // Request is one call.
@@ -54,19 +56,33 @@ type CreateParams struct {
 	Client string `json:"client,omitempty"`
 }
 
-// CreateResult is the new track and its window.
+// CreateResult is the new or resumed track and its window.
 type CreateResult struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Window string `json:"window"`
 }
 
-// ListResult are the open tracks, in window order.
+// ListResult are the open tracks, in window order, then the most
+// recently ended ones.
 type ListResult struct {
 	Tracks []tracks.Listed `json:"tracks"`
 }
 
-// EndParams names the track to end.
+// EndParams names the track to end, or to resume.
 type EndParams struct {
 	ID string `json:"id"`
+}
+
+// CleanParams names the track to clean. Force removes its worktrees
+// even with unsaved work in them.
+type CleanParams struct {
+	ID    string `json:"id"`
+	Force bool   `json:"force,omitempty"`
+}
+
+// CleanResult is the unsaved work Clean found, one line per worktree,
+// such as "web: 3 changed files". Nothing was removed when there's some.
+type CleanResult struct {
+	Unsaved []string `json:"unsaved,omitempty"`
 }

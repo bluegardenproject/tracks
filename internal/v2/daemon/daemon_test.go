@@ -111,6 +111,13 @@ func TestDaemon(t *testing.T) {
 	if listed, err := client.List(ctx); err != nil || len(listed) != 0 {
 		t.Errorf("List = %v, %v", listed, err)
 	}
+	var p tracks.Problem
+	if _, err := client.Resume(ctx, "20260928-101500-abc123", nil); !errors.As(err, &p) {
+		t.Errorf("resuming a missing track: %v, want a problem", err)
+	}
+	if _, err := client.Clean(ctx, "20260928-101500-abc123", true); !errors.As(err, &p) {
+		t.Errorf("cleaning a missing track: %v, want a problem", err)
+	}
 
 	if err := client.Shutdown(ctx); err != nil {
 		t.Fatal(err)
