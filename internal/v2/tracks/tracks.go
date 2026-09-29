@@ -56,7 +56,6 @@ type Worktrees interface {
 	// re-creates.
 	Missing(t track.Track) []track.Repo
 	Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
-	Unsaved(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
 	// Branches are t's repos on the branches their worktrees are on.
 	Branches(ctx context.Context, t track.Track) []track.Repo
 	// RemoveWorktrees removes the worktrees and keeps the branches.
@@ -106,7 +105,7 @@ type Service struct {
 	// claimed are the window names of tracks being created or resumed,
 	// whose windows don't exist yet.
 	claimed map[string]bool
-	// busy are the tracks being resumed, cleaned or ended.
+	// busy are the tracks being resumed, archived or ended.
 	busy map[string]bool
 	// reporting keeps one Report reading and writing a state at a time.
 	reporting sync.Mutex
@@ -121,7 +120,7 @@ type Service struct {
 // ended is how many ended tracks List returns, the most recent ones.
 const ended = 100
 
-// hold claims track id for one Resume, Clean or End at a time, until
+// hold claims track id for one Resume, Archive or End at a time, until
 // release.
 func (s *Service) hold(ctx context.Context, id string) (t track.Track, release func(), err error) {
 	if t, err = s.Store.Track(ctx, id); errors.Is(err, store.ErrNotFound) {

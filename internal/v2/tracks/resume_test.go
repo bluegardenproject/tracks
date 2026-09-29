@@ -10,11 +10,10 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
-	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
 // ended creates a work track with a terminal, ends it and, when
-// cleaned, cleans it.
+// cleaned, archives and unarchives it, which leaves it cleaned.
 func (f *fixture) ended(t *testing.T, cleaned bool) track.Track {
 	ctx := context.Background()
 	got, err := f.svc.Create(ctx, Request{Kind: track.Work, Repos: []string{"api", "web"}, Prompt: "Fix it", Terminal: true}, func(string) {})
@@ -25,7 +24,10 @@ func (f *fixture) ended(t *testing.T, cleaned bool) track.Track {
 		t.Fatal(err)
 	}
 	if cleaned {
-		if _, err := f.svc.Clean(ctx, got.Track.ID, false); err != nil {
+		if _, err := f.svc.Archive(ctx, got.Track.ID, true); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.Unarchive(ctx, got.Track.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -179,56 +181,6 @@ func TestResumeCleaned(t *testing.T) {
 	}
 	if saved, _ := f.store.Track(ctx, tr.ID); !saved.Open() || saved.Cleaned() {
 		t.Errorf("resumed = %+v, want open and no longer cleaned", saved.State)
-	}
-}
-
-func TestClean(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t)
-	ask, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why"}, func(string) {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.svc.Clean(ctx, ask.Track.ID, true); err == nil || !strings.Contains(err.Error(), "has no worktrees") {
-		t.Errorf("cleaning an ask track: %v", err)
-	}
-	work, err := f.svc.Create(ctx, Request{Kind: track.Work, Repos: []string{"api"}, Prompt: "Fix it"}, func(string) {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.svc.Clean(ctx, work.Track.ID, true); err == nil || !strings.Contains(err.Error(), "End fix-it before") {
-		t.Errorf("cleaning an open track: %v", err)
-	}
-
-	id := work.Track.ID
-	if err := f.svc.End(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	f.worktrees.unsaved = []workspace.Unsaved{{Repo: "api", Changed: 3}}
-	if unsaved, err := f.svc.Unsaved(ctx, id); err != nil || len(unsaved) != 1 {
-		t.Fatalf("Unsaved = %v, %v", unsaved, err)
-	}
-	unsaved, err := f.svc.Clean(ctx, id, false)
-	if err != nil || len(unsaved) != 1 || unsaved[0].String() != "api: 3 changed files" {
-		t.Fatalf("Clean = %v, %v; want the unsaved work", unsaved, err)
-	}
-	if saved, _ := f.store.Track(ctx, id); saved.Cleaned() || len(f.worktrees.cleaned) != 0 {
-		t.Fatal("Clean removed worktrees with unsaved work")
-	}
-
-	f.worktrees.renamed = map[string]string{"api": "fix/login"}
-	if unsaved, err := f.svc.Clean(ctx, id, true); err != nil || len(unsaved) != 0 {
-		t.Fatalf("forced Clean = %v, %v", unsaved, err)
-	}
-	saved, _ := f.store.Track(ctx, id)
-	if !saved.Cleaned() || !slices.Equal(f.worktrees.cleaned, []string{id}) {
-		t.Errorf("after Clean: %+v, removed %v", saved, f.worktrees.cleaned)
-	}
-	if saved.Repos[0].Branch != "fix/login" {
-		t.Errorf("branch after Clean = %s, want the one the agent renamed it to", saved.Repos[0].Branch)
-	}
-	if _, err := f.svc.Clean(ctx, id, true); err != nil || len(f.worktrees.cleaned) != 1 {
-		t.Errorf("cleaning twice: %v, removed %v", err, f.worktrees.cleaned)
 	}
 }
 

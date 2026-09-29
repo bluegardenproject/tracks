@@ -45,17 +45,13 @@ func questionKeys(q question) []keyHelp {
 	case q.kind == askRecreate:
 		return []keyHelp{{"y", "re-create"}, {"n/Esc/Enter", "cancel"}}
 	case q.kind == askArchive && len(q.lines) > 0:
-		return []keyHelp{{"y", "remove and archive"}, {"n/Esc/Enter", "cancel"}}
+		return []keyHelp{{"y", "archive anyway"}, {"n/Esc/Enter", "cancel"}}
 	case q.kind == askArchive:
 		return []keyHelp{{"y/Enter", "archive"}, {"n/Esc", "cancel"}}
-	case q.kind == askDerail && len(q.lines) > 0:
-		return []keyHelp{{"y", "derail anyway"}, {"n/Esc/Enter", "cancel"}}
-	case q.kind == askDerail:
-		return []keyHelp{{"y", "derail"}, {"n/Esc/Enter", "cancel"}}
 	case len(q.lines) > 0:
-		return []keyHelp{{"y", "remove anyway"}, {"n/Esc/Enter", "cancel"}}
+		return []keyHelp{{"y", "derail anyway"}, {"n/Esc/Enter", "cancel"}}
 	}
-	return []keyHelp{{"y/Enter", "remove"}, {"n/Esc", "cancel"}}
+	return []keyHelp{{"y", "derail"}, {"n/Esc/Enter", "cancel"}}
 }
 
 // prefixKeys are the keys every window of the session has, behind the

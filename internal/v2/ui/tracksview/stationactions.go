@@ -13,9 +13,10 @@ import (
 // it returns them instead, one line per worktree, unless recreate.
 type ResumeFunc func(id string, recreate bool, progress func(string)) (missing []string, err error)
 
-// CleanFunc removes ended track id's worktrees. Unless force, it
-// returns the unsaved work it finds instead, one line per worktree.
-type CleanFunc func(id string, force bool) (unsaved []string, err error)
+// DiscardFunc archives or derails ended track id, removing its
+// worktrees and branches. Unless force, it returns the work that would
+// be lost instead, one line per repo.
+type DiscardFunc func(id string, force bool) (lost []string, err error)
 
 type (
 	// resumeEvent is a Resume's progress, or its end when done.
@@ -27,16 +28,15 @@ type (
 		err      error
 		events   <-chan resumeEvent
 	}
-	// checkedMsg is the unsaved work Clean's or Derail's check found in
-	// track id before kind; cleanedMsg is what Clean did, archivedMsg
-	// what Archive did, derailedMsg what Derail did.
+	// checkedMsg is the work archiving or derailing track id would
+	// lose, found before asking kind; archivedMsg is what Archive did,
+	// derailedMsg what Derail did.
 	checkedMsg struct {
 		id, name string
 		kind     asked
-		unsaved  []string
+		lost     []string
 		err      error
 	}
-	cleanedMsg  checkedMsg
 	archivedMsg checkedMsg
 	derailedMsg checkedMsg
 )
@@ -79,17 +79,17 @@ func (m Model) resumed(e resumeEvent) (Model, tea.Cmd) {
 	return m, m.loadTracks()
 }
 
-// checkUnsaved looks for unsaved work in t's worktrees, and then asks
-// kind.
-func (m Model) checkUnsaved(t source.Track, kind asked) (Model, tea.Cmd) {
-	if m.unsaved == nil {
+// checkLost looks for the work doing kind to t would lose, saying so
+// with checking, and then asks kind.
+func (m Model) checkLost(t source.Track, kind asked, checking string) (Model, tea.Cmd) {
+	if m.lostFn == nil {
 		return m, nil
 	}
-	unsaved := m.unsaved
-	m.station.notice = notice{text: "Checking the worktrees of " + t.Name + "…", busy: true}
+	lost := m.lostFn
+	m.station.notice = notice{text: checking, busy: true}
 	return m, func() tea.Msg {
-		found, err := unsaved(t.ID)
-		return checkedMsg{id: t.ID, name: t.Name, kind: kind, unsaved: found, err: err}
+		found, err := lost(t.ID)
+		return checkedMsg{id: t.ID, name: t.Name, kind: kind, lost: found, err: err}
 	}
 }
 
@@ -99,7 +99,7 @@ func (m Model) checked(msg checkedMsg) Model {
 		return m
 	}
 	m.station.notice = notice{}
-	return m.ask(question{id: msg.id, name: msg.name, kind: msg.kind, lines: msg.unsaved})
+	return m.ask(question{id: msg.id, name: msg.name, kind: msg.kind, lines: msg.lost})
 }
 
 // ask puts q to the user while its track is still the selected one.
@@ -108,31 +108,6 @@ func (m Model) ask(q question) Model {
 		m.station.asking = &q
 	}
 	return m
-}
-
-// clean removes q's worktrees, anyway when q listed unsaved work.
-func (m Model) clean(q question) tea.Cmd {
-	if m.cleanFn == nil {
-		return nil
-	}
-	clean := m.cleanFn
-	return func() tea.Msg {
-		found, err := clean(q.id, len(q.lines) > 0)
-		return cleanedMsg{id: q.id, name: q.name, unsaved: found, err: err}
-	}
-}
-
-func (m Model) cleaned(msg cleanedMsg) (Model, tea.Cmd) {
-	switch {
-	case msg.err != nil:
-		m.station.notice = notice{text: failure("Couldn't clean "+msg.name, msg.err), err: true}
-	case len(msg.unsaved) > 0:
-		// Work that appeared after the check: ask again.
-		m = m.ask(question{id: msg.id, name: msg.name, kind: askClean, lines: msg.unsaved})
-	default:
-		m.station.notice = notice{text: "Removed the worktrees of " + msg.name + "."}
-	}
-	return m, m.loadTracks()
 }
 
 // failure is err for the hint row: a problem is worded for the user

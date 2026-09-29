@@ -18,7 +18,6 @@ const (
 	List      = "list"
 	End       = "end"
 	Resume    = "resume"
-	Clean     = "clean"
 	Archive   = "archive"
 	Unarchive = "unarchive"
 	Filter    = "filter"
@@ -130,16 +129,9 @@ type ResumeResult struct {
 	Missing []string `json:"missing,omitempty"`
 }
 
-// CleanParams names the track to clean. Check only looks for unsaved
-// work; Force removes the worktrees even with some in them.
-type CleanParams struct {
-	ID    string `json:"id"`
-	Check bool   `json:"check,omitempty"`
-	Force bool   `json:"force,omitempty"`
-}
-
 // ArchiveParams names the ended track to archive. Force removes its
-// worktrees even with unsaved work in them; the result is a CleanResult.
+// worktrees and branches even with work that would be lost; the result
+// is a LostResult.
 type ArchiveParams struct {
 	ID    string `json:"id"`
 	Force bool   `json:"force,omitempty"`
@@ -147,15 +139,16 @@ type ArchiveParams struct {
 
 // DerailParams names the ended track to delete for good. Check only
 // looks for work that would be lost; Force deletes it even with some.
-// The result is a CleanResult.
+// The result is a LostResult.
 type DerailParams struct {
 	ID    string `json:"id"`
 	Check bool   `json:"check,omitempty"`
 	Force bool   `json:"force,omitempty"`
 }
 
-// CleanResult is the unsaved work Clean found, one line per worktree,
-// such as "web: 3 changed files". Nothing was removed when there's some.
-type CleanResult struct {
-	Unsaved []string `json:"unsaved,omitempty"`
+// LostResult is the work Archive or Derail would lose, one line per
+// repo, such as "web: 3 changed files". Nothing was removed when
+// there's some.
+type LostResult struct {
+	Lost []string `json:"lost,omitempty"`
 }

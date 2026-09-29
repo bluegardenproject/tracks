@@ -9,11 +9,11 @@ import (
 )
 
 func TestArchiveAsksFirst(t *testing.T) {
-	var unsaved []string
+	var lost []string
 	var archived []string
 	var forced []bool
 	m := withEnded(Config{
-		Unsaved: func(string) ([]string, error) { return unsaved, nil },
+		Lost: func(string) ([]string, error) { return lost, nil },
 		Archive: func(id string, force bool) ([]string, error) {
 			archived, forced = append(archived, id), append(forced, force)
 			return nil, nil
@@ -25,7 +25,7 @@ func TestArchiveAsksFirst(t *testing.T) {
 
 	m = settle(m, key('a'))
 	view := plainView(m)
-	for _, want := range []string{"Archive rate-bug? Its worktrees are", "removed; its branches stay.", " Archive ", " Cancel ", "y/Enter archive"} {
+	for _, want := range []string{"Archive rate-bug? Its worktrees and local", "branches are removed; what was pushed", " Archive ", " Cancel ", "y/Enter archive"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Archive should ask, missing %q:\n%s", want, view)
 		}
@@ -38,23 +38,23 @@ func TestArchiveAsksFirst(t *testing.T) {
 		t.Fatalf("confirmed: archived %v, hint row %q", forced, m.station.notice.text)
 	}
 
-	unsaved = []string{"web: 3 changed files"}
+	lost = []string{"web: 1 commit that exists nowhere else"}
 	m = settle(m, key('a'))
-	if view := plainView(m); !strings.Contains(view, "web: 3 changed files") || !strings.Contains(view, "y remove and archive") {
-		t.Fatalf("Archive should list the unsaved work:\n%s", view)
+	if view := plainView(m); !strings.Contains(view, "web: 1 commit that exists nowhere else") || !strings.Contains(view, "y archive anyway") {
+		t.Fatalf("Archive should list the work it would lose:\n%s", view)
 	}
 	if m = settle(m, tea.KeyPressMsg{Code: tea.KeyEnter}); len(forced) != 1 || m.station.asking != nil {
-		t.Fatalf("Enter should cancel removing unsaved work: archived %v", forced)
+		t.Fatalf("Enter should cancel losing work: archived %v", forced)
 	}
-	m = press(t, settle(m, key('a')), "Remove and archive")
+	m = press(t, settle(m, key('a')), "Archive anyway")
 	if !slices.Equal(forced, []bool{false, true}) {
-		t.Errorf("Remove and archive: archived %v, want it forced", forced)
+		t.Errorf("Archive anyway: archived %v, want it forced", forced)
 	}
 
-	// old-fix is cleaned already: nothing to remove, nothing to ask.
+	// old-fix's worktree and branch are removed already: nothing to ask.
 	m = settle(settle(m, tea.KeyPressMsg{Code: tea.KeyDown}), key('a'))
 	if m.station.asking != nil || !slices.Equal(archived, []string{"b", "b", "c"}) || m.station.notice.text != "Archived old-fix." {
-		t.Errorf("a closed track: archived %v, asking %+v, hint row %q", archived, m.station.asking, m.station.notice.text)
+		t.Errorf("a removed track: archived %v, asking %+v, hint row %q", archived, m.station.asking, m.station.notice.text)
 	}
 }
 

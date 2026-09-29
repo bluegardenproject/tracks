@@ -73,7 +73,7 @@ func (s *Service) End(ctx context.Context, id string) error {
 // Sweep keeps the records in step with the windows: an open track
 // whose window is gone is recorded as ended, and an ended one whose
 // window exists as open again, under the window's name. Busy tracks
-// are left to their Resume, Clean or End, and a track being created
+// are left to their Resume, Archive or End, and a track being created
 // has no row until its window is open.
 func (s *Service) Sweep(ctx context.Context) error {
 	open, err := s.Store.OpenTracks(ctx)

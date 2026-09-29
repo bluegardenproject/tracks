@@ -35,15 +35,7 @@ func derailQuestion(t source.Track, q question) ([]string, []action) {
 
 // checkDerail looks for the work derailing t would lose, and then asks.
 func (m Model) checkDerail(t source.Track) (Model, tea.Cmd) {
-	if m.lostFn == nil {
-		return m, nil
-	}
-	lost := m.lostFn
-	m.station.notice = notice{text: "Checking what derailing " + t.Name + " would lose…", busy: true}
-	return m, func() tea.Msg {
-		found, err := lost(t.ID)
-		return checkedMsg{id: t.ID, name: t.Name, kind: askDerail, unsaved: found, err: err}
-	}
+	return m.checkLost(t, askDerail, "Checking what derailing "+t.Name+" would lose…")
 }
 
 // derail deletes q's track, anyway when q listed work it would lose.
@@ -54,7 +46,7 @@ func (m Model) derail(q question) tea.Cmd {
 	derail := m.derailFn
 	return func() tea.Msg {
 		found, err := derail(q.id, len(q.lines) > 0)
-		return derailedMsg{id: q.id, name: q.name, kind: askDerail, unsaved: found, err: err}
+		return derailedMsg{id: q.id, name: q.name, kind: askDerail, lost: found, err: err}
 	}
 }
 
@@ -62,9 +54,9 @@ func (m Model) derailed(msg derailedMsg) (Model, tea.Cmd) {
 	switch {
 	case msg.err != nil:
 		m.station.notice = notice{text: failure("Couldn't derail "+msg.name, msg.err), err: true}
-	case len(msg.unsaved) > 0:
+	case len(msg.lost) > 0:
 		// Work that appeared after the check: ask again.
-		m = m.ask(question{id: msg.id, name: msg.name, kind: askDerail, lines: msg.unsaved})
+		m = m.ask(question{id: msg.id, name: msg.name, kind: askDerail, lines: msg.lost})
 	default:
 		m.station.notice = notice{text: "Derailed " + msg.name + "."}
 	}

@@ -55,12 +55,6 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Resume: func(id string, recreate bool, progress func(string)) ([]string, error) {
 					return resumeTrack(cmd.Context(), daemon, c, rpc.ResumeParams{ID: id, Recreate: recreate}, progress)
 				},
-				Unsaved: func(id string) ([]string, error) {
-					return cleanTrack(cmd.Context(), daemon, rpc.CleanParams{ID: id, Check: true})
-				},
-				Clean: func(id string, force bool) ([]string, error) {
-					return cleanTrack(cmd.Context(), daemon, rpc.CleanParams{ID: id, Force: force})
-				},
 				Archive: func(id string, force bool) ([]string, error) {
 					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
 				},
@@ -157,20 +151,12 @@ func resumeTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, p rpc.
 	return nil, nil
 }
 
-func cleanTrack(ctx context.Context, daemon daemonCalls, p rpc.CleanParams) (unsaved []string, err error) {
+func archiveTrack(ctx context.Context, daemon daemonCalls, p rpc.ArchiveParams) (lost []string, err error) {
 	err = daemon.do(ctx, func(client rpc.Client) (err error) {
-		unsaved, err = client.Clean(ctx, p)
+		lost, err = client.Archive(ctx, p)
 		return err
 	})
-	return unsaved, err
-}
-
-func archiveTrack(ctx context.Context, daemon daemonCalls, p rpc.ArchiveParams) (unsaved []string, err error) {
-	err = daemon.do(ctx, func(client rpc.Client) (err error) {
-		unsaved, err = client.Archive(ctx, p)
-		return err
-	})
-	return unsaved, err
+	return lost, err
 }
 
 func derailTrack(ctx context.Context, daemon daemonCalls, p rpc.DerailParams) (lost []string, err error) {

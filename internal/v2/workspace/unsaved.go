@@ -53,25 +53,6 @@ func count(n int, noun string) string {
 	return strconv.Itoa(n) + " " + noun + "s"
 }
 
-// Unsaved checks t's worktrees for work that exists nowhere else, one
-// entry per worktree that has some. Worktrees already gone are skipped.
-func (w *Worktrees) Unsaved(ctx context.Context, t track.Track) ([]Unsaved, error) {
-	var out []Unsaved
-	for _, r := range t.Repos {
-		if r.Worktree == "" || !exists(r.Worktree) {
-			continue
-		}
-		u, err := unsaved(ctx, r, t.Kind == track.Review)
-		if err != nil {
-			return nil, fmt.Errorf("check the worktree for %s: %w", r.Name, err)
-		}
-		if u.Changed+u.Untracked+u.Commits > 0 {
-			out = append(out, u)
-		}
-	}
-	return out, nil
-}
-
 func unsaved(ctx context.Context, r track.Repo, detached bool) (Unsaved, error) {
 	wt := git.NewWorktreeClient(r.Worktree)
 	u := Unsaved{Repo: r.Name}
