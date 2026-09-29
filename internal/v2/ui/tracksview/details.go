@@ -113,6 +113,9 @@ func (m Model) details(width int) ([]string, []hit) {
 	muted := func(s string) string { return m.fg(theme.TextMuted).Render(s) }
 
 	about := muted(t.Kind+" · ") + m.fg(theme.Token(t.Status.Token)).Render(t.Status.Label)
+	if t.PRStatus.Label != "" {
+		about += muted(" · ") + m.fg(theme.Token(t.PRStatus.Token)).Render(t.PRStatus.Label)
+	}
 	name := m.fg(theme.TextDefault).Bold(true).Render(t.Name)
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	number := muted("none")
@@ -147,8 +150,8 @@ func (m Model) details(width int) ([]string, []hit) {
 	if t.Session != "" {
 		session = muted(shorten(t.Session, width-labelWidth))
 	}
-	if t.PR != nil {
-		pr = value(fmt.Sprintf("#%d", t.PR.Number)) + muted(" "+t.PR.State)
+	if len(t.PRs) > 0 {
+		pr = prList(t.PRs, value, muted)
 	}
 	lines = append(lines, label("Engine")+engine, label("Session")+session, label("PR")+pr, "")
 
@@ -229,7 +232,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 	case actionCopySession:
 		return t.Session != ""
 	case actionOpenPR:
-		return t.PR != nil && t.PR.URL != ""
+		_, ok := t.MainPR()
+		return ok
 	case actionResume:
 		return t.Status != track.Closed
 	case actionClean:
@@ -315,10 +319,30 @@ func (m Model) act(id actionID) tea.Cmd {
 		return run(func() error { return m.open(t.Number) }, "", "Couldn't switch", false)
 	case id == actionEnd && m.end != nil:
 		return run(func() error { return m.end(t.Number) }, "Ended "+t.Name+".", "Couldn't end "+t.Name, true)
-	case id == actionOpenPR && m.openURL != nil && t.PR != nil:
-		return run(func() error { return m.openURL(t.PR.URL) }, "", "Couldn't open the pull request", false)
+	case id == actionOpenPR && m.openURL != nil:
+		if pr, ok := t.MainPR(); ok {
+			return run(func() error { return m.openURL(pr.URL) }, "", "Couldn't open the pull request", false)
+		}
 	}
 	return nil
+}
+
+// prList is prs as "#12 open", with each repo's name when they're in
+// several repos.
+func prList(prs []source.PR, value, muted func(string) string) string {
+	several := false
+	for _, p := range prs {
+		several = several || p.Repo != prs[0].Repo
+	}
+	parts := make([]string, len(prs))
+	for i, p := range prs {
+		name := ""
+		if several {
+			_, name, _ = strings.Cut(p.Repo, "/")
+		}
+		parts[i] = value(fmt.Sprintf("%s#%d", name, p.Number)) + muted(" "+p.State)
+	}
+	return strings.Join(parts, muted(", "))
 }
 
 // shorten writes the home directory as ~ and cuts s from the left to

@@ -111,7 +111,15 @@ func cells(t source.Track) []string {
 	if t.Cost > 0 {
 		cost = fmt.Sprintf("$%.2f", t.Cost)
 	}
-	return []string{t.Name, t.Kind, t.Status.Label, model, cost}
+	return []string{t.Name, t.Kind, statusLabel(t), model, cost}
+}
+
+// statusLabel is t's track status, then its PR status when it has PRs.
+func statusLabel(t source.Track) string {
+	if t.PRStatus.Label == "" {
+		return t.Status.Label
+	}
+	return t.Status.Label + " · " + t.PRStatus.Label
 }
 
 func (m Model) loadTracks(poll bool) tea.Cmd {
