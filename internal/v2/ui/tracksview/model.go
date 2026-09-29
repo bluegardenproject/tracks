@@ -7,7 +7,7 @@
 package tracksview
 
 import (
-	"time"
+	"context"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
@@ -27,6 +27,10 @@ type Config struct {
 	Version string
 	Theme   theme.Theme // the applied theme
 	Tracks  source.Source
+	// Watch calls changed once connected to the daemon and after each
+	// change to the tracks, until the connection breaks; nil reads the
+	// tracks once.
+	Watch func(ctx context.Context, changed func()) error
 	// Open switches to a track, End closes it.
 	Open, End TrackFunc
 	// Resume starts an ended track again. Unsaved is Clean's check: the
@@ -68,6 +72,8 @@ type Model struct {
 	version       string
 	palette       style.Palette
 	source        source.Source
+	watchFn       func(ctx context.Context, changed func()) error
+	changes       chan watchMsg // from watchFn, nil without it
 	open, end     TrackFunc
 	resume        ResumeFunc
 	unsaved       func(id string) ([]string, error)
@@ -110,12 +116,16 @@ func New(c Config) Model {
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, engines: newEnginesTab()}
+	if c.Watch != nil {
+		m.watchFn, m.changes = c.Watch, make(chan watchMsg, 1)
+	}
 	return m.showRepo(-1)
 }
 
-// Init reads the tracks, repos and themes.
+// Init reads the tracks, repos and themes, and follows the tracks'
+// changes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadTracks(true), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory())
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory())
 }
 
 // Update handles resizes, data and input. The Tracks window never quits
@@ -138,12 +148,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.settings.creator.SetSize(m.sectionWidth(), m.sectionHeight())
 		m = m.scrollStation().scrollRepos()
 	case tracksMsg:
-		if !msg.poll {
-			return m.setTracks(msg), nil
-		}
-		return m.setTracks(msg), tea.Tick(refreshEvery, func(time.Time) tea.Msg { return refreshMsg{} })
-	case refreshMsg:
-		return m, m.loadTracks(true)
+		return m.setTracks(msg), nil
+	case watchMsg:
+		return m.watched(msg)
 	case doneMsg:
 		return m.done(msg)
 	case resumeEvent:

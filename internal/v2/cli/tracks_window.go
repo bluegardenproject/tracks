@@ -47,6 +47,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Version: version,
 				Theme:   t,
 				Tracks:  source.Daemon{Station: daemon.station},
+				Watch:   daemon.watch,
 				Open: func(number int) error {
 					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
 				},

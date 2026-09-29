@@ -75,7 +75,7 @@ func (m Model) resumed(e resumeEvent) (Model, tea.Cmd) {
 	default:
 		m.station.notice = notice{text: "Resumed " + e.name + "."}
 	}
-	return m, m.loadTracks(false)
+	return m, m.loadTracks()
 }
 
 // checkUnsaved looks for unsaved work in t's worktrees, and then asks
@@ -131,7 +131,7 @@ func (m Model) cleaned(msg cleanedMsg) (Model, tea.Cmd) {
 	default:
 		m.station.notice = notice{text: "Removed the worktrees of " + msg.name + "."}
 	}
-	return m, m.loadTracks(false)
+	return m, m.loadTracks()
 }
 
 // failure is err for the hint row: a problem is worded for the user
