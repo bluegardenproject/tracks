@@ -32,8 +32,8 @@ func TestEndingAsksFirst(t *testing.T) {
 	m = run(m, tea.KeyPressMsg{Code: 'n'})
 	m = clickButton(t, m, "End")
 	m = clickButton(t, m, "Cancel")
-	if len(ended) != 0 || m.station.confirming {
-		t.Fatalf("cancelled twice, yet ended %v (asking: %v)", ended, m.station.confirming)
+	if len(ended) != 0 || m.station.asking != nil {
+		t.Fatalf("cancelled twice, yet ended %v (asking: %v)", ended, m.station.asking)
 	}
 
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})

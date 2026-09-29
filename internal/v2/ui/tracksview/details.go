@@ -21,10 +21,13 @@ type actionID int
 const (
 	actionOpen actionID = iota
 	actionEnd
+	actionResume
+	actionClean
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
 	actionConfirmEnd
+	actionConfirmClean
 	actionCancel
 )
 
@@ -37,18 +40,48 @@ type action struct {
 }
 
 var (
-	actions = []action{
+	// openActions are an open track's buttons, endedActions an ended
+	// one's.
+	openActions = []action{
 		{actionOpen, "Open", "o", 0},
 		{actionEnd, "End", "e", 0},
 		{actionCopyPath, "Copy path", "c", 0},
 		{actionCopySession, "Copy session", "s", 5},
 		{actionOpenPR, "Open PR", "p", 5},
 	}
-	confirmActions = []action{
+	endedActions = append([]action{
+		{actionResume, "Resume", "r", 0},
+		{actionClean, "Clean", "l", 1},
+	}, openActions[2:]...)
+	confirmEnd = []action{
 		{actionConfirmEnd, "End track", "y", -1},
 		{actionCancel, "Cancel", "n", -1},
 	}
+	confirmClean = []action{
+		{actionConfirmClean, "Remove", "y", -1},
+		{actionCancel, "Cancel", "n", -1},
+	}
+	confirmCleanAnyway = []action{
+		{actionConfirmClean, "Remove anyway", "y", -1},
+		{actionCancel, "Cancel", "n", -1},
+	}
 )
+
+// actionsFor are t's buttons.
+func actionsFor(t source.Track) []action {
+	if t.Open() {
+		return openActions
+	}
+	return endedActions
+}
+
+// mainAction is what Enter and a double click do to t.
+func mainAction(t source.Track) actionID {
+	if t.Open() {
+		return actionOpen
+	}
+	return actionResume
+}
 
 // hit is where a button is drawn in the details panel.
 type hit struct {
@@ -71,7 +104,11 @@ func (m Model) details(width int) ([]string, []hit) {
 	about := muted(t.Kind + " · " + t.Status)
 	name := m.fg(theme.TextDefault).Bold(true).Render(t.Name)
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
-	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("ID") + value(strconv.Itoa(t.Number))}
+	number := muted("none")
+	if t.Number > 0 {
+		number = value(strconv.Itoa(t.Number))
+	}
+	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("ID") + number}
 
 	for i, r := range t.Repos {
 		l := label("")
@@ -82,7 +119,11 @@ func (m Model) details(width int) ([]string, []hit) {
 		if r.Branch != "" {
 			line += "  " + m.fg(theme.TextAccent).Render(r.Branch)
 		}
-		lines = append(lines, line, label("")+muted(shorten(r.Path, width-labelWidth)))
+		path := muted(shorten(r.Path, width-labelWidth))
+		if r.Removed {
+			path = muted("removed")
+		}
+		lines = append(lines, line, label("")+path)
 	}
 	engine := muted("unknown")
 	if t.Engine != "" {
@@ -100,10 +141,22 @@ func (m Model) details(width int) ([]string, []hit) {
 	}
 	lines = append(lines, label("Engine")+engine, label("Session")+session, label("PR")+pr, "")
 
-	buttons := actions
-	if m.station.confirming {
-		lines = append(lines, m.fg(theme.StateWarningText).Render("End "+t.Name+"? Its window and agent close."), "")
-		buttons = confirmActions
+	buttons := actionsFor(t)
+	if q := m.station.asking; q != nil {
+		var ask []string
+		switch {
+		case !q.clean:
+			ask, buttons = []string{"End " + t.Name + "? Its window and agent close."}, confirmEnd
+		case len(q.unsaved) > 0:
+			ask, buttons = q.unsaved, confirmCleanAnyway
+		default:
+			ask, buttons = []string{"Remove the worktrees of " + t.Name + "? Its branches stay."}, confirmClean
+		}
+		warn := m.fg(theme.StateWarningText).Width(width)
+		for _, a := range ask {
+			lines = append(lines, strings.Split(warn.Render(a), "\n")...)
+		}
+		lines = append(lines, "")
 	}
 	row, hits := m.buttonRows(buttons, t, width, len(lines))
 	return append(lines, row...), hits
@@ -132,7 +185,7 @@ func (m Model) buttonRows(buttons []action, t source.Track, width, top int) ([]s
 	line, col := "", 0
 	for _, a := range buttons {
 		button := widget.Button{Label: a.label, Hot: a.hot, Disabled: !m.enabled(a.id, t), Hover: a.id == m.station.hoverButton}
-		if a.id == actionConfirmEnd {
+		if a.id == actionConfirmEnd || a.id == actionConfirmClean {
 			button.Kind = widget.ButtonDanger
 		}
 		b, w := button.View(m.palette), button.Width()
@@ -160,6 +213,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return t.Session != ""
 	case actionOpenPR:
 		return t.PR != nil && t.PR.URL != ""
+	case actionClean:
+		return t.Cleanable
 	}
 	return true
 }
@@ -192,11 +247,24 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	}
 	switch id {
 	case actionEnd:
-		m.station.confirming = true
+		m.station.asking = &question{id: t.ID, name: t.Name}
 		return m, nil, true
 	case actionCancel:
-		m.station.confirming = false
+		m.station.asking = nil
 		return m, nil, true
+	case actionResume:
+		next, cmd := m.startResume(t)
+		return next, cmd, true
+	case actionClean:
+		next, cmd := m.checkClean(t)
+		return next, cmd, true
+	case actionConfirmClean:
+		q := m.station.asking
+		m.station.asking = nil
+		if q == nil {
+			return m, nil, true
+		}
+		return m, m.clean(*q), true
 	case actionCopyPath:
 		m.station.notice = notice{text: "Copied the worktree path."}
 		return m, tea.SetClipboard(t.Repos[0].Path), true
@@ -204,7 +272,7 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 		m.station.notice = notice{text: "Copied the session ID."}
 		return m, tea.SetClipboard(t.Session), true
 	case actionConfirmEnd:
-		m.station.confirming = false
+		m.station.asking = nil
 		return m, m.act(actionEnd), true
 	}
 	return m, m.act(id), true

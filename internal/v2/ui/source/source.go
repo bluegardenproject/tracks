@@ -11,11 +11,17 @@ import (
 
 // Track is what screens show about a track.
 type Track struct {
-	Number int // the track's window index, as the footer and keys use it
+	ID string
+	// Number is the track's window index, as the footer and keys use
+	// it; 0 for an ended track, which has no window.
+	Number int
 	Name   string
 	Kind   string
 	Status string
-	Repos  []Repo
+	// Cleanable says Clean can remove the worktrees: the track ended and
+	// has some.
+	Cleanable bool
+	Repos     []Repo
 	// Engine is the agent CLI, Model its model; Session is the agent's
 	// session ID, which resumes it.
 	Engine, Model, Session string
@@ -24,11 +30,13 @@ type Track struct {
 }
 
 // Repo is one repository of a track; Path is its worktree, or the
-// primary checkout for a track without worktrees.
+// primary checkout for a track without worktrees. Removed says Clean
+// removed the worktree; Path is empty then.
 type Repo struct {
-	Name   string
-	Branch string
-	Path   string
+	Name    string
+	Branch  string
+	Path    string
+	Removed bool
 }
 
 // PR is a track's pull request.
@@ -43,15 +51,23 @@ type Source interface {
 	Tracks(ctx context.Context) ([]Track, error)
 }
 
-// Running is the status every track has until the status model exists.
-const Running = "running"
+// The statuses until the status model exists: an open track is
+// running.
+const (
+	Running = "running"
+	Ended   = "ended"
+)
 
-// Daemon reads the open tracks from the daemon, with List.
+// Open reports whether t has a window.
+func (t Track) Open() bool { return t.Status != Ended }
+
+// Daemon reads the tracks from the daemon, with List.
 type Daemon struct {
 	List func(ctx context.Context) ([]tracks.Listed, error)
 }
 
-// Tracks lists the open tracks in window order.
+// Tracks lists the open tracks in window order, then the ended ones,
+// most recently ended first.
 func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 	listed, err := d.List(ctx)
 	if err != nil {
@@ -62,12 +78,20 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 		repos := make([]Repo, len(l.Repos))
 		for j, r := range l.Repos {
 			repos[j] = Repo{Name: r.Name, Branch: r.Branch, Path: r.Dir()}
+			if l.Cleaned() && r.Worktree != "" {
+				repos[j].Path, repos[j].Removed = "", true
+			}
 		}
 		engine := l.Engine
 		if e, ok := agents.ByID(l.Engine); ok {
 			engine = e.Name
 		}
-		out[i] = Track{Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: Running, Repos: repos,
+		status := Running
+		if !l.Open() {
+			status = Ended
+		}
+		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: status,
+			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session}
 	}
 	return out, nil
