@@ -163,6 +163,7 @@ type fixture struct {
 	windows   *fakeWindows
 	engine    *fakeEngine
 	engines   settings.Engines
+	types     settings.Tracks
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -189,7 +190,7 @@ func newFixture(t *testing.T) *fixture {
 	n := 0
 	f.svc = &Service{
 		Store: f.store, Worktrees: f.worktrees, Windows: f.windows,
-		Settings: func() (settings.Settings, error) { return settings.Settings{Engines: f.engines}, nil },
+		Settings: func() (settings.Settings, error) { return settings.Settings{Engines: f.engines, Tracks: f.types}, nil },
 		Engines:  map[string]Engine{"claude": f.engine, "cursor": f.engine},
 		Now:      func() time.Time { return time.UnixMilli(1_790_000_000_000) },
 		NewID: func() string {
@@ -313,6 +314,49 @@ func TestCreateChecks(t *testing.T) {
 				t.Error("a rejected request made something")
 			}
 		})
+	}
+}
+
+func TestCreateRunsOnTheTypesAgent(t *testing.T) {
+	ctx := context.Background()
+	doc := filepath.Join(t.TempDir(), "spec.md")
+	if err := os.WriteFile(doc, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t)
+	f.engines = settings.Engines{Claude: &settings.Engine{Model: "opus"}, Cursor: &settings.Engine{Model: "gpt-5"}}
+	f.types.Set("ask", &settings.TrackType{Engine: "cursor"})
+	f.types.Set("plan", &settings.TrackType{Engine: "claude", Model: "sonnet"})
+	for _, c := range []struct {
+		kind          track.Kind
+		engine, model string
+	}{
+		{track.Ask, "cursor", "gpt-5"},
+		{track.Plan, "claude", "sonnet"},
+		{track.Doc, "claude", "opus"},
+	} {
+		req := Request{Kind: c.kind, Prompt: "Why"}
+		if c.kind == track.Doc {
+			req.Document = doc
+		}
+		got, err := f.svc.Create(ctx, req, func(string) {})
+		if err != nil {
+			t.Fatalf("%s: %v", c.kind, err)
+		}
+		if got.Track.Engine != c.engine || got.Track.Model != c.model {
+			t.Errorf("%s runs on %s, %q; want %s, %q", c.kind, got.Track.Engine, got.Track.Model, c.engine, c.model)
+		}
+	}
+
+	f.engines.Cursor = nil
+	opened := len(f.windows.opened)
+	_, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why"}, func(string) {})
+	var p Problem
+	if !errors.As(err, &p) || err.Error() != "Add Cursor on the Engines tab, or pick another agent for Ask tracks in Settings → Tracks." {
+		t.Errorf("an agent that isn't added: %v", err)
+	}
+	if len(f.windows.opened) != opened {
+		t.Error("a refused create opened a window")
 	}
 }
 
