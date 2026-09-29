@@ -24,7 +24,7 @@ func (s *Service) Derail(ctx context.Context, id string, force bool) ([]workspac
 				return lost, err
 			}
 		}
-		if err := s.Worktrees.Derail(ctx, t); err != nil {
+		if err := s.Worktrees.Discard(ctx, t); err != nil {
 			return nil, err
 		}
 	}

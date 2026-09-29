@@ -109,7 +109,7 @@ func (w *fakeWorktrees) Lost(context.Context, track.Track) ([]workspace.Unsaved,
 	return w.lost, nil
 }
 
-func (w *fakeWorktrees) Derail(_ context.Context, t track.Track) error {
+func (w *fakeWorktrees) Discard(_ context.Context, t track.Track) error {
 	w.derailed = append(w.derailed, t.ID)
 	return nil
 }

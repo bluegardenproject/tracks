@@ -10,7 +10,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-func TestCleanAndRestoreWork(t *testing.T) {
+func TestRemoveAndRestoreWork(t *testing.T) {
 	isolate(t)
 	ctx := context.Background()
 	root := t.TempDir()
@@ -23,9 +23,6 @@ func TestCleanAndRestoreWork(t *testing.T) {
 	}
 	tr.Repos = repos
 	wt := repos[0].Worktree
-	if u, err := w.Unsaved(ctx, tr); err != nil || len(u) != 0 {
-		t.Fatalf("a fresh worktree has unsaved work %v, %v", u, err)
-	}
 
 	if err := os.WriteFile(filepath.Join(wt, "rates.go"), []byte("package rates\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -37,10 +34,10 @@ func TestCleanAndRestoreWork(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	u, err := w.Unsaved(ctx, tr)
+	u, err := w.Lost(ctx, tr)
 	want := "api: 1 changed file, 1 untracked file and 1 commit that exists nowhere else"
 	if err != nil || len(u) != 1 || u[0].String() != want {
-		t.Fatalf("Unsaved = %v, %v; want %q", u, err, want)
+		t.Fatalf("Lost = %v, %v; want %q", u, err, want)
 	}
 
 	if err := w.RemoveWorktrees(ctx, tr.ID, tr.Repos); err != nil {
@@ -50,7 +47,7 @@ func TestCleanAndRestoreWork(t *testing.T) {
 		t.Errorf("the track's folder is still there: %v", err)
 	}
 	if out := run(t, api.Path, "branch", "--list", repos[0].Branch); out == "" {
-		t.Error("Clean removed the branch")
+		t.Error("RemoveWorktrees removed the branch")
 	}
 
 	var steps []string
@@ -72,15 +69,52 @@ func TestCleanAndRestoreWork(t *testing.T) {
 	if b := w.Branches(ctx, tr); b[0].Branch != "fix/rates" || tr.Repos[0].Branch == "fix/rates" {
 		t.Errorf("Branches = %+v, want the renamed branch in a copy", b)
 	}
-	if err := w.RemoveWorktrees(ctx, tr.ID, tr.Repos); err != nil {
+}
+
+func TestRestoreDeletedBranch(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	api := repo(t, root, "api")
+	w := &Worktrees{Root: filepath.Join(root, "worktrees")}
+	tr := track.Track{ID: "20260928-101500-abc123", Kind: track.Work, Repos: []track.Repo{api}}
+	repos, err := w.Add(ctx, tr, noProgress)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.Restore(ctx, tr, noProgress); err == nil || !strings.Contains(err.Error(), "no longer exists in api") {
-		t.Errorf("restoring onto a deleted branch: %v", err)
+	tr.Repos = repos
+	wt, branch := repos[0].Worktree, repos[0].Branch
+	run(t, wt, "commit", "-q", "--allow-empty", "-m", "rates")
+	run(t, wt, "push", "-q", "origin", branch)
+	if err := w.Discard(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+
+	var steps []string
+	if _, err := w.Restore(ctx, tr, func(s string) { steps = append(steps, s) }); err != nil {
+		t.Fatalf("restoring from the pushed branch: %v", err)
+	}
+	if s := subject(t, wt); s != "rates" || run(t, wt, "branch", "--show-current") != branch {
+		t.Errorf("restored from origin at %q on %s", s, run(t, wt, "branch", "--show-current"))
+	}
+	if last := steps[len(steps)-1]; last != "Re-creating "+branch+" in api from origin/"+branch+"…" {
+		t.Errorf("last step = %q", last)
+	}
+
+	// Never pushed: the branch starts again from the base.
+	if err := w.Discard(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+	run(t, api.Path, "push", "-q", "origin", "--delete", branch)
+	if _, err := w.Restore(ctx, tr, noProgress); err != nil {
+		t.Fatalf("restoring from the base: %v", err)
+	}
+	if s := subject(t, wt); s != "base" || run(t, wt, "branch", "--show-current") != branch {
+		t.Errorf("restored from the base at %q on %s", s, run(t, wt, "branch", "--show-current"))
 	}
 }
 
-func TestCleanAndRestoreReview(t *testing.T) {
+func TestRemoveAndRestoreReview(t *testing.T) {
 	isolate(t)
 	ctx := context.Background()
 	root := t.TempDir()
@@ -93,12 +127,12 @@ func TestCleanAndRestoreReview(t *testing.T) {
 	}
 	tr.Repos = repos
 	wt := repos[0].Worktree
-	if u, err := w.Unsaved(ctx, tr); err != nil || len(u) != 0 {
-		t.Fatalf("the pull request's own commits count as unsaved: %v, %v", u, err)
+	if u, err := w.Lost(ctx, tr); err != nil || len(u) != 0 {
+		t.Fatalf("the pull request's own commits count as lost: %v, %v", u, err)
 	}
 	run(t, wt, "commit", "-q", "--allow-empty", "-m", "a fix")
-	if u, err := w.Unsaved(ctx, tr); err != nil || len(u) != 1 || u[0].Commits != 1 {
-		t.Fatalf("a commit on the checkout: Unsaved = %v, %v", u, err)
+	if u, err := w.Lost(ctx, tr); err != nil || len(u) != 1 || u[0].Commits != 1 {
+		t.Fatalf("a commit on the checkout: Lost = %v, %v", u, err)
 	}
 
 	if err := w.RemoveWorktrees(ctx, tr.ID, tr.Repos); err != nil {
