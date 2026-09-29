@@ -25,8 +25,8 @@ This repo holds two apps. **v1** is everything outside `internal/v2/` and ships 
 - `ui/source/` the data screens read (tracks, repos, themes, engines); tracks come from the daemon
 - `store/` SQLite: schema, migrations (`migrations/*.sql`, one per change), queries · `repos/` rules for adding, changing and removing repos
 - `agents/` the agent CLIs (engines): finding one, its version, its models, its MCP servers, and the pane command a track runs · `agents/claude/`, `agents/cursor/` each engine's command line, v1's prompts and session
-- `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing and ending tracks · `workspace/` a track's git worktrees
-- `daemon/` the v2 daemon: lock, socket, helpers, closing tracks whose window is gone · `rpc/` the daemon's protocol and client
+- `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
+- `daemon/` the v2 daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client
 - `ui/widget/` UI pieces more than one screen uses
 - Imports point downwards. The planned layout is in the masterplan; add packages here when they land.
 
