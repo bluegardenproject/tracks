@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 )
 
@@ -34,6 +35,7 @@ type (
 	// tracksMsg carries the tracks; poll schedules the next read.
 	tracksMsg struct {
 		tracks []source.Track
+		filter track.Filter
 		err    error
 		poll   bool
 	}
@@ -49,7 +51,8 @@ type (
 // station is the Station tab's state.
 type station struct {
 	tracks    []source.Track
-	err       error // reading the tracks failed
+	filter    track.Filter // the tracks are under; the zero Filter for none
+	err       error        // reading the tracks failed
 	selected  int
 	offset    int // first row shown
 	lastClick time.Time
@@ -58,6 +61,7 @@ type station struct {
 	// hoverButton is the details button under the mouse, -1 for none.
 	hoverButton actionID
 	hoverAdd    bool // the mouse is on Add new Track
+	hoverClear  bool // the mouse is on Clear filter
 	notice      notice
 }
 
@@ -131,13 +135,16 @@ func (m Model) loadTracks(poll bool) tea.Cmd {
 	}
 	src := m.source
 	return func() tea.Msg {
-		tracks, err := src.Tracks(context.Background())
-		return tracksMsg{tracks, err, poll}
+		tracks, f, err := src.Tracks(context.Background())
+		return tracksMsg{tracks, f, err, poll}
 	}
 }
 
 func (m Model) setTracks(msg tracksMsg) Model {
 	m.station.tracks, m.station.err = msg.tracks, msg.err
+	if msg.err == nil {
+		m.station.filter = msg.filter
+	}
 	m.station.selected = min(m.station.selected, max(0, len(msg.tracks)-1))
 	return m.scrollStation()
 }
@@ -166,7 +173,7 @@ func (m Model) done(msg doneMsg) (Model, tea.Cmd) {
 // doesn't use.
 func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 	m.station.notice = notice{}
-	if len(m.station.tracks) == 0 && m.station.err == nil && key == "enter" {
+	if len(m.station.tracks) == 0 && m.station.err == nil && !m.station.filter.On() && key == "enter" {
 		return m, m.openNewTrack(), true
 	}
 	if q := m.station.asking; q != nil {
@@ -179,10 +186,12 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 			return m, nil, true
 		}
 	}
-	switch key {
-	case "up", "k":
+	switch {
+	case key == "x" && m.station.filter.On():
+		return m, m.clearFilter(), true
+	case key == "up" || key == "k":
 		m.station.selected = max(0, m.station.selected-1)
-	case "down", "j":
+	case key == "down" || key == "j":
 		m.station.selected = min(max(0, len(m.station.tracks)-1), m.station.selected+1)
 	default:
 		t, ok := m.selectedTrack()
@@ -205,6 +214,9 @@ func (m Model) stationClick(x, y int) (Model, tea.Cmd) {
 	m.station.notice = notice{}
 	if m.onAddTrack(x, y) {
 		return m, m.openNewTrack()
+	}
+	if m.onClearFilter(x, y) {
+		return m, m.clearFilter()
 	}
 	if id, ok := m.buttonAt(x, y); ok {
 		next, cmd, _ := m.press(id)
@@ -249,10 +261,11 @@ func (m Model) panes() panes {
 
 func (m Model) contentTop() int { return m.tabsTop() + tabsChrome }
 
-// The list's rows start below its frame's top and its header.
-func (m Model) stationTop() int { return m.contentTop() + 2 }
+// The list's rows start below its frame's top, the Filtered line and
+// the header.
+func (m Model) stationTop() int { return m.contentTop() + 2 + m.filterRows() }
 
-func (m Model) stationRows() int { return max(0, m.contentHeight()-3) }
+func (m Model) stationRows() int { return max(0, m.contentHeight()-3-m.filterRows()) }
 
 // rowAt returns the track drawn at cell x, y.
 func (m Model) rowAt(x, y int) (int, bool) {
@@ -351,12 +364,19 @@ func (m Model) list(width, height int) []string {
 		}
 		return ""
 	}
+	var filter []string
+	if s.filter.On() {
+		filter = []string{m.filterLine(width)}
+	}
 	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset,
-		tint: tint}.draw(m, width, height)
-	if len(s.tracks) == 0 {
+		tint: tint}.draw(m, width, height-len(filter))
+	switch {
+	case len(s.tracks) == 0 && s.filter.On():
+		return m.noMatch(append(filter, lines[:min(1, len(lines))]...), width, height)
+	case len(s.tracks) == 0:
 		return m.emptyList(lines, width, height)
 	}
-	return lines
+	return append(filter, lines...)
 }
 
 // message centres one line in width by height cells.

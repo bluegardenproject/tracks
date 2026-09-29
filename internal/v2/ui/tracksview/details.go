@@ -25,6 +25,7 @@ const (
 	actionResume
 	actionClean
 	actionArchive
+	actionUnarchive
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
@@ -58,7 +59,9 @@ var (
 		{actionClean, "Clean", "l", 1},
 		{actionArchive, "Archive", "a", 0},
 	}, openActions[2:]...)
-	confirmEnd = []action{
+	// archivedActions are an archived track's.
+	archivedActions = append([]action{{actionUnarchive, "Unarchive", "u", 0}}, openActions[2:]...)
+	confirmEnd      = []action{
 		{actionConfirmEnd, "End track", "y", -1},
 		{actionCancel, "Cancel", "n", -1},
 	}
@@ -83,16 +86,22 @@ func confirmRecreate(n int) []action {
 
 // actionsFor are t's buttons.
 func actionsFor(t source.Track) []action {
-	if t.Open() {
+	switch {
+	case t.Open():
 		return openActions
+	case t.Archived:
+		return archivedActions
 	}
 	return endedActions
 }
 
 // mainAction is what Enter and a double click do to t.
 func mainAction(t source.Track) actionID {
-	if t.Open() {
+	switch {
+	case t.Open():
 		return actionOpen
+	case t.Archived:
+		return actionUnarchive
 	}
 	return actionResume
 }
@@ -309,8 +318,9 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	return m, m.act(id), true
 }
 
-// act runs an action that leaves the Tracks window: switching to the
-// track, ending it or opening its pull request.
+// act runs an action that leaves the Tracks window or reloads it:
+// switching to the track, ending or unarchiving it, or opening its pull
+// request.
 func (m Model) act(id actionID) tea.Cmd {
 	t, ok := m.selectedTrack()
 	if !ok {
@@ -329,6 +339,8 @@ func (m Model) act(id actionID) tea.Cmd {
 		return run(func() error { return m.open(t.Number) }, "", "Couldn't switch", false)
 	case id == actionEnd && m.end != nil:
 		return run(func() error { return m.end(t.Number) }, "Ended "+t.Name+".", "Couldn't end "+t.Name, true)
+	case id == actionUnarchive && m.unarchive != nil:
+		return run(func() error { return m.unarchive(t.ID) }, "Unarchived "+t.Name+".", "Couldn't unarchive "+t.Name, true)
 	case id == actionOpenPR && m.openURL != nil:
 		if pr, ok := t.MainPR(); ok {
 			return run(func() error { return m.openURL(pr.URL) }, "", "Couldn't open the pull request", false)

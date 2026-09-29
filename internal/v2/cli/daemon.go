@@ -17,6 +17,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 	"github.com/spf13/cobra"
@@ -147,6 +148,15 @@ func (d daemonCalls) list(ctx context.Context) (listed []tracks.Listed, err erro
 		return err
 	})
 	return listed, err
+}
+
+// station is Station's list and the filter it's under.
+func (d daemonCalls) station(ctx context.Context) (listed []tracks.Listed, f track.Filter, err error) {
+	err = d.do(ctx, func(c rpc.Client) error {
+		listed, f, err = c.Station(ctx)
+		return err
+	})
+	return listed, f, err
 }
 
 // stopDaemon asks the daemon to shut down and waits until it's gone.

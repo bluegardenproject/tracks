@@ -65,25 +65,25 @@ func (t Track) MainPR() (PR, bool) {
 	return t.PRs[len(t.PRs)-1], true
 }
 
-// Source lists the tracks.
+// Source lists Station's tracks, and the filter they're under.
 type Source interface {
-	Tracks(ctx context.Context) ([]Track, error)
+	Tracks(ctx context.Context) ([]Track, track.Filter, error)
 }
 
 // Open reports whether t has a window.
 func (t Track) Open() bool { return t.Status != track.Done && t.Status != track.Closed }
 
-// Daemon reads the tracks from the daemon, with List.
+// Daemon reads the tracks from the daemon, with Station.
 type Daemon struct {
-	List func(ctx context.Context) ([]tracks.Listed, error)
+	Station func(ctx context.Context) ([]tracks.Listed, track.Filter, error)
 }
 
 // Tracks lists the open tracks in window order, then the ended ones,
-// most recently ended first.
-func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
-	listed, err := d.List(ctx)
+// most recently ended first; or under a filter, the tracks it picks.
+func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
+	listed, f, err := d.Station(ctx)
 	if err != nil {
-		return nil, err
+		return nil, f, err
 	}
 	out := make([]Track, len(listed))
 	for i, l := range listed {
@@ -106,5 +106,5 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}
-	return out, nil
+	return out, f, nil
 }

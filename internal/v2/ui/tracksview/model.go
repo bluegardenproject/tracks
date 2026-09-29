@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/themecreator"
@@ -36,6 +37,10 @@ type Config struct {
 	Unsaved func(id string) ([]string, error)
 	Clean   CleanFunc
 	Archive CleanFunc
+	// Unarchive puts an archived track back in Station; SetFilter puts
+	// Station under a filter, the zero Filter clearing it.
+	Unarchive func(id string) error
+	SetFilter func(track.Filter) error
 	// NewTrack opens the New track form and returns once it closes.
 	NewTrack func() error
 	OpenURL  func(url string) error
@@ -68,6 +73,8 @@ type Model struct {
 	unsaved       func(id string) ([]string, error)
 	cleanFn       CleanFunc
 	archiveFn     CleanFunc
+	unarchive     func(id string) error
+	setFilter     func(track.Filter) error
 	newTrack      func() error
 	openURL       func(url string) error
 	repoSource    source.Repos
@@ -99,7 +106,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
-		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean, archiveFn: c.Archive,
+		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean, archiveFn: c.Archive, unarchive: c.Unarchive, setFilter: c.SetFilter,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, engines: newEnginesTab()}
@@ -323,7 +330,7 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 func (m Model) hover(mouse tea.Mouse) Model {
 	m.station.hover, m.repos.hover = -1, -1
 	m.station.hoverButton, m.repos.hoverField, m.repos.hoverNew = -1, -1, false
-	m.station.hoverAdd = false
+	m.station.hoverAdd, m.station.hoverClear = false, false
 	m.engines.hover = engineControl{}
 	switch m.tab {
 	case tabStation:
@@ -334,6 +341,7 @@ func (m Model) hover(mouse tea.Mouse) Model {
 			m.station.hoverButton = id
 		}
 		m.station.hoverAdd = m.onAddTrack(mouse.X, mouse.Y)
+		m.station.hoverClear = m.onClearFilter(mouse.X, mouse.Y)
 	case tabRepositories:
 		if row, ok := m.repoRowAt(mouse.X, mouse.Y); ok {
 			m.repos.hover = row

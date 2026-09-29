@@ -1,6 +1,7 @@
 package tracksview
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -18,6 +19,8 @@ var (
 	tabKeys          = []keyHelp{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}}
 	stationKeys      = []keyHelp{{"↑/↓", "select"}, {"Enter", "open"}}
 	endedStationKeys = []keyHelp{{"↑/↓", "select"}, {"Enter", "resume"}}
+	archivedKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "unarchive"}}
+	clearFilterKeys  = []keyHelp{{"x", "clear filter"}}
 	selectKeys       = []keyHelp{{"↑/↓", "select"}}
 	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
@@ -69,9 +72,10 @@ type keyGroup struct {
 func keyGroups() []keyGroup {
 	station := append([]keyHelp{}, stationKeys...)
 	station = append(station, keyHelp{"Enter", "resume an ended track"})
-	for _, a := range append(append([]action{}, openActions...), endedActions[:3]...) {
+	for _, a := range slices.Concat(openActions, endedActions[:3], archivedActions[:1]) {
 		station = append(station, keyHelp{a.key, strings.ToLower(a.label[:1]) + a.label[1:]})
 	}
+	station = append(station, keyHelp{"x", "clear the filter"})
 	return []keyGroup{
 		{"Tracks window", tabKeys},
 		{"Station", station},
