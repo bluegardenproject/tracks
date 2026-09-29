@@ -19,6 +19,7 @@ type Settings struct {
 	Theme   string  `yaml:"theme,omitempty"` // the chosen theme's id
 	Engines Engines `yaml:"engines,omitempty"`
 	Tracks  Tracks  `yaml:"tracks,omitempty"`
+	History History `yaml:"history,omitempty"`
 }
 
 // Load reads the file at path. A missing file gives the defaults.
