@@ -71,8 +71,8 @@ func TestStatusOf(t *testing.T) {
 func TestStatuses(t *testing.T) {
 	ids := map[string]bool{}
 	for i, s := range Statuses {
-		if s.ID == "" || s.Label == "" || s.Token == "" || ids[s.ID] {
-			t.Errorf("%+v needs a unique ID, a label and a token", s)
+		if s.ID == "" || s.Label == "" || s.Badge == "" || ids[s.ID] {
+			t.Errorf("%+v needs a unique ID, a label and a badge", s)
 		}
 		ids[s.ID] = true
 		if i > 0 && s.Priority <= Statuses[i-1].Priority {

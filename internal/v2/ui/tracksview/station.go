@@ -101,8 +101,7 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 
 var columns = []string{"Slug", "Type", "Status", "Model", "Cost"}
 
-// statusColumn is drawn in the status's colour; costColumn is
-// right-aligned.
+// statusColumn is drawn as badges; costColumn is right-aligned.
 const (
 	statusColumn = 2
 	costColumn   = 4
@@ -116,15 +115,7 @@ func cells(t source.Track) []string {
 	if t.Cost > 0 {
 		cost = fmt.Sprintf("$%.2f", t.Cost)
 	}
-	return []string{t.Name, t.Kind, statusLabel(t), model, cost}
-}
-
-// statusLabel is t's track status, then its PR status when it has PRs.
-func statusLabel(t source.Track) string {
-	if t.PRStatus.Label == "" {
-		return t.Status.Label
-	}
-	return t.Status.Label + " · " + t.PRStatus.Label
+	return []string{t.Name, t.Kind, statusText(t), model, cost}
 }
 
 func (m Model) loadTracks() tea.Cmd {
@@ -356,9 +347,9 @@ func (m Model) list(width, height int) []string {
 	for i, t := range s.tracks {
 		rows[i] = cells(t)
 	}
-	tint := func(row, col int) theme.Token {
+	cell := func(row, col int, fill lipgloss.Style) string {
 		if col == statusColumn {
-			return theme.Token(s.tracks[row].Status.Token)
+			return m.statusBadges(s.tracks[row], fill)
 		}
 		return ""
 	}
@@ -367,7 +358,7 @@ func (m Model) list(width, height int) []string {
 		filter = []string{m.filterLine(width)}
 	}
 	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset,
-		tint: tint}.draw(m, width, height-len(filter))
+		cell: cell}.draw(m, width, height-len(filter))
 	switch {
 	case len(s.tracks) == 0 && s.filter.On():
 		return m.noMatch(append(filter, lines[:min(1, len(lines))]...), width, height)

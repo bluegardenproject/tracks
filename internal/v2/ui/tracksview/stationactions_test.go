@@ -45,7 +45,7 @@ func TestEndedRows(t *testing.T) {
 		},
 	})
 	view := plainView(m)
-	for _, want := range []string{"work · done", " Resume ", " Clean ", "Enter resume", "/tmp/wt/b/web"} {
+	for _, want := range []string{"work   done ", " Resume ", " Clean ", "Enter resume", "/tmp/wt/b/web"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("ended track: missing %q:\n%s", want, view)
 		}
@@ -56,7 +56,7 @@ func TestEndedRows(t *testing.T) {
 
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
 	view = plainView(m)
-	if !strings.Contains(view, "work · closed") || !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
+	if !strings.Contains(view, "work   closed ") || !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
 		t.Errorf("cleaned track: the worktree should show as removed:\n%s", view)
 	}
 	if strings.Contains(view, "Enter resume") {
@@ -164,10 +164,18 @@ func TestCleanAsksFirst(t *testing.T) {
 	}
 }
 
-func TestStatusTokensAreThemeTokens(t *testing.T) {
+func TestStatusBadgesAreThemeTokens(t *testing.T) {
 	for _, s := range slices.Concat(track.Statuses, track.PRStatuses) {
-		if !slices.Contains(theme.All, theme.Token(s.Token)) {
-			t.Errorf("%s's token %q isn't a theme token", s.ID, s.Token)
+		bg, text := badgeTokens(s)
+		if !slices.Contains(theme.All, bg) || !slices.Contains(theme.All, text) {
+			t.Errorf("%s's badge %q isn't a theme state", s.ID, s.Badge)
+		}
+		if want := theme.StateInfoBg; s == track.ActionRequired {
+			if bg != theme.StateWarningBg || text != theme.StateWarningText {
+				t.Errorf("action required is drawn in %s on %s, want the warning badge", text, bg)
+			}
+		} else if bg != want || text != theme.StateInfoText {
+			t.Errorf("%s is drawn in %s on %s, want the info badge", s.ID, text, bg)
 		}
 	}
 }
