@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -61,6 +62,8 @@ type Windows interface {
 	Close(window string) error
 	// Attention marks window as needing the user, or not.
 	Attention(window string, on bool) error
+	// Screen is what window's agent pane shows.
+	Screen(window string) (string, error)
 }
 
 // Service creates, lists and ends tracks.
@@ -90,6 +93,9 @@ type Service struct {
 	busy map[string]bool
 	// reporting keeps one Report reading and writing a state at a time.
 	reporting sync.Mutex
+	// gone counts, per waiting track, the checks in a row that found
+	// its dialog closed.
+	gone map[string]int
 }
 
 // ended is how many ended tracks List returns, the most recent ones.
@@ -187,6 +193,7 @@ type TmuxWindows struct {
 	Tmux interface {
 		trackwin.Tmux
 		KillWindow(window string) error
+		CapturePane(pane string) (string, error)
 	}
 	Session string
 }
@@ -201,4 +208,17 @@ func (w TmuxWindows) Close(window string) error { return w.Tmux.KillWindow(windo
 
 func (w TmuxWindows) Attention(window string, on bool) error {
 	return trackwin.SetAttention(w.Tmux, window, on)
+}
+
+func (w TmuxWindows) Screen(window string) (string, error) {
+	panes, err := w.Tmux.ListPanes(window)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range panes {
+		if p.Role == trackwin.RoleAgent {
+			return w.Tmux.CapturePane(p.ID)
+		}
+	}
+	return "", fmt.Errorf("window %s has no agent pane", window)
 }

@@ -96,6 +96,8 @@ func Run(ctx context.Context, c Config) error {
 				reason = "the tmux session is gone"
 			} else if err := c.Tracks.Sweep(ctx); err != nil {
 				c.Log.Printf("checking the windows: %v", err)
+			} else if err := c.Tracks.CheckScreens(ctx); err != nil {
+				c.Log.Printf("checking the agents' screens: %v", err)
 			}
 		}
 	}
