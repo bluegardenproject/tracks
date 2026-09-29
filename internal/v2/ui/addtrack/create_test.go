@@ -17,7 +17,7 @@ import (
 func ready(t *testing.T, create CreateFunc) Model {
 	m, _ := send(New(Config{Theme: theme.Default(), Repos: []string{"tracks"}, Engine: "Claude Code", Model: "opus", Create: create}), resize)
 	m = m.setFocus(ctlRepos)
-	m, _ = send(m, space)
+	m, _ = send(m, space, space, enter)
 	m = m.setFocus(ctlPrompt)
 	m, _ = send(m, typed("Fix the rate bug")...)
 	return m
