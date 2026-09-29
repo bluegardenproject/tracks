@@ -93,6 +93,8 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SavePR", func() error { _, err := w.SavePR(ctx, "a", merged, now); return err }, true},
 		{"SavePR", func() error { _, err := w.SavePR(ctx, "a", merged, now); return err }, false},
 		{"Rename", func() error { return w.Rename(ctx, "gone", "b") }, false},
+		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, true},
+		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, false},
 	}
 	tested := map[string]bool{}
 	for _, c := range writes {

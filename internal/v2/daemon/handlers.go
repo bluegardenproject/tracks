@@ -92,6 +92,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Resume:  c.resume,
 		rpc.Clean:   c.clean,
 		rpc.Archive: c.archive,
+		rpc.Derail:  c.derail,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -169,6 +170,29 @@ func (c Config) archive(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	if len(r.Unsaved) == 0 {
 		c.Log.Printf("archived %s", p.ID)
+	}
+	return r, nil
+}
+
+func (c Config) derail(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.DerailParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	var lost []workspace.Unsaved
+	var err error
+	if p.Check {
+		lost, err = c.Tracks.Lost(ctx, p.ID)
+	} else if lost, err = c.Tracks.Derail(ctx, p.ID, p.Force); err == nil && len(lost) == 0 {
+		c.Log.Printf("derailed %s", p.ID)
+	}
+	if err != nil {
+		c.Log.Printf("derailing %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	var r rpc.CleanResult
+	for _, u := range lost {
+		r.Unsaved = append(r.Unsaved, u.String())
 	}
 	return r, nil
 }

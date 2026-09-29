@@ -134,6 +134,12 @@ func TestDaemon(t *testing.T) {
 	if err := client.Unarchive(ctx, "20260928-101500-abc123"); !errors.As(err, &p) {
 		t.Errorf("unarchiving a missing track: %v, want a problem", err)
 	}
+	for _, params := range []rpc.DerailParams{{Check: true}, {Force: true}} {
+		params.ID = "20260928-101500-abc123"
+		if _, err := client.Derail(ctx, params); !errors.As(err, &p) {
+			t.Errorf("derailing a missing track with %+v: %v, want a problem", params, err)
+		}
+	}
 	if err := client.SetFilter(ctx, track.Filter{Started: track.Between}); !errors.As(err, &p) {
 		t.Errorf("an invalid filter: %v, want a problem", err)
 	}
