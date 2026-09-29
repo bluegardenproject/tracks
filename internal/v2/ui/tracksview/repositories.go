@@ -338,7 +338,7 @@ func (m Model) saved(msg repoSavedMsg) (Model, tea.Cmd) {
 	r.leaving = nil
 	if msg.err != nil {
 		if !r.form.fieldError(msg.err) {
-			r.notice = notice{"Couldn't save: " + msg.err.Error(), true}
+			r.notice = notice{text: "Couldn't save: " + msg.err.Error(), err: true}
 		}
 		return m, nil
 	}
@@ -368,7 +368,7 @@ func (m Model) deleteRepo() tea.Cmd {
 
 func (m Model) deleted(msg repoDeletedMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
-		m.repos.notice = notice{"Couldn't delete: " + msg.err.Error(), true}
+		m.repos.notice = notice{text: "Couldn't delete: " + msg.err.Error(), err: true}
 		return m, nil
 	}
 	m.repos.notice = notice{text: fmt.Sprintf("Deleted %s.", msg.name)}

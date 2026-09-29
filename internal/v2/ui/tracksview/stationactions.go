@@ -48,7 +48,7 @@ func (m Model) startResume(id, name string, recreate bool) (Model, tea.Cmd) {
 		missing, err := resume(id, recreate, func(s string) { events <- resumeEvent{progress: s, events: events} })
 		events <- resumeEvent{id: id, name: name, done: true, missing: missing, err: err, events: events}
 	}()
-	m.station.notice = notice{text: "Resuming " + name + "…"}
+	m.station.notice = notice{text: "Resuming " + name + "…", busy: true}
 	return m, nextEvent(events)
 }
 
@@ -58,16 +58,16 @@ func nextEvent(events <-chan resumeEvent) tea.Cmd {
 
 func (m Model) resumed(e resumeEvent) (Model, tea.Cmd) {
 	if !e.done {
-		m.station.notice = notice{text: e.progress}
+		m.station.notice = notice{text: e.progress, busy: true}
 		return m, nextEvent(e.events)
 	}
 	switch {
 	case e.err != nil:
-		m.station.notice = notice{failure("Couldn't resume "+e.name, e.err), true}
+		m.station.notice = notice{text: failure("Couldn't resume "+e.name, e.err), err: true}
 	case len(e.missing) > 0:
 		m.station.notice = notice{}
 		if m = m.ask(question{id: e.id, name: e.name, kind: askRecreate, lines: e.missing}); m.station.asking == nil {
-			m.station.notice = notice{"Couldn't resume " + e.name + ": a worktree couldn't be found.", true}
+			m.station.notice = notice{text: "Couldn't resume " + e.name + ": a worktree couldn't be found.", err: true}
 		}
 	default:
 		m.station.notice = notice{text: "Resumed " + e.name + "."}
@@ -81,7 +81,7 @@ func (m Model) checkClean(t source.Track) (Model, tea.Cmd) {
 		return m, nil
 	}
 	unsaved := m.unsaved
-	m.station.notice = notice{text: "Checking the worktrees of " + t.Name + "…"}
+	m.station.notice = notice{text: "Checking the worktrees of " + t.Name + "…", busy: true}
 	return m, func() tea.Msg {
 		found, err := unsaved(t.ID)
 		return checkedMsg{t.ID, t.Name, found, err}
@@ -90,7 +90,7 @@ func (m Model) checkClean(t source.Track) (Model, tea.Cmd) {
 
 func (m Model) checked(msg checkedMsg) Model {
 	if msg.err != nil {
-		m.station.notice = notice{failure("Couldn't check "+msg.name, msg.err), true}
+		m.station.notice = notice{text: failure("Couldn't check "+msg.name, msg.err), err: true}
 		return m
 	}
 	m.station.notice = notice{}
@@ -120,7 +120,7 @@ func (m Model) clean(q question) tea.Cmd {
 func (m Model) cleaned(msg cleanedMsg) (Model, tea.Cmd) {
 	switch {
 	case msg.err != nil:
-		m.station.notice = notice{failure("Couldn't clean "+msg.name, msg.err), true}
+		m.station.notice = notice{text: failure("Couldn't clean "+msg.name, msg.err), err: true}
 	case len(msg.unsaved) > 0:
 		// Work that appeared after the check: ask again.
 		m = m.ask(question{id: msg.id, name: msg.name, kind: askClean, lines: msg.unsaved})

@@ -210,7 +210,7 @@ func (m Model) enginesSaved(msg enginesSavedMsg) (Model, tea.Cmd) {
 	e := &m.engines
 	e.saving = false
 	if msg.err != nil {
-		e.notice = notice{"Couldn't save the engines: " + msg.err.Error(), true}
+		e.notice = notice{text: "Couldn't save the engines: " + msg.err.Error(), err: true}
 	}
 	if e.pending {
 		e.pending = false
@@ -283,13 +283,13 @@ func (m Model) addModel(id string) (Model, tea.Cmd) {
 	case cur == nil:
 		return m, nil
 	case model == "":
-		e.notice = notice{"Type a model id first.", true}
+		e.notice = notice{text: "Type a model id first.", err: true}
 		return m, nil
 	case strings.ContainsAny(model, " \t"):
-		e.notice = notice{"A model id has no spaces.", true}
+		e.notice = notice{text: "A model id has no spaces.", err: true}
 		return m, nil
 	case slices.Contains(cur.Models, model) || slices.ContainsFunc(en.Models, func(b agents.Model) bool { return b.ID == model }):
-		e.notice = notice{model + " is already listed.", true}
+		e.notice = notice{text: model + " is already listed.", err: true}
 		return m, nil
 	}
 	e.input.SetValue("")
