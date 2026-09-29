@@ -10,6 +10,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/v2/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
@@ -42,6 +43,13 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		},
 		rpc.Resume: c.resume,
 		rpc.Clean:  c.clean,
+		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.ReportParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return nil, c.Tracks.Report(ctx, p.ID, track.Event(p.Event))
+		},
 	}
 }
 
