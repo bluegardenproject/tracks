@@ -23,10 +23,17 @@ type Config struct {
 	// why they couldn't be read.
 	Repos    []string
 	ReposErr error
-	// Engine and Model are what new tracks run on: the default engine's
-	// name, "" with none added, and its model, "" for its own default.
+	// RunsOn is what each type's tracks run on; a type that's missing
+	// has no engine added.
+	RunsOn map[track.Kind]RunsOn
+	Create CreateFunc
+}
+
+// RunsOn is an engine's name and its model, "" for its own default.
+// Missing says the engine isn't added, so Create would refuse.
+type RunsOn struct {
 	Engine, Model string
-	Create        CreateFunc
+	Missing       bool
 }
 
 // Model is the form.
@@ -57,11 +64,11 @@ type Model struct {
 	// discard is the open "Discard this track?" question.
 	discard *question
 
-	engine, model string
-	create        CreateFunc
-	creating      *creation
-	failure       string // why the last Create failed
-	made          *Created
+	runsOn   map[track.Kind]RunsOn
+	create   CreateFunc
+	creating *creation
+	failure  string // why the last Create failed
+	made     *Created
 
 	width, height, offset int
 }
@@ -84,8 +91,7 @@ func New(c Config) Model {
 		prompt:   newPrompt(),
 		hover:    noHit,
 		errs:     map[control]string{},
-		engine:   c.Engine,
-		model:    c.Model,
+		runsOn:   c.RunsOn,
 		create:   c.Create,
 	}
 	m.setPrompt(kinds[Work].prompt)

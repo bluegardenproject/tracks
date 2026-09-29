@@ -13,9 +13,14 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
-// ready is a Work form for repo tracks with a prompt, on Claude Code.
+// ready is a Work form for repo tracks with a prompt, on Claude Code;
+// Ask tracks run on Cursor, which isn't added, and Plan tracks on nothing.
 func ready(t *testing.T, create CreateFunc) Model {
-	m, _ := send(New(Config{Theme: theme.Default(), Repos: []string{"tracks"}, Engine: "Claude Code", Model: "opus", Create: create}), resize)
+	runsOn := map[track.Kind]RunsOn{
+		track.Work: {Engine: "Claude Code", Model: "opus"},
+		track.Ask:  {Engine: "Cursor", Missing: true},
+	}
+	m, _ := send(New(Config{Theme: theme.Default(), Repos: []string{"tracks"}, RunsOn: runsOn, Create: create}), resize)
 	m = m.setFocus(ctlRepos)
 	m, _ = send(m, space, space, enter)
 	m = m.setFocus(ctlPrompt)
@@ -80,12 +85,24 @@ func TestCreateFailureKeepsTheForm(t *testing.T) {
 }
 
 func TestCreateWithoutAnEngine(t *testing.T) {
-	m := ready(t, nil)
-	m.engine = ""
+	m := ready(t, nil).setKind(Plan)
 	m = m.setFocus(ctlCreate)
 	m, cmd := send(m, enter)
 	if m.creating != nil || cmd != nil || m.notice != string(tracks.ErrNoEngine) {
 		t.Errorf("creating %v, notice %q", m.creating != nil, m.notice)
+	}
+}
+
+func TestRunsOnFollowsTheType(t *testing.T) {
+	m := ready(t, nil)
+	for k, want := range map[Kind]string{
+		Work: "Runs on Claude Code, model opus.",
+		Ask:  "Runs on Cursor, which isn't added on the Engines tab.",
+		Plan: "",
+	} {
+		if got := m.setKind(k).engineLine(); got != want {
+			t.Errorf("%s runs on %q, want %q", trackKinds[k], got, want)
+		}
 	}
 }
 

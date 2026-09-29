@@ -12,6 +12,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/addtrack"
 )
@@ -57,10 +58,7 @@ func addTrack(ctx context.Context, version, client string) error {
 	names, reposErr := repoNames(ctx, paths)
 	conf := addtrack.Config{Theme: t, Repos: names, ReposErr: reposErr, Create: creator(c, paths, version, client)}
 	if s, err := settings.Load(paths.Settings); err == nil {
-		id := s.Engines.DefaultID()
-		if e, ok := agents.ByID(id); ok {
-			conf.Engine, conf.Model = e.Name, s.Engines.Get(id).Model
-		}
+		conf.RunsOn = runsOn(s)
 	}
 	done, err := runPopup(ctx, addtrack.New(conf))
 	if err != nil {
@@ -70,6 +68,18 @@ func addTrack(ctx context.Context, version, client string) error {
 		return c.SwitchClient(client, m.Made().Window)
 	}
 	return nil
+}
+
+// runsOn is what each type of track runs on, as Create would pick it.
+func runsOn(s settings.Settings) map[track.Kind]addtrack.RunsOn {
+	on := map[track.Kind]addtrack.RunsOn{}
+	for _, k := range track.Kinds {
+		id, model := s.RunsOn(string(k))
+		if e, ok := agents.ByID(id); ok {
+			on[k] = addtrack.RunsOn{Engine: e.Name, Model: model, Missing: s.Engines.Get(id) == nil}
+		}
+	}
+	return on
 }
 
 // creator creates tracks through a daemon of this build, which tells

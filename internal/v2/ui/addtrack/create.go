@@ -57,7 +57,7 @@ func (m Model) request() tracks.Request {
 
 // startCreate sends the request and waits for the first event.
 func (m Model) startCreate() (Model, tea.Cmd) {
-	if m.engine == "" || m.create == nil {
+	if _, ok := m.runsOn[trackKinds[m.kind]]; !ok || m.create == nil {
 		m.notice = string(tracks.ErrNoEngine)
 		return m, nil
 	}
@@ -117,12 +117,16 @@ func (m Model) Made() *Created { return m.made }
 
 // engineLine says what runs the track.
 func (m Model) engineLine() string {
-	if m.engine == "" {
+	on, ok := m.runsOn[trackKinds[m.kind]]
+	if !ok {
 		return ""
 	}
-	line := "Runs on " + m.engine
-	if m.model != "" {
-		line += ", model " + m.model
+	line := "Runs on " + on.Engine
+	if on.Missing {
+		return line + ", which isn't added on the Engines tab."
+	}
+	if on.Model != "" {
+		line += ", model " + on.Model
 	}
 	return line + "."
 }
