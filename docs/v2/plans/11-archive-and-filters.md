@@ -1,6 +1,6 @@
 # Plan: archive and filters
 
-**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream and the per-track event timeline stay for later; Station keeps reading the list every 2 seconds.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream came next ([12-change-stream-and-derail.md](12-change-stream-and-derail.md)); the per-track event timeline is a future feature.
 
 ## What users get
 

@@ -1,6 +1,6 @@
 # Draft: storage on SQLite (chunk 4)
 
-**Status: mostly built.** The database, archive, auto-archive and filters are built ([11-archive-and-filters.md](../11-archive-and-filters.md)), and the change stream and a hard delete (Derail) are planned in [12-change-stream-and-derail.md](../12-change-stream-and-derail.md). The timeline, History's text search, paging and other filters, and event retention moved to the masterplan's [Future features](../../masterplan.md#future-features). The rest below is the original design. Part of the [v2 masterplan](../../masterplan.md). How status is stored follows the [track status model](../../masterplan.md#track-status); the `status` column below is a placeholder.
+**Status: mostly built.** The database, archive, auto-archive and filters are built ([11-archive-and-filters.md](../11-archive-and-filters.md)), and so is the change stream ([12-change-stream-and-derail.md](../12-change-stream-and-derail.md)), where a hard delete (Derail) is planned too. The timeline, History's text search, paging and other filters, and event retention moved to the masterplan's [Future features](../../masterplan.md#future-features). The rest below is the original design. Part of the [v2 masterplan](../../masterplan.md). How status is stored follows the [track status model](../../masterplan.md#track-status); the `status` column below is a placeholder.
 
 ## Why
 

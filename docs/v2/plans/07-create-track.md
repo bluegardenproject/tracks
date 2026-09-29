@@ -121,7 +121,7 @@ CREATE INDEX track_repos_repo ON track_repos (repo_id);
   - A track is saved once, after its worktrees and window exist, in one transaction with its repos, so there are no half-made rows.
   - The daemon writes tracks and the Tracks window still writes repos. Two writers are safe with WAL, `busy_timeout` and immediate transactions at this write rate; repos move behind the daemon later.
   - A daemon killed mid-creation can leave a worktree folder without a row. Clean (a follow-up) removes those.
-- **Performance:** Station's list is an indexed query on open tracks plus one window listing, every 2 s.
+- **Performance:** Station's list is an indexed query on open tracks plus one window listing, read when the tracks change.
 - **Permissions:** prompts and session IDs are stored from now on, so the database follow-up is done here. The data folder becomes 0700, and the database 0600; SQLite gives its WAL and shared-memory files the database's mode. Backups get 0600 too.
 
 ## Packages

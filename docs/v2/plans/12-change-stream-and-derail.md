@@ -1,6 +1,6 @@
 # Plan: change stream and Derail
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md). It finishes chunk 4 (storage): the daemon tells the Tracks window when tracks change, instead of Station reading the list every 2 seconds. It also adds **Derail**, which deletes a track for good. The event timeline and the rest of History (text search, more filters, paging) move to the masterplan's [Future features](../masterplan.md#future-features).
+**Status: change stream built, Derail planned.** Part of the [v2 masterplan](../masterplan.md). It finishes chunk 4 (storage): the daemon tells the Tracks window when tracks change, instead of Station reading the list every 2 seconds. It also adds **Derail**, which deletes a track for good. The event timeline and the rest of History (text search, more filters, paging) move to the masterplan's [Future features](../masterplan.md#future-features).
 
 ## What users get
 
