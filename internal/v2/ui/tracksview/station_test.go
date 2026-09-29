@@ -8,13 +8,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 )
 
 func demoTracks(n int) []source.Track {
 	tracks := make([]source.Track, n)
 	for i := range tracks {
-		tracks[i] = source.Track{Number: i + 1, Name: fmt.Sprintf("track-%02d", i+1), Kind: "feature", Status: source.Running,
+		tracks[i] = source.Track{Number: i + 1, Name: fmt.Sprintf("track-%02d", i+1), Kind: "feature", Status: track.Active,
 			Repos: []source.Repo{{Name: "shop", Branch: "main", Path: "/tmp/shop"}}, Session: "s-1"}
 	}
 	return tracks

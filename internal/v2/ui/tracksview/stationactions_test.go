@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 )
@@ -17,11 +18,11 @@ import (
 func withEnded(c Config) Model {
 	c.Version, c.Theme = "test", theme.Default()
 	tracks := []source.Track{
-		{ID: "a", Number: 1, Name: "open-one", Kind: "work", Status: source.Running,
+		{ID: "a", Number: 1, Name: "open-one", Kind: "work", Status: track.Active,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/aaa111", Path: "/tmp/wt/a/web"}}},
-		{ID: "b", Name: "rate-bug", Kind: "work", Status: source.Ended, Cleanable: true,
+		{ID: "b", Name: "rate-bug", Kind: "work", Status: track.Done, Cleanable: true,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/abc123", Path: "/tmp/wt/b/web"}}, Session: "s-2"},
-		{ID: "c", Name: "old-fix", Kind: "work", Status: source.Cleaned,
+		{ID: "c", Name: "old-fix", Kind: "work", Status: track.Closed,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/def456", Removed: true}}},
 	}
 	return update(New(c), tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: tracks}, tea.KeyPressMsg{Code: tea.KeyDown})
@@ -42,7 +43,7 @@ func TestEndedRows(t *testing.T) {
 		},
 	})
 	view := plainView(m)
-	for _, want := range []string{"work · ended", " Resume ", " Clean ", "Enter resume", "/tmp/wt/b/web"} {
+	for _, want := range []string{"work · done", " Resume ", " Clean ", "Enter resume", "/tmp/wt/b/web"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("ended track: missing %q:\n%s", want, view)
 		}
@@ -53,7 +54,7 @@ func TestEndedRows(t *testing.T) {
 
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
 	view = plainView(m)
-	if !strings.Contains(view, "work · cleaned") || !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
+	if !strings.Contains(view, "work · closed") || !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
 		t.Errorf("cleaned track: the worktree should show as removed:\n%s", view)
 	}
 	if strings.Contains(view, "Enter resume") {
@@ -158,5 +159,13 @@ func TestCleanAsksFirst(t *testing.T) {
 	m = press(t, m, "Remove anyway")
 	if !slices.Equal(forced, []bool{false, true}) {
 		t.Errorf("Remove anyway: cleaned %v, want it forced", forced)
+	}
+}
+
+func TestStatusTokensAreThemeTokens(t *testing.T) {
+	for _, s := range track.Statuses {
+		if !slices.Contains(theme.All, theme.Token(s.Token)) {
+			t.Errorf("%s's token %q isn't a theme token", s.ID, s.Token)
+		}
 	}
 }

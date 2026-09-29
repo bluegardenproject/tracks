@@ -96,8 +96,12 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 
 var columns = []string{"Slug", "Type", "Status", "Model", "Cost"}
 
-// costColumn is right-aligned.
-const costColumn = 4
+// statusColumn is drawn in the status's colour; costColumn is
+// right-aligned.
+const (
+	statusColumn = 2
+	costColumn   = 4
+)
 
 func cells(t source.Track) []string {
 	model, cost := "—", "—"
@@ -107,7 +111,7 @@ func cells(t source.Track) []string {
 	if t.Cost > 0 {
 		cost = fmt.Sprintf("$%.2f", t.Cost)
 	}
-	return []string{t.Name, t.Kind, t.Status, model, cost}
+	return []string{t.Name, t.Kind, t.Status.Label, model, cost}
 }
 
 func (m Model) loadTracks(poll bool) tea.Cmd {
@@ -330,7 +334,14 @@ func (m Model) list(width, height int) []string {
 	for i, t := range s.tracks {
 		rows[i] = cells(t)
 	}
-	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset}.draw(m, width, height)
+	tint := func(row, col int) theme.Token {
+		if col == statusColumn {
+			return theme.Token(s.tracks[row].Status.Token)
+		}
+		return ""
+	}
+	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset,
+		tint: tint}.draw(m, width, height)
 	if len(s.tracks) == 0 {
 		return m.emptyList(lines, width, height)
 	}
