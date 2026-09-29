@@ -1,6 +1,6 @@
 # Plan: default agent and model per track type
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), chunks 5 (real tracks) and 7 (Tracks window content). Each track type, Work, Ask, Plan, Review and Doc, gets its own default agent and model, set in Settings. New tracks run on their type's.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunks 5 (real tracks) and 7 (Tracks window content). Each track type, Work, Ask, Plan, Review and Doc, gets its own default agent and model, set in Settings. New tracks run on their type's.
 
 ## What users get
 
@@ -13,7 +13,7 @@
   - When the agent isn't added, the fields say so below them: "Cursor isn't added on the Engines tab, so Work tracks can't start."
 - **A type the user hasn't set follows the Engines tab:** Claude Code with its default model, or Cursor when only Cursor is added, as tracks run today. Changing Claude Code's default model on the Engines tab changes every such type.
 - **Create** runs a track on its type's agent and model. A type set to an agent that isn't added refuses: "Add Cursor on the Engines tab, or pick another agent for Work tracks in Settings → Tracks." With no agent added at all, it says "Add an engine on the Engines tab first." as today.
-- **The New track form** shows what the chosen type runs on, above its buttons ("Runs on Claude Code, model opus"), and updates when the type changes. Choosing the agent or model for one track comes later.
+- **The New track form** shows what the chosen type runs on, above its buttons ("Runs on Claude Code, model opus.", or "Runs on Cursor, which isn't added on the Engines tab."), and updates when the type changes. Choosing the agent or model for one track comes later.
 - **Resume** is unchanged: a track keeps the agent and model it was created with.
 
 ## Settings

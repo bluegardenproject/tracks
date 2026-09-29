@@ -9,7 +9,7 @@
   - Narrow windows show whichever frame has focus.
 - **General:** preferences. For now one, **Theme**: a field showing the file in use (`[ default.yaml ▾ ]`) and its display name. Enter or a click opens the **theme picker**.
 - **Theme picker:** an overlay centred on the window, listing every theme file by file name with its display name beside: the built-ins first, then the themes folder's files by file name. The one in use is marked. Choosing one applies it everywhere at once and remembers it; Esc or a click outside closes it. Files that aren't valid themes are listed greyed out with the reason, and can't be chosen.
-- **Fast Tracks:** third in the list, below **Track** (a placeholder for each track type's defaults). Until Fast Tracks are built it shows the empty state: a " + New " button, a line on what Fast Tracks are, and a centred, framed "Create your first Fast Track now" button. Both buttons are placeholders that say Fast Tracks aren't built yet; the section doesn't take focus.
+- **Fast Tracks:** third in the list, below **Tracks** (each track type's default agent and model, [09-track-type-defaults.md](09-track-type-defaults.md)). Until Fast Tracks are built it shows the empty state: a " + New " button, a line on what Fast Tracks are, and a centred, framed "Create your first Fast Track now" button. Both buttons are placeholders that say Fast Tracks aren't built yet; the section doesn't take focus.
 - **Theme Creator:** edits a theme.
   - It opens on the current theme; **Load** picks another in the same picker, marking the one being edited.
   - One row per token: name, preview, value. The preview shows the draft; the creator's own colours stay on the applied theme, so a bad edit can't make it unreadable.
