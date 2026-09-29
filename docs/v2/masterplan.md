@@ -17,7 +17,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 1 | Technical groundwork: `--new-app`, isolation, `internal/v2` skeleton, dedicated tmux server, Charm v2 TUI stack, design tokens, demo session | [01-technical-groundwork.md](plans/01-technical-groundwork.md) | done |
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md); popups in [06-add-track.md](plans/06-add-track.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
-| 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md); archive, auto-archive and filters in [11-archive-and-filters.md](plans/11-archive-and-filters.md) | started: repos, archive, auto-archive and filters built; change stream to do |
+| 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md); archive, auto-archive and filters in [11-archive-and-filters.md](plans/11-archive-and-filters.md); change stream and Derail in [12-change-stream-and-derail.md](plans/12-change-stream-and-derail.md) | started: repos, archive, auto-archive and filters built; change stream and Derail planned |
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md); default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: form layout; creating, ending, resuming and cleaning tracks; defaults per track type |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md); the hooks for status in [10-track-status.md](plans/10-track-status.md) | started: track and PR status from hooks |
 | 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
@@ -36,7 +36,7 @@ Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and po
 - **Track navigation: a fixed footer** (the tmux status line) on every window, with clickable track slots, first/previous/next/last buttons, attention badges and keyboard shortcuts. Hover is not possible in the tmux status line and is accepted as missing.
 - **Popups:** Quick Access (`Ctrl+b q`), which replaces the planned full menu, and a quick switcher.
 - **Tracks keys sit behind the tmux prefix** (`Ctrl+b t`, ...). A key bound without it is taken from every pane, and agents and shells use most Alt keys: Claude Code has `Alt+t` (thinking), `Alt+p` (model), `Alt+o`, `Alt+b`/`f`/`d`, `Alt+y`; shells have `Alt+.` (last argument), `Alt+<`/`Alt+>` (history), `Alt+t`, Alt+digits.
-- **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks, history and the event timeline. `config.yaml` stays a hand-edited YAML file.
+- **Storage: SQLite** (pure Go, `modernc.org/sqlite`) for tracks and their history. `config.yaml` stays a hand-edited YAML file.
 - **Agent status from hooks,** not screen polling, with a narrow polling fallback. One direction for now: agent to Tracks.
 - **Colours only through design tokens:** app code names what a colour is for (`text.muted`, `bg.hover`, `state.danger.text`), never the colour itself. A theme assigns a value to every token. Themes and colour values are kept apart from app code. Built-in themes ship with the binary; users add their own as files in the themes folder ([04-settings.md](plans/04-settings.md)).
 - **Theme values are exact `#rrggbb` colours,** one per token. A light look is a theme of its own (Default Light), not a variant of every token. Tracks has its own look instead of following the terminal's colour scheme. Terminals without 24-bit colour (older macOS Terminal.app, the Linux console) get the nearest colour they support: Lip Gloss and tmux convert automatically.
@@ -181,6 +181,13 @@ Known gaps left on purpose, each with when it has to be done. Remove an entry in
 
 - **Renaming a repo that tracks use:** tracks now link their repos by ID, but a repo's name and path still can't change while running tracks use it, since their windows and worktrees were made from them. Allow it once repos are written through the daemon.
 - **Case-insensitive repo names fold only A–Z:** SQLite's `NOCASE` treats `Über` and `über` as different names. Add a normalized name column if that ever matters.
+
+## Future features
+
+Ideas worked out far enough to keep, but not planned in any chunk. One moves into a chunk when it's picked up.
+
+- **Event timeline per track:** prompts, approvals, PRs opened and merged, turns and errors, resumes, usage per turn, stored as events from the agent hooks and shown in the track's details. Moved out of chunk 4: its use cases aren't clear yet. Needs a retention setting (`events_retention_days`) if the file grows.
+- **History:** a text search on the slug, branch and prompt; filters by repo, track type and engine; paging past the filter's 500 tracks. Moved out of chunk 4 after the first filters ([11-archive-and-filters.md](plans/11-archive-and-filters.md)).
 
 ## Existing work
 
