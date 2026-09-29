@@ -49,6 +49,7 @@ type Track struct {
 	Opinion, ClaimCheck    bool   // Doc's optional sections
 	Terminal               bool
 	Repos                  []Repo
+	PRs                    []PR // in the order they were found
 	CreatedAt              time.Time
 	State
 }
