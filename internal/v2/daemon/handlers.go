@@ -38,7 +38,43 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.End(ctx, p.ID)
 		},
+		rpc.Resume: c.resume,
+		rpc.Clean:  c.clean,
 	}
+}
+
+func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.EndParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	resumed, err := c.Tracks.Resume(ctx, p.ID, call.Progress)
+	if err != nil {
+		c.Log.Printf("resuming %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	c.Log.Printf("resumed %s, %s", p.ID, resumed.Track.Name)
+	return rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}, nil
+}
+
+func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.CleanParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	unsaved, err := c.Tracks.Clean(ctx, p.ID, p.Force)
+	if err != nil {
+		c.Log.Printf("cleaning %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	var r rpc.CleanResult
+	for _, u := range unsaved {
+		r.Unsaved = append(r.Unsaved, u.String())
+	}
+	if len(unsaved) == 0 {
+		c.Log.Printf("cleaned %s", p.ID)
+	}
+	return r, nil
 }
 
 func (c Config) create(ctx context.Context, call *rpc.Call) (any, error) {

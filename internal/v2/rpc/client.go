@@ -91,3 +91,15 @@ func (c Client) List(ctx context.Context) ([]tracks.Listed, error) {
 func (c Client) End(ctx context.Context, id string) error {
 	return c.Call(ctx, End, EndParams{ID: id}, nil, nil)
 }
+
+func (c Client) Resume(ctx context.Context, id string, progress func(string)) (CreateResult, error) {
+	var r CreateResult
+	return r, c.Call(ctx, Resume, EndParams{ID: id}, &r, progress)
+}
+
+// Clean returns the unsaved work it found instead of removing it,
+// unless force.
+func (c Client) Clean(ctx context.Context, id string, force bool) ([]string, error) {
+	var r CleanResult
+	return r.Unsaved, c.Call(ctx, Clean, CleanParams{ID: id, Force: force}, &r, nil)
+}
