@@ -51,10 +51,14 @@ type Track struct {
 	Repos                  []Repo
 	CreatedAt              time.Time
 	ClosedAt               time.Time // zero while its window is open
+	CleanedAt              time.Time // zero while its worktrees exist
 }
 
 // Open reports whether t's window is still open.
 func (t Track) Open() bool { return t.ClosedAt.IsZero() }
+
+// Cleaned reports whether Clean removed t's worktrees.
+func (t Track) Cleaned() bool { return !t.CleanedAt.IsZero() }
 
 // Repo is one of a track's repos. Name, Path and Base are copies, so the
 // track keeps them when the repo is renamed or removed.

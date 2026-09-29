@@ -90,6 +90,51 @@ func TestOpenAndClosedTracks(t *testing.T) {
 	}
 }
 
+func TestEndedCleanedAndReopenedTracks(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.Now()
+	for i, id := range []string{"a", "b", "c", "d"} {
+		tr := track.Track{ID: id, Kind: track.Work, Name: id, Engine: "claude", CreatedAt: now.Add(time.Duration(i) * time.Second)}
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, id := range []string{"c", "a", "b"} {
+		if err := s.CloseTrack(ctx, id, now.Add(time.Duration(i+1)*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ended, err := s.EndedTracks(ctx, 2)
+	if err != nil || len(ended) != 2 || ended[0].ID != "b" || ended[1].ID != "a" {
+		t.Fatalf("EndedTracks(2) = %+v, %v; want b then a, the last closed first", ended, err)
+	}
+
+	cleaned := now.Add(time.Hour)
+	if err := s.CleanTrack(ctx, "b", cleaned); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := s.Track(ctx, "b"); !b.Cleaned() || b.CleanedAt.UnixMilli() != cleaned.UnixMilli() {
+		t.Errorf("b cleaned at %v, want %v", b.CleanedAt, cleaned)
+	}
+	if err := s.ReopenTrack(ctx, "b", "b-2"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" {
+		t.Errorf("reopened b = %+v; want open, not cleaned, named b-2", b)
+	}
+	if open, _ := s.OpenTracks(ctx); len(open) != 2 || open[0].ID != "b" || open[1].ID != "d" {
+		t.Errorf("OpenTracks after reopening b = %+v", open)
+	}
+	for name, err := range map[string]error{
+		"reopen": s.ReopenTrack(ctx, "nope", "x"), "clean": s.CleanTrack(ctx, "nope", now),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s an unknown track: %v, want ErrNotFound", name, err)
+		}
+	}
+}
+
 func TestDatabaseIsPrivate(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "state")
