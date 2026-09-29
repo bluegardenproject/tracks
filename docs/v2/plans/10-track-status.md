@@ -55,7 +55,7 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 
 - **Installed per track, never in global files:** Claude gets a per-track settings file with `--settings <path>`, and Cursor a per-track plugin with `--plugin-dir <path>`, both under the track's data directory. They're written at Create and Resume, and removed at Clean. `~/.claude` and `~/.cursor` are never touched.
 - **The command** is `'<abs path>/tracks' hook --engine <claude|cursor> --track <id> <event>`, with a 5-second timeout. The track ID is baked in, so it doesn't depend on the environment.
-- **`tracks hook`** (hidden) reads stdin (capped at 1 MiB), keeps only the fields it maps, and sends one `report` with a 1-second timeout. It never affects the agent: it always exits 0, prints nothing for Claude and `{}` for Cursor, and logs failures to `<data>/logs/hook.log`.
+- **`tracks hook`** (hidden) reads stdin (capped at 1 MiB), keeps only the fields it maps, and sends one `report` with a 1-second timeout. It never affects the agent: it always exits 0, prints nothing for Claude and `{}` for Cursor (`{"continue":true}` before a prompt), and logs failures to `<data>/logs/hook.log`.
 
 **Claude:**
 - **Waiting:** `PermissionRequest` (fires the moment a permission dialog opens); `PreToolUse` for `AskUserQuestion` and `ExitPlanMode`; `Elicitation`. `Notification` with `permission_prompt` or `elicitation_dialog` is the backstop, about 6 seconds late.
@@ -72,7 +72,7 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 
 The daemon's 2-second tick already sweeps the windows. It also reads the agent's pane (`capture-pane`, the visible screen only) in two cases:
 - **A Claude track in action required:** when two checks in a row find no dialog, it's active again. This covers Esc, which fires no hook. A dialog is its selected option, such as `❯ 1. Yes`, which Claude's permission prompts, questions and plan approvals all show.
-- **A Cursor track that's active** and runs without `--force` (Ask, Plan and Doc, and Work and Review without auto mode): Cursor's approval and question dialogs mean action required, and their absence means active. Their markers are taken from a real Cursor session first; until then Cursor tracks aren't checked.
+- **Every Cursor track:** a dialog on screen means action required at once, and two checks in a row without it mean active again. The markers come from a real session: the command approval's first option, `→ Run (once) (y)`, and the title of the questions' box, `│ Clarifying Questions`. Both are anchored at the line's start, so the agent quoting them in chat doesn't count. Other Cursor dialogs, such as a plan's approval, aren't known yet.
 
 ## Pull requests
 
