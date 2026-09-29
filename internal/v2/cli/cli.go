@@ -38,6 +38,7 @@ func newRoot(version string) *cobra.Command {
 		newPopupCmd(version),
 		newDaemonCmd(version),
 		newFooterCmd(),
+		newHookCmd(),
 	)
 	return root
 }
