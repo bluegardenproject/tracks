@@ -31,9 +31,41 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			return nil, nil
 		},
 		rpc.Create: c.create,
-		rpc.List: func(ctx context.Context, _ *rpc.Call) (any, error) {
-			listed, err := c.Tracks.List(ctx)
-			return rpc.ListResult{Tracks: listed}, err
+		rpc.List: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.ListParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			if !p.Station {
+				listed, err := c.Tracks.List(ctx)
+				return rpc.ListResult{Tracks: listed}, err
+			}
+			listed, f, err := c.Tracks.Station(ctx)
+			return rpc.ListResult{Tracks: listed, Filter: f}, err
+		},
+		rpc.Filter: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.FilterParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			if p.Set != nil {
+				if err := c.Tracks.SetFilter(ctx, *p.Set); err != nil {
+					return nil, err
+				}
+			}
+			f, err := c.Tracks.Filter(ctx)
+			return rpc.FilterResult{Filter: f}, err
+		},
+		rpc.Unarchive: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.UnarchiveParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			if err := c.Tracks.Unarchive(ctx, p.ID); err != nil {
+				return nil, err
+			}
+			c.Log.Printf("unarchived %s", p.ID)
+			return nil, nil
 		},
 		rpc.End: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.EndParams

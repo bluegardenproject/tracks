@@ -16,6 +16,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
 )
@@ -129,6 +130,22 @@ func TestDaemon(t *testing.T) {
 	}
 	if _, err := client.Archive(ctx, rpc.ArchiveParams{ID: "20260928-101500-abc123"}); !errors.As(err, &p) {
 		t.Errorf("archiving a missing track: %v, want a problem", err)
+	}
+	if err := client.Unarchive(ctx, "20260928-101500-abc123"); !errors.As(err, &p) {
+		t.Errorf("unarchiving a missing track: %v, want a problem", err)
+	}
+	if err := client.SetFilter(ctx, track.Filter{Started: track.Between}); !errors.As(err, &p) {
+		t.Errorf("an invalid filter: %v, want a problem", err)
+	}
+	want := track.Filter{Archived: true, Started: track.Last7Days}
+	if err := client.SetFilter(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := client.Filter(ctx); err != nil || f.String() != want.String() {
+		t.Errorf("Filter = %+v, %v; want %+v", f, err, want)
+	}
+	if listed, f, err := client.Station(ctx); err != nil || len(listed) != 0 || f.String() != want.String() {
+		t.Errorf("Station = %v, %+v, %v", listed, f, err)
 	}
 
 	if err := client.Shutdown(ctx); err != nil {
