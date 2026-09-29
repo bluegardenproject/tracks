@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -60,5 +61,40 @@ func TestPRs(t *testing.T) {
 	}
 	if open, _ := s.OpenTracks(ctx); len(open) != 2 || len(open[1].PRs) != 1 {
 		t.Errorf("OpenTracks carry their PRs: %+v", open)
+	}
+}
+
+func TestDeleteTrack(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.UnixMilli(1_790_000_000_000)
+	for _, id := range []string{"a", "b"} {
+		tr := track.Track{ID: id, Kind: track.Work, Name: id, Engine: "claude", CreatedAt: now,
+			Repos: []track.Repo{{Name: "web", Path: "/src/web", Branch: "tracks/" + id}}}
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+		pr, _ := track.ParsePR("https://github.com/acme/web/pull/7")
+		if _, err := s.AddPR(ctx, id, pr, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.DeleteTrack(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Track(ctx, "a"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("reading a deleted track: %v", err)
+	}
+	for _, table := range []string{"track_repos", "track_prs"} {
+		var n int
+		if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM "+table+" WHERE track_id = 'a'").Scan(&n); err != nil || n != 0 {
+			t.Errorf("%s rows left: %d, %v", table, n, err)
+		}
+	}
+	if b, err := s.Track(ctx, "b"); err != nil || len(b.Repos) != 1 || len(b.PRs) != 1 {
+		t.Errorf("the other track = %+v, %v", b, err)
+	}
+	if err := s.DeleteTrack(ctx, "a"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("deleting it again: %v", err)
 	}
 }

@@ -83,6 +83,12 @@ func (s *Store) SetBranch(ctx context.Context, id string, position int, branch s
 	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
 }
 
+// DeleteTrack deletes track id with its repos and PRs; ErrNotFound when
+// there's none.
+func (s *Store) DeleteTrack(ctx context.Context, id string) error {
+	return s.updateTrack(ctx, id, "DELETE FROM tracks WHERE id = ?", id)
+}
+
 // updateTrack runs query on id's row; ErrNotFound when there's none.
 func (s *Store) updateTrack(ctx context.Context, id, query string, args ...any) error {
 	res, err := s.db.ExecContext(ctx, query, args...)
