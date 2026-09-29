@@ -49,7 +49,7 @@ set -g mouse on
 set -g set-clipboard on
 set -g history-limit 50000
 set -g renumber-windows on
-set -g status-interval 5
+set -g status-interval 15
 set -g pane-border-status top
 set-environment -g COLORTERM truecolor
 set-environment -g TRACKS_NEW_APP 1
