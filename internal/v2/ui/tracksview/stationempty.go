@@ -36,7 +36,7 @@ func (m Model) emptyList(lines []string, width, height int) []string {
 // onAddTrack reports whether cell x, y of the window is on Add new
 // Track.
 func (m Model) onAddTrack(x, y int) bool {
-	if m.tab != tabStation || len(m.station.tracks) > 0 || m.station.err != nil {
+	if m.tab != tabStation || len(m.station.tracks) > 0 || m.station.err != nil || m.station.filter.On() {
 		return false
 	}
 	p := m.panes()

@@ -11,6 +11,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
@@ -45,7 +46,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 			window := tracksview.New(tracksview.Config{
 				Version: version,
 				Theme:   t,
-				Tracks:  source.Daemon{List: daemon.list},
+				Tracks:  source.Daemon{Station: daemon.station},
 				Open: func(number int) error {
 					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
 				},
@@ -61,6 +62,12 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				},
 				Archive: func(id string, force bool) ([]string, error) {
 					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
+				},
+				Unarchive: func(id string) error {
+					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.Unarchive(cmd.Context(), id) })
+				},
+				SetFilter: func(f track.Filter) error {
+					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.SetFilter(cmd.Context(), f) })
 				},
 				NewTrack: func() error {
 					client, err := c.ClientOf(os.Getenv("TMUX_PANE"))

@@ -1,6 +1,7 @@
 package tracksview
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -128,11 +129,18 @@ func (m Model) hints() string {
 		return "  " + joinKeys(key, text, questionKeys(*m.station.asking))
 	case m.tab == tabStation && len(m.station.tracks) > 0:
 		keys = stationKeys
-		if t, _ := m.selectedTrack(); t.Status == track.Closed {
+		if t, _ := m.selectedTrack(); t.Archived {
+			keys = archivedKeys
+		} else if t.Status == track.Closed {
 			keys = selectKeys
 		} else if !t.Open() {
 			keys = endedStationKeys
 		}
+		if m.station.filter.On() {
+			keys = slices.Concat(keys, clearFilterKeys)
+		}
+	case m.tab == tabStation && m.station.err == nil && m.station.filter.On():
+		keys = clearFilterKeys
 	case m.tab == tabStation && m.station.err == nil:
 		keys = emptyStationKeys
 	case m.tab == tabRepositories && m.repos.editing:
