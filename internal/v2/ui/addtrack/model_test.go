@@ -141,9 +141,20 @@ func TestClicks(t *testing.T) {
 		t.Fatalf("no control %d item %d on the form", c, index)
 		return m
 	}
-	m = click(m, ctlRepos, 1)
-	if !m.picked["ledger-live"] || m.focus != ctlRepos {
-		t.Errorf("clicking a repo: picked %v, focus %d", m.picked, m.focus)
+	if m = click(m, ctlRepos, 0); m.picker == nil || m.focus != ctlRepos {
+		t.Fatal("clicking Select repos didn't open the picker")
+	}
+	x, y, _, _ := m.pickerBox()
+	m, _ = send(m, tea.MouseClickMsg{X: x + 2, Y: y + 2, Button: tea.MouseLeft})
+	if m.picker == nil {
+		t.Fatal("ticking a repo closed the picker")
+	}
+	m, _ = send(m, tea.MouseClickMsg{X: x + 2, Y: y + 4, Button: tea.MouseLeft})
+	if m.picker != nil || !m.picked["ledger-live"] || m.picked["tracks"] {
+		t.Fatalf("ticking ledger-live and OK: picker open %v, picked %v", m.picker != nil, m.picked)
+	}
+	if m = click(m, ctlRepos, 1); len(m.pickedRepos()) != 0 {
+		t.Errorf("clicking the ✕ left %v", m.pickedRepos())
 	}
 	if m = click(m, ctlType, int(Doc)); m.kind != Doc {
 		t.Errorf("clicking Doc review left kind %d", m.kind)

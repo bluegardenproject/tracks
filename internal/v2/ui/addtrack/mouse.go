@@ -98,7 +98,15 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 	switch h.ctl {
 	case ctlType:
 		m = m.setKind(Kind(h.index))
-	case ctlRepos, ctlRepo, ctlSections:
+	case ctlRepos:
+		if h.index == 0 {
+			m = m.openRepos()
+		} else {
+			m = m.unpick(h.index - 1)
+		}
+	case ctlRepo:
+		m = m.openRepos()
+	case ctlSections:
 		m = m.toggle(h.ctl, h.index)
 	case ctlTerminal:
 		m.terminal = !m.terminal
@@ -144,7 +152,7 @@ func (m Model) wheel(mouse tea.Mouse) Model {
 	return m
 }
 
-// pickerBox is where the candor picker is drawn: centred.
+// pickerBox is where the picker is drawn: centred.
 func (m Model) pickerBox() (x, y, w, h int) {
 	w, h = m.picker.Size(m.width, m.height)
 	return (m.width - w) / 2, (m.height - h) / 2, w, h

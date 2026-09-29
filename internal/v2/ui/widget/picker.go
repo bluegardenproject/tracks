@@ -26,6 +26,10 @@ const (
 
 // Picker is a framed list to choose one item from, drawn over the
 // screen. Marked is the current choice, -1 for none.
+//
+// With Ticked set, one entry per item, it's a list to tick any number
+// of items in instead: Space or a click ticks one, and OK or Enter
+// reports PickerChosen.
 type Picker struct {
 	Title  string
 	Items  []PickerItem
@@ -38,8 +42,10 @@ type Picker struct {
 	// Problem makes it an error that Enter retries.
 	Message string
 	Problem bool
+	Ticked  []bool
 	query   string
 	hover   int
+	hoverOK bool
 	offset  int // into the shown items
 	rows    int // rows shown, from the last Size
 }
@@ -87,9 +93,9 @@ func (p *Picker) Size(width, height int) (w, h int) {
 		w = max(w, 4+markWidth+label+pickerGap+lipgloss.Width(p.detail(it)))
 	}
 	w = max(0, min(max(w, lipgloss.Width(p.Message)+4), width-4))
-	p.rows = max(1, min(len(p.Items), height-2-pickerChrome))
+	p.rows = max(1, min(len(p.Items), height-2-pickerChrome-p.footer()))
 	p.scroll()
-	return w, min(height, p.rows+pickerChrome)
+	return w, min(height, p.rows+pickerChrome+p.footer())
 }
 
 // Key handles a key press.
@@ -102,6 +108,15 @@ func (p *Picker) Key(key string) PickerResult {
 			return PickerRetry
 		}
 		return PickerOpen
+	}
+	if p.Ticked != nil {
+		switch key {
+		case "space":
+			p.tick(p.Cursor)
+			return PickerOpen
+		case "enter":
+			return PickerChosen
+		}
 	}
 	if p.Filter {
 		switch r := []rune(key); {
@@ -168,11 +183,18 @@ func (p *Picker) follow() {
 
 // Click handles a click at x, y relative to the box, w wide.
 func (p *Picker) Click(x, y, w int) PickerResult {
+	if p.okAt(x, y) {
+		return PickerChosen
+	}
 	i, ok := p.rowAt(x, y, w)
 	if !ok {
 		return PickerOpen
 	}
 	p.Cursor = i
+	if p.Ticked != nil {
+		p.tick(i)
+		return PickerOpen
+	}
 	return p.choose()
 }
 
@@ -182,6 +204,7 @@ func (p *Picker) Hover(x, y, w int) {
 	if i, ok := p.rowAt(x, y, w); ok {
 		p.hover = i
 	}
+	p.hoverOK = p.okAt(x, y)
 }
 
 // Wheel scrolls by step rows.
@@ -277,6 +300,9 @@ func (p Picker) View(pal style.Palette, w, h int) string {
 			lines = append(lines, body(row, fill))
 		}
 	}
+	if p.Ticked != nil {
+		lines = append(lines, body("", bg), body(p.okButton().View(pal), bg))
+	}
 	lines = append(lines, border.Render("╰"+strings.Repeat("─", w-2)+"╯"))
 	return strings.Join(lines, "\n")
 }
@@ -292,7 +318,12 @@ func (p Picker) row(pal style.Palette, i, inner int, bg lipgloss.Style) (string,
 		fill = fill.Background(pal.Color(theme.OverlayBgHover))
 	}
 	mark := strings.Repeat(" ", markWidth)
-	if i == p.Marked {
+	switch {
+	case i < len(p.Ticked) && p.Ticked[i]:
+		mark = tickedMark
+	case p.Ticked != nil:
+		mark = untickedMark
+	case i == p.Marked:
 		mark = pickerMark
 	}
 	name := fill.Foreground(pal.Color(theme.OverlayTextDefault)).Bold(i == p.Cursor)

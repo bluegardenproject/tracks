@@ -103,7 +103,7 @@ func (m Model) body(width int) ([]string, []hit) {
 		case ctlSections:
 			b.checks(c, sections, m.sections)
 		case ctlCandor:
-			b.candor()
+			b.selectField(ctlCandor, candorLabel(m.candor), theme.TextDefault)
 		case ctlPrompt:
 			b.prompt()
 		}
@@ -147,7 +147,8 @@ func (b *body) types() {
 	b.add(row.String())
 }
 
-// repos draws the repos to tick, or for Review's repo to pick one.
+// repos draws the selector that opens the repos' picker: Review's shows
+// its repo; the others' show the picked repos under it.
 func (b *body) repos(c control) {
 	m := b.m
 	switch {
@@ -157,18 +158,49 @@ func (b *body) repos(c control) {
 	case len(m.repos) == 0:
 		b.wrapped(theme.TextFaint, noRepos)
 		return
+	case c == ctlRepo:
+		b.selectField(c, m.repos[min(m.repo, len(m.repos)-1)], theme.TextDefault)
+		return
 	}
-	marks := make([]bool, len(m.repos))
-	for i, r := range m.repos {
-		marks[i] = m.picked[r]
-		if c == ctlRepo {
-			marks[i] = i == m.repo
-		}
-	}
-	b.checks(c, m.repos, marks)
+	b.selectField(c, selectRepos, theme.TextFaint)
+	b.picked()
 }
 
-// checks draws labels as a list to tick, a radio list for Review's repo.
+// picked draws the picked repos in rows, each with an ✕ that removes
+// it. Their hits are the ✕s, from index 1.
+func (b *body) picked() {
+	m := b.m
+	var row strings.Builder
+	x := 0
+	for i, r := range m.pickedRepos() {
+		chip := " " + cut(r, max(1, b.width-4)) + " ✕ "
+		w := lipgloss.Width(chip)
+		if x > 0 && x+1+w > b.width {
+			b.add(row.String())
+			row.Reset()
+			x = 0
+		}
+		if x > 0 {
+			row.WriteString(" ")
+			x++
+		}
+		bg, fg := theme.ListItemBgDefault, theme.ListItemTextDefault
+		switch {
+		case m.focus == ctlRepos && m.item == i+1:
+			bg, fg = theme.ListItemBgActive, theme.ListItemTextActive
+		case m.hover.ctl == ctlRepos && m.hover.index == i+1:
+			bg, fg = theme.ListItemBgHover, theme.ListItemTextHover
+		}
+		b.hit(ctlRepos, i+1, x+w-3, 3, 1)
+		row.WriteString(lipgloss.NewStyle().Background(m.palette.Color(bg)).Foreground(m.palette.Color(fg)).Render(chip))
+		x += w
+	}
+	if x > 0 {
+		b.add(row.String())
+	}
+}
+
+// checks draws labels as a list to tick.
 func (b *body) checks(c control, labels []string, marks []bool) {
 	m := b.m
 	w := 0
@@ -185,9 +217,6 @@ func (b *body) checks(c control, labels []string, marks []bool) {
 			row = row.Background(m.palette.Color(theme.TableBgHighlight))
 		}
 		mark, on := "[ ]", "[x]"
-		if c == ctlRepo {
-			mark, on = "( )", "(•)"
-		}
 		markColor := theme.BorderDefault
 		if marks[i] {
 			mark, markColor = on, theme.TextAccent
@@ -217,15 +246,20 @@ func (b *body) input(c control, in textinput.Model) {
 	b.add(widget.Input(b.m.palette, in, max(1, b.width-2), b.bracket(c)))
 }
 
-// candor draws the level in a field that opens a picker.
-func (b *body) candor() {
+// selectField draws value, in fg, in a field that opens a picker. On
+// Repos it's lit only while the cursor is on it, not on a repo.
+func (b *body) selectField(c control, value string, fg theme.Token) {
 	m := b.m
-	br := m.fg(b.bracket(ctlCandor))
+	bracket := b.bracket(c)
+	if m.focus == c && m.item != 0 && m.errs[c] == "" {
+		bracket = theme.BorderDefault
+	}
+	br := m.fg(bracket)
 	bg := lipgloss.NewStyle().Background(m.palette.Color(theme.InputBg))
 	inner := max(4, b.width-2)
-	value := cut(" "+candorLabel(m.candor), inner-2)
-	b.hit(ctlCandor, 0, 0, b.width, 1)
-	b.add(br.Render("[") + bg.Foreground(m.palette.Color(theme.TextDefault)).Render(value+strings.Repeat(" ", max(0, inner-2-lipgloss.Width(value)))) +
+	value = cut(" "+value, inner-2)
+	b.hit(c, 0, 0, b.width, 1)
+	b.add(br.Render("[") + bg.Foreground(m.palette.Color(fg)).Render(value+strings.Repeat(" ", max(0, inner-2-lipgloss.Width(value)))) +
 		bg.Foreground(m.palette.Color(theme.TextMuted)).Render("▾ ") + br.Render("]"))
 }
 
@@ -315,9 +349,9 @@ func overlay(screen, box string, x, y int) string {
 
 // Keys are every key the form takes, for the Keys list.
 var Keys = []widget.KeyHelp{
-	{Key: "Tab", Help: "next field"}, {Key: "Shift+Tab", Help: "previous field"}, {Key: "←/→", Help: "type"},
-	{Key: "↑/↓", Help: "select"}, {Key: "Space", Help: "tick"}, {Key: "Enter", Help: "new line in the prompt"},
-	{Key: "Esc", Help: "close"},
+	{Key: "Tab", Help: "next field"}, {Key: "Shift+Tab", Help: "previous field"}, {Key: "←/→", Help: "type, or the picked repos"},
+	{Key: "↑/↓", Help: "select"}, {Key: "Space", Help: "tick"}, {Key: "Backspace", Help: "remove a picked repo"},
+	{Key: "Enter", Help: "new line in the prompt"}, {Key: "Esc", Help: "close"},
 }
 
 // hints is the bottom row: the notice, or the keys the focus takes.
@@ -333,16 +367,22 @@ func (m Model) hints() string {
 	switch {
 	case m.discard != nil:
 		keys = []widget.KeyHelp{{Key: "←/→", Help: "choose"}, {Key: "Enter", Help: "press"}, {Key: "Esc", Help: "keep editing"}}
+	case m.picker != nil && m.picker.Ticked != nil:
+		keys = []widget.KeyHelp{{Key: "Type", Help: "to filter"}, {Key: "↑/↓", Help: "select"}, {Key: "Space", Help: "tick"}, {Key: "Enter", Help: "OK"}, {Key: "Esc", Help: "close"}}
+	case m.picker != nil && m.picker.Filter:
+		keys = []widget.KeyHelp{{Key: "Type", Help: "to filter"}, {Key: "↑/↓", Help: "select"}, {Key: "Enter", Help: "choose"}, {Key: "Esc", Help: "close"}}
 	case m.picker != nil:
 		keys = []widget.KeyHelp{{Key: "↑/↓", Help: "select"}, {Key: "Enter", Help: "choose"}, {Key: "Esc", Help: "close"}}
 	default:
 		switch m.focus {
 		case ctlType:
 			keys = append(keys, widget.KeyHelp{Key: "←/→", Help: "type"})
-		case ctlRepos, ctlSections, ctlTerminal:
+		case ctlRepos:
+			keys = append(keys, m.reposHints()...)
+		case ctlSections, ctlTerminal:
 			keys = append(keys, widget.KeyHelp{Key: "Space", Help: "tick"})
 		case ctlRepo:
-			keys = append(keys, widget.KeyHelp{Key: "Space", Help: "pick"})
+			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "pick"})
 		case ctlCandor:
 			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "pick"})
 		case ctlPrompt:

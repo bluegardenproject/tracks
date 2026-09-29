@@ -3,7 +3,6 @@
 package addtrack
 
 import (
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,11 +47,13 @@ type Model struct {
 	prompt   textarea.Model
 
 	focus  control
-	item   int // the cursor in a list
+	item   int // the cursor in a list, or on Repos: 0 the selector, then the picked repos
 	hover  hit
 	errs   map[control]string
 	notice string
 	picker *widget.Picker
+	// pickerFor is the field the picker is open for.
+	pickerFor control
 	// discard is the open "Discard this track?" question.
 	discard *question
 
@@ -168,7 +169,9 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		case "down", "enter":
 			return m.move(1, false)
 		}
-	case ctlRepos, ctlRepo, ctlSections:
+	case ctlRepos:
+		return m.reposKey(key)
+	case ctlSections:
 		return m.listKey(key)
 	case ctlTerminal:
 		switch key {
@@ -177,6 +180,15 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		case "up":
 			return m.move(-1, false)
 		case "down", "enter":
+			return m.move(1, false)
+		}
+	case ctlRepo:
+		switch key {
+		case "enter", "space":
+			m = m.openRepos()
+		case "up":
+			return m.move(-1, false)
+		case "down":
 			return m.move(1, false)
 		}
 	case ctlCandor:
@@ -217,8 +229,8 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// listKey handles a key on the repos or sections: the arrows walk the
-// items and then leave, Space ticks one.
+// listKey handles a key on the sections: the arrows walk the items and
+// then leave, Space ticks one.
 func (m Model) listKey(key string) (Model, tea.Cmd) {
 	n := m.listLen(m.focus)
 	switch key {
@@ -244,21 +256,14 @@ func (m Model) listLen(c control) int {
 	if c == ctlSections {
 		return len(m.sections)
 	}
-	return len(m.repos)
+	return 0
 }
 
-// toggle ticks item i of list c, or picks it for Review's repo.
+// toggle ticks item i of the sections.
 func (m Model) toggle(c control, i int) Model {
-	switch {
-	case c == ctlSections && i < len(m.sections):
+	if c == ctlSections && i < len(m.sections) {
 		m.sections = slices.Clone(m.sections)
 		m.sections[i] = !m.sections[i]
-	case c == ctlRepos && i < len(m.repos):
-		m.picked = maps.Clone(m.picked)
-		m.picked[m.repos[i]] = !m.picked[m.repos[i]]
-		delete(m.errs, ctlRepos)
-	case c == ctlRepo && i < len(m.repos):
-		m.repo = i
 	}
 	return m
 }
@@ -327,8 +332,6 @@ func (m Model) setFocus(c control) Model {
 		m.name.Focus()
 	case ctlPrompt:
 		m.prompt.Focus()
-	case ctlRepo:
-		m.item = m.repo
 	}
 	return m
 }
@@ -437,7 +440,7 @@ func (m Model) openCandor() Model {
 		items = append(items, widget.PickerItem{Label: strconv.Itoa(level), Detail: label})
 	}
 	p := widget.NewPicker("Candor", items, m.candor-track.MinCandor)
-	m.picker = &p
+	m.picker, m.pickerFor = &p, ctlCandor
 	return m
 }
 
@@ -447,13 +450,29 @@ func (m Model) pickerKey(key string) Model {
 	return m.pickerDone(p.Key(key))
 }
 
+// pickerDone follows up on the picker closing. The repos ticked stay
+// ticked however it closed.
 func (m Model) pickerDone(r widget.PickerResult) Model {
-	switch r {
-	case widget.PickerChosen:
-		m.candor = m.picker.Cursor + track.MinCandor
-		m.picker = nil
-	case widget.PickerClosed:
-		m.picker = nil
+	if r != widget.PickerChosen && r != widget.PickerClosed {
+		return m
+	}
+	p := m.picker
+	m.picker = nil
+	switch {
+	case m.pickerFor == ctlRepos:
+		m.picked = map[string]bool{}
+		for i, on := range p.Ticked {
+			if on {
+				m.picked[m.repos[i]] = true
+			}
+		}
+		delete(m.errs, ctlRepos)
+	case r == widget.PickerClosed:
+	case m.pickerFor == ctlRepo:
+		m.repo = p.Cursor
+		delete(m.errs, ctlRepo)
+	case m.pickerFor == ctlCandor:
+		m.candor = p.Cursor + track.MinCandor
 	}
 	return m
 }
