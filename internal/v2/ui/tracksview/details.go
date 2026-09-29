@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
@@ -111,7 +112,7 @@ func (m Model) details(width int) ([]string, []hit) {
 	value := func(s string) string { return m.fg(theme.TextDefault).Render(s) }
 	muted := func(s string) string { return m.fg(theme.TextMuted).Render(s) }
 
-	about := muted(t.Kind + " · " + t.Status)
+	about := muted(t.Kind+" · ") + m.fg(theme.Token(t.Status.Token)).Render(t.Status.Label)
 	name := m.fg(theme.TextDefault).Bold(true).Render(t.Name)
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	number := muted("none")
@@ -230,7 +231,7 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 	case actionOpenPR:
 		return t.PR != nil && t.PR.URL != ""
 	case actionResume:
-		return t.Status != source.Cleaned
+		return t.Status != track.Closed
 	case actionClean:
 		return t.Cleanable
 	}

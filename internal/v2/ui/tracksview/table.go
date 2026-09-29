@@ -19,6 +19,8 @@ type table struct {
 	// selected and hover are row indexes, -1 for none; offset is the
 	// first row shown.
 	selected, hover, offset int
+	// tint, when set, is a cell's colour token; "" keeps the column's.
+	tint func(row, col int) theme.Token
 }
 
 // draw renders the header and the rows that fit, width by at most
@@ -58,6 +60,11 @@ func (t table) draw(m Model, width, height int) []string {
 		lines = append(lines, row(t.rows[i], fill, func(col int) lipgloss.Style {
 			if col == 0 {
 				return fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(i == t.selected)
+			}
+			if t.tint != nil {
+				if token := t.tint(i, col); token != "" {
+					return fill.Foreground(m.palette.Color(token))
+				}
 			}
 			return fill.Foreground(m.palette.Color(theme.TableTextMuted))
 		}))

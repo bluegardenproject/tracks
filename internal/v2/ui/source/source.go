@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/bluegardenproject/tracks/internal/v2/agents"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
@@ -17,7 +18,7 @@ type Track struct {
 	Number int
 	Name   string
 	Kind   string
-	Status string
+	Status track.Status
 	// Cleanable says Clean can remove the worktrees: the track ended and
 	// has some.
 	Cleanable bool
@@ -51,16 +52,8 @@ type Source interface {
 	Tracks(ctx context.Context) ([]Track, error)
 }
 
-// The statuses until the status model exists: an open track is
-// running, and a cleaned one ended and lost its worktrees to Clean.
-const (
-	Running = "running"
-	Ended   = "ended"
-	Cleaned = "cleaned"
-)
-
 // Open reports whether t has a window.
-func (t Track) Open() bool { return t.Status != Ended && t.Status != Cleaned }
+func (t Track) Open() bool { return t.Status != track.Done && t.Status != track.Closed }
 
 // Daemon reads the tracks from the daemon, with List.
 type Daemon struct {
@@ -87,14 +80,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 		if e, ok := agents.ByID(l.Engine); ok {
 			engine = e.Name
 		}
-		status := Running
-		switch {
-		case l.Cleaned():
-			status = Cleaned
-		case !l.Open():
-			status = Ended
-		}
-		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: status,
+		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: l.Status(),
 			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session}
 	}
