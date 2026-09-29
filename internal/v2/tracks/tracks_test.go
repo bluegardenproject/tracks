@@ -43,7 +43,7 @@ type fakeWorktrees struct {
 	fail, failRestore bool
 	removed           []string // Remove's tracks
 	cleaned           []string // RemoveWorktrees' tracks, when it had some
-	derailed          []string // Derail's tracks
+	discarded         []string // Discard's tracks
 	lost              []workspace.Unsaved
 	unsaved           []workspace.Unsaved
 	renamed           map[string]string // repo name to branch
@@ -110,7 +110,7 @@ func (w *fakeWorktrees) Lost(context.Context, track.Track) ([]workspace.Unsaved,
 }
 
 func (w *fakeWorktrees) Discard(_ context.Context, t track.Track) error {
-	w.derailed = append(w.derailed, t.ID)
+	w.discarded = append(w.discarded, t.ID)
 	return nil
 }
 

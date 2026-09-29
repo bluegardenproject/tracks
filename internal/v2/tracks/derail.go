@@ -18,11 +18,8 @@ func (s *Service) Derail(ctx context.Context, id string, force bool) ([]workspac
 	}
 	defer release()
 	if t.Kind.Worktrees() {
-		if !force {
-			lost, err := s.Worktrees.Lost(ctx, t)
-			if err != nil || len(lost) > 0 {
-				return lost, err
-			}
+		if lost, err := s.lost(ctx, t, force); err != nil || len(lost) > 0 {
+			return lost, err
 		}
 		if err := s.Worktrees.Discard(ctx, t); err != nil {
 			return nil, err
