@@ -130,6 +130,7 @@ func Run(ctx context.Context, c Config) error {
 		}
 	}
 	c.Log.Printf("exiting: %s", reason)
+	c.Tracks.Changes.Close()
 	ln.Close()
 	return <-served
 }

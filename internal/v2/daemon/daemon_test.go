@@ -179,3 +179,41 @@ func TestExitsWithTheSession(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWatch(t *testing.T) {
+	c, _ := config(t)
+	changes := &tracks.Changes{}
+	c.Tracks.Store, c.Tracks.Changes = tracks.Watched(c.Tracks.Store, changes), changes
+	done := start(t, c)
+	client := rpc.Client{Socket: c.Paths.Socket}
+	ctx := context.Background()
+
+	lines := make(chan struct{}, 10)
+	watching := make(chan error, 1)
+	go func() { watching <- client.Watch(ctx, func() { lines <- struct{}{} }) }()
+	line := func(what string) {
+		t.Helper()
+		select {
+		case <-lines:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no line %s", what)
+		}
+	}
+	line("once connected")
+	if err := client.SetFilter(ctx, track.Filter{Archived: true}); err != nil {
+		t.Fatal(err)
+	}
+	line("after a change")
+
+	if err := client.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := wait(t, done); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-watching:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Watch didn't return when the daemon exited")
+	}
+}

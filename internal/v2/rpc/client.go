@@ -111,6 +111,12 @@ func (c Client) Unarchive(ctx context.Context, id string) error {
 	return c.Call(ctx, Unarchive, UnarchiveParams{ID: id}, nil, nil)
 }
 
+// Watch calls changed once connected and after each change to the
+// tracks, until ctx ends or the daemon hangs up.
+func (c Client) Watch(ctx context.Context, changed func()) error {
+	return c.Call(ctx, Watch, nil, nil, func(string) { changed() })
+}
+
 func (c Client) End(ctx context.Context, id string) error {
 	return c.Call(ctx, End, EndParams{ID: id}, nil, nil)
 }

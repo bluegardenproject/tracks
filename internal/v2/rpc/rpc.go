@@ -23,6 +23,9 @@ const (
 	Unarchive = "unarchive"
 	Filter    = "filter"
 	Report    = "report"
+	// Watch sends a progress line right away and one after each change
+	// to the tracks, until the daemon exits.
+	Watch = "watch"
 )
 
 // Request is one call.
