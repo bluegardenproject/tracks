@@ -41,7 +41,7 @@ func openNewTrack(c *tmux.Client, paths platform.Paths, client string) error {
 		Width:      strconv.Itoa(min(width, max(formMinWidth, width*formShare/100))),
 		Height:     strconv.Itoa(min(height, max(formMinHeight, height*formShare/100))),
 		Command:    command + " popup add-track " + shellx.Quote(client),
-		Background: t.Value(theme.BgOverlay),
+		Background: t.Value(theme.OverlayBg),
 	}, version)
 }
 

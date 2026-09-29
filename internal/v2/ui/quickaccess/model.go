@@ -126,7 +126,7 @@ func (m Model) render() string {
 	for i, e := range entries {
 		rows[i] = m.row(e, inner, i == m.hover, i == m.cursor)
 	}
-	lines := widget.Frame(m.palette, "Quick Access", rows, m.width, min(m.height-1, len(entries)+2), theme.BorderFocus)
+	lines := widget.Frame(m.palette, "Quick Access", rows, m.width, min(m.height-1, len(entries)+2), theme.OverlayBorderFocus)
 	fg := func(t theme.Token) lipgloss.Style { return lipgloss.NewStyle().Foreground(m.palette.Color(t)) }
 	lines = append(lines, " "+widget.Hints(fg(theme.TextAccent), fg(theme.TextFaint), Keys))
 	return strings.Join(lines, "\n")

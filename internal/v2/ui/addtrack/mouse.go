@@ -156,7 +156,7 @@ const discardText = "What you entered is lost."
 func (m Model) discardBox() (x, y int, box []string) {
 	row, _ := m.discardButtons()
 	w := min(m.width, max(len(discardText), 30)+4)
-	box = widget.Frame(m.palette, "Discard this track?", []string{m.fg(theme.TextMuted).Render(discardText), "", row}, w, 5, theme.BorderFocus)
+	box = widget.Frame(m.palette, "Discard this track?", []string{m.fg(theme.TextMuted).Render(discardText), "", row}, w, 5, theme.OverlayBorderFocus)
 	return (m.width - w) / 2, (m.height - 5) / 2, box
 }
 

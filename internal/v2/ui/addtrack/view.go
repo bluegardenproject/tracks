@@ -295,7 +295,7 @@ func (m Model) render() string {
 	}
 	lines, _ := m.body(m.width - 4)
 	lines = lines[min(m.offset, len(lines)):]
-	framed := widget.Frame(m.palette, "New track", lines, m.width, m.height-1, theme.BorderFocus)
+	framed := widget.Frame(m.palette, "New track", lines, m.width, m.height-1, theme.OverlayBorderFocus)
 	framed = append(framed, m.hints())
 	screen := strings.Join(framed, "\n")
 	switch {
