@@ -94,13 +94,6 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 	return m, m.act(actionEnd)
 }
 
-// notice is a short message in the hint row, until the next key or
-// click.
-type notice struct {
-	text string
-	err  bool
-}
-
 var columns = []string{"Slug", "Type", "Status", "Model", "Cost"}
 
 // costColumn is right-aligned.
@@ -144,7 +137,7 @@ func (m Model) selectedTrack() (source.Track, bool) {
 func (m Model) done(msg doneMsg) (Model, tea.Cmd) {
 	switch {
 	case msg.err != nil:
-		m.station.notice = notice{msg.err.Error(), true}
+		m.station.notice = notice{text: msg.err.Error(), err: true}
 	case msg.ok != "":
 		m.station.notice = notice{text: msg.ok}
 	}

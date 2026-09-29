@@ -173,7 +173,7 @@ func (m Model) choose(i int) (Model, tea.Cmd) {
 	}
 	e := s.themes[i]
 	if e.Err != nil {
-		s.notice = notice{fmt.Sprintf("%s isn't a valid theme: %v", e.DisplayName, e.Err), true}
+		s.notice = notice{text: fmt.Sprintf("%s isn't a valid theme: %v", e.DisplayName, e.Err), err: true}
 		return m, nil
 	}
 	src, id := m.themeSource, e.ID
@@ -185,7 +185,7 @@ func (m Model) choose(i int) (Model, tea.Cmd) {
 
 func (m Model) chosen(msg chosenMsg) Model {
 	if msg.err != nil {
-		m.settings.notice = notice{"Couldn't use the theme: " + msg.err.Error(), true}
+		m.settings.notice = notice{text: "Couldn't use the theme: " + msg.err.Error(), err: true}
 		return m
 	}
 	m = m.applyTheme(msg.theme)

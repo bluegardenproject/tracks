@@ -118,23 +118,8 @@ func (m Model) content(width, height int) []string {
 func (m Model) hints() string {
 	key := m.fg(theme.TextAccent)
 	text := m.fg(theme.TextFaint)
-	var n notice
-	switch m.tab {
-	case tabStation:
-		n = m.station.notice
-	case tabRepositories:
-		n = m.repos.notice
-	case tabEngines:
-		n = m.engines.notice
-	case tabSettings:
-		n = m.settings.notice
-	}
-	if n.text != "" {
-		color := theme.StateSuccessText
-		if n.err {
-			color = theme.StateDangerText
-		}
-		return "  " + m.fg(color).Render(n.text)
+	if n := m.noticeOf(m.tab); n != nil && n.text != "" {
+		return m.noticeView(*n)
 	}
 	var keys []keyHelp
 	s := m.settings

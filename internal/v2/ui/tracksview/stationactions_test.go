@@ -91,7 +91,7 @@ func TestResumeShowsProgress(t *testing.T) {
 		errors.New("tmux is gone"): "Couldn't resume rate-bug: tmux is gone",
 	} {
 		m := withEnded(Config{Resume: func(string, bool, func(string)) ([]string, error) { return nil, err }})
-		if m = settle(m, key('r')); m.station.notice != (notice{want, true}) {
+		if m = settle(m, key('r')); m.station.notice != (notice{text: want, err: true}) {
 			t.Errorf("failed resume: hint row %+v, want %q", m.station.notice, want)
 		}
 	}

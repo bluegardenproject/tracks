@@ -79,6 +79,9 @@ type Model struct {
 	picker       *widget.Picker
 	pickerFor    int
 	pickerEngine string
+	// noticeSeq counts each tab's notices, so only the latest one's
+	// clock ends it.
+	noticeSeq [tabSettings + 1]int
 }
 
 // New returns the Tracks window for c.
@@ -100,6 +103,16 @@ func (m Model) Init() tea.Cmd {
 // Update handles resizes, data and input. The Tracks window never quits
 // on its own.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(noticeExpiredMsg); ok {
+		return m.expire(msg), nil
+	}
+	before := m.notices()
+	next, cmd := m.update(msg)
+	next, clock := next.(Model).timeNotices(before)
+	return next, tea.Batch(cmd, clock)
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -258,6 +271,10 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 	if mouse.Button != tea.MouseLeft {
+		return m, nil
+	}
+	if m.onNoticeClose(mouse.X, mouse.Y) {
+		*m.noticeOf(m.tab) = notice{}
 		return m, nil
 	}
 	if i, ok := m.tabAt(mouse.X, mouse.Y); ok {
