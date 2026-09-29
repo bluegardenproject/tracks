@@ -3,24 +3,31 @@ package track
 import "time"
 
 // Status is one value of a track's status. ID is how it's stored and
-// sent, Label how it's shown, Token the colour token it's drawn in, by
-// name. A lower Priority is shown first where only one fits; Attention
-// says the track needs the user.
+// sent, Label how it's shown, Badge the theme state its badge is drawn
+// in: BadgeInfo or BadgeWarning. A lower Priority is shown first where
+// only one fits; Attention says the track needs the user.
 type Status struct {
 	ID        string
 	Label     string
-	Token     string
+	Badge     string
 	Priority  int
 	Attention bool
 }
 
+// The badges' theme states: a badge is drawn in state.<badge>.bg and
+// state.<badge>.text.
+const (
+	BadgeInfo    = "info"
+	BadgeWarning = "warning"
+)
+
 // The track statuses. Adding one is an entry here and in Statuses, the
 // event that sets it in Apply, and their tests.
 var (
-	Active         = Status{ID: "active", Label: "active", Token: "state.success.text", Priority: 1}
-	ActionRequired = Status{ID: "action_required", Label: "action required", Token: "state.warning.text", Attention: true}
-	Done           = Status{ID: "done", Label: "done", Token: "text.muted", Priority: 2}
-	Closed         = Status{ID: "closed", Label: "closed", Token: "text.faint", Priority: 3}
+	Active         = Status{ID: "active", Label: "active", Badge: BadgeInfo, Priority: 1}
+	ActionRequired = Status{ID: "action_required", Label: "action required", Badge: BadgeWarning, Attention: true}
+	Done           = Status{ID: "done", Label: "done", Badge: BadgeInfo, Priority: 2}
+	Closed         = Status{ID: "closed", Label: "closed", Badge: BadgeInfo, Priority: 3}
 )
 
 // Statuses are every track status, by priority.

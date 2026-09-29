@@ -53,9 +53,9 @@ func ParsePR(url string) (PR, bool) {
 // how many there are.
 var (
 	NoPRs     = Status{ID: "none"}
-	PRsOpen   = Status{ID: "open", Label: "PR open", Token: "state.info.text", Priority: 1}
-	PRsMerged = Status{ID: "merged", Label: "PR merged", Token: "text.accent", Priority: 2}
-	PRsClosed = Status{ID: "closed", Label: "PR closed", Token: "text.muted", Priority: 3}
+	PRsOpen   = Status{ID: "open", Label: "PR open", Badge: BadgeInfo, Priority: 1}
+	PRsMerged = Status{ID: "merged", Label: "PR merged", Badge: BadgeInfo, Priority: 2}
+	PRsClosed = Status{ID: "closed", Label: "PR closed", Badge: BadgeInfo, Priority: 3}
 )
 
 // PRStatuses are every PR status shown, by priority.

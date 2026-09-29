@@ -131,10 +131,7 @@ func (m Model) details(width int) ([]string, []hit) {
 	value := func(s string) string { return m.fg(theme.TextDefault).Render(s) }
 	muted := func(s string) string { return m.fg(theme.TextMuted).Render(s) }
 
-	about := muted(t.Kind+" · ") + m.fg(theme.Token(t.Status.Token)).Render(t.Status.Label)
-	if t.PRStatus.Label != "" {
-		about += muted(" · ") + m.fg(theme.Token(t.PRStatus.Token)).Render(t.PRStatus.Label)
-	}
+	about := muted(t.Kind+"  ") + m.statusBadges(t, lipgloss.NewStyle())
 	name := m.fg(theme.TextDefault).Bold(true).Render(t.Name)
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	number := muted("none")

@@ -49,8 +49,8 @@ func TestPRStatus(t *testing.T) {
 
 func TestPRStatuses(t *testing.T) {
 	for i, s := range PRStatuses {
-		if s.ID == "" || s.Label == "" || s.Token == "" || s.Attention {
-			t.Errorf("%+v needs an ID, a label and a token, and no attention", s)
+		if s.ID == "" || s.Label == "" || s.Badge == "" || s.Attention {
+			t.Errorf("%+v needs an ID, a label and a badge, and no attention", s)
 		}
 		if i > 0 && s.Priority <= PRStatuses[i-1].Priority {
 			t.Errorf("PRStatuses should be in priority order: %s after %s", s.ID, PRStatuses[i-1].ID)

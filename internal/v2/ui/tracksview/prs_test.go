@@ -33,14 +33,16 @@ func TestPRStatus(t *testing.T) {
 		tracksMsg{tracks: []source.Track{withPRs(prs), merged, {ID: "c", Number: 2, Name: "no-pr", Kind: "ask", Status: track.Active}}})
 
 	view := plainView(m)
-	for _, want := range []string{"active · 2 PRs open", "done · PR merged", "work · active · 2 PRs open",
+	for _, want := range []string{" active   2 PRs open ", " done   PR merged ", "work   active   2 PRs open ",
 		"web#6 merged, web#7 open, api#8 draft"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "active · ·") || strings.Contains(view, "ask · active ·") {
-		t.Errorf("a track without PRs shows no PR status:\n%s", view)
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "no-pr") && strings.Contains(line, "PR") {
+			t.Errorf("a track without PRs shows no PR status: %q", line)
+		}
 	}
 
 	m = clickButton(t, m, "Open PR")

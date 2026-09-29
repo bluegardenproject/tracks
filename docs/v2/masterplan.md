@@ -151,7 +151,7 @@ internal/v2/
 
 Designed in [10-track-status.md](plans/10-track-status.md): a track status (active, action required, done, closed) and a PR status, changed only through events. Requirements:
 
-- **Defined exactly once:** one place in the `track` domain package declares every status value with its label, colour token, priority and whether it needs attention. Footer, screens, notifications and storage read from there and never list statuses themselves.
+- **Defined exactly once:** one place in the `track` domain package declares every status value with its label, badge (the theme's info state, or warning for action required), priority and whether it needs attention. Footer, screens, notifications and storage read from there and never list statuses themselves.
 - **Easy to extend:** adding a status value is one new entry in that place, plus its tests.
 - **Combined, not one flat list:** a track can be in several states at once (for example its agent waits for you while its PR is open), and what's shown is derived from them.
 - **Nothing is carried over from v1:** v1's statuses are not a starting point.
