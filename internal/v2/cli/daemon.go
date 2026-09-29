@@ -57,10 +57,12 @@ func newDaemonCmd(version string) *cobra.Command {
 				return err
 			}
 			c := tmux.New(paths.TmuxSocket)
+			changes := &tracks.Changes{}
 			err = daemon.Run(ctx, daemon.Config{
 				Paths: paths, Version: version, Session: sessionName, Tmux: c, Home: home, Log: logger,
 				Tracks: &tracks.Service{
-					Store:     db,
+					Store:     tracks.Watched(db, changes),
+					Changes:   changes,
 					Worktrees: &workspace.Worktrees{Root: paths.Worktrees},
 					Windows:   tracks.TmuxWindows{Tmux: c, Session: sessionName},
 					Settings:  func() (settings.Settings, error) { return settings.Load(paths.Settings) },

@@ -31,6 +31,21 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			return nil, nil
 		},
 		rpc.Create: c.create,
+		rpc.Watch: func(_ context.Context, call *rpc.Call) (any, error) {
+			changed, cancel := c.Tracks.Changes.Subscribe()
+			defer cancel()
+			for {
+				select {
+				case _, ok := <-changed:
+					if !ok {
+						return nil, nil
+					}
+					call.Progress("changed")
+				case <-call.Gone:
+					return nil, nil
+				}
+			}
+		},
 		rpc.List: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ListParams
 			if err := call.Decode(&p); err != nil {
