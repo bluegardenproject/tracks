@@ -20,9 +20,9 @@ type Track struct {
 	Name   string
 	Kind   string
 	Status track.Status
-	// Cleanable says Clean can remove the worktrees: the track ended and
-	// has some.
-	Cleanable bool
+	// Removable says Archive would remove worktrees and branches: the
+	// track ended, has worktrees, and Archive hasn't removed them yet.
+	Removable bool
 	Archived  bool // taken out of Station
 	Repos     []Repo
 	// Engine is the agent CLI, Model its model; Session is the agent's
@@ -36,8 +36,8 @@ type Track struct {
 }
 
 // Repo is one repository of a track; Path is its worktree, or the
-// primary checkout for a track without worktrees. Removed says Clean
-// removed the worktree; Path is empty then.
+// primary checkout for a track without worktrees. Removed says Archive
+// removed the worktree and branch; Path is empty then.
 type Repo struct {
 	Name    string
 	Branch  string
@@ -70,6 +70,16 @@ func (t Track) MainPR() (PR, bool) {
 // Source lists Station's tracks, and the filter they're under.
 type Source interface {
 	Tracks(ctx context.Context) ([]Track, track.Filter, error)
+}
+
+// Removed reports whether Archive removed t's worktrees.
+func (t Track) Removed() bool {
+	for _, r := range t.Repos {
+		if r.Removed {
+			return true
+		}
+	}
+	return false
 }
 
 // Open reports whether t has a window.
@@ -105,7 +115,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 			engine = e.Name
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: l.Status(),
-			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
+			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}
 	return out, f, nil

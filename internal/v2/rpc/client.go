@@ -133,23 +133,16 @@ func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string
 	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
-// Archive returns the unsaved work it found instead of archiving the
-// track, one line per worktree.
+// Archive returns the work that would be lost instead of archiving the
+// track, when there's some and not p.Force.
 func (c Client) Archive(ctx context.Context, p ArchiveParams) ([]string, error) {
-	var r CleanResult
-	return r.Unsaved, c.Call(ctx, Archive, p, &r, nil)
+	var r LostResult
+	return r.Lost, c.Call(ctx, Archive, p, &r, nil)
 }
 
 // Derail returns the work that would be lost instead of deleting the
 // track, when p.Check or there's some and not p.Force.
 func (c Client) Derail(ctx context.Context, p DerailParams) ([]string, error) {
-	var r CleanResult
-	return r.Unsaved, c.Call(ctx, Derail, p, &r, nil)
-}
-
-// Clean returns the unsaved work it found instead of removing it,
-// unless p.Force.
-func (c Client) Clean(ctx context.Context, p CleanParams) ([]string, error) {
-	var r CleanResult
-	return r.Unsaved, c.Call(ctx, Clean, p, &r, nil)
+	var r LostResult
+	return r.Lost, c.Call(ctx, Derail, p, &r, nil)
 }

@@ -90,7 +90,6 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			return nil, c.Tracks.End(ctx, p.ID)
 		},
 		rpc.Resume:  c.resume,
-		rpc.Clean:   c.clean,
 		rpc.Archive: c.archive,
 		rpc.Derail:  c.derail,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
@@ -131,44 +130,18 @@ func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
 	return rpc.ResumeResult{CreateResult: rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}}, nil
 }
 
-func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
-	var p rpc.CleanParams
-	if err := call.Decode(&p); err != nil {
-		return nil, err
-	}
-	var unsaved []workspace.Unsaved
-	var err error
-	if p.Check {
-		unsaved, err = c.Tracks.Unsaved(ctx, p.ID)
-	} else if unsaved, err = c.Tracks.Clean(ctx, p.ID, p.Force); err == nil && len(unsaved) == 0 {
-		c.Log.Printf("cleaned %s", p.ID)
-	}
-	if err != nil {
-		c.Log.Printf("cleaning %s failed: %v", p.ID, err)
-		return nil, err
-	}
-	var r rpc.CleanResult
-	for _, u := range unsaved {
-		r.Unsaved = append(r.Unsaved, u.String())
-	}
-	return r, nil
-}
-
 func (c Config) archive(ctx context.Context, call *rpc.Call) (any, error) {
 	var p rpc.ArchiveParams
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	unsaved, err := c.Tracks.Archive(ctx, p.ID, p.Force)
+	lost, err := c.Tracks.Archive(ctx, p.ID, p.Force)
 	if err != nil {
 		c.Log.Printf("archiving %s failed: %v", p.ID, err)
 		return nil, err
 	}
-	var r rpc.CleanResult
-	for _, u := range unsaved {
-		r.Unsaved = append(r.Unsaved, u.String())
-	}
-	if len(r.Unsaved) == 0 {
+	r := lostResult(lost)
+	if len(r.Lost) == 0 {
 		c.Log.Printf("archived %s", p.ID)
 	}
 	return r, nil
@@ -190,11 +163,15 @@ func (c Config) derail(ctx context.Context, call *rpc.Call) (any, error) {
 		c.Log.Printf("derailing %s failed: %v", p.ID, err)
 		return nil, err
 	}
-	var r rpc.CleanResult
+	return lostResult(lost), nil
+}
+
+func lostResult(lost []workspace.Unsaved) rpc.LostResult {
+	var r rpc.LostResult
 	for _, u := range lost {
-		r.Unsaved = append(r.Unsaved, u.String())
+		r.Lost = append(r.Lost, u.String())
 	}
-	return r, nil
+	return r
 }
 
 // autoArchive archives the old tracks and logs which.

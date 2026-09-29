@@ -42,11 +42,11 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	if err := f.svc.End(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Clean(ctx, id, true); err != nil {
+	if _, err := f.svc.Archive(ctx, id, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Errorf("Clean left the hooks: %v", err)
+		t.Errorf("Archive left the hooks: %v", err)
 	}
 }
 

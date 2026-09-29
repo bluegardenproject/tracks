@@ -60,35 +60,32 @@ type station struct {
 	offline     bool // the daemon's change stream broke
 }
 
-// question is what Station asks before ending, cleaning or archiving a
+// question is what Station asks before ending, archiving or derailing a
 // track, or when resuming one finds a worktree gone.
 type question struct {
 	id, name string // the track's
 	kind     asked
-	lines    []string // the unsaved work, or the missing worktrees
+	lines    []string // the work that would be lost, or the missing worktrees
 }
 
 type asked int
 
 const (
 	askEnd asked = iota
-	askClean
 	askRecreate
 	askArchive
 	askDerail
 )
 
-// enterConfirms says Enter answers yes. Removing unsaved work and a
+// enterConfirms says Enter answers yes. Losing work, derailing and a
 // worktree that's gone take y, not the Enter that resumes.
 func (q question) enterConfirms() bool {
-	return q.kind == askEnd || (q.kind == askClean || q.kind == askArchive) && len(q.lines) == 0
+	return q.kind == askEnd || q.kind == askArchive && len(q.lines) == 0
 }
 
 // confirm does what q asked about.
 func (m Model) confirm(q question) (Model, tea.Cmd) {
 	switch q.kind {
-	case askClean:
-		return m, m.clean(q)
 	case askRecreate:
 		return m.startResume(q.id, q.name, true)
 	case askArchive:

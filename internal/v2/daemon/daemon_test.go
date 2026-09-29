@@ -122,12 +122,6 @@ func TestDaemon(t *testing.T) {
 	if err := client.Report(ctx, rpc.ReportParams{ID: "20260928-101500-abc123", Event: "agent.waiting"}); !errors.As(err, &p) {
 		t.Errorf("reporting on a missing track: %v, want a problem", err)
 	}
-	for _, params := range []rpc.CleanParams{{Check: true}, {Force: true}} {
-		params.ID = "20260928-101500-abc123"
-		if _, err := client.Clean(ctx, params); !errors.As(err, &p) {
-			t.Errorf("cleaning a missing track with %+v: %v, want a problem", params, err)
-		}
-	}
 	if _, err := client.Archive(ctx, rpc.ArchiveParams{ID: "20260928-101500-abc123"}); !errors.As(err, &p) {
 		t.Errorf("archiving a missing track: %v, want a problem", err)
 	}
