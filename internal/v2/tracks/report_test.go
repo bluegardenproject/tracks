@@ -37,12 +37,16 @@ func TestReport(t *testing.T) {
 		{track.Ended, track.Done},
 		{track.AgentWaiting, track.Done},
 	}
+	window := got.Window.ID
 	for _, st := range steps {
 		if err := f.svc.Report(ctx, id, st.e); err != nil {
 			t.Fatal(err)
 		}
 		if s := status(); s != st.want {
 			t.Errorf("after %s the track is %s, want %s", st.e, s.ID, st.want.ID)
+		}
+		if st.want != track.Done && f.windows.attention[window] != st.want.Attention {
+			t.Errorf("after %s the window's mark is %v", st.e, f.windows.attention[window])
 		}
 	}
 
