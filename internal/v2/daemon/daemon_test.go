@@ -14,6 +14,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
+	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
@@ -53,7 +54,7 @@ func config(t *testing.T) (Config, *fakeTmux) {
 			DataDir: dir, Socket: filepath.Join(dir, "daemon.sock"), Lock: filepath.Join(dir, "daemon.lock"),
 			BinDir: filepath.Join(dir, "bin"),
 		},
-		Version: "v-test", Tracks: &tracks.Service{Store: st, Windows: noWindows{}}, Tmux: tm, Session: "tracks",
+		Version: "v-test", Tracks: &tracks.Service{Store: st, Windows: noWindows{}, Settings: func() (settings.Settings, error) { return settings.Settings{}, nil }}, Tmux: tm, Session: "tracks",
 		Home: filepath.Join(dir, "home"), Log: log.New(io.Discard, "", 0), Every: 10 * time.Millisecond,
 	}, tm
 }
@@ -125,6 +126,9 @@ func TestDaemon(t *testing.T) {
 		if _, err := client.Clean(ctx, params); !errors.As(err, &p) {
 			t.Errorf("cleaning a missing track with %+v: %v, want a problem", params, err)
 		}
+	}
+	if _, err := client.Archive(ctx, rpc.ArchiveParams{ID: "20260928-101500-abc123"}); !errors.As(err, &p) {
+		t.Errorf("archiving a missing track: %v, want a problem", err)
 	}
 
 	if err := client.Shutdown(ctx); err != nil {

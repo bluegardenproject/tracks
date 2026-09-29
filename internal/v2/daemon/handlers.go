@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/v2/agents/claude"
@@ -41,8 +42,9 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.End(ctx, p.ID)
 		},
-		rpc.Resume: c.resume,
-		rpc.Clean:  c.clean,
+		rpc.Resume:  c.resume,
+		rpc.Clean:   c.clean,
+		rpc.Archive: c.archive,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -102,6 +104,35 @@ func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
 		r.Unsaved = append(r.Unsaved, u.String())
 	}
 	return r, nil
+}
+
+func (c Config) archive(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.ArchiveParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	unsaved, err := c.Tracks.Archive(ctx, p.ID, p.Force)
+	if err != nil {
+		c.Log.Printf("archiving %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	var r rpc.CleanResult
+	for _, u := range unsaved {
+		r.Unsaved = append(r.Unsaved, u.String())
+	}
+	if len(r.Unsaved) == 0 {
+		c.Log.Printf("archived %s", p.ID)
+	}
+	return r, nil
+}
+
+// autoArchive archives the old tracks and logs which.
+func (c Config) autoArchive(ctx context.Context) error {
+	names, err := c.Tracks.AutoArchive(ctx)
+	if len(names) > 0 {
+		c.Log.Printf("archived %s, ended over a week ago", strings.Join(names, ", "))
+	}
+	return err
 }
 
 func (c Config) create(ctx context.Context, call *rpc.Call) (any, error) {

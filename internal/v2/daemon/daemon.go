@@ -22,10 +22,12 @@ import (
 var ErrRunning = errors.New("another daemon is running")
 
 // every is how often the windows are checked, pollEvery how often
-// GitHub is asked about the tracks' PRs.
+// GitHub is asked about the tracks' PRs, archiveEvery how often old
+// tracks are archived.
 const (
-	every     = 2 * time.Second
-	pollEvery = 2 * time.Minute
+	every        = 2 * time.Second
+	pollEvery    = time.Minute
+	archiveEvery = time.Hour
 )
 
 // Config is what the daemon runs with.
@@ -44,7 +46,7 @@ type Config struct {
 	Home string
 	Log  *log.Logger
 	// Every is how often the windows are checked; 0 is 2 s. PollEvery is
-	// how often the PRs are; 0 is 2 minutes.
+	// how often the PRs are; 0 is a minute.
 	Every, PollEvery time.Duration
 }
 
@@ -93,12 +95,17 @@ func Run(ctx context.Context, c Config) error {
 	polls := time.NewTicker(pollInterval)
 	defer polls.Stop()
 	pollCtx, cancelPoll := context.WithCancel(ctx)
-	poller := &poller{log: c.Log}
-	defer poller.wait()
+	prs := &poller{log: c.Log, what: "checking the pull requests"}
+	defer prs.wait()
+	archives := time.NewTicker(archiveEvery)
+	defer archives.Stop()
+	archiver := &poller{log: c.Log, what: "archiving old tracks"}
+	defer archiver.wait()
 	defer cancelPoll()
 
 	c.Log.Printf("started, pid %d", os.Getpid())
-	poller.start(pollCtx, c.Tracks.PollPRs)
+	prs.start(pollCtx, c.Tracks.PollPRs)
+	archiver.start(pollCtx, c.autoArchive)
 	reason := ""
 	for reason == "" {
 		select {
@@ -109,7 +116,9 @@ func Run(ctx context.Context, c Config) error {
 		case err := <-served:
 			return err
 		case <-polls.C:
-			poller.start(pollCtx, c.Tracks.PollPRs)
+			prs.start(pollCtx, c.Tracks.PollPRs)
+		case <-archives.C:
+			archiver.start(pollCtx, c.autoArchive)
 		case <-tick.C:
 			if !c.Tmux.HasSession(c.Session) {
 				reason = "the tmux session is gone"

@@ -18,6 +18,7 @@ const (
 	End      = "end"
 	Resume   = "resume"
 	Clean    = "clean"
+	Archive  = "archive"
 	Report   = "report"
 )
 
@@ -104,6 +105,13 @@ type ResumeResult struct {
 type CleanParams struct {
 	ID    string `json:"id"`
 	Check bool   `json:"check,omitempty"`
+	Force bool   `json:"force,omitempty"`
+}
+
+// ArchiveParams names the ended track to archive. Force removes its
+// worktrees even with unsaved work in them; the result is a CleanResult.
+type ArchiveParams struct {
+	ID    string `json:"id"`
 	Force bool   `json:"force,omitempty"`
 }
 

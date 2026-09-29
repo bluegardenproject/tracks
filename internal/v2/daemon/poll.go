@@ -6,11 +6,12 @@ import (
 	"sync"
 )
 
-// poller runs one PR poll at a time beside the daemon's loop, since gh
-// can take seconds, and logs a failure only when it changes, so a
-// missing gh is logged once.
+// poller runs one job at a time beside the daemon's loop, since gh or
+// git can take seconds, and logs a failure only when it changes, so a
+// missing gh is logged once. What names the job in the log.
 type poller struct {
 	log     *log.Logger
+	what    string
 	mu      sync.Mutex
 	running bool
 	last    string
@@ -37,7 +38,7 @@ func (p *poller) start(ctx context.Context, poll func(context.Context) error) {
 			msg = err.Error()
 		}
 		if msg != p.last && msg != "" {
-			p.log.Printf("checking the pull requests: %s", msg)
+			p.log.Printf("%s: %s", p.what, msg)
 		}
 		p.last = msg
 	}()

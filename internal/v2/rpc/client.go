@@ -104,6 +104,13 @@ func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string
 	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
+// Archive returns the unsaved work it found instead of archiving the
+// track, one line per worktree.
+func (c Client) Archive(ctx context.Context, p ArchiveParams) ([]string, error) {
+	var r CleanResult
+	return r.Unsaved, c.Call(ctx, Archive, p, &r, nil)
+}
+
 // Clean returns the unsaved work it found instead of removing it,
 // unless p.Force.
 func (c Client) Clean(ctx context.Context, p CleanParams) ([]string, error) {

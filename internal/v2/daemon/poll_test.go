@@ -12,7 +12,7 @@ import (
 func TestPoller(t *testing.T) {
 	ctx := context.Background()
 	var logs bytes.Buffer
-	p := &poller{log: log.New(&logs, "", 0)}
+	p := &poller{log: log.New(&logs, "", 0), what: "checking the pull requests"}
 
 	release := make(chan struct{})
 	runs := 0
