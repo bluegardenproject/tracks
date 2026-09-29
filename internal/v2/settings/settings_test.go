@@ -129,3 +129,60 @@ func TestRemovingTheLastEngineKeepsUnknownOnes(t *testing.T) {
 		t.Errorf("removing the last engine should remove it, with its unknown keys, and keep codex:\n%s", data)
 	}
 }
+
+func TestRunsOn(t *testing.T) {
+	var s Settings
+	if e, m := s.RunsOn("work"); e != "" || m != "" {
+		t.Errorf("no engines: %q, %q", e, m)
+	}
+	s.Engines.Cursor = &Engine{Model: "gpt-5"}
+	if e, m := s.RunsOn("work"); e != "cursor" || m != "gpt-5" {
+		t.Errorf("only Cursor: %q, %q", e, m)
+	}
+	s.Engines.Claude = &Engine{Model: "opus"}
+	if e, m := s.RunsOn("work"); e != "claude" || m != "opus" {
+		t.Errorf("unset with Claude: %q, %q", e, m)
+	}
+	s.Tracks.Set("ask", &TrackType{Engine: "cursor"})
+	s.Tracks.Set("plan", &TrackType{Engine: "claude", Model: "sonnet"})
+	if e, m := s.RunsOn("ask"); e != "cursor" || m != "gpt-5" {
+		t.Errorf("ask on Cursor's default: %q, %q", e, m)
+	}
+	if e, m := s.RunsOn("plan"); e != "claude" || m != "sonnet" {
+		t.Errorf("plan on sonnet: %q, %q", e, m)
+	}
+	s.Engines.Cursor = nil
+	if e, m := s.RunsOn("ask"); e != "cursor" || m != "" {
+		t.Errorf("ask on Cursor, removed: %q, %q; want cursor all the same", e, m)
+	}
+}
+
+func TestTracksKeepWhatThisBuildDoesntKnow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.yaml")
+	newer := "tracks:\n  work:\n    engine: claude\n    effort: high # newer\n  triage: {engine: cursor}\n"
+	if err := os.WriteFile(path, []byte(newer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil || s.Tracks.Get("work") == nil || s.Tracks.Get("work").Engine != "claude" {
+		t.Fatalf("Load: %+v, %v", s.Tracks, err)
+	}
+	s.Tracks.Set("work", &TrackType{Engine: "claude", Model: "opus"})
+	s.Tracks.Set("doc", &TrackType{Engine: "cursor"})
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	for _, want := range []string{"model: opus", "effort: high # newer", "triage: {engine: cursor}", "doc:\n        engine: cursor"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("saved file lacks %q:\n%s", want, data)
+		}
+	}
+	s.Tracks.Set("work", nil)
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); strings.Contains(string(data), "work") || !strings.Contains(string(data), "triage") {
+		t.Errorf("unsetting Work should keep the rest:\n%s", data)
+	}
+}
