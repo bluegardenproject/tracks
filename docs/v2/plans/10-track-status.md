@@ -70,9 +70,9 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 
 ## The pane check
 
-The daemon's 2-second tick already sweeps the windows. It also reads the agent's pane (`capture-pane`, the last screen only) in two cases:
-- **A Claude track in action required:** when the dialog is gone (no `☐` prompt header, v1's marker), it's active again. This covers Esc, which fires no hook.
-- **A Cursor track that's active,** in kinds that run without `--force` (Ask, Plan, Review, Doc): Cursor's approval and question dialogs mean action required, and their absence means active. Their markers are taken from a real Cursor session before this is built.
+The daemon's 2-second tick already sweeps the windows. It also reads the agent's pane (`capture-pane`, the visible screen only) in two cases:
+- **A Claude track in action required:** when two checks in a row find no dialog, it's active again. This covers Esc, which fires no hook. A dialog is its selected option, such as `❯ 1. Yes`, which Claude's permission prompts, questions and plan approvals all show.
+- **A Cursor track that's active** and runs without `--force` (Ask, Plan and Doc, and Work and Review without auto mode): Cursor's approval and question dialogs mean action required, and their absence means active. Their markers are taken from a real Cursor session first; until then Cursor tracks aren't checked.
 
 ## Pull requests
 
