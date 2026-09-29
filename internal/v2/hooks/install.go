@@ -31,7 +31,8 @@ var claudeHooks = []struct{ event, matcher string }{
 // cursorHooks are the Cursor events Tracks subscribes to. The
 // permission hooks (preToolUse, before*Execution) are left alone: a
 // wrong answer there blocks the action or skips the user's approval.
-var cursorHooks = []string{"beforeSubmitPrompt", "postToolUse", "postToolUseFailure", "stop"}
+var cursorHooks = []string{"beforeSubmitPrompt", "postToolUse", "postToolUseFailure", "stop",
+	"afterShellExecution", "afterAgentResponse"}
 
 // Command is the hook command for engine on track id: program is the
 // tracks command.

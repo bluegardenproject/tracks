@@ -48,7 +48,12 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			if err := call.Decode(&p); err != nil {
 				return nil, err
 			}
-			return nil, c.Tracks.Report(ctx, p.ID, track.Event(p.Event))
+			if p.Event != "" {
+				if err := c.Tracks.Report(ctx, p.ID, track.Event(p.Event)); err != nil {
+					return nil, err
+				}
+			}
+			return nil, c.Tracks.SeePRs(ctx, p.ID, p.PRs)
 		},
 	}
 }
