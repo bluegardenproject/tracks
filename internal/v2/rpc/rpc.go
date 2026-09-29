@@ -74,10 +74,11 @@ type EndParams struct {
 	ID string `json:"id"`
 }
 
-// CleanParams names the track to clean. Force removes its worktrees
-// even with unsaved work in them.
+// CleanParams names the track to clean. Check only looks for unsaved
+// work; Force removes the worktrees even with some in them.
 type CleanParams struct {
 	ID    string `json:"id"`
+	Check bool   `json:"check,omitempty"`
 	Force bool   `json:"force,omitempty"`
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/agents"
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
@@ -83,13 +84,8 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 		return nil, err
 	}
 	defer release()
-	switch {
-	case !t.Kind.Worktrees():
-		return nil, Problem(t.Name + " has no worktrees.")
-	case t.Open():
-		return nil, Problem("End " + t.Name + " before cleaning it.")
-	case t.Cleaned():
-		return nil, nil
+	if err := cleanable(t); err != nil || t.Cleaned() {
+		return nil, err
 	}
 	if !force {
 		unsaved, err := s.Worktrees.Unsaved(ctx, t)
@@ -101,4 +97,28 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 		return nil, err
 	}
 	return nil, s.Store.CleanTrack(context.WithoutCancel(ctx), t.ID, s.now())
+}
+
+// Unsaved is Clean's check alone: the work in ended track id's
+// worktrees that exists nowhere else. It removes nothing.
+func (s *Service) Unsaved(ctx context.Context, id string) ([]workspace.Unsaved, error) {
+	t, release, err := s.hold(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if err := cleanable(t); err != nil || t.Cleaned() {
+		return nil, err
+	}
+	return s.Worktrees.Unsaved(ctx, t)
+}
+
+func cleanable(t track.Track) error {
+	switch {
+	case !t.Kind.Worktrees():
+		return Problem(t.Name + " has no worktrees.")
+	case t.Open():
+		return Problem("End " + t.Name + " before cleaning it.")
+	}
+	return nil
 }

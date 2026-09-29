@@ -10,6 +10,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
+	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
 func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
@@ -62,7 +63,13 @@ func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	unsaved, err := c.Tracks.Clean(ctx, p.ID, p.Force)
+	var unsaved []workspace.Unsaved
+	var err error
+	if p.Check {
+		unsaved, err = c.Tracks.Unsaved(ctx, p.ID)
+	} else if unsaved, err = c.Tracks.Clean(ctx, p.ID, p.Force); err == nil && len(unsaved) == 0 {
+		c.Log.Printf("cleaned %s", p.ID)
+	}
 	if err != nil {
 		c.Log.Printf("cleaning %s failed: %v", p.ID, err)
 		return nil, err
@@ -70,9 +77,6 @@ func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
 	var r rpc.CleanResult
 	for _, u := range unsaved {
 		r.Unsaved = append(r.Unsaved, u.String())
-	}
-	if len(unsaved) == 0 {
-		c.Log.Printf("cleaned %s", p.ID)
 	}
 	return r, nil
 }
