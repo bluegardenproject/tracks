@@ -76,6 +76,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				ThemesDir:  paths.ThemesDir,
 				Engines:    engines{path: paths.Settings},
 				TrackTypes: trackTypes{path: paths.Settings},
+				History:    history{path: paths.Settings},
 				About:      about(paths),
 			})
 			_, err = tea.NewProgram(window,

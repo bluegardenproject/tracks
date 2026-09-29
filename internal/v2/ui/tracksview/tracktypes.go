@@ -18,22 +18,25 @@ import (
 const notListed = "not listed on the Engines tab"
 
 // typesState is Settings → Tracks: each track type's default agent and
-// model.
+// model. Its focus moves on to the Tracks History group below.
 type typesState struct {
 	tracks  settings.Tracks
 	loadErr error
 	kind    int // the selected type, in track.Kinds
-	focus   int // typeRow, typeAgent or typeModel
+	focus   int // typeRow to typeUnsaved
 	hover   typeHit
 	// saving is a save on its way; pending is another one due after it.
 	saving, pending bool
 }
 
-// The Tracks section's controls.
+// The Tracks section's controls: the types' row and fields, then
+// Tracks History's.
 const (
 	typeRow = iota
 	typeAgent
 	typeModel
+	typeAutoArchive
+	typeUnsaved
 )
 
 // typeHit is a type in the row, or a field; -1 for none.
@@ -184,6 +187,12 @@ func (m Model) typesIntro(width int) []string {
 }
 
 func (m Model) typesView(width int) []string {
+	history, _ := m.historyView(width)
+	return append(append(m.typesBody(width), ""), history...)
+}
+
+// typesBody is the section above Tracks History.
+func (m Model) typesBody(width int) []string {
 	t := m.settings.types
 	lit := func(field int) bool {
 		return t.hover.field == field || m.settings.editing && t.focus == field
@@ -229,6 +238,17 @@ func (m Model) typeAt(bx, by int) typeHit {
 			return typeHit{-1, typeAgent + by - top - 2}
 		}
 	}
+	_, rows := m.historyView(m.sectionWidth())
+	top = len(m.typesBody(m.sectionWidth())) + 1
+	for field, row := range rows {
+		w := m.themeFieldWidth() + 2
+		if field == typeAutoArchive {
+			w = len("[x] Auto-archive tracks")
+		}
+		if by == top+row && bx >= 0 && bx < w {
+			return typeHit{-1, field}
+		}
+	}
 	return typeHit{-1, -1}
 }
 
@@ -240,9 +260,21 @@ func (m Model) typesClick(bx, by int) (Model, tea.Cmd) {
 		t.kind, t.focus = h.kind, typeRow
 	case h.field >= 0:
 		t.focus = h.field
-		return m.openTypePicker()
+		return m.pressTypeField()
 	}
 	return m, nil
+}
+
+// pressTypeField acts on the focused field: a picker opens, the
+// checkbox toggles.
+func (m Model) pressTypeField() (Model, tea.Cmd) {
+	switch m.settings.types.focus {
+	case typeAutoArchive:
+		return m.toggleAutoArchive()
+	case typeUnsaved:
+		return m.openUnsavedPicker()
+	}
+	return m.openTypePicker()
 }
 
 // typesKey handles a key while the Tracks section has focus.
@@ -256,13 +288,15 @@ func (m Model) typesKey(key string) (Model, tea.Cmd) {
 	case "up", "k", "shift+tab":
 		t.focus = max(typeRow, t.focus-1)
 	case "down", "j", "tab":
-		t.focus = min(typeModel, t.focus+1)
+		t.focus = min(m.lastTypeField(), t.focus+1)
 	case "enter", "space":
 		if t.focus == typeRow {
 			t.focus = typeAgent
 			return m, nil
 		}
-		return m.openTypePicker()
+		next, cmd := m.pressTypeField()
+		next.settings.types.focus = min(next.settings.types.focus, next.lastTypeField())
+		return next, cmd
 	}
 	return m, nil
 }

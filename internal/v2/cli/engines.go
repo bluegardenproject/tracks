@@ -46,6 +46,24 @@ func (t trackTypes) Save(tracks settings.Tracks) error {
 	return settings.Save(t.path, s)
 }
 
+type history struct{ path string }
+
+var _ source.History = history{}
+
+func (h history) Load() (settings.History, error) {
+	s, err := settings.Load(h.path)
+	return s.History, err
+}
+
+func (h history) Save(history settings.History) error {
+	s, err := settings.Load(h.path)
+	if err != nil {
+		return err
+	}
+	s.History = history
+	return settings.Save(h.path, s)
+}
+
 func (engines) Check(ctx context.Context, e agents.Engine) (agents.Found, error) {
 	return agents.Check(ctx, e)
 }
