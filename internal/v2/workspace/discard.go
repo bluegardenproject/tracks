@@ -11,7 +11,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-// Lost is what Derail would lose of t, one entry per repo with some:
+// Lost is what Discard would lose of t, one entry per repo with some:
 // the changed and untracked files in the worktrees still there, and the
 // commits on a work track's branches that no other branch and no remote
 // has, or for a review, those made in its worktree.
@@ -54,10 +54,10 @@ func branchOnly(ctx context.Context, r track.Repo) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(out))
 }
 
-// Derail removes t's worktrees, whatever they hold, and a work track's
-// branches. A branch that is a repo's base or checked out in its
-// primary checkout stays.
-func (w *Worktrees) Derail(ctx context.Context, t track.Track) error {
+// Discard removes t's worktrees, whatever they hold, and a work track's
+// local branches. A branch that is a repo's base or checked out in its
+// primary checkout stays, and so does whatever was pushed.
+func (w *Worktrees) Discard(ctx context.Context, t track.Track) error {
 	repos := w.Branches(ctx, t)
 	if err := w.RemoveWorktrees(ctx, t.ID, repos); err != nil {
 		return err

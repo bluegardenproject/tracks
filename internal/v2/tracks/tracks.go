@@ -61,10 +61,10 @@ type Worktrees interface {
 	Branches(ctx context.Context, t track.Track) []track.Repo
 	// RemoveWorktrees removes the worktrees and keeps the branches.
 	RemoveWorktrees(ctx context.Context, id string, repos []track.Repo) error
-	// Lost is what Derail would lose; Derail removes the worktrees and
-	// a work track's branches.
+	// Lost is what Discard would lose; Discard removes the worktrees
+	// and a work track's local branches.
 	Lost(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
-	Derail(ctx context.Context, t track.Track) error
+	Discard(ctx context.Context, t track.Track) error
 }
 
 // Windows opens and closes the tracks' windows.

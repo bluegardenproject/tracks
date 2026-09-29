@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/git"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
@@ -21,7 +22,8 @@ func (w *Worktrees) Missing(t track.Track) []track.Repo {
 }
 
 // Restore re-creates t's worktrees that are gone: a work track's on its
-// branch, a review's by fetching its ref again. It returns the repos it
+// branch, which is re-created too when it was deleted, a review's by
+// fetching its ref again. It returns the repos it
 // re-created. When one fails, those it made are removed again.
 func (w *Worktrees) Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
 	if !t.Kind.Worktrees() {
@@ -59,10 +61,33 @@ func (w *Worktrees) restore(ctx context.Context, r track.Repo, review Review, pr
 		return fmt.Errorf("check branch %s in %s: %w", r.Branch, r.Name, err)
 	}
 	if !found {
-		return fmt.Errorf("%s no longer exists in %s", r.Branch, r.Name)
+		return w.rebranch(ctx, primary, r, progress)
 	}
 	progress(fmt.Sprintf("Re-creating the worktree for %s on %s…", r.Name, r.Branch))
 	if err := primary.CheckoutWorktree(ctx, r.Worktree, r.Branch); err != nil {
+		return fmt.Errorf("re-create the worktree for %s: %w", r.Name, err)
+	}
+	return nil
+}
+
+// rebranch re-creates r's deleted branch with its worktree: from the
+// pushed branch when origin has it, else as a new branch from
+// origin/<base>.
+func (w *Worktrees) rebranch(ctx context.Context, primary *git.PrimaryRepoClient, r track.Repo, progress func(string)) error {
+	heads, _, err := primary.Runner.Run(ctx, "ls-remote", "--heads", "origin", "refs/heads/"+r.Branch)
+	if err != nil {
+		return fmt.Errorf("look for %s on origin in %s: %w", r.Branch, r.Name, err)
+	}
+	start := r.Base
+	if strings.TrimSpace(heads) != "" {
+		start = r.Branch
+	}
+	progress(fmt.Sprintf("Fetching origin/%s in %s…", start, r.Name))
+	if err := primary.FetchWithRetry(ctx, "origin", start); err != nil {
+		return fmt.Errorf("fetch %s in %s: %w", start, r.Name, err)
+	}
+	progress(fmt.Sprintf("Re-creating %s in %s from origin/%s…", r.Branch, r.Name, start))
+	if err := primary.AddWorktree(ctx, r.Worktree, r.Branch, "origin/"+start); err != nil {
 		return fmt.Errorf("re-create the worktree for %s: %w", r.Name, err)
 	}
 	return nil
