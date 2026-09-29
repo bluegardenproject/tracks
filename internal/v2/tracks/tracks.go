@@ -42,7 +42,7 @@ type Store interface {
 	Rename(ctx context.Context, id, name string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
-	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) error
+	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
 }
 
@@ -89,6 +89,9 @@ type Service struct {
 	HooksDir string
 	// GitHub is asked about the tracks' PRs; nil doesn't poll.
 	GitHub GitHub
+	// Changes hears when the track windows change, which Store doesn't
+	// see; give Store as Watched with the same Changes for the rest.
+	Changes *Changes
 	// Now and NewID are the clock and the track IDs; nil is the real
 	// ones.
 	Now   func() time.Time
@@ -105,6 +108,9 @@ type Service struct {
 	// gone counts, per waiting track, the checks in a row that found
 	// its dialog closed.
 	gone map[string]int
+	// windows are the track windows the last Sweep saw; only Sweep
+	// uses them.
+	windows []trackwin.Info
 }
 
 // ended is how many ended tracks List returns, the most recent ones.

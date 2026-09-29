@@ -52,7 +52,7 @@ func TestPollPRs(t *testing.T) {
 	}
 	merged, _ := track.ParsePR(settled)
 	merged.State = track.PRMerged
-	if err := f.store.SavePR(ctx, ask.Track.ID, merged, f.svc.now()); err != nil {
+	if _, err := f.store.SavePR(ctx, ask.Track.ID, merged, f.svc.now()); err != nil {
 		t.Fatal(err)
 	}
 	draft, _ := track.ParsePR(byHand)
