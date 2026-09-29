@@ -72,6 +72,9 @@ type Service struct {
 	Engines map[string]Engine
 	// SocketDir and BinDir go into every agent pane's environment.
 	SocketDir, BinDir string
+	// HooksDir holds each track's hooks, a folder per track; "" starts
+	// agents without them.
+	HooksDir string
 	// Now and NewID are the clock and the track IDs; nil is the real
 	// ones.
 	Now   func() time.Time

@@ -27,6 +27,9 @@ type Spec struct {
 	// SocketDir is where the daemon listens, and BinDir goes first on
 	// the pane's PATH.
 	SocketDir, BinDir string
+	// Hooks is the track's hooks, as the engine takes them: Claude's
+	// settings file, Cursor's plugin folder; "" for none.
+	Hooks string
 }
 
 // Start is the command a track's agent pane runs, and the folder it
