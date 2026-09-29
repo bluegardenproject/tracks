@@ -38,8 +38,8 @@ func TestTracksHistory(t *testing.T) {
 	}
 
 	m = settle(m, downKey, enterKey, downKey, enterKey)
-	if !history.saved.KeepUnsaved() || !strings.Contains(plainView(m), "Archive, keep the worktrees") {
-		t.Fatalf("picking Archive, keep the worktrees: saved %+v", history.saved)
+	if !history.saved.KeepUnsaved() || !strings.Contains(plainView(m), "Archive, remove nothing") {
+		t.Fatalf("picking Archive, remove nothing: saved %+v", history.saved)
 	}
 
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, enterKey)
