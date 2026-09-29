@@ -83,6 +83,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 	for _, d := range dirs {
 		line.Set("--add-dir", d)
 	}
+	line.SetIf("--settings", s.Hooks)
 	return agents.Start{Command: s.Wrap(line.Build()), Dir: dir}, nil
 }
 

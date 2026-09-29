@@ -65,6 +65,7 @@ func newDaemonCmd(version string) *cobra.Command {
 					Settings:  func() (settings.Settings, error) { return settings.Load(paths.Settings) },
 					SocketDir: paths.DataDir,
 					BinDir:    paths.BinDir,
+					HooksDir:  filepath.Join(paths.DataDir, "hooks"),
 				},
 			})
 			switch {

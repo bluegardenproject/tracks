@@ -62,11 +62,19 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 	}
 	// Undoing runs to the end even when ctx is cancelled.
 	undo := context.WithoutCancel(ctx)
-	removeWorktrees := func() { _ = s.Worktrees.Remove(undo, t) }
+	removeWorktrees := func() {
+		_ = s.Worktrees.Remove(undo, t)
+		s.removeHooks(t.ID)
+	}
 
+	hooks, err := s.installHooks(t)
+	if err != nil {
+		removeWorktrees()
+		return Created{}, err
+	}
 	start, err := engine.Command(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
-		SocketDir: s.SocketDir, BinDir: s.BinDir,
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
 	})
 	if err != nil {
 		removeWorktrees()

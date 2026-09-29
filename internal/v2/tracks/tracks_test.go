@@ -197,7 +197,7 @@ func newFixture(t *testing.T) *fixture {
 			n++
 			return "20260928-101500-abc12" + string(rune('0'+n))
 		},
-		SocketDir: "/data", BinDir: "/data/bin",
+		SocketDir: "/data", BinDir: "/data/bin", HooksDir: filepath.Join(dir, "hooks"),
 	}
 	return f
 }

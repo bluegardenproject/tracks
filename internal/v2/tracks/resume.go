@@ -71,9 +71,14 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 	undo := context.WithoutCancel(ctx)
 	removeWorktrees := func() { _ = s.Worktrees.RemoveWorktrees(undo, t.ID, made) }
 
+	hooks, err := s.installHooks(t)
+	if err != nil {
+		removeWorktrees()
+		return Created{}, err
+	}
 	start, err := engine.Command(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), Resume: true,
-		SocketDir: s.SocketDir, BinDir: s.BinDir,
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
 	})
 	if err != nil {
 		removeWorktrees()
@@ -124,6 +129,7 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 	if err := s.Worktrees.RemoveWorktrees(ctx, t.ID, t.Repos); err != nil {
 		return nil, err
 	}
+	s.removeHooks(t.ID)
 	return nil, s.Report(context.WithoutCancel(ctx), t.ID, track.Cleaned)
 }
 

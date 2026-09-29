@@ -89,5 +89,6 @@ func Command(s agents.Spec) (agents.Start, error) {
 	if !s.Resume {
 		line.SetIf("--model", t.Model)
 	}
+	line.SetIf("--plugin-dir", s.Hooks)
 	return agents.Start{Command: s.Wrap(line.Build()), Dir: dir}, nil
 }
