@@ -18,6 +18,7 @@ const (
 	End      = "end"
 	Resume   = "resume"
 	Clean    = "clean"
+	Report   = "report"
 )
 
 // Request is one call.
@@ -72,6 +73,13 @@ type ListResult struct {
 // EndParams names the track to end.
 type EndParams struct {
 	ID string `json:"id"`
+}
+
+// ReportParams says event happened to the track: one of track.Event's
+// values.
+type ReportParams struct {
+	ID    string `json:"id"`
+	Event string `json:"event"`
 }
 
 // ResumeParams names the track to resume. Recreate re-creates its

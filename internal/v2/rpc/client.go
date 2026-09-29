@@ -92,6 +92,11 @@ func (c Client) End(ctx context.Context, id string) error {
 	return c.Call(ctx, End, EndParams{ID: id}, nil, nil)
 }
 
+// Report says event happened to track id.
+func (c Client) Report(ctx context.Context, id, event string) error {
+	return c.Call(ctx, Report, ReportParams{ID: id, Event: event}, nil, nil)
+}
+
 // Resume returns the worktrees it couldn't find instead of resuming,
 // unless p.Recreate.
 func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string)) (ResumeResult, error) {
