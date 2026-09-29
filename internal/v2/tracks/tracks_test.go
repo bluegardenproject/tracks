@@ -44,6 +44,7 @@ type fakeWorktrees struct {
 	removed           []string // Remove's tracks
 	cleaned           []string // RemoveWorktrees' tracks, when it had some
 	unsaved           []workspace.Unsaved
+	renamed           map[string]string // repo name to branch
 }
 
 func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
@@ -81,6 +82,17 @@ func (w *fakeWorktrees) Restore(_ context.Context, t track.Track, progress func(
 
 func (w *fakeWorktrees) Unsaved(context.Context, track.Track) ([]workspace.Unsaved, error) {
 	return w.unsaved, nil
+}
+
+// Branches puts the repos named in renamed on their new branch.
+func (w *fakeWorktrees) Branches(_ context.Context, t track.Track) []track.Repo {
+	repos := slices.Clone(t.Repos)
+	for i, r := range repos {
+		if b, ok := w.renamed[r.Name]; ok {
+			repos[i].Branch = b
+		}
+	}
+	return repos
 }
 
 func (w *fakeWorktrees) RemoveWorktrees(_ context.Context, id string, repos []track.Repo) error {
