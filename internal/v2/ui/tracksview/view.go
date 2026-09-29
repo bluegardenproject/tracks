@@ -162,7 +162,7 @@ func (m Model) hints() string {
 			return "  " + joinKeys(key, text, creatorKeys)
 		}
 		return "  " + joinKeys(key, text, scrollKeys)
-	case m.tab == tabSettings && s.section != sectionFastTracks && s.section != sectionAbout:
+	case m.tab == tabSettings && s.section != sectionTrack && s.section != sectionFastTracks && s.section != sectionAbout:
 		keys = settingsListKeys
 	case m.tab == tabSettings:
 		keys = settingsListKeys[:1]

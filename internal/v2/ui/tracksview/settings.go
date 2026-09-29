@@ -14,13 +14,14 @@ import (
 // Settings sections, in display order.
 const (
 	sectionGeneral    = iota
+	sectionTrack      // a placeholder for each track type's defaults
 	sectionFastTracks // empty until Fast Tracks are built
 	sectionCreator
 	sectionKeys
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Track", "Fast Tracks", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
@@ -215,7 +216,7 @@ func (m Model) showSection(i int) Model {
 func (m Model) editSection() (Model, tea.Cmd) {
 	s := &m.settings
 	switch s.section {
-	case sectionFastTracks, sectionAbout:
+	case sectionTrack, sectionFastTracks, sectionAbout:
 		return m, nil
 	case sectionCreator:
 		s.editing = true
