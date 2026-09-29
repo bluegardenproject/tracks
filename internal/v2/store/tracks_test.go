@@ -71,14 +71,8 @@ func TestOpenAndClosedTracks(t *testing.T) {
 		}
 	}
 	closedAt := now.Add(time.Minute)
-	if err := s.CloseTrack(ctx, "a", closedAt); err != nil {
+	if err := s.SetState(ctx, "a", track.State{ClosedAt: closedAt}); err != nil {
 		t.Fatal(err)
-	}
-	if err := s.CloseTrack(ctx, "a", closedAt.Add(time.Hour)); err != nil {
-		t.Errorf("closing twice: %v", err)
-	}
-	if err := s.CloseTrack(ctx, "nope", now); !errors.Is(err, ErrNotFound) {
-		t.Errorf("closing an unknown track: %v, want ErrNotFound", err)
 	}
 	listed, err := s.OpenTracks(ctx)
 	if err != nil || len(listed) != 2 || listed[0].ID != "b" || listed[1].ID != "c" {
@@ -86,11 +80,11 @@ func TestOpenAndClosedTracks(t *testing.T) {
 	}
 	a, _ := s.Track(ctx, "a")
 	if a.Open() || a.ClosedAt.UnixMilli() != closedAt.UnixMilli() {
-		t.Errorf("a closed at %v, want %v, kept on a second close", a.ClosedAt, closedAt)
+		t.Errorf("a closed at %v, want %v", a.ClosedAt, closedAt)
 	}
 }
 
-func TestEndedCleanedAndReopenedTracks(t *testing.T) {
+func TestStateAndName(t *testing.T) {
 	ctx := context.Background()
 	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
 	now := time.Now()
@@ -101,7 +95,7 @@ func TestEndedCleanedAndReopenedTracks(t *testing.T) {
 		}
 	}
 	for i, id := range []string{"c", "a", "b"} {
-		if err := s.CloseTrack(ctx, id, now.Add(time.Duration(i+1)*time.Minute)); err != nil {
+		if err := s.SetState(ctx, id, track.State{ClosedAt: now.Add(time.Duration(i+1) * time.Minute)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -110,14 +104,20 @@ func TestEndedCleanedAndReopenedTracks(t *testing.T) {
 		t.Fatalf("EndedTracks(2) = %+v, %v; want b then a, the last closed first", ended, err)
 	}
 
-	cleaned := now.Add(time.Hour)
-	if err := s.CleanTrack(ctx, "b", cleaned); err != nil {
+	cleaned := track.State{ClosedAt: now, CleanedAt: now.Add(time.Hour)}
+	if err := s.SetState(ctx, "b", cleaned); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := s.Track(ctx, "b"); !b.Cleaned() || b.CleanedAt.UnixMilli() != cleaned.UnixMilli() {
-		t.Errorf("b cleaned at %v, want %v", b.CleanedAt, cleaned)
+	if b, _ := s.Track(ctx, "b"); b.CleanedAt.UnixMilli() != cleaned.CleanedAt.UnixMilli() || b.Status() != track.Closed {
+		t.Errorf("b = %+v, want cleaned at %v", b.State, cleaned.CleanedAt)
 	}
-	if err := s.ReopenTrack(ctx, "b", "b-2"); err != nil {
+	if err := s.SetState(ctx, "d", track.State{Waiting: true}); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.Track(ctx, "d"); !d.Waiting || d.Status() != track.ActionRequired {
+		t.Errorf("d = %+v, want waiting", d.State)
+	}
+	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2")); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" {
@@ -127,7 +127,7 @@ func TestEndedCleanedAndReopenedTracks(t *testing.T) {
 		t.Errorf("OpenTracks after reopening b = %+v", open)
 	}
 	for name, err := range map[string]error{
-		"reopen": s.ReopenTrack(ctx, "nope", "x"), "clean": s.CleanTrack(ctx, "nope", now),
+		"rename": s.Rename(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
 	} {
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s an unknown track: %v, want ErrNotFound", name, err)

@@ -230,7 +230,7 @@ func TestSweepHeals(t *testing.T) {
 	}
 	// one was recorded as ended while its window stayed, and two's
 	// window is gone while it's busy.
-	if err := f.store.CloseTrack(ctx, ids[0], f.svc.now()); err != nil {
+	if err := f.store.SetState(ctx, ids[0], track.State{ClosedAt: f.svc.now()}); err != nil {
 		t.Fatal(err)
 	}
 	f.windows.windows = slices.DeleteFunc(f.windows.windows, func(in trackwin.Info) bool { return in.Name == "two" })

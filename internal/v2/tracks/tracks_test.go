@@ -32,11 +32,11 @@ func (s *failingStore) AddTrack(ctx context.Context, t track.Track) error {
 	return s.Store.AddTrack(ctx, t)
 }
 
-func (s *failingStore) ReopenTrack(ctx context.Context, id, name string) error {
+func (s *failingStore) Rename(ctx context.Context, id, name string) error {
 	if s.fail {
 		return errStep
 	}
-	return s.Store.ReopenTrack(ctx, id, name)
+	return s.Store.Rename(ctx, id, name)
 }
 
 type fakeWorktrees struct {

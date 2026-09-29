@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
@@ -87,12 +86,12 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 		removeWorktrees()
 		return Created{}, err
 	}
-	if err := s.Store.ReopenTrack(undo, t.ID, t.Name); err != nil {
+	if err := s.reopen(undo, t.ID, t.Name); err != nil {
 		_ = s.Windows.Close(win.ID)
 		removeWorktrees()
 		return Created{}, fmt.Errorf("save the track: %w", err)
 	}
-	t.ClosedAt, t.CleanedAt = time.Time{}, time.Time{}
+	t.State = track.State{}
 	return Created{Track: t, Window: win}, nil
 }
 
@@ -125,7 +124,7 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 	if err := s.Worktrees.RemoveWorktrees(ctx, t.ID, t.Repos); err != nil {
 		return nil, err
 	}
-	return nil, s.Store.CleanTrack(context.WithoutCancel(ctx), t.ID, s.now())
+	return nil, s.Report(context.WithoutCancel(ctx), t.ID, track.Cleaned)
 }
 
 // Unsaved is Clean's check alone: the work in ended track id's
