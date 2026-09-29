@@ -134,7 +134,6 @@ func TestResumeChecks(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	tr := f.ended(t, false)
-	cleaned := f.ended(t, true)
 	open, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why"}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +144,6 @@ func TestResumeChecks(t *testing.T) {
 	}{
 		{"open", open.Track.ID, "already open", func() {}},
 		{"gone", "20260928-101500-ffffff", "That track is gone.", func() {}},
-		{"cleaned", cleaned.ID, "was cleaned, so it can't be resumed.", func() {}},
 		{"busy", tr.ID, "fix-it is busy.", func() { f.svc.busy = map[string]bool{tr.ID: true} }},
 		{"engine removed", tr.ID, "Add Claude Code on the Engines tab to resume this track.", func() {
 			f.svc.busy = nil
@@ -164,6 +162,23 @@ func TestResumeChecks(t *testing.T) {
 				t.Error("a refused resume opened a window")
 			}
 		})
+	}
+}
+
+func TestResumeCleaned(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	tr := f.ended(t, true)
+	f.worktrees.gone = map[string]bool{"api": true, "web": true}
+	var missing Missing
+	if _, err := f.svc.Resume(ctx, tr.ID, false, func(string) {}); !errors.As(err, &missing) || len(missing) != 2 {
+		t.Fatalf("resuming without re-creating: %v, want both worktrees missing", err)
+	}
+	if _, err := f.svc.Resume(ctx, tr.ID, true, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if saved, _ := f.store.Track(ctx, tr.ID); !saved.Open() || saved.Cleaned() {
+		t.Errorf("resumed = %+v, want open and no longer cleaned", saved.State)
 	}
 }
 

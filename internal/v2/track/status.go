@@ -37,7 +37,7 @@ var Statuses = []Status{ActionRequired, Active, Done, Closed}
 // it.
 type State struct {
 	ClosedAt   time.Time // zero while its window is open
-	CleanedAt  time.Time // zero while its worktrees exist
+	CleanedAt  time.Time // set when Archive removed its worktrees
 	ArchivedAt time.Time // zero while it's listed in Station
 	Waiting    bool      // its agent waits on a dialog in its window
 }
@@ -45,7 +45,8 @@ type State struct {
 // Open reports whether the track's window is still open.
 func (s State) Open() bool { return s.ClosedAt.IsZero() }
 
-// Cleaned reports whether Clean removed the track's worktrees.
+// Cleaned reports whether Archive removed the track's worktrees and
+// branches. An unarchived track stays cleaned until it's resumed.
 func (s State) Cleaned() bool { return !s.CleanedAt.IsZero() }
 
 // Archived reports whether the track was taken out of Station.
@@ -54,7 +55,7 @@ func (s State) Archived() bool { return !s.ArchivedAt.IsZero() }
 // Status is the track status s gives.
 func (s State) Status() Status {
 	switch {
-	case s.Cleaned():
+	case s.Archived():
 		return Closed
 	case !s.Open():
 		return Done
@@ -72,9 +73,10 @@ const (
 	Created Event = "created"
 	Resumed Event = "resumed"
 	Ended   Event = "ended"
+	// Cleaned says Archive removed the worktrees and branches.
 	Cleaned Event = "cleaned"
-	// Archived takes an ended track out of Station; Unarchived puts it
-	// back.
+	// Archived takes an ended track out of Station, closing it;
+	// Unarchived puts it back, done.
 	Archived   Event = "archived"
 	Unarchived Event = "unarchived"
 	// AgentWaiting and AgentWorking say the agent opened a dialog in the

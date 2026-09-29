@@ -62,7 +62,7 @@ func TestFilteredTracks(t *testing.T) {
 	add("active", now.Add(-2*time.Hour), track.State{})
 	add("waiting", now.AddDate(0, 0, -1), track.State{Waiting: true}, track.PROpen)
 	add("done", now.AddDate(0, 0, -3), track.State{ClosedAt: ended}, track.PRMerged)
-	add("closed", now.AddDate(0, 0, -10), track.State{ClosedAt: ended, CleanedAt: ended})
+	add("cleaned", now.AddDate(0, 0, -10), track.State{ClosedAt: ended, CleanedAt: ended})
 	add("archived", now.AddDate(0, 0, -40), track.State{ClosedAt: ended, CleanedAt: ended, ArchivedAt: ended}, track.PRClosed)
 
 	ids := func(f track.Filter, limit int) []string {
@@ -82,15 +82,17 @@ func TestFilteredTracks(t *testing.T) {
 		limit int
 		want  []string
 	}{
-		{track.Filter{Started: track.Last30Days}, 500, []string{"active", "waiting", "done", "closed"}},
+		{track.Filter{Started: track.Last30Days}, 500, []string{"active", "waiting", "done", "cleaned"}},
 		{track.Filter{Started: track.Last30Days}, 2, []string{"active", "waiting"}},
-		{track.Filter{Statuses: []string{"action_required", "closed"}}, 500, []string{"waiting", "closed"}},
+		{track.Filter{Statuses: []string{"action_required", "closed"}}, 500, []string{"waiting"}},
+		{track.Filter{Statuses: []string{"done"}}, 500, []string{"done", "cleaned"}},
+		{track.Filter{Archived: true, Statuses: []string{"closed"}}, 500, []string{"archived"}},
 		{track.Filter{Statuses: []string{"active"}}, 500, []string{"active"}},
 		{track.Filter{PRStatuses: []string{"none"}}, 1, []string{"active"}},
 		{track.Filter{PRStatuses: []string{"open", "merged"}}, 500, []string{"waiting", "done"}},
 		{track.Filter{Archived: true}, 500, []string{"archived"}},
 		{track.Filter{Archived: true, PRStatuses: []string{"none"}}, 500, nil},
-		{track.Filter{Started: track.Between, From: now.AddDate(0, 0, -10).Format(track.DateLayout), To: now.AddDate(0, 0, -3).Format(track.DateLayout)}, 500, []string{"done", "closed"}},
+		{track.Filter{Started: track.Between, From: now.AddDate(0, 0, -10).Format(track.DateLayout), To: now.AddDate(0, 0, -3).Format(track.DateLayout)}, 500, []string{"done", "cleaned"}},
 	} {
 		if got := ids(tt.f, tt.limit); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("FilteredTracks(%s, %d) = %v, want %v", tt.f, tt.limit, got, tt.want)

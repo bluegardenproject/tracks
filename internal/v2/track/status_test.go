@@ -11,7 +11,7 @@ func TestApply(t *testing.T) {
 		active  = State{}
 		waiting = State{Waiting: true}
 		done    = State{ClosedAt: then}
-		closed  = State{ClosedAt: then, CleanedAt: then}
+		cleaned = State{ClosedAt: then, CleanedAt: then}
 	)
 	tests := []struct {
 		from State
@@ -26,19 +26,19 @@ func TestApply(t *testing.T) {
 		{active, Ended, State{ClosedAt: now}},
 		{waiting, Ended, State{ClosedAt: now}},
 		{done, Ended, done},
-		{closed, Ended, closed},
+		{cleaned, Ended, cleaned},
 		{active, Cleaned, active},
 		{done, Cleaned, State{ClosedAt: then, CleanedAt: now}},
-		{closed, Cleaned, closed},
+		{cleaned, Cleaned, cleaned},
 		{done, Resumed, active},
-		{closed, Resumed, active},
+		{cleaned, Resumed, active},
 		{done, AgentWaiting, done},
-		{closed, AgentWorking, closed},
+		{cleaned, AgentWorking, cleaned},
 		{active, "agent.dancing", active},
 		{active, Archived, active},
 		{waiting, Archived, waiting},
 		{done, Archived, State{ClosedAt: then, ArchivedAt: now}},
-		{closed, Archived, State{ClosedAt: then, CleanedAt: then, ArchivedAt: now}},
+		{cleaned, Archived, State{ClosedAt: then, CleanedAt: then, ArchivedAt: now}},
 		{State{ClosedAt: then, ArchivedAt: then}, Archived, State{ClosedAt: then, ArchivedAt: then}},
 		{State{ClosedAt: then, ArchivedAt: then}, Unarchived, done},
 		{State{ClosedAt: then, ArchivedAt: then}, Cleaned, State{ClosedAt: then, CleanedAt: now, ArchivedAt: then}},
@@ -58,9 +58,10 @@ func TestStatusOf(t *testing.T) {
 		{}:                                 Active,
 		{Waiting: true}:                    ActionRequired,
 		{ClosedAt: then}:                   Done,
-		{ClosedAt: then, CleanedAt: then}:  Closed,
 		{ClosedAt: then, Waiting: true}:    Done,
-		{ClosedAt: then, ArchivedAt: then}: Done,
+		{ClosedAt: then, CleanedAt: then}:  Done,
+		{ClosedAt: then, ArchivedAt: then}: Closed,
+		{ClosedAt: then, CleanedAt: then, ArchivedAt: then}: Closed,
 	} {
 		if got := s.Status(); got != want {
 			t.Errorf("%+v is %s, want %s", s, got.ID, want.ID)

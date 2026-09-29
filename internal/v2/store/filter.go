@@ -43,8 +43,8 @@ func (s *Store) SetFilter(ctx context.Context, f track.Filter) error {
 var statusSQL = map[string]string{
 	track.Active.ID:         "(closed_at IS NULL AND waiting = 0)",
 	track.ActionRequired.ID: "(closed_at IS NULL AND waiting != 0)",
-	track.Done.ID:           "(closed_at IS NOT NULL AND cleaned_at IS NULL)",
-	track.Closed.ID:         "cleaned_at IS NOT NULL",
+	track.Done.ID:           "(closed_at IS NOT NULL AND archived_at IS NULL)",
+	track.Closed.ID:         "archived_at IS NOT NULL",
 }
 
 // FilteredTracks are the tracks f picks at now, newest first, at most

@@ -80,7 +80,7 @@ func (s *Service) branchTracks(ctx context.Context) ([]track.Track, error) {
 	}
 	var out []track.Track
 	for _, t := range append(open, done...) {
-		if t.Kind == track.Work && !t.Cleaned() {
+		if t.Kind == track.Work && !t.Archived() {
 			out = append(out, t)
 		}
 	}
