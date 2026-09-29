@@ -1,6 +1,6 @@
 # Plan: track status
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md): the [track status model](../masterplan.md#track-status), and the status part of chunk 6 (agent hooks). A track has two statuses, what it's doing and where its pull requests are, and anything can change them: the Tracks window's actions, the agent's hooks, and a GitHub poll.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md): the [track status model](../masterplan.md#track-status), and the status part of chunk 6 (agent hooks). A track has two statuses, what it's doing and where its pull requests are, and anything can change them: the Tracks window's actions, the agent's hooks, and a GitHub poll.
 
 ## What users get
 
@@ -11,7 +11,7 @@
 
 ## The statuses
 
-Declared once, in `track/status.go`. Each value has an ID (stored), a label, a colour token, a priority and whether it needs attention. Station, the details and the footer only read from there.
+Declared once, in `track`: the track statuses in `status.go`, the PR statuses in `pr.go`. Each value has an ID (stored), a label, a colour token, a priority and whether it needs attention. Station, the details and the footer only read from there.
 
 **Track status**, one of:
 
@@ -32,7 +32,7 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 | `closed` | PR closed / PRs closed | all were closed without merging |
 
 - **Priority** orders what's shown first where there's room for one: action required, then PR open, then the rest.
-- **Adding a value** is an entry in `status.go`, the event that sets it, and their tests. A third group (for example CI checks) is a new group there, with the same shape.
+- **Adding a value** is an entry in `status.go` (`pr.go` for the PR statuses), the event that sets it, and their tests. A third group (for example CI checks) is a new group there, with the same shape.
 
 ## How a status changes
 
@@ -45,16 +45,15 @@ Declared once, in `track/status.go`. Each value has an ID (stored), a label, a c
 | `cleaned` | Clean | closed |
 | `agent.waiting` | a hook, or the pane check | action required, while active |
 | `agent.working` | a hook, or the pane check | active, while action required |
-| `pr.seen` (URL) | a hook, or the poll finding a PR on a branch | adds the PR as open, if it's new |
-| `pr.polled` (URL, state) | the poll | updates that PR |
 
-- Done and closed stay as they are: the lifecycle columns (`closed_at`, `cleaned_at`) already record them, and the track status is derived from them plus the agent's dialog state. So **agent events on an ended track are dropped**, and PR events are always taken.
-- **The daemon method `report`** takes `{TrackID, Event, URL, State}`. `tracks hook` (below) calls it; the daemon's own actions call the same function in-process.
+- Done and closed stay as they are: the lifecycle columns (`closed_at`, `cleaned_at`) already record them, and the track status is derived from them plus the agent's dialog state. So **agent events on an ended track are dropped**.
+- **PRs aren't state:** the PR status is derived from the track's PRs by `track.PRStatus`. A hook's PR is added as open if it's new (`SeePRs`), and the poll saves what GitHub says; both are taken whatever the track's status.
+- **The daemon method `report`** takes `{ID, Event, PRs}`, either of the last two may be empty. `tracks hook` (below) calls it; the daemon's own actions call the same functions in-process.
 
 ## Agent hooks
 
 - **Installed per track, never in global files:** Claude gets a per-track settings file with `--settings <path>`, and Cursor a per-track plugin with `--plugin-dir <path>`, both under the track's data directory. They're written at Create and Resume, and removed at Clean. `~/.claude` and `~/.cursor` are never touched.
-- **The command** is `'<abs path>/tracks' hook --engine <claude|cursor> --track <id> <event>`, with a 5-second timeout. The track ID is baked in, so it doesn't depend on the environment.
+- **The command** is `'<abs path>/tracks' hook --engine <claude|cursor> --track <id>`, with a 5-second timeout. The track ID is baked in, so it doesn't depend on the environment.
 - **`tracks hook`** (hidden) reads stdin (capped at 1 MiB), keeps only the fields it maps, and sends one `report` with a 1-second timeout. It never affects the agent: it always exits 0, prints nothing for Claude and `{}` for Cursor (`{"continue":true}` before a prompt), and logs failures to `<data>/logs/hook.log`.
 
 **Claude:**
@@ -76,11 +75,11 @@ The daemon's 2-second tick already sweeps the windows. It also reads the agent's
 
 ## Pull requests
 
-- **Stored** in a `track_prs` table: track, URL, repo, number, state (`open`, `draft`, `merged`, `closed`), checked at. A Review track's reviewed PR is not one of its PRs.
-- **The poll** runs in the daemon every 2 minutes, one pass for all tracks:
-  - every open or draft PR, with `gh pr view <url> --json state,isDraft,number`, for tracks in any status, until it's merged or closed;
-  - for each Work track that isn't closed, `gh pr list --head <branch> --state all` in each repo, which finds PRs the hooks didn't report.
-- **Without `gh`,** or logged out, the poll skips its pass and logs it once. PRs from hooks still show as open.
+- **Stored** in a `track_prs` table: track, URL, repo, number, state (`open`, `draft`, `merged`, `closed`), found at, checked at. A Review track's reviewed PR is not one of its PRs.
+- **The poll** runs in the daemon when it starts and every 2 minutes, one pass at a time beside the tick, since `gh` can take seconds:
+  - first, for each Work track that isn't closed, among the open ones and the last 100 ended, `gh pr list --head <branch> --state all` in each repo's primary checkout, which finds PRs the hooks didn't report;
+  - then every open or draft PR not found that way, with `gh pr view <url> --json state,isDraft`, for tracks in any status, until it's merged or closed.
+- **Without `gh`,** or logged out, the poll stops its pass and logs why, once until it works again or fails another way. PRs from hooks still show as open.
 - A merged PR changes nothing but the PR status: the track isn't ended for it.
 
 ## Storage
@@ -91,14 +90,14 @@ The daemon's 2-second tick already sweeps the windows. It also reads the agent's
 ## Packages
 
 - **New: `hooks`:** the per-engine event mapping, the settings file and plugin it installs, and `tracks hook`'s payload reading. No UI imports.
-- `track`: `status.go`, the two groups, `Event` and `Apply`.
+- `track`: `status.go` and `pr.go`, the two groups, `Event` and `Apply`.
 - `store`: the migrations, the state and the PRs.
 - `tracks`: `Report`, the pane check and the PR poll; Create and Resume install the hooks.
 - `agents/claude`, `agents/cursor`: the `--settings` and `--plugin-dir` arguments.
 - `rpc`, `daemon`: the `report` method; the poll's timer.
 - `cli`: the hidden `hook` command.
 - `ui/source`, `ui/tracksview`: both statuses in Station and the details; `footer`: the badge from a `@tracks_attention` window option.
-- `github` (v1's, reused unchanged if it fits): `gh pr view` and `gh pr list`.
+- `tracks.GH`: `gh pr view` and `gh pr list`. v1's `github` package doesn't fit: it asks for review and comment fields v2 doesn't show, and has no branch search.
 
 Sync before building: the new `hooks` package.
 
