@@ -9,7 +9,7 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at"
 
 // AddTrack stores t and its repos in one transaction.
 func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
@@ -18,9 +18,9 @@ func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting)
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt))
 	if err != nil {
 		return err
 	}
@@ -56,15 +56,21 @@ func (s *Store) OpenTracks(ctx context.Context) ([]track.Track, error) {
 }
 
 // EndedTracks are the last tracks whose window closed, at most limit,
-// the most recently closed first.
+// the most recently closed first, without the archived ones.
 func (s *Store) EndedTracks(ctx context.Context, limit int) ([]track.Track, error) {
-	return s.tracks(ctx, "WHERE closed_at IS NOT NULL ORDER BY closed_at DESC, created_at DESC LIMIT ?", limit)
+	return s.tracks(ctx, "WHERE closed_at IS NOT NULL AND archived_at IS NULL ORDER BY closed_at DESC, created_at DESC LIMIT ?", limit)
+}
+
+// EndedBefore are the tracks not archived whose window closed before
+// at, the longest closed first.
+func (s *Store) EndedBefore(ctx context.Context, at time.Time) ([]track.Track, error) {
+	return s.tracks(ctx, "WHERE closed_at < ? AND archived_at IS NULL ORDER BY closed_at, created_at", at.UnixMilli())
 }
 
 // SetState records st as id's state.
 func (s *Store) SetState(ctx context.Context, id string, st track.State) error {
-	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = ?, cleaned_at = ?, waiting = ? WHERE id = ?",
-		millis(st.ClosedAt), millis(st.CleanedAt), st.Waiting, id)
+	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = ?, cleaned_at = ?, waiting = ?, archived_at = ? WHERE id = ?",
+		millis(st.ClosedAt), millis(st.CleanedAt), st.Waiting, millis(st.ArchivedAt), id)
 }
 
 // Rename records that id's window is now called name.
@@ -162,9 +168,9 @@ func scanTrack(row scanner) (track.Track, error) {
 	var t track.Track
 	var kind string
 	var created int64
-	var closed, cleaned sql.NullInt64
+	var closed, cleaned, archived sql.NullInt64
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
-		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting)
+		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived)
 	t.Kind = track.Kind(kind)
 	t.CreatedAt = time.UnixMilli(created)
 	if closed.Valid {
@@ -172,6 +178,9 @@ func scanTrack(row scanner) (track.Track, error) {
 	}
 	if cleaned.Valid {
 		t.CleanedAt = time.UnixMilli(cleaned.Int64)
+	}
+	if archived.Valid {
+		t.ArchivedAt = time.UnixMilli(archived.Int64)
 	}
 	return t, err
 }

@@ -35,6 +35,15 @@ func TestApply(t *testing.T) {
 		{done, AgentWaiting, done},
 		{closed, AgentWorking, closed},
 		{active, "agent.dancing", active},
+		{active, Archived, active},
+		{waiting, Archived, waiting},
+		{done, Archived, State{ClosedAt: then, ArchivedAt: now}},
+		{closed, Archived, State{ClosedAt: then, CleanedAt: then, ArchivedAt: now}},
+		{State{ClosedAt: then, ArchivedAt: then}, Archived, State{ClosedAt: then, ArchivedAt: then}},
+		{State{ClosedAt: then, ArchivedAt: then}, Unarchived, done},
+		{State{ClosedAt: then, ArchivedAt: then}, Cleaned, State{ClosedAt: then, CleanedAt: now, ArchivedAt: then}},
+		{State{ClosedAt: then, ArchivedAt: then}, Resumed, active},
+		{done, Unarchived, done},
 	}
 	for _, tt := range tests {
 		if got := tt.from.Apply(tt.e, now); got != tt.want {
@@ -46,11 +55,12 @@ func TestApply(t *testing.T) {
 func TestStatusOf(t *testing.T) {
 	then := time.UnixMilli(1000)
 	for s, want := range map[State]Status{
-		{}:                                Active,
-		{Waiting: true}:                   ActionRequired,
-		{ClosedAt: then}:                  Done,
-		{ClosedAt: then, CleanedAt: then}: Closed,
-		{ClosedAt: then, Waiting: true}:   Done,
+		{}:                                 Active,
+		{Waiting: true}:                    ActionRequired,
+		{ClosedAt: then}:                   Done,
+		{ClosedAt: then, CleanedAt: then}:  Closed,
+		{ClosedAt: then, Waiting: true}:    Done,
+		{ClosedAt: then, ArchivedAt: then}: Done,
 	} {
 		if got := s.Status(); got != want {
 			t.Errorf("%+v is %s, want %s", s, got.ID, want.ID)
