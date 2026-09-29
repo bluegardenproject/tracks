@@ -135,6 +135,31 @@ func TestStateAndName(t *testing.T) {
 	}
 }
 
+func TestArchivedTracks(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.UnixMilli(1_790_000_000_000)
+	for i, id := range []string{"a", "b", "c"} {
+		closed := now.Add(-time.Duration(10-i) * 24 * time.Hour)
+		tr := track.Track{ID: id, Kind: track.Ask, Name: id, Engine: "claude", CreatedAt: closed, State: track.State{ClosedAt: closed}}
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetState(ctx, "b", track.State{ClosedAt: now.Add(-9 * 24 * time.Hour), ArchivedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := s.Track(ctx, "b"); !b.ArchivedAt.Equal(now) || !b.Archived() {
+		t.Errorf("b = %+v, want archived at %v", b.State, now)
+	}
+	if ended, err := s.EndedTracks(ctx, 10); err != nil || len(ended) != 2 || ended[0].ID != "c" || ended[1].ID != "a" {
+		t.Errorf("EndedTracks = %+v, %v; want c and a, not the archived b", ended, err)
+	}
+	if old, err := s.EndedBefore(ctx, now.Add(-8*24*time.Hour-time.Minute)); err != nil || len(old) != 1 || old[0].ID != "a" {
+		t.Errorf("EndedBefore = %+v, %v; want a alone: c ended since, b is archived", old, err)
+	}
+}
+
 func TestDatabaseIsPrivate(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "state")

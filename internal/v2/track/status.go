@@ -29,9 +29,10 @@ var Statuses = []Status{ActionRequired, Active, Done, Closed}
 // State is what a track's status is derived from. Only Apply changes
 // it.
 type State struct {
-	ClosedAt  time.Time // zero while its window is open
-	CleanedAt time.Time // zero while its worktrees exist
-	Waiting   bool      // its agent waits on a dialog in its window
+	ClosedAt   time.Time // zero while its window is open
+	CleanedAt  time.Time // zero while its worktrees exist
+	ArchivedAt time.Time // zero while it's listed in Station
+	Waiting    bool      // its agent waits on a dialog in its window
 }
 
 // Open reports whether the track's window is still open.
@@ -39,6 +40,9 @@ func (s State) Open() bool { return s.ClosedAt.IsZero() }
 
 // Cleaned reports whether Clean removed the track's worktrees.
 func (s State) Cleaned() bool { return !s.CleanedAt.IsZero() }
+
+// Archived reports whether the track was taken out of Station.
+func (s State) Archived() bool { return !s.ArchivedAt.IsZero() }
 
 // Status is the track status s gives.
 func (s State) Status() Status {
@@ -62,6 +66,10 @@ const (
 	Resumed Event = "resumed"
 	Ended   Event = "ended"
 	Cleaned Event = "cleaned"
+	// Archived takes an ended track out of Station; Unarchived puts it
+	// back.
+	Archived   Event = "archived"
+	Unarchived Event = "unarchived"
 	// AgentWaiting and AgentWorking say the agent opened a dialog in the
 	// track's window, and that it's gone.
 	AgentWaiting Event = "agent.waiting"
@@ -71,7 +79,7 @@ const (
 // Valid reports whether e is an event Apply knows.
 func (e Event) Valid() bool {
 	switch e {
-	case Created, Resumed, Ended, Cleaned, AgentWaiting, AgentWorking:
+	case Created, Resumed, Ended, Cleaned, Archived, Unarchived, AgentWaiting, AgentWorking:
 		return true
 	}
 	return false
@@ -91,6 +99,12 @@ func (s State) Apply(e Event, at time.Time) State {
 		if !s.Open() && !s.Cleaned() {
 			s.CleanedAt = at
 		}
+	case Archived:
+		if !s.Open() && !s.Archived() {
+			s.ArchivedAt = at
+		}
+	case Unarchived:
+		s.ArchivedAt = time.Time{}
 	case AgentWaiting, AgentWorking:
 		if s.Open() {
 			s.Waiting = e == AgentWaiting
