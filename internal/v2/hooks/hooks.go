@@ -21,6 +21,16 @@ type Payload struct {
 	NotificationType string `json:"notification_type"`
 	// Agent is set when the hook fires inside a Claude subagent.
 	Agent string `json:"agent_id"`
+
+	// Where PRs are found, kept raw so a field of an unexpected shape
+	// costs only the PRs: Claude's tool and last answer, Cursor's shell
+	// command and answer.
+	ToolInput    json.RawMessage `json:"tool_input"`
+	ToolResponse json.RawMessage `json:"tool_response"`
+	LastMessage  json.RawMessage `json:"last_assistant_message"`
+	Command      json.RawMessage `json:"command"`
+	Output       json.RawMessage `json:"output"`
+	Text         json.RawMessage `json:"text"`
 }
 
 // Read decodes a hook's input from r, at most MaxPayload bytes.

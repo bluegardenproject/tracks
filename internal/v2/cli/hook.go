@@ -48,20 +48,21 @@ func newHookCmd() *cobra.Command {
 // runHook reads a hook's input from in, reports what it means for
 // track id, and prints the engine's reply to out.
 func runHook(ctx context.Context, in io.Reader, out io.Writer, engine, id string,
-	report func(ctx context.Context, id, event string) error, logf func(string, ...any)) {
+	report func(context.Context, rpc.ReportParams) error, logf func(string, ...any)) {
 	p, err := hooks.Read(in)
 	defer func() { fmt.Fprint(out, hooks.Reply(engine, p.Event)) }()
 	if err != nil {
 		logf("%s hook for %s: reading its input: %v", engine, id, err)
 		return
 	}
-	e, ok := hooks.Event(engine, p)
-	if !ok {
+	e, _ := hooks.Event(engine, p)
+	params := rpc.ReportParams{ID: id, Event: string(e), PRs: hooks.PRs(engine, p)}
+	if params.Event == "" && len(params.PRs) == 0 {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, hookWait)
 	defer cancel()
-	if err := report(ctx, id, string(e)); err != nil {
+	if err := report(ctx, params); err != nil {
 		logf("%s %s for %s: %v", engine, p.Event, id, err)
 	}
 }

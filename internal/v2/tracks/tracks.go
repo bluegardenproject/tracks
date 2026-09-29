@@ -37,6 +37,9 @@ type Store interface {
 	SetState(ctx context.Context, id string, st track.State) error
 	Rename(ctx context.Context, id, name string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
+	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
+	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) error
+	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
 }
 
 // Worktrees makes and removes a track's worktrees.

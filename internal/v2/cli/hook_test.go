@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 )
 
 func TestRunHook(t *testing.T) {
@@ -20,13 +22,21 @@ func TestRunHook(t *testing.T) {
 		{"claude", `{"hook_event_name":"SessionStart"}`, "", "", false},
 		{"cursor", `{"hook_event_name":"beforeSubmitPrompt"}`, "agent.working", `{"continue":true}`, false},
 		{"cursor", `not json`, "", "{}", true},
+		{"cursor", `{"hook_event_name":"afterAgentResponse","text":"TRACKS_PR_URL=https://github.com/a/b/pull/1"}`,
+			" [https://github.com/a/b/pull/1]", "{}", false},
+		{"claude", `{"hook_event_name":"Stop","last_assistant_message":"TRACKS_PR_URL=https://github.com/a/b/pull/1"}`,
+			"agent.working [https://github.com/a/b/pull/1]", "", false},
 	}
 	for _, tt := range tests {
 		var out bytes.Buffer
 		var got []string
 		var logs []string
-		report := func(_ context.Context, id, event string) error {
-			got = append(got, id+" "+event)
+		report := func(_ context.Context, p rpc.ReportParams) error {
+			r := p.ID + " " + p.Event
+			if len(p.PRs) > 0 {
+				r += fmt.Sprint(" ", p.PRs)
+			}
+			got = append(got, r)
 			return nil
 		}
 		logf := func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) }
@@ -44,7 +54,7 @@ func TestRunHook(t *testing.T) {
 func TestRunHookWithTheDaemonDown(t *testing.T) {
 	var out bytes.Buffer
 	var logs []string
-	down := func(context.Context, string, string) error { return errors.New("connection refused") }
+	down := func(context.Context, rpc.ReportParams) error { return errors.New("connection refused") }
 	runHook(context.Background(), strings.NewReader(`{"hook_event_name":"beforeSubmitPrompt"}`), &out, "cursor", "t1", down,
 		func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) })
 	if out.String() != `{"continue":true}` || len(logs) != 1 || !strings.Contains(logs[0], "connection refused") {

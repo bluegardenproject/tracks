@@ -75,11 +75,13 @@ type EndParams struct {
 	ID string `json:"id"`
 }
 
-// ReportParams says event happened to the track: one of track.Event's
-// values.
+// ReportParams says event happened to the track, one of track.Event's
+// values, and that its agent opened the pull requests at PRs. Either
+// may be empty.
 type ReportParams struct {
-	ID    string `json:"id"`
-	Event string `json:"event"`
+	ID    string   `json:"id"`
+	Event string   `json:"event,omitempty"`
+	PRs   []string `json:"prs,omitempty"`
 }
 
 // ResumeParams names the track to resume. Recreate re-creates its

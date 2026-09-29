@@ -117,7 +117,7 @@ func TestDaemon(t *testing.T) {
 	if _, err := client.Resume(ctx, rpc.ResumeParams{ID: "20260928-101500-abc123"}, nil); !errors.As(err, &p) {
 		t.Errorf("resuming a missing track: %v, want a problem", err)
 	}
-	if err := client.Report(ctx, "20260928-101500-abc123", "agent.waiting"); !errors.As(err, &p) {
+	if err := client.Report(ctx, rpc.ReportParams{ID: "20260928-101500-abc123", Event: "agent.waiting"}); !errors.As(err, &p) {
 		t.Errorf("reporting on a missing track: %v, want a problem", err)
 	}
 	for _, params := range []rpc.CleanParams{{Check: true}, {Force: true}} {
