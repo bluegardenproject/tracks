@@ -64,6 +64,12 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Archive: func(id string, force bool) ([]string, error) {
 					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
 				},
+				Lost: func(id string) ([]string, error) {
+					return derailTrack(cmd.Context(), daemon, rpc.DerailParams{ID: id, Check: true})
+				},
+				Derail: func(id string, force bool) ([]string, error) {
+					return derailTrack(cmd.Context(), daemon, rpc.DerailParams{ID: id, Force: force})
+				},
 				Unarchive: func(id string) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.Unarchive(cmd.Context(), id) })
 				},
@@ -165,6 +171,14 @@ func archiveTrack(ctx context.Context, daemon daemonCalls, p rpc.ArchiveParams) 
 		return err
 	})
 	return unsaved, err
+}
+
+func derailTrack(ctx context.Context, daemon daemonCalls, p rpc.DerailParams) (lost []string, err error) {
+	err = daemon.do(ctx, func(client rpc.Client) (err error) {
+		lost, err = client.Derail(ctx, p)
+		return err
+	})
+	return lost, err
 }
 
 // trackUses lists the repos of the open tracks.

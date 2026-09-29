@@ -75,6 +75,7 @@ const (
 	askClean
 	askRecreate
 	askArchive
+	askDerail
 )
 
 // enterConfirms says Enter answers yes. Removing unsaved work and a
@@ -92,6 +93,8 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 		return m.startResume(q.id, q.name, true)
 	case askArchive:
 		return m, m.archive(q)
+	case askDerail:
+		return m, m.derail(q)
 	}
 	return m, m.act(actionEnd)
 }

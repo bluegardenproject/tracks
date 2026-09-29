@@ -48,6 +48,10 @@ func questionKeys(q question) []keyHelp {
 		return []keyHelp{{"y", "remove and archive"}, {"n/Esc/Enter", "cancel"}}
 	case q.kind == askArchive:
 		return []keyHelp{{"y/Enter", "archive"}, {"n/Esc", "cancel"}}
+	case q.kind == askDerail && len(q.lines) > 0:
+		return []keyHelp{{"y", "derail anyway"}, {"n/Esc/Enter", "cancel"}}
+	case q.kind == askDerail:
+		return []keyHelp{{"y", "derail"}, {"n/Esc/Enter", "cancel"}}
 	case len(q.lines) > 0:
 		return []keyHelp{{"y", "remove anyway"}, {"n/Esc/Enter", "cancel"}}
 	}
@@ -73,7 +77,7 @@ type keyGroup struct {
 func keyGroups() []keyGroup {
 	station := append([]keyHelp{}, stationKeys...)
 	station = append(station, keyHelp{"Enter", "resume an ended track"})
-	for _, a := range slices.Concat(openActions, endedActions[:3], archivedActions[:1]) {
+	for _, a := range slices.Concat(openActions, endedActions[:4], archivedActions[:1]) {
 		station = append(station, keyHelp{a.key, strings.ToLower(a.label[:1]) + a.label[1:]})
 	}
 	station = append(station, keyHelp{"x", "clear the filter"})

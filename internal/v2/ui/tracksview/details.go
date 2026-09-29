@@ -26,6 +26,7 @@ const (
 	actionClean
 	actionArchive
 	actionUnarchive
+	actionDerail
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
@@ -33,6 +34,7 @@ const (
 	actionConfirmClean
 	actionConfirmRecreate
 	actionConfirmArchive
+	actionConfirmDerail
 	actionCancel
 )
 
@@ -58,9 +60,10 @@ var (
 		{actionResume, "Resume", "r", 0},
 		{actionClean, "Clean", "l", 1},
 		{actionArchive, "Archive", "a", 0},
+		{actionDerail, "Derail", "d", 0},
 	}, openActions[2:]...)
 	// archivedActions are an archived track's.
-	archivedActions = append([]action{{actionUnarchive, "Unarchive", "u", 0}}, openActions[2:]...)
+	archivedActions = append([]action{{actionUnarchive, "Unarchive", "u", 0}, {actionDerail, "Derail", "d", 0}}, openActions[2:]...)
 	confirmEnd      = []action{
 		{actionConfirmEnd, "End track", "y", -1},
 		{actionCancel, "Cancel", "n", -1},
@@ -181,6 +184,8 @@ func (m Model) details(width int) ([]string, []hit) {
 			ask, buttons = append([]string{heading}, q.lines...), confirmRecreate(len(q.lines))
 		case q.kind == askArchive:
 			ask, buttons = archiveQuestion(t, *q)
+		case q.kind == askDerail:
+			ask, buttons = derailQuestion(t, *q)
 		case len(q.lines) > 0:
 			ask, buttons = q.lines, confirmCleanAnyway
 		default:
@@ -219,7 +224,7 @@ func (m Model) buttonRows(buttons []action, t source.Track, width, top int) ([]s
 	line, col := "", 0
 	for _, a := range buttons {
 		button := widget.Button{Label: a.label, Hot: a.hot, Disabled: !m.enabled(a.id, t), Hover: a.id == m.station.hoverButton}
-		if a.id == actionConfirmEnd || a.id == actionConfirmClean || a.id == actionConfirmArchive {
+		if a.id == actionConfirmEnd || a.id == actionConfirmClean || a.id == actionConfirmArchive || a.id == actionConfirmDerail {
 			button.Kind = widget.ButtonDanger
 		}
 		b, w := button.View(m.palette), button.Width()
@@ -254,6 +259,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return t.Cleanable
 	case actionArchive:
 		return !t.Open() && !t.Archived
+	case actionDerail:
+		return !t.Open()
 	}
 	return true
 }
@@ -300,7 +307,10 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	case actionArchive:
 		next, cmd := m.checkArchive(t)
 		return next, cmd, true
-	case actionConfirmEnd, actionConfirmClean, actionConfirmRecreate, actionConfirmArchive:
+	case actionDerail:
+		next, cmd := m.checkDerail(t)
+		return next, cmd, true
+	case actionConfirmEnd, actionConfirmClean, actionConfirmRecreate, actionConfirmArchive, actionConfirmDerail:
 		q := m.station.asking
 		m.station.asking = nil
 		if q == nil {
