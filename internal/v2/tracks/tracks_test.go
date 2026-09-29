@@ -267,7 +267,7 @@ func TestCreateKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := newFixture(t)
-	f.engines = settings.Engines{Default: "cursor", Claude: &settings.Engine{}, Cursor: &settings.Engine{Auto: new(bool)}}
+	f.engines = settings.Engines{Cursor: &settings.Engine{Auto: new(bool)}}
 	got, err := f.svc.Create(context.Background(), Request{
 		Kind: track.Doc, Document: doc, Repos: []string{"web"}, Prompt: "Review it", Opinion: true, Terminal: true,
 	}, func(string) {})

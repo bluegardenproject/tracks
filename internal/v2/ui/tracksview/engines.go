@@ -67,8 +67,7 @@ const (
 	ctlRemove
 	ctlConfirm // remove, confirmed
 	ctlCancel
-	ctlMCP     // check the MCP servers
-	ctlDefault // make the engine the one new tracks run on
+	ctlMCP // check the MCP servers
 )
 
 type (
@@ -253,12 +252,6 @@ func (m Model) pressEngine(c engineControl) (Model, tea.Cmd) {
 				s.Auto = &on
 			}
 		})
-	case ctlDefault:
-		s := e.settings.Clone()
-		s.Default = c.engine
-		e.settings = s
-		e.notice = notice{text: "New tracks run on " + en.Name + "."}
-		return m.saveEngines()
 	case ctlRemove:
 		e.confirm = c.engine
 		return m.focusEngine(engineControl{engine: c.engine, kind: ctlCancel}), nil
@@ -268,9 +261,6 @@ func (m Model) pressEngine(c engineControl) (Model, tea.Cmd) {
 	case ctlConfirm:
 		s := e.settings.Clone()
 		s.Set(c.engine, nil)
-		if s.Default == c.engine {
-			s.Default = ""
-		}
 		e.settings, e.confirm = s, ""
 		e.checks = maps.Clone(e.checks)
 		delete(e.checks, c.engine)

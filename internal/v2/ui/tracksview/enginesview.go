@@ -150,14 +150,6 @@ func (b *engineBody) draw(en agents.Engine, width int) {
 	}
 
 	b.status(en, check, width)
-	if e.settings.Claude != nil && e.settings.Cursor != nil {
-		if e.settings.DefaultID() == en.ID {
-			b.add(b.label("New tracks") + badge(m, theme.StateInfoBgAccent, theme.StateInfoTextAccent, "default") +
-				m.fg(theme.TextFaint).Render("  They run here."))
-		} else {
-			b.buttons(b.label("New tracks"), engineLabelWidth, []int{ctlDefault}, widget.NewButton("Make default", widget.ButtonDefault))
-		}
-	}
 	b.add("")
 	value, detail := "Default", en.Name+" chooses"
 	if cur.Model != "" {
@@ -196,11 +188,14 @@ func (b *engineBody) draw(en agents.Engine, width int) {
 // status is the badge, with where the CLI is or why it isn't there.
 func (b *engineBody) status(en agents.Engine, check engineCheck, width int) {
 	m := b.m
+	badge := func(bg, fg theme.Token, text string) string {
+		return lipgloss.NewStyle().Background(m.palette.Color(bg)).Foreground(m.palette.Color(fg)).Bold(true).Render(" " + text + " ")
+	}
 	switch {
 	case check.checking:
-		b.add(b.label("Status") + badge(m, theme.StateInfoBgAccent, theme.StateInfoTextAccent, "checking"))
+		b.add(b.label("Status") + badge(theme.StateInfoBgAccent, theme.StateInfoTextAccent, "checking"))
 	case check.err != nil:
-		prefix := b.label("Status") + badge(m, theme.StateDangerBgAccent, theme.StateDangerTextAccent, "not found") + "  "
+		prefix := b.label("Status") + badge(theme.StateDangerBgAccent, theme.StateDangerTextAccent, "not found") + "  "
 		b.buttons(prefix, lipgloss.Width(prefix), []int{ctlCheck}, widget.NewButton("Check again", widget.ButtonDefault))
 		b.wrapped(theme.StateDangerText, checkProblem(en, check.err), width-engineLabelWidth)
 		b.add(strings.Repeat(" ", engineLabelWidth) + cut(m.fg(theme.TextMuted).Render("Install it with ")+m.fg(theme.TextDefault).Render(en.Install), width-engineLabelWidth))
@@ -209,13 +204,9 @@ func (b *engineBody) status(en agents.Engine, check engineCheck, width int) {
 		if v := check.found.Version; v != "" {
 			where += "  " + v
 		}
-		b.add(b.label("Status") + badge(m, theme.StateSuccessBgAccent, theme.StateSuccessTextAccent, "active") +
+		b.add(b.label("Status") + badge(theme.StateSuccessBgAccent, theme.StateSuccessTextAccent, "active") +
 			m.fg(theme.TextFaint).Render(cut("  "+where, max(0, width-engineLabelWidth-8))))
 	}
-}
-
-func badge(m Model, bg, fg theme.Token, text string) string {
-	return lipgloss.NewStyle().Background(m.palette.Color(bg)).Foreground(m.palette.Color(fg)).Bold(true).Render(" " + text + " ")
 }
 
 // models lists the built-in and added models, and the input to add one.

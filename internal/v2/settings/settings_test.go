@@ -107,23 +107,7 @@ func TestDefaultEngine(t *testing.T) {
 	}
 	e.Claude = &Engine{}
 	if id := e.DefaultID(); id != "claude" {
-		t.Errorf("both, none made default: default %q", id)
-	}
-	e.Default = "cursor"
-	if id := e.DefaultID(); id != "cursor" {
-		t.Errorf("Cursor made default: default %q", id)
-	}
-	e.Cursor = nil
-	if id := e.DefaultID(); id != "claude" {
-		t.Errorf("the default removed: default %q", id)
-	}
-
-	path := filepath.Join(t.TempDir(), "settings.yaml")
-	if err := Save(path, Settings{Engines: Engines{Default: "cursor", Cursor: &Engine{}}}); err != nil {
-		t.Fatal(err)
-	}
-	if s, err := Load(path); err != nil || s.Engines.Default != "cursor" {
-		t.Errorf("default after a round trip: %q, %v", s.Engines.Default, err)
+		t.Errorf("both: default %q, want claude", id)
 	}
 }
 
