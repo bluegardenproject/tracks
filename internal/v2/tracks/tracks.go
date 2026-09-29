@@ -44,6 +44,9 @@ type Worktrees interface {
 	Add(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
 	// Remove undoes Add, branches included.
 	Remove(ctx context.Context, t track.Track) error
+	// Missing are t's repos whose worktree is gone, which Restore
+	// re-creates.
+	Missing(t track.Track) []track.Repo
 	Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
 	Unsaved(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
 	// Branches are t's repos on the branches their worktrees are on.

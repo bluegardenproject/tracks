@@ -69,9 +69,24 @@ type ListResult struct {
 	Tracks []tracks.Listed `json:"tracks"`
 }
 
-// EndParams names the track to end, or to resume.
+// EndParams names the track to end.
 type EndParams struct {
 	ID string `json:"id"`
+}
+
+// ResumeParams names the track to resume. Recreate re-creates its
+// worktrees that are gone.
+type ResumeParams struct {
+	ID       string `json:"id"`
+	Recreate bool   `json:"recreate,omitempty"`
+}
+
+// ResumeResult is the resumed track, or the worktrees that couldn't be
+// found, one line per repo such as "web: /path/to/worktree". Nothing
+// was done when there are some.
+type ResumeResult struct {
+	CreateResult
+	Missing []string `json:"missing,omitempty"`
 }
 
 // CleanParams names the track to clean. Check only looks for unsaved

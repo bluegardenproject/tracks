@@ -9,8 +9,9 @@ import (
 )
 
 // ResumeFunc starts ended track id again, telling progress each slow
-// step, and switches to its window.
-type ResumeFunc func(id string, progress func(string)) error
+// step, and switches to its window. When some of its worktrees are gone
+// it returns them instead, one line per worktree, unless recreate.
+type ResumeFunc func(id string, recreate bool, progress func(string)) (missing []string, err error)
 
 // CleanFunc removes ended track id's worktrees. Unless force, it
 // returns the unsaved work it finds instead, one line per worktree.
@@ -19,9 +20,10 @@ type CleanFunc func(id string, force bool) (unsaved []string, err error)
 type (
 	// resumeEvent is a Resume's progress, or its end when done.
 	resumeEvent struct {
-		name     string
+		id, name string
 		progress string
 		done     bool
+		missing  []string
 		err      error
 		events   <-chan resumeEvent
 	}
@@ -35,18 +37,18 @@ type (
 	cleanedMsg checkedMsg
 )
 
-// startResume resumes t, showing its progress in the hint row.
-func (m Model) startResume(t source.Track) (Model, tea.Cmd) {
+// startResume resumes track id, showing its progress in the hint row.
+func (m Model) startResume(id, name string, recreate bool) (Model, tea.Cmd) {
 	if m.resume == nil {
 		return m, nil
 	}
 	events := make(chan resumeEvent, 16)
 	resume := m.resume
 	go func() {
-		err := resume(t.ID, func(s string) { events <- resumeEvent{progress: s, events: events} })
-		events <- resumeEvent{name: t.Name, done: true, err: err, events: events}
+		missing, err := resume(id, recreate, func(s string) { events <- resumeEvent{progress: s, events: events} })
+		events <- resumeEvent{id: id, name: name, done: true, missing: missing, err: err, events: events}
 	}()
-	m.station.notice = notice{text: "Resuming " + t.Name + "…"}
+	m.station.notice = notice{text: "Resuming " + name + "…"}
 	return m, nextEvent(events)
 }
 
@@ -59,9 +61,15 @@ func (m Model) resumed(e resumeEvent) (Model, tea.Cmd) {
 		m.station.notice = notice{text: e.progress}
 		return m, nextEvent(e.events)
 	}
-	if e.err != nil {
+	switch {
+	case e.err != nil:
 		m.station.notice = notice{failure("Couldn't resume "+e.name, e.err), true}
-	} else {
+	case len(e.missing) > 0:
+		m.station.notice = notice{}
+		if m = m.ask(question{id: e.id, name: e.name, kind: askRecreate, lines: e.missing}); m.station.asking == nil {
+			m.station.notice = notice{"Couldn't resume " + e.name + ": a worktree couldn't be found.", true}
+		}
+	default:
 		m.station.notice = notice{text: "Resumed " + e.name + "."}
 	}
 	return m, m.loadTracks(false)
@@ -86,7 +94,7 @@ func (m Model) checked(msg checkedMsg) Model {
 		return m
 	}
 	m.station.notice = notice{}
-	return m.ask(question{id: msg.id, name: msg.name, clean: true, unsaved: msg.unsaved})
+	return m.ask(question{id: msg.id, name: msg.name, kind: askClean, lines: msg.unsaved})
 }
 
 // ask puts q to the user while its track is still the selected one.
@@ -104,7 +112,7 @@ func (m Model) clean(q question) tea.Cmd {
 	}
 	clean := m.cleanFn
 	return func() tea.Msg {
-		found, err := clean(q.id, len(q.unsaved) > 0)
+		found, err := clean(q.id, len(q.lines) > 0)
 		return cleanedMsg{q.id, q.name, found, err}
 	}
 }
@@ -115,7 +123,7 @@ func (m Model) cleaned(msg cleanedMsg) (Model, tea.Cmd) {
 		m.station.notice = notice{failure("Couldn't clean "+msg.name, msg.err), true}
 	case len(msg.unsaved) > 0:
 		// Work that appeared after the check: ask again.
-		m = m.ask(question{id: msg.id, name: msg.name, clean: true, unsaved: msg.unsaved})
+		m = m.ask(question{id: msg.id, name: msg.name, kind: askClean, lines: msg.unsaved})
 	default:
 		m.station.notice = notice{text: "Removed the worktrees of " + msg.name + "."}
 	}

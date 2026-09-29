@@ -45,6 +45,7 @@ type fakeWorktrees struct {
 	cleaned           []string // RemoveWorktrees' tracks, when it had some
 	unsaved           []workspace.Unsaved
 	renamed           map[string]string // repo name to branch
+	gone              map[string]bool   // repos whose worktree is gone
 }
 
 func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
@@ -66,18 +67,25 @@ func (w *fakeWorktrees) Remove(_ context.Context, t track.Track) error {
 	return nil
 }
 
-// Restore re-creates every worktree of a cleaned track.
+func (w *fakeWorktrees) Missing(t track.Track) []track.Repo {
+	var out []track.Repo
+	for _, r := range t.Repos {
+		if w.gone[r.Name] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func (w *fakeWorktrees) Restore(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
 	if w.failRestore {
 		return nil, errStep
 	}
-	if !t.Cleaned() {
-		return nil, nil
-	}
-	for _, r := range t.Repos {
+	made := w.Missing(t)
+	for _, r := range made {
 		progress("Re-creating the worktree for " + r.Name + "…")
 	}
-	return t.Repos, nil
+	return made, nil
 }
 
 func (w *fakeWorktrees) Unsaved(context.Context, track.Track) ([]workspace.Unsaved, error) {

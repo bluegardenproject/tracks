@@ -9,10 +9,20 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-// Restore re-creates t's worktrees that are gone, as Clean leaves them:
-// a work track's on its branch, a review's by fetching its ref again.
-// It returns the repos it re-created. When one fails, those it made are
-// removed again.
+// Missing are t's repos whose worktree is gone.
+func (w *Worktrees) Missing(t track.Track) []track.Repo {
+	var out []track.Repo
+	for _, r := range t.Repos {
+		if r.Worktree != "" && !exists(r.Worktree) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Restore re-creates t's worktrees that are gone: a work track's on its
+// branch, a review's by fetching its ref again. It returns the repos it
+// re-created. When one fails, those it made are removed again.
 func (w *Worktrees) Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
 	if !t.Kind.Worktrees() {
 		return nil, nil
@@ -25,10 +35,7 @@ func (w *Worktrees) Restore(ctx context.Context, t track.Track, progress func(st
 		}
 	}
 	var made []track.Repo
-	for _, r := range t.Repos {
-		if r.Worktree == "" || exists(r.Worktree) {
-			continue
-		}
+	for _, r := range w.Missing(t) {
 		if err := w.restore(ctx, r, review, progress); err != nil {
 			_ = w.RemoveWorktrees(context.WithoutCancel(ctx), t.ID, made)
 			return nil, err

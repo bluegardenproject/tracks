@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/agents"
@@ -10,18 +11,38 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
-// Resume starts ended track id again: the worktrees Clean removed, a
-// window under its name, and its engine on its session, saved last.
-// progress is told each slow step. When a step fails, what Resume made
-// is undone and the track stays ended.
-func (s *Service) Resume(ctx context.Context, id string, progress func(string)) (Created, error) {
+// Missing is Resume's answer when some of the track's worktrees are
+// gone, which only Clean should do. Resume re-creates them when asked
+// to.
+type Missing []track.Repo
+
+func (m Missing) Error() string {
+	names := make([]string, len(m))
+	for i, r := range m {
+		names[i] = r.Name
+	}
+	return "the worktree couldn't be found for " + strings.Join(names, ", ")
+}
+
+// Resume starts ended track id again: a window under its name and its
+// engine on its session, saved last. A worktree that's gone is Missing,
+// unless recreate, which re-creates it first. progress is told each
+// slow step. When a step fails, what Resume made is undone and the
+// track stays ended.
+func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress func(string)) (Created, error) {
 	t, release, err := s.hold(ctx, id)
 	if err != nil {
 		return Created{}, err
 	}
 	defer release()
-	if t.Open() {
+	switch {
+	case t.Open():
 		return Created{}, Problem(t.Name + " is already open.")
+	case t.Cleaned():
+		return Created{}, Problem(t.Name + " was cleaned, so it can't be resumed.")
+	}
+	if missing := s.Worktrees.Missing(t); len(missing) > 0 && !recreate {
+		return Created{}, Missing(missing)
 	}
 	info, known := agents.ByID(t.Engine)
 	engine, ok := s.engine(t.Engine)
@@ -93,7 +114,7 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 			return unsaved, err
 		}
 	}
-	// Resume re-creates the worktrees on the branches they're on now.
+	// The branches stay under the names the agent gave them.
 	for i, r := range s.Worktrees.Branches(ctx, t) {
 		if r.Branch != t.Repos[i].Branch {
 			if err := s.Store.SetBranch(ctx, t.ID, i, r.Branch); err != nil {

@@ -18,6 +18,7 @@ var (
 	tabKeys          = []keyHelp{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}}
 	stationKeys      = []keyHelp{{"↑/↓", "select"}, {"Enter", "open"}}
 	endedStationKeys = []keyHelp{{"↑/↓", "select"}, {"Enter", "resume"}}
+	selectKeys       = []keyHelp{{"↑/↓", "select"}}
 	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	repoFormKeys     = []keyHelp{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back to the list"}}
@@ -34,9 +35,11 @@ var (
 // questionKeys answer q.
 func questionKeys(q question) []keyHelp {
 	switch {
-	case !q.clean:
+	case q.kind == askEnd:
 		return []keyHelp{{"y/Enter", "end track"}, {"n/Esc", "cancel"}}
-	case len(q.unsaved) > 0:
+	case q.kind == askRecreate:
+		return []keyHelp{{"y", "re-create"}, {"n/Esc/Enter", "cancel"}}
+	case len(q.lines) > 0:
 		return []keyHelp{{"y", "remove anyway"}, {"n/Esc/Enter", "cancel"}}
 	}
 	return []keyHelp{{"y/Enter", "remove"}, {"n/Esc", "cancel"}}

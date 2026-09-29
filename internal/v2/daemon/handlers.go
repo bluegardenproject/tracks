@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,17 +46,26 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 }
 
 func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
-	var p rpc.EndParams
+	var p rpc.ResumeParams
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	resumed, err := c.Tracks.Resume(ctx, p.ID, call.Progress)
+	resumed, err := c.Tracks.Resume(ctx, p.ID, p.Recreate, call.Progress)
+	var missing tracks.Missing
+	if errors.As(err, &missing) {
+		c.Log.Printf("resuming %s: %v", p.ID, err)
+		var r rpc.ResumeResult
+		for _, repo := range missing {
+			r.Missing = append(r.Missing, repo.Name+": "+repo.Worktree)
+		}
+		return r, nil
+	}
 	if err != nil {
 		c.Log.Printf("resuming %s failed: %v", p.ID, err)
 		return nil, err
 	}
 	c.Log.Printf("resumed %s, %s", p.ID, resumed.Track.Name)
-	return rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}, nil
+	return rpc.ResumeResult{CreateResult: rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}}, nil
 }
 
 func (c Config) clean(ctx context.Context, call *rpc.Call) (any, error) {
