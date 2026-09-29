@@ -247,8 +247,8 @@ func (p Picker) View(pal style.Palette, w, h int) string {
 	if w < 6 || h < pickerChrome {
 		return ""
 	}
-	bg := lipgloss.NewStyle().Background(pal.Color(theme.BgOverlay))
-	border := bg.Foreground(pal.Color(theme.BorderDefault))
+	bg := lipgloss.NewStyle().Background(pal.Color(theme.OverlayBg))
+	border := bg.Foreground(pal.Color(theme.OverlayBorder))
 	title := p.Title
 	if p.query != "" {
 		title += " · " + p.query
@@ -263,13 +263,13 @@ func (p Picker) View(pal style.Palette, w, h int) string {
 	for r := range p.rows {
 		switch {
 		case r == 0 && p.Message != "":
-			color := theme.TextMuted
+			color := theme.OverlayTextMuted
 			if p.Problem {
 				color = theme.StateDangerText
 			}
 			lines = append(lines, body(bg.Foreground(pal.Color(color)).Render(cutTo(p.Message, inner)), bg))
 		case r == 0 && len(shown) == 0:
-			lines = append(lines, body(bg.Foreground(pal.Color(theme.TextFaint)).Render(cutTo("Nothing matches.", inner)), bg))
+			lines = append(lines, body(bg.Foreground(pal.Color(theme.OverlayTextFaint)).Render(cutTo("Nothing matches.", inner)), bg))
 		case p.Message != "" || p.offset+r >= len(shown):
 			lines = append(lines, body("", bg))
 		default:
@@ -287,23 +287,23 @@ func (p Picker) row(pal style.Palette, i, inner int, bg lipgloss.Style) (string,
 	fill := bg
 	switch i {
 	case p.Cursor:
-		fill = fill.Background(pal.Color(theme.TableBgSelected))
+		fill = fill.Background(pal.Color(theme.OverlayBgSelected))
 	case p.hover:
-		fill = fill.Background(pal.Color(theme.TableBgHighlight))
+		fill = fill.Background(pal.Color(theme.OverlayBgHover))
 	}
 	mark := strings.Repeat(" ", markWidth)
 	if i == p.Marked {
 		mark = pickerMark
 	}
-	name := fill.Foreground(pal.Color(theme.TableTextDefault)).Bold(i == p.Cursor)
-	detail := fill.Foreground(pal.Color(theme.TableTextMuted))
+	name := fill.Foreground(pal.Color(theme.OverlayTextDefault)).Bold(i == p.Cursor)
+	detail := fill.Foreground(pal.Color(theme.OverlayTextMuted))
 	if it.Problem != "" {
-		name = fill.Foreground(pal.Color(theme.TableTextFaint))
+		name = fill.Foreground(pal.Color(theme.OverlayTextFaint))
 		detail = fill.Foreground(pal.Color(theme.StateDangerText))
 	}
 	label := p.labelWidth()
 	room := max(0, inner-markWidth-label-pickerGap)
-	row := fill.Foreground(pal.Color(theme.TableTextMuted)).Render(mark) +
+	row := fill.Foreground(pal.Color(theme.OverlayTextMuted)).Render(mark) +
 		name.Render(padTo(cutTo(it.Label, label), label+pickerGap)) + detail.Render(cutTo(p.detail(it), room))
 	return row + fill.Render(strings.Repeat(" ", max(0, inner-lipgloss.Width(row)))), fill
 }

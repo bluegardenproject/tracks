@@ -52,6 +52,8 @@ func backgroundOf(token theme.Token) theme.Token {
 		return theme.ButtonBgAccent
 	case strings.HasPrefix(string(token), "footer."):
 		return theme.FooterBg
+	case strings.HasPrefix(string(token), "overlay."):
+		return theme.OverlayBg
 	default:
 		return theme.BgBase
 	}

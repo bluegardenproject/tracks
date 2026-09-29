@@ -9,7 +9,6 @@ tokens:
 
   bg.base:            "#041228"
   bg.surface:         "#27272a"
-  bg.overlay:         "#303036"
   bg.selected:        "#3f3f46"
   bg.hover:           "#2f2f35"
 
@@ -75,3 +74,12 @@ tokens:
   listItem.text.hover:      "#e4e4e7"
   listItem.bg.active:       "#073542"
   listItem.text.active:     "#1ccde8"
+
+  overlay.bg:               "#303036"
+  overlay.bg.selected:      "#102547"
+  overlay.bg.hover:         "#102547"
+  overlay.border:           "#1ccde8"
+  overlay.border.focus:     "#f5d000"
+  overlay.text.default:     "#a1d2e3"
+  overlay.text.muted:       "#4da5c4"
+  overlay.text.faint:       "#71717a"

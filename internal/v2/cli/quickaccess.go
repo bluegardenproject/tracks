@@ -63,7 +63,7 @@ func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
 		Width:      strconv.Itoa(min(width, quickaccess.Width+border)),
 		Height:     strconv.Itoa(min(height, quickaccess.Height()+border)),
 		Command:    command + " popup quick-access " + shellx.Quote(choice.Name()),
-		Background: t.Value(theme.BgOverlay),
+		Background: t.Value(theme.OverlayBg),
 	}
 	if err := c.Popup(popup, version); err != nil {
 		return err

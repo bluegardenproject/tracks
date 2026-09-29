@@ -15,7 +15,6 @@ const (
 
 	BgBase     Token = "bg.base"
 	BgSurface  Token = "bg.surface"
-	BgOverlay  Token = "bg.overlay"
 	BgSelected Token = "bg.selected"
 	BgHover    Token = "bg.hover"
 
@@ -93,12 +92,22 @@ const (
 	ListItemTextHover   Token = "listItem.text.hover"
 	ListItemBgActive    Token = "listItem.bg.active"
 	ListItemTextActive  Token = "listItem.text.active"
+
+	// Overlays: the picker, and the popups' background and frames.
+	OverlayBg          Token = "overlay.bg"
+	OverlayBgSelected  Token = "overlay.bg.selected"
+	OverlayBgHover     Token = "overlay.bg.hover" // the row under the mouse
+	OverlayBorder      Token = "overlay.border"
+	OverlayBorderFocus Token = "overlay.border.focus"
+	OverlayTextDefault Token = "overlay.text.default"
+	OverlayTextMuted   Token = "overlay.text.muted"
+	OverlayTextFaint   Token = "overlay.text.faint"
 )
 
 // All lists every token in display order.
 var All = []Token{
 	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent,
-	BgBase, BgSurface, BgOverlay, BgSelected, BgHover,
+	BgBase, BgSurface, BgSelected, BgHover,
 	BorderDefault, BorderFocus, BorderAccent,
 	StateSuccessText, StateSuccessTextAccent, StateSuccessBg, StateSuccessBgAccent,
 	StateWarningText, StateWarningTextAccent, StateWarningBg, StateWarningBgAccent,
@@ -112,4 +121,6 @@ var All = []Token{
 	ButtonBgDefault, ButtonBgHover, ButtonBgDanger, ButtonBgDangerHover, ButtonBgAccent, ButtonBgAccentHover,
 	ButtonTextDefault, ButtonTextDanger, ButtonTextAccent,
 	ListItemBgDefault, ListItemTextDefault, ListItemBgHover, ListItemTextHover, ListItemBgActive, ListItemTextActive,
+	OverlayBg, OverlayBgSelected, OverlayBgHover, OverlayBorder, OverlayBorderFocus,
+	OverlayTextDefault, OverlayTextMuted, OverlayTextFaint,
 }
