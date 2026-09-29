@@ -8,6 +8,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/addtrack"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/quickaccess"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/tracksfilter"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
@@ -88,6 +89,7 @@ func keyGroups() []keyGroup {
 		{"Every window", append(prefixKeys(), keyHelp{"Click", "a track in the footer to switch to it"})},
 		{"Quick Access", fromWidget(quickaccess.Keys)},
 		{"New track", fromWidget(addtrack.Keys)},
+		{"Tracks filter", fromWidget(tracksfilter.Keys)},
 	}
 }
 
