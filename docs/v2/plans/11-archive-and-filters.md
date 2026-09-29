@@ -1,6 +1,6 @@
 # Plan: archive and filters
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream and the per-track event timeline stay for later; Station keeps reading the list every 2 seconds.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream and the per-track event timeline stay for later; Station keeps reading the list every 2 seconds.
 
 ## What users get
 
@@ -35,10 +35,11 @@ history:
 - **Quick Access** gets **Tracks filter** (`f`). It opens a popup:
   - **Status:** checkboxes for the track statuses (active, action required, done, closed) and the PR statuses (no PR, PR open, PR merged, PR closed). None ticked in a group means all of it.
   - **Archived only:** shows the archived tracks instead of the others.
-  - **Started:** Any time, Today, Last 7 days, Last 30 days, or Between, with From and To as `YYYY-MM-DD`, both included, in local time.
+  - **Started:** Any time, Today, Last 7 days, Last 30 days, or Between, with From and To as `YYYY-MM-DD`, both included, in local time. Either date may be left empty. Last 7 days is today and the six days before, from local midnight; Last 30 days likewise.
   - **Apply**, **Clear** and **Cancel**. Apply and Clear switch to the Tracks window.
 - **Kept until cleared,** also across restarts: the daemon stores it, and Station's `list` returns the filtered tracks and the filter.
 - **Station** shows a line above the table while a filter is on, such as **Filtered: done, closed · PR merged · started in the last 7 days**, with **Clear filter** (`x`).
+- **Archived tracks** show Unarchive (`u`, also Enter) instead of Resume, Clean and Archive.
 - **Unfiltered,** Station lists as now: the open tracks, then the last 100 ended ones, without the archived. **Filtered,** it searches every track, newest first, up to 500.
 - Later: a text search on the name, branch and prompt; filters by repo, type and engine.
 
