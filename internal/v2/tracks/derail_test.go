@@ -43,8 +43,8 @@ func TestDerail(t *testing.T) {
 	if lost, err := f.svc.Derail(ctx, id, false); err != nil || len(lost) != 1 {
 		t.Fatalf("Derail = %v, %v; want the work it would lose", lost, err)
 	}
-	if _, err := f.store.Track(ctx, id); err != nil || len(f.worktrees.derailed) != 0 {
-		t.Fatalf("Derail deleted something with work to lose: %v, %v", err, f.worktrees.derailed)
+	if _, err := f.store.Track(ctx, id); err != nil || len(f.worktrees.discarded) != 0 {
+		t.Fatalf("Derail deleted something with work to lose: %v, %v", err, f.worktrees.discarded)
 	}
 	if lost, err := f.svc.Derail(ctx, id, true); err != nil || len(lost) != 0 {
 		t.Fatalf("forced Derail = %v, %v", lost, err)
@@ -52,8 +52,8 @@ func TestDerail(t *testing.T) {
 	if _, err := f.store.Track(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("the track is still saved: %v", err)
 	}
-	if !slices.Equal(f.worktrees.derailed, []string{id}) {
-		t.Errorf("derailed worktrees %v", f.worktrees.derailed)
+	if !slices.Equal(f.worktrees.discarded, []string{id}) {
+		t.Errorf("derailed worktrees %v", f.worktrees.discarded)
 	}
 	if _, err := os.Stat(hooks); !os.IsNotExist(err) {
 		t.Errorf("the hooks are still there: %v", err)
@@ -101,7 +101,7 @@ func TestDerailArchivedAndWithoutWorktrees(t *testing.T) {
 			t.Errorf("%s is still saved: %v", id, err)
 		}
 	}
-	if !slices.Equal(f.worktrees.derailed, []string{work.Track.ID}) {
-		t.Errorf("derailed worktrees %v; want only the work track's", f.worktrees.derailed)
+	if !slices.Equal(f.worktrees.discarded, []string{work.Track.ID, work.Track.ID}) {
+		t.Errorf("discarded %v; want the work track's, by Archive and Derail", f.worktrees.discarded)
 	}
 }

@@ -27,29 +27,33 @@ func TestArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f.worktrees.unsaved = []workspace.Unsaved{{Repo: "api", Changed: 3}}
-	if unsaved, err := f.svc.Archive(ctx, id, false); err != nil || len(unsaved) != 1 {
-		t.Fatalf("Archive = %v, %v; want the unsaved work", unsaved, err)
+	f.worktrees.lost = []workspace.Unsaved{{Repo: "api", Commits: 2}}
+	if lost, err := f.svc.Archive(ctx, id, false); err != nil || len(lost) != 1 {
+		t.Fatalf("Archive = %v, %v; want the work that would be lost", lost, err)
 	}
-	if saved, _ := f.store.Track(ctx, id); saved.Archived() || saved.Cleaned() {
-		t.Fatalf("Archive changed %+v with unsaved work", saved.State)
+	if saved, _ := f.store.Track(ctx, id); saved.Archived() || saved.Cleaned() || len(f.worktrees.discarded) != 0 {
+		t.Fatalf("Archive changed %+v with work that would be lost", saved.State)
 	}
-	if unsaved, err := f.svc.Archive(ctx, id, true); err != nil || len(unsaved) != 0 {
-		t.Fatalf("forced Archive = %v, %v", unsaved, err)
+	f.worktrees.renamed = map[string]string{"api": "fix/login"}
+	if lost, err := f.svc.Archive(ctx, id, true); err != nil || len(lost) != 0 {
+		t.Fatalf("forced Archive = %v, %v", lost, err)
 	}
 	saved, _ := f.store.Track(ctx, id)
-	if !saved.Archived() || !saved.Cleaned() || !slices.Equal(f.worktrees.cleaned, []string{id}) {
-		t.Errorf("after Archive: %+v, removed %v", saved.State, f.worktrees.cleaned)
+	if !saved.Archived() || !saved.Cleaned() || saved.Status() != track.Closed || !slices.Equal(f.worktrees.discarded, []string{id}) {
+		t.Errorf("after Archive: %+v, discarded %v", saved.State, f.worktrees.discarded)
 	}
-	if _, err := f.svc.Archive(ctx, id, true); err != nil || len(f.worktrees.cleaned) != 1 {
-		t.Errorf("archiving twice: %v, removed %v", err, f.worktrees.cleaned)
+	if saved.Repos[0].Branch != "fix/login" {
+		t.Errorf("branch after Archive = %s, want the one the agent renamed it to", saved.Repos[0].Branch)
+	}
+	if _, err := f.svc.Archive(ctx, id, true); err != nil || len(f.worktrees.discarded) != 1 {
+		t.Errorf("archiving twice: %v, discarded %v", err, f.worktrees.discarded)
 	}
 
 	if err := f.svc.Unarchive(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if saved, _ := f.store.Track(ctx, id); saved.Archived() || !saved.Cleaned() {
-		t.Errorf("after Unarchive: %+v", saved.State)
+	if saved, _ := f.store.Track(ctx, id); saved.Archived() || !saved.Cleaned() || saved.Status() != track.Done {
+		t.Errorf("after Unarchive: %+v, want done", saved.State)
 	}
 }
 
@@ -63,12 +67,12 @@ func TestArchiveWithoutWorktrees(t *testing.T) {
 	if err := f.svc.End(ctx, ask.Track.ID); err != nil {
 		t.Fatal(err)
 	}
-	f.worktrees.unsaved = []workspace.Unsaved{{Repo: "api", Changed: 3}}
-	if unsaved, err := f.svc.Archive(ctx, ask.Track.ID, false); err != nil || len(unsaved) != 0 {
-		t.Fatalf("Archive = %v, %v", unsaved, err)
+	f.worktrees.lost = []workspace.Unsaved{{Repo: "api", Changed: 3}}
+	if lost, err := f.svc.Archive(ctx, ask.Track.ID, false); err != nil || len(lost) != 0 {
+		t.Fatalf("Archive = %v, %v", lost, err)
 	}
-	if saved, _ := f.store.Track(ctx, ask.Track.ID); !saved.Archived() || len(f.worktrees.cleaned) != 0 {
-		t.Errorf("after Archive: %+v, removed %v", saved.State, f.worktrees.cleaned)
+	if saved, _ := f.store.Track(ctx, ask.Track.ID); !saved.Archived() || len(f.worktrees.discarded) != 0 {
+		t.Errorf("after Archive: %+v, discarded %v", saved.State, f.worktrees.discarded)
 	}
 }
 
@@ -117,9 +121,9 @@ func TestAutoArchive(t *testing.T) {
 	}
 
 	f.history = settings.History{AutoArchive: true}
-	f.worktrees.unsaved = []workspace.Unsaved{{Repo: "api", Changed: 1}}
+	f.worktrees.lost = []workspace.Unsaved{{Repo: "api", Commits: 1}}
 	if got, err := f.svc.AutoArchive(ctx); err != nil || len(got) != 0 || len(archived()) != 0 {
-		t.Fatalf("AutoArchive skipping unsaved work = %v, %v; archived %v", got, err, archived())
+		t.Fatalf("AutoArchive skipping work that would be lost = %v, %v; archived %v", got, err, archived())
 	}
 
 	f.history.Unsaved = settings.UnsavedKeep
@@ -128,7 +132,15 @@ func TestAutoArchive(t *testing.T) {
 	if err != nil || !slices.Equal(got, []string{"old", "old-merged"}) {
 		t.Fatalf("AutoArchive keeping worktrees = %v, %v", got, err)
 	}
-	if !slices.Equal(archived(), []string{"old", "old-merged"}) || len(f.worktrees.cleaned) != 0 {
-		t.Errorf("archived %v, removed %v; want old and old-merged, worktrees kept", archived(), f.worktrees.cleaned)
+	if !slices.Equal(archived(), []string{"old", "old-merged"}) || len(f.worktrees.discarded) != 0 {
+		t.Errorf("archived %v, discarded %v; want old and old-merged, worktrees kept", archived(), f.worktrees.discarded)
+	}
+
+	f.worktrees.lost = nil
+	if err := f.svc.Unarchive(ctx, ids["old"]); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.svc.AutoArchive(ctx); err != nil || !slices.Equal(got, []string{"old"}) || !slices.Equal(f.worktrees.discarded, []string{ids["old"]}) {
+		t.Errorf("AutoArchive with nothing to lose = %v, %v; discarded %v", got, err, f.worktrees.discarded)
 	}
 }
