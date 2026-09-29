@@ -178,6 +178,7 @@ type fixture struct {
 	engine    *fakeEngine
 	engines   settings.Engines
 	types     settings.Tracks
+	history   settings.History
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -204,9 +205,11 @@ func newFixture(t *testing.T) *fixture {
 	n := 0
 	f.svc = &Service{
 		Store: f.store, Worktrees: f.worktrees, Windows: f.windows,
-		Settings: func() (settings.Settings, error) { return settings.Settings{Engines: f.engines, Tracks: f.types}, nil },
-		Engines:  map[string]Engine{"claude": f.engine, "cursor": f.engine},
-		Now:      func() time.Time { return time.UnixMilli(1_790_000_000_000) },
+		Settings: func() (settings.Settings, error) {
+			return settings.Settings{Engines: f.engines, Tracks: f.types, History: f.history}, nil
+		},
+		Engines: map[string]Engine{"claude": f.engine, "cursor": f.engine},
+		Now:     func() time.Time { return time.UnixMilli(1_790_000_000_000) },
 		NewID: func() string {
 			n++
 			return "20260928-101500-abc12" + string(rune('0'+n))

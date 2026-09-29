@@ -34,6 +34,7 @@ type Store interface {
 	Track(ctx context.Context, id string) (track.Track, error)
 	OpenTracks(ctx context.Context) ([]track.Track, error)
 	EndedTracks(ctx context.Context, limit int) ([]track.Track, error)
+	EndedBefore(ctx context.Context, at time.Time) ([]track.Track, error)
 	SetState(ctx context.Context, id string, st track.State) error
 	Rename(ctx context.Context, id, name string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error

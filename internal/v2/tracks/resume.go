@@ -112,6 +112,12 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 	if err := cleanable(t); err != nil || t.Cleaned() {
 		return nil, err
 	}
+	return s.clean(ctx, t, force)
+}
+
+// clean is Clean on t, held: unless force, it returns the unsaved work
+// it finds instead of removing anything.
+func (s *Service) clean(ctx context.Context, t track.Track, force bool) ([]workspace.Unsaved, error) {
 	if !force {
 		unsaved, err := s.Worktrees.Unsaved(ctx, t)
 		if err != nil || len(unsaved) > 0 {
