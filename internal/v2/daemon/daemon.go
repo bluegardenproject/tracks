@@ -21,8 +21,12 @@ import (
 // ErrRunning means another daemon holds the lock.
 var ErrRunning = errors.New("another daemon is running")
 
-// every is how often the windows are checked.
-const every = 2 * time.Second
+// every is how often the windows are checked, pollEvery how often
+// GitHub is asked about the tracks' PRs.
+const (
+	every     = 2 * time.Second
+	pollEvery = 2 * time.Minute
+)
 
 // Config is what the daemon runs with.
 type Config struct {
@@ -39,8 +43,9 @@ type Config struct {
 	// Home is where the reviewer subagents are installed.
 	Home string
 	Log  *log.Logger
-	// Every is how often the windows are checked; 0 is 2 s.
-	Every time.Duration
+	// Every is how often the windows are checked; 0 is 2 s. PollEvery is
+	// how often the PRs are; 0 is 2 minutes.
+	Every, PollEvery time.Duration
 }
 
 // Run serves until ctx ends, a client asks it to shut down or the tmux
@@ -81,7 +86,19 @@ func Run(ctx context.Context, c Config) error {
 	}
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
+	pollInterval := c.PollEvery
+	if pollInterval == 0 {
+		pollInterval = pollEvery
+	}
+	polls := time.NewTicker(pollInterval)
+	defer polls.Stop()
+	pollCtx, cancelPoll := context.WithCancel(ctx)
+	poller := &poller{log: c.Log}
+	defer poller.wait()
+	defer cancelPoll()
+
 	c.Log.Printf("started, pid %d", os.Getpid())
+	poller.start(pollCtx, c.Tracks.PollPRs)
 	reason := ""
 	for reason == "" {
 		select {
@@ -91,6 +108,8 @@ func Run(ctx context.Context, c Config) error {
 			reason = "asked to shut down"
 		case err := <-served:
 			return err
+		case <-polls.C:
+			poller.start(pollCtx, c.Tracks.PollPRs)
 		case <-tick.C:
 			if !c.Tmux.HasSession(c.Session) {
 				reason = "the tmux session is gone"

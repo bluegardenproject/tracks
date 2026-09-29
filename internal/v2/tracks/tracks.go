@@ -83,6 +83,8 @@ type Service struct {
 	// HooksDir holds each track's hooks, a folder per track; "" starts
 	// agents without them.
 	HooksDir string
+	// GitHub is asked about the tracks' PRs; nil doesn't poll.
+	GitHub GitHub
 	// Now and NewID are the clock and the track IDs; nil is the real
 	// ones.
 	Now   func() time.Time
