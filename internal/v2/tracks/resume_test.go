@@ -164,6 +164,9 @@ func TestClean(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.worktrees.unsaved = []workspace.Unsaved{{Repo: "api", Changed: 3}}
+	if unsaved, err := f.svc.Unsaved(ctx, id); err != nil || len(unsaved) != 1 {
+		t.Fatalf("Unsaved = %v, %v", unsaved, err)
+	}
 	unsaved, err := f.svc.Clean(ctx, id, false)
 	if err != nil || len(unsaved) != 1 || unsaved[0].String() != "api: 3 changed files" {
 		t.Fatalf("Clean = %v, %v; want the unsaved work", unsaved, err)

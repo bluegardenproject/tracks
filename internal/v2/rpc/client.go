@@ -98,8 +98,8 @@ func (c Client) Resume(ctx context.Context, id string, progress func(string)) (C
 }
 
 // Clean returns the unsaved work it found instead of removing it,
-// unless force.
-func (c Client) Clean(ctx context.Context, id string, force bool) ([]string, error) {
+// unless p.Force.
+func (c Client) Clean(ctx context.Context, p CleanParams) ([]string, error) {
 	var r CleanResult
-	return r.Unsaved, c.Call(ctx, Clean, CleanParams{ID: id, Force: force}, &r, nil)
+	return r.Unsaved, c.Call(ctx, Clean, p, &r, nil)
 }

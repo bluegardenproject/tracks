@@ -115,8 +115,11 @@ func TestDaemon(t *testing.T) {
 	if _, err := client.Resume(ctx, "20260928-101500-abc123", nil); !errors.As(err, &p) {
 		t.Errorf("resuming a missing track: %v, want a problem", err)
 	}
-	if _, err := client.Clean(ctx, "20260928-101500-abc123", true); !errors.As(err, &p) {
-		t.Errorf("cleaning a missing track: %v, want a problem", err)
+	for _, params := range []rpc.CleanParams{{Check: true}, {Force: true}} {
+		params.ID = "20260928-101500-abc123"
+		if _, err := client.Clean(ctx, params); !errors.As(err, &p) {
+			t.Errorf("cleaning a missing track with %+v: %v, want a problem", params, err)
+		}
 	}
 
 	if err := client.Shutdown(ctx); err != nil {
