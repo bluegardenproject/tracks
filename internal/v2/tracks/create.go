@@ -25,11 +25,17 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 	if err != nil {
 		return Created{}, err
 	}
-	id := set.Engines.DefaultID()
+	id, model := set.RunsOn(string(req.Kind))
 	engine, ok := s.engine(id)
 	info, known := agents.ByID(id)
-	if !ok || !known {
+	switch {
+	case id == "":
 		return Created{}, ErrNoEngine
+	case !ok || !known:
+		return Created{}, Problem(fmt.Sprintf("Tracks doesn't know the engine %s.", id))
+	case set.Engines.Get(id) == nil:
+		return Created{}, Problem(fmt.Sprintf("Add %s on the Engines tab, or pick another agent for %s tracks in Settings → Tracks.",
+			info.Name, title(req.Kind)))
 	}
 	conf := set.Engines.Get(id)
 
@@ -37,7 +43,7 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 	if err != nil {
 		return Created{}, err
 	}
-	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, conf.Model, s.now()
+	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, model, s.now()
 	name, release, err := s.claimName(t)
 	if err != nil {
 		return Created{}, err
@@ -107,4 +113,12 @@ func repoNames(repos []track.Repo) string {
 		names[i] = r.Name
 	}
 	return strings.Join(names, ",")
+}
+
+// title is k as a type's name: "Work".
+func title(k track.Kind) string {
+	if k == "" {
+		return ""
+	}
+	return strings.ToUpper(string(k[:1])) + string(k[1:])
 }
