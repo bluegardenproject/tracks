@@ -6,20 +6,23 @@ package rpc
 import (
 	"encoding/json"
 
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
 // The methods.
 const (
-	Ping     = "ping"
-	Shutdown = "shutdown"
-	Create   = "create"
-	List     = "list"
-	End      = "end"
-	Resume   = "resume"
-	Clean    = "clean"
-	Archive  = "archive"
-	Report   = "report"
+	Ping      = "ping"
+	Shutdown  = "shutdown"
+	Create    = "create"
+	List      = "list"
+	End       = "end"
+	Resume    = "resume"
+	Clean     = "clean"
+	Archive   = "archive"
+	Unarchive = "unarchive"
+	Filter    = "filter"
+	Report    = "report"
 )
 
 // Request is one call.
@@ -65,10 +68,33 @@ type CreateResult struct {
 	Window string `json:"window"`
 }
 
+// ListParams asks for Station's list: under its filter, when one is on.
+type ListParams struct {
+	Station bool `json:"station,omitempty"`
+}
+
 // ListResult are the open tracks, in window order, then the most
-// recently ended ones.
+// recently ended ones; or for Station under a filter, the tracks it
+// picks, and the filter.
 type ListResult struct {
 	Tracks []tracks.Listed `json:"tracks"`
+	Filter track.Filter    `json:"filter"`
+}
+
+// FilterParams sets Station's filter to Set, the zero Filter clearing
+// it; without Set, it's only read. The result is a FilterResult.
+type FilterParams struct {
+	Set *track.Filter `json:"set,omitempty"`
+}
+
+// FilterResult is Station's filter.
+type FilterResult struct {
+	Filter track.Filter `json:"filter"`
+}
+
+// UnarchiveParams names the archived track to put back in Station.
+type UnarchiveParams struct {
+	ID string `json:"id"`
 }
 
 // EndParams names the track to end.

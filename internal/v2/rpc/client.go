@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
@@ -86,6 +87,28 @@ func (c Client) Create(ctx context.Context, p CreateParams, progress func(string
 func (c Client) List(ctx context.Context) ([]tracks.Listed, error) {
 	var r ListResult
 	return r.Tracks, c.Call(ctx, List, nil, &r, nil)
+}
+
+// Station is Station's list and the filter it's under.
+func (c Client) Station(ctx context.Context) ([]tracks.Listed, track.Filter, error) {
+	var r ListResult
+	err := c.Call(ctx, List, ListParams{Station: true}, &r, nil)
+	return r.Tracks, r.Filter, err
+}
+
+// Filter is Station's filter.
+func (c Client) Filter(ctx context.Context) (track.Filter, error) {
+	var r FilterResult
+	return r.Filter, c.Call(ctx, Filter, FilterParams{}, &r, nil)
+}
+
+// SetFilter puts Station under f; the zero Filter clears it.
+func (c Client) SetFilter(ctx context.Context, f track.Filter) error {
+	return c.Call(ctx, Filter, FilterParams{Set: &f}, nil, nil)
+}
+
+func (c Client) Unarchive(ctx context.Context, id string) error {
+	return c.Call(ctx, Unarchive, UnarchiveParams{ID: id}, nil, nil)
 }
 
 func (c Client) End(ctx context.Context, id string) error {
