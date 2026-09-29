@@ -19,11 +19,11 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | [drafts/storage.md](plans/drafts/storage.md); repos in [03-repositories.md](plans/03-repositories.md) | started: repos |
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md); default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: form layout; creating, ending, resuming and cleaning tracks; defaults per track type |
-| 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md) | draft |
+| 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md); the hooks for status in [10-track-status.md](plans/10-track-status.md) | draft |
 | 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
 
-Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status-to-be-designed) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
+Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
 ## Decisions
 
@@ -147,9 +147,9 @@ internal/v2/
 
 **Reused from v1, unchanged at first:** `git`, `provision`, `services`, `proxy`, `ports`, `github`, `notify`, `update`, `usage`, `shellx`, `dlog`.
 
-## Track status (to be designed)
+## Track status
 
-The footer, the Tracks window, notifications and storage all depend on it, so it has to be designed before real tracks are built. Requirements:
+Designed in [10-track-status.md](plans/10-track-status.md): a track status (active, action required, done, closed) and a PR status, changed only through events. Requirements:
 
 - **Defined exactly once:** one place in the `track` domain package declares every status value with its label, colour token, priority and whether it needs attention. Footer, screens, notifications and storage read from there and never list statuses themselves.
 - **Easy to extend:** adding a status value is one new entry in that place, plus its tests.

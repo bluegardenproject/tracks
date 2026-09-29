@@ -16,7 +16,7 @@ The goal is to judge the layout by using it, before any real logic exists.
 
 Out of scope: the Tracks window's header and tabs (chunk 3), real tracks (chunk 5), storage and hooks.
 
-**Statuses are placeholders** in this chunk. The [track status model](../masterplan.md#track-status-to-be-designed) is designed later, before chunk 3 or after it.
+**Statuses are placeholders** in this chunk. The [track status model](../masterplan.md#track-status) is designed later, before chunk 3 or after it.
 
 ## Data: the `Source` interface (`internal/v2/ui/source`) (built)
 
