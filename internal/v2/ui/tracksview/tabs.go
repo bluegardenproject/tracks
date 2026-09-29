@@ -24,7 +24,7 @@ const (
 )
 
 var tabs = []tab{
-	tabStation:      {"Station", "Your active tracks, with their status and actions."},
+	tabStation:      {"Station", "Your tracks, with their status and actions."},
 	tabRepositories: {"Repositories", "The repositories tracks are created from."},
 	tabProxy:        {"Proxy", "Dev servers and the local proxy."},
 	tabEngines:      {"Engines", "The agent CLIs that tracks run."},

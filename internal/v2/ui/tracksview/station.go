@@ -48,17 +48,24 @@ type (
 
 // station is the Station tab's state.
 type station struct {
-	tracks     []source.Track
-	err        error // reading the tracks failed
-	selected   int
-	offset     int // first row shown
-	lastClick  time.Time
-	hover      int  // the track under the mouse, -1 for none
-	confirming bool // asking whether to end the selected track
+	tracks    []source.Track
+	err       error // reading the tracks failed
+	selected  int
+	offset    int // first row shown
+	lastClick time.Time
+	hover     int       // the track under the mouse, -1 for none
+	asking    *question // about the selected track, nil for nothing
 	// hoverButton is the details button under the mouse, -1 for none.
 	hoverButton actionID
 	hoverAdd    bool // the mouse is on Add new Track
 	notice      notice
+}
+
+// question is what Station asks before ending or cleaning a track.
+type question struct {
+	id, name string // the track's
+	clean    bool   // Clean's question, else End's
+	unsaved  []string
 }
 
 // notice is a short message in the hint row, until the next key or
@@ -128,12 +135,16 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 	if len(m.station.tracks) == 0 && m.station.err == nil && key == "enter" {
 		return m, m.openNewTrack(), true
 	}
-	if m.station.confirming {
-		m.station.confirming = false
-		switch key {
-		case "y", "enter":
+	if q := m.station.asking; q != nil {
+		m.station.asking = nil
+		// Removing unsaved work takes y, not the Enter that resumes.
+		switch {
+		case key == "y" || key == "enter" && len(q.unsaved) == 0:
+			if q.clean {
+				return m, m.clean(*q), true
+			}
 			return m, m.act(actionEnd), true
-		case "n", "esc":
+		case key == "n" || key == "esc" || key == "enter":
 			return m, nil, true
 		}
 	}
@@ -143,8 +154,12 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 	case "down", "j":
 		m.station.selected = min(max(0, len(m.station.tracks)-1), m.station.selected+1)
 	default:
-		for _, a := range actions {
-			if a.key == key || (key == "enter" && a.id == actionOpen) {
+		t, ok := m.selectedTrack()
+		if !ok {
+			return m, nil, false
+		}
+		for _, a := range actionsFor(t) {
+			if a.key == key || (key == "enter" && a.id == mainAction(t)) {
 				return m.press(a.id)
 			}
 		}
@@ -171,12 +186,13 @@ func (m Model) stationClick(x, y int) (Model, tea.Cmd) {
 	now := time.Now()
 	double := row == m.station.selected && now.Sub(m.station.lastClick) <= doubleClick
 	if row != m.station.selected {
-		m.station.confirming = false
+		m.station.asking = nil
 	}
 	m.station.selected, m.station.lastClick = row, now
 	if double {
 		m.station.lastClick = time.Time{}
-		return m, m.act(actionOpen)
+		next, cmd, _ := m.press(mainAction(m.station.tracks[row]))
+		return next, cmd
 	}
 	return m, nil
 }

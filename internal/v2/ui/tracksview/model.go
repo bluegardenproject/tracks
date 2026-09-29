@@ -28,6 +28,11 @@ type Config struct {
 	Tracks  source.Source
 	// Open switches to a track, End closes it.
 	Open, End TrackFunc
+	// Resume starts an ended track again. Unsaved is Clean's check: the
+	// work in an ended track's worktrees that exists nowhere else.
+	Resume  ResumeFunc
+	Unsaved func(id string) ([]string, error)
+	Clean   CleanFunc
 	// NewTrack opens the New track form and returns once it closes.
 	NewTrack func() error
 	OpenURL  func(url string) error
@@ -52,6 +57,9 @@ type Model struct {
 	palette       style.Palette
 	source        source.Source
 	open, end     TrackFunc
+	resume        ResumeFunc
+	unsaved       func(id string) ([]string, error)
+	cleanFn       CleanFunc
 	newTrack      func() error
 	openURL       func(url string) error
 	repoSource    source.Repos
@@ -77,6 +85,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
+		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, engines: newEnginesTab()}
@@ -106,6 +115,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.loadTracks(true)
 	case doneMsg:
 		return m.done(msg)
+	case resumeEvent:
+		return m.resumed(msg)
+	case checkedMsg:
+		return m.checked(msg), nil
+	case cleanedMsg:
+		return m.cleaned(msg)
 	case reposMsg:
 		return m.setRepos(msg), nil
 	case suggestMsg:

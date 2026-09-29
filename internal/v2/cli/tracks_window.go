@@ -50,6 +50,15 @@ func newTracksWindowCmd(version string) *cobra.Command {
 					return trackwin.Switch(c, sessionName, strconv.Itoa(number), 0)
 				},
 				End: func(number int) error { return endTrack(cmd.Context(), daemon, c, number) },
+				Resume: func(id string, progress func(string)) error {
+					return resumeTrack(cmd.Context(), daemon, c, id, progress)
+				},
+				Unsaved: func(id string) ([]string, error) {
+					return cleanTrack(cmd.Context(), daemon, rpc.CleanParams{ID: id, Check: true})
+				},
+				Clean: func(id string, force bool) ([]string, error) {
+					return cleanTrack(cmd.Context(), daemon, rpc.CleanParams{ID: id, Force: force})
+				},
 				NewTrack: func() error {
 					client, err := c.ClientOf(os.Getenv("TMUX_PANE"))
 					if err != nil {
@@ -106,6 +115,37 @@ func endTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, number in
 	return c.KillWindow("=" + sessionName + ":" + strconv.Itoa(number))
 }
 
+// resumeTrack resumes ended track id through the daemon and switches to
+// its window.
+func resumeTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, id string, progress func(string)) error {
+	var r rpc.CreateResult
+	err := daemon.do(ctx, func(client rpc.Client) (err error) {
+		r, err = client.Resume(ctx, id, progress)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	infos, err := trackwin.List(c, sessionName)
+	if err != nil {
+		return err
+	}
+	for _, in := range infos {
+		if in.Window == r.Window {
+			return trackwin.Switch(c, sessionName, strconv.Itoa(in.Number), 0)
+		}
+	}
+	return nil
+}
+
+func cleanTrack(ctx context.Context, daemon daemonCalls, p rpc.CleanParams) (unsaved []string, err error) {
+	err = daemon.do(ctx, func(client rpc.Client) (err error) {
+		unsaved, err = client.Clean(ctx, p)
+		return err
+	})
+	return unsaved, err
+}
+
 // trackUses lists the repos of the open tracks.
 func trackUses(daemon daemonCalls) repos.UsesFunc {
 	return func(ctx context.Context) ([]repos.Use, error) {
@@ -115,6 +155,9 @@ func trackUses(daemon daemonCalls) repos.UsesFunc {
 		}
 		var uses []repos.Use
 		for _, l := range listed {
+			if !l.Open() {
+				continue
+			}
 			for _, r := range l.Repos {
 				if r.RepoID != 0 {
 					uses = append(uses, repos.Use{RepoID: r.RepoID, Track: l.Name})

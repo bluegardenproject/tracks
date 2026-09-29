@@ -17,6 +17,7 @@ type keyHelp struct{ key, help string }
 var (
 	tabKeys          = []keyHelp{{"Tab", "next tab"}, {"Shift+Tab", "previous tab"}}
 	stationKeys      = []keyHelp{{"↑/↓", "select"}, {"Enter", "open"}}
+	endedStationKeys = []keyHelp{{"↑/↓", "select"}, {"Enter", "resume"}}
 	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	repoFormKeys     = []keyHelp{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back to the list"}}
@@ -29,6 +30,17 @@ var (
 	engineKeys       = []keyHelp{{"Tab", "next"}, {"Shift+Tab", "previous"}, {"Enter", "press"}, {"Esc", "back"}}
 	modelPickerKeys  = []keyHelp{{"Type", "to filter"}, {"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 )
+
+// questionKeys answer q.
+func questionKeys(q question) []keyHelp {
+	switch {
+	case !q.clean:
+		return []keyHelp{{"y/Enter", "end track"}, {"n/Esc", "cancel"}}
+	case len(q.unsaved) > 0:
+		return []keyHelp{{"y", "remove anyway"}, {"n/Esc/Enter", "cancel"}}
+	}
+	return []keyHelp{{"y/Enter", "remove"}, {"n/Esc", "cancel"}}
+}
 
 // prefixKeys are the keys every window of the session has, behind the
 // tmux prefix.
@@ -48,7 +60,8 @@ type keyGroup struct {
 
 func keyGroups() []keyGroup {
 	station := append([]keyHelp{}, stationKeys...)
-	for _, a := range actions {
+	station = append(station, keyHelp{"Enter", "resume an ended track"})
+	for _, a := range append(append([]action{}, openActions...), endedActions[:2]...) {
 		station = append(station, keyHelp{a.key, strings.ToLower(a.label[:1]) + a.label[1:]})
 	}
 	return []keyGroup{
