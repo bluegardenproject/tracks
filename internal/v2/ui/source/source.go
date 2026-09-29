@@ -4,6 +4,7 @@ package source
 
 import (
 	"context"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
@@ -28,7 +29,8 @@ type Track struct {
 	// session ID, which resumes it.
 	Engine, Model, Session string
 	Cost                   float64 // in US dollars, 0 when unknown
-	PRs                    []PR    // in the order they were found
+	Created                time.Time
+	PRs                    []PR // in the order they were found
 	// PRStatus is where the PRs are; track.NoPRs without any.
 	PRStatus track.Status
 }
@@ -104,7 +106,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: l.Status(),
 			Cleanable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
-			Engine: engine, Model: l.Model, Session: l.Session, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
+			Engine: engine, Model: l.Model, Session: l.Session, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}
 	return out, f, nil
 }

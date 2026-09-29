@@ -80,3 +80,13 @@ func TestFastTrackGivesWayToDetails(t *testing.T) {
 		}
 	}
 }
+
+func TestDetailsShowWhenCreated(t *testing.T) {
+	m := withEnded(Config{})
+	if view := plainView(m); !strings.Contains(view, "Created   2026-09-28 10:15") {
+		t.Errorf("details lack when rate-bug was created:\n%s", view)
+	}
+	if view := plainView(settle(m, tea.KeyPressMsg{Code: tea.KeyDown})); !strings.Contains(view, "Created   unknown") {
+		t.Errorf("details of a track without a creation time:\n%s", view)
+	}
+}

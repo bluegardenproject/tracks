@@ -14,8 +14,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/ui/widget"
 )
 
-// labelWidth is the width of the details' label column.
-const labelWidth = 10
+const (
+	// labelWidth is the width of the details' label column.
+	labelWidth = 10
+	// createdLayout is how the details show when a track was created.
+	createdLayout = "2006-01-02 15:04"
+)
 
 type actionID int
 
@@ -137,7 +141,11 @@ func (m Model) details(width int) ([]string, []hit) {
 	if t.Number > 0 {
 		number = value(strconv.Itoa(t.Number))
 	}
-	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("ID") + number}
+	created := muted("unknown")
+	if !t.Created.IsZero() {
+		created = value(t.Created.Local().Format(createdLayout))
+	}
+	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("ID") + number, label("Created") + created}
 
 	for i, r := range t.Repos {
 		l := label("")
