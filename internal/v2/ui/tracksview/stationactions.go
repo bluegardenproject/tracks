@@ -27,9 +27,9 @@ type (
 		err      error
 		events   <-chan resumeEvent
 	}
-	// checkedMsg is the unsaved work Clean's check found in track id
-	// before kind, askClean or askArchive; cleanedMsg is what Clean did,
-	// archivedMsg what Archive did.
+	// checkedMsg is the unsaved work Clean's or Derail's check found in
+	// track id before kind; cleanedMsg is what Clean did, archivedMsg
+	// what Archive did, derailedMsg what Derail did.
 	checkedMsg struct {
 		id, name string
 		kind     asked
@@ -38,6 +38,7 @@ type (
 	}
 	cleanedMsg  checkedMsg
 	archivedMsg checkedMsg
+	derailedMsg checkedMsg
 )
 
 // startResume resumes track id, showing its progress in the hint row.

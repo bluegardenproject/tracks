@@ -41,6 +41,10 @@ type Config struct {
 	Unsaved func(id string) ([]string, error)
 	Clean   CleanFunc
 	Archive CleanFunc
+	// Derail deletes an ended track for good; Lost is its check, the
+	// work it would lose, one line per repo.
+	Derail CleanFunc
+	Lost   func(id string) ([]string, error)
 	// Unarchive puts an archived track back in Station; SetFilter puts
 	// Station under a filter, the zero Filter clearing it.
 	Unarchive func(id string) error
@@ -79,6 +83,8 @@ type Model struct {
 	unsaved       func(id string) ([]string, error)
 	cleanFn       CleanFunc
 	archiveFn     CleanFunc
+	derailFn      CleanFunc
+	lostFn        func(id string) ([]string, error)
 	unarchive     func(id string) error
 	setFilter     func(track.Filter) error
 	newTrack      func() error
@@ -112,7 +118,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
-		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean, archiveFn: c.Archive, unarchive: c.Unarchive, setFilter: c.SetFilter,
+		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, engines: newEnginesTab()}
@@ -159,6 +165,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.checked(msg), nil
 	case archivedMsg:
 		return m.archived(msg)
+	case derailedMsg:
+		return m.derailed(msg)
 	case cleanedMsg:
 		return m.cleaned(msg)
 	case reposMsg:
