@@ -108,8 +108,8 @@ func TestStateAndName(t *testing.T) {
 	if err := s.SetState(ctx, "b", cleaned); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := s.Track(ctx, "b"); b.CleanedAt.UnixMilli() != cleaned.CleanedAt.UnixMilli() || b.Status() != track.Closed {
-		t.Errorf("b = %+v, want cleaned at %v", b.State, cleaned.CleanedAt)
+	if b, _ := s.Track(ctx, "b"); b.CleanedAt.UnixMilli() != cleaned.CleanedAt.UnixMilli() || b.Status() != track.Done {
+		t.Errorf("b = %+v, want done, cleaned at %v", b.State, cleaned.CleanedAt)
 	}
 	if err := s.SetState(ctx, "d", track.State{Waiting: true}); err != nil {
 		t.Fatal(err)

@@ -12,7 +12,7 @@ func TestFilterMatch(t *testing.T) {
 	active := Track{CreatedAt: day(29, 9)}
 	waiting := Track{CreatedAt: day(28, 9), State: State{Waiting: true}}
 	done := Track{CreatedAt: day(23, 0), State: State{ClosedAt: day(24, 0)}, PRs: []PR{{State: PRMerged}}}
-	closed := Track{CreatedAt: day(22, 23), State: State{ClosedAt: day(24, 0), CleanedAt: day(24, 0)}, PRs: []PR{{State: PRDraft}}}
+	cleaned := Track{CreatedAt: day(22, 23), State: State{ClosedAt: day(24, 0), CleanedAt: day(24, 0)}, PRs: []PR{{State: PRDraft}}}
 	archived := Track{CreatedAt: day(1, 0), State: State{ClosedAt: day(2, 0), ArchivedAt: day(9, 0)}}
 
 	tests := []struct {
@@ -20,18 +20,20 @@ func TestFilterMatch(t *testing.T) {
 		f      Filter
 		tracks map[string]bool
 	}{
-		{"none", Filter{}, map[string]bool{"active": true, "waiting": true, "done": true, "closed": true, "archived": false}},
-		{"statuses", Filter{Statuses: []string{"done", "action_required"}}, map[string]bool{"waiting": true, "done": true, "active": false, "closed": false}},
-		{"no PR", Filter{PRStatuses: []string{"none"}}, map[string]bool{"active": true, "done": false, "closed": false}},
-		{"PR open counts drafts", Filter{PRStatuses: []string{"open", "merged"}}, map[string]bool{"done": true, "closed": true, "active": false}},
+		{"none", Filter{}, map[string]bool{"active": true, "waiting": true, "done": true, "cleaned": true, "archived": false}},
+		{"statuses", Filter{Statuses: []string{"done", "action_required"}}, map[string]bool{"waiting": true, "done": true, "cleaned": true, "active": false}},
+		{"closed is archived", Filter{Statuses: []string{"closed"}}, map[string]bool{"cleaned": false, "done": false}},
+		{"archived and closed", Filter{Archived: true, Statuses: []string{"closed"}}, map[string]bool{"archived": true}},
+		{"no PR", Filter{PRStatuses: []string{"none"}}, map[string]bool{"active": true, "done": false, "cleaned": false}},
+		{"PR open counts drafts", Filter{PRStatuses: []string{"open", "merged"}}, map[string]bool{"done": true, "cleaned": true, "active": false}},
 		{"archived only", Filter{Archived: true}, map[string]bool{"archived": true, "done": false, "active": false}},
 		{"today", Filter{Started: Today}, map[string]bool{"active": true, "waiting": false}},
-		{"last 7 days from local midnight", Filter{Started: Last7Days}, map[string]bool{"done": true, "closed": false}},
-		{"between includes both days", Filter{Started: Between, From: "2026-09-23", To: "2026-09-28"}, map[string]bool{"done": true, "waiting": true, "closed": false, "active": false}},
+		{"last 7 days from local midnight", Filter{Started: Last7Days}, map[string]bool{"done": true, "cleaned": false}},
+		{"between includes both days", Filter{Started: Between, From: "2026-09-23", To: "2026-09-28"}, map[string]bool{"done": true, "waiting": true, "cleaned": false, "active": false}},
 		{"from only", Filter{Started: Between, From: "2026-09-28"}, map[string]bool{"waiting": true, "active": true, "done": false}},
-		{"to only", Filter{Started: Between, To: "2026-09-22"}, map[string]bool{"closed": true, "done": false}},
+		{"to only", Filter{Started: Between, To: "2026-09-22"}, map[string]bool{"cleaned": true, "done": false}},
 	}
-	all := map[string]Track{"active": active, "waiting": waiting, "done": done, "closed": closed, "archived": archived}
+	all := map[string]Track{"active": active, "waiting": waiting, "done": done, "cleaned": cleaned, "archived": archived}
 	for _, tt := range tests {
 		for name, want := range tt.tracks {
 			if got := tt.f.Match(all[name], now); got != want {

@@ -11,8 +11,8 @@ import (
 )
 
 // Missing is Resume's answer when some of the track's worktrees are
-// gone, which only Clean should do. Resume re-creates them when asked
-// to.
+// gone, as Archive leaves them. Resume re-creates them when asked to,
+// and their branches if those are gone too.
 type Missing []track.Repo
 
 func (m Missing) Error() string {
@@ -37,8 +37,6 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 	switch {
 	case t.Open():
 		return Created{}, Problem(t.Name + " is already open.")
-	case t.Cleaned():
-		return Created{}, Problem(t.Name + " was cleaned, so it can't be resumed.")
 	}
 	if missing := s.Worktrees.Missing(t); len(missing) > 0 && !recreate {
 		return Created{}, Missing(missing)
