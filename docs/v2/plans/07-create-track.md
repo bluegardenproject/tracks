@@ -116,7 +116,7 @@ CREATE TABLE track_repos (
 CREATE INDEX track_repos_repo ON track_repos (repo_id);
 ```
 
-- **No status column:** statuses wait for the [status model](../masterplan.md#track-status-to-be-designed). The table holds facts only; a track is open while `closed_at` is empty.
+- **No status column:** statuses wait for the [status model](../masterplan.md#track-status). The table holds facts only; a track is open while `closed_at` is empty.
 - **Reliability:**
   - A track is saved once, after its worktrees and window exist, in one transaction with its repos, so there are no half-made rows.
   - The daemon writes tracks and the Tracks window still writes repos. Two writers are safe with WAL, `busy_timeout` and immediate transactions at this write rate; repos move behind the daemon later.
