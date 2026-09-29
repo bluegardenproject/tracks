@@ -118,16 +118,13 @@ func (m Model) sectionBody(width, height int) []string {
 	case sectionKeys:
 		lines := m.keyLines()
 		return lines[min(m.settings.keysOffset, len(lines)):min(len(lines), m.settings.keysOffset+height)]
-	case sectionTrack:
-		return strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(trackSettingsLater), "\n")
+	case sectionTracks:
+		return m.typesView(width)
 	case sectionFastTracks:
 		return m.fastTracks(width)
 	}
 	return m.about(width)
 }
-
-// trackSettingsLater is the Track section until it's built.
-const trackSettingsLater = "Defaults for each track type, such as the engine it runs on, come here later."
 
 // generalIntro is General's text above the theme field.
 func (m Model) generalIntro(width int) []string {
@@ -257,6 +254,9 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 		return m, tea.Batch(focus, cmd)
 	case sectionKeys:
 		s.editing = true
+	case sectionTracks:
+		s.editing = true
+		return m.typesClick(bx, by)
 	}
 	return m, nil
 }
@@ -288,6 +288,12 @@ func (m Model) settingsHover(x, y int) Model {
 		s.hover = i
 	}
 	s.fieldHover = m.onThemeField(x, y)
+	s.types.hover = typeHit{-1, -1}
+	if s.section == sectionTracks {
+		if bx, by, ok := m.inSection(x, y); ok {
+			s.types.hover = m.typeAt(bx, by)
+		}
+	}
 	s.fastHover = m.fastButtonAt(x, y)
 	if s.section == sectionCreator {
 		bx, by, ok := m.inSection(x, y)

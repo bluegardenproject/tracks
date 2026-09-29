@@ -29,6 +29,7 @@ var (
 	scrollKeys       = []keyHelp{{"↑/↓", "scroll"}, {"Esc", "back"}}
 	engineListKeys   = []keyHelp{{"↑/↓", "scroll"}, {"Enter", "to the controls"}}
 	engineKeys       = []keyHelp{{"Tab", "next"}, {"Shift+Tab", "previous"}, {"Enter", "press"}, {"Esc", "back"}}
+	typeKeys         = []keyHelp{{"←/→", "track type"}, {"↑/↓", "field"}, {"Enter", "choose"}, {"Esc", "back"}}
 	modelPickerKeys  = []keyHelp{{"Type", "to filter"}, {"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 )
 

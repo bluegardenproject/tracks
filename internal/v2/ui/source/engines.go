@@ -7,6 +7,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
 )
 
+// TrackTypes keeps each track type's default agent and model.
+type TrackTypes interface {
+	Load() (settings.Tracks, error)
+	Save(settings.Tracks) error
+}
+
 // Engines keeps the engines' settings and asks their CLIs.
 type Engines interface {
 	Load() (settings.Engines, error)

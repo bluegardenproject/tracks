@@ -44,8 +44,10 @@ type Config struct {
 	// put theme files.
 	Themes    source.Themes
 	ThemesDir string
-	// Engines keeps the engines' settings and asks their CLIs.
-	Engines source.Engines
+	// Engines keeps the engines' settings and asks their CLIs;
+	// TrackTypes each track type's default agent and model.
+	Engines    source.Engines
+	TrackTypes source.TrackTypes
 	// About is what the Settings tab's About section lists, label and
 	// value.
 	About [][2]string
@@ -67,6 +69,7 @@ type Model struct {
 	themeSource   source.Themes
 	themesDir     string
 	engineSource  source.Engines
+	typeSource    source.TrackTypes
 	aboutFacts    [][2]string
 	width, height int
 	tab           int
@@ -75,7 +78,8 @@ type Model struct {
 	settings      settingsTab
 	engines       enginesTab
 	// picker, when set, is open over the window; pickerFor is what it
-	// chooses, and pickerEngine the engine for pickModel.
+	// chooses, and pickerEngine the engine for pickModel and
+	// pickTypeModel.
 	picker       *widget.Picker
 	pickerFor    int
 	pickerEngine string
@@ -91,13 +95,13 @@ func New(c Config) Model {
 		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
-		engineSource: c.Engines, engines: newEnginesTab()}
+		engineSource: c.Engines, typeSource: c.TrackTypes, engines: newEnginesTab()}
 	return m.showRepo(-1)
 }
 
 // Init reads the tracks, repos and themes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadTracks(true), m.loadRepos(), m.loadThemes())
+	return tea.Batch(m.loadTracks(true), m.loadRepos(), m.loadThemes(), m.loadTypes())
 }
 
 // Update handles resizes, data and input. The Tracks window never quits
@@ -156,6 +160,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.engineMCP(msg), nil
 	case enginesSavedMsg:
 		return m.enginesSaved(msg)
+	case typesMsg:
+		return m.setTypes(msg), nil
+	case typesSavedMsg:
+		return m.typesSaved(msg)
 	case themecreator.SaveMsg, themecreator.CreateMsg, themecreator.SavedMsg, themecreator.DoneMsg, themecreator.StayMsg, themecreator.LoadMsg:
 		return m.creatorMsg(msg)
 	}
@@ -342,7 +350,7 @@ func (m Model) switchTab(i int) (Model, tea.Cmd) {
 		m.engines.input.Blur()
 		return m.loadEngines()
 	case tabSettings:
-		return m, m.loadThemes()
+		return m, tea.Batch(m.loadThemes(), m.loadTypes())
 	}
 	return m, nil
 }

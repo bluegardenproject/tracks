@@ -27,6 +27,25 @@ func (e engines) Save(en settings.Engines) error {
 	return settings.Save(e.path, s)
 }
 
+// trackTypes keeps the tracks section of settings.yaml for Settings.
+type trackTypes struct{ path string }
+
+var _ source.TrackTypes = trackTypes{}
+
+func (t trackTypes) Load() (settings.Tracks, error) {
+	s, err := settings.Load(t.path)
+	return s.Tracks, err
+}
+
+func (t trackTypes) Save(tracks settings.Tracks) error {
+	s, err := settings.Load(t.path)
+	if err != nil {
+		return err
+	}
+	s.Tracks = tracks
+	return settings.Save(t.path, s)
+}
+
 func (engines) Check(ctx context.Context, e agents.Engine) (agents.Found, error) {
 	return agents.Check(ctx, e)
 }

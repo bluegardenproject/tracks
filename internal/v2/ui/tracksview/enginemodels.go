@@ -17,13 +17,18 @@ func (m Model) openModelPicker(id string) (Model, tea.Cmd) {
 	if !ok || m.engines.settings.Get(id) == nil {
 		return m, nil
 	}
-	p := widget.NewPicker(en.Name+": default model", nil, -1)
+	return m.modelPicker(en, pickModel, en.Name+": default model")
+}
+
+// modelPicker opens the picker on en's models, for purpose.
+func (m Model) modelPicker(en agents.Engine, purpose int, title string) (Model, tea.Cmd) {
+	p := widget.NewPicker(title, nil, -1)
 	p.Filter = true
-	m.picker, m.pickerFor, m.pickerEngine = &p, pickModel, id
+	m.picker, m.pickerFor, m.pickerEngine = &p, purpose, en.ID
 	if !en.ListsModels {
 		return m.setModelItems(en.Models), nil
 	}
-	if models, ok := m.engines.models[id]; ok {
+	if models, ok := m.engines.models[en.ID]; ok {
 		return m.setModelItems(models), nil
 	}
 	return m.listModels()
@@ -57,7 +62,7 @@ func (m Model) engineModels(msg engineModelsMsg) Model {
 		m.engines.models = maps.Clone(m.engines.models)
 		m.engines.models[msg.id] = msg.models
 	}
-	if m.picker == nil || m.pickerFor != pickModel || m.pickerEngine != msg.id {
+	if m.picker == nil || (m.pickerFor != pickModel && m.pickerFor != pickTypeModel) || m.pickerEngine != msg.id {
 		return m
 	}
 	if msg.err != nil {
@@ -69,25 +74,37 @@ func (m Model) engineModels(msg engineModelsMsg) Model {
 }
 
 // setModelItems lists the engine's default, models and the user's
-// added ones in the picker, marking the default in use.
+// added ones in the picker, marking the model in use: the engine's
+// default, or the track type's.
 func (m Model) setModelItems(models []agents.Model) Model {
 	id := m.pickerEngine
 	en, _ := agents.ByID(id)
-	cur := m.engines.settings.Get(id)
-	items := []widget.PickerItem{{Label: "Default", Detail: en.Name + " chooses"}}
+	conf := m.engines.settings.Get(id)
+	def, current := en.Name+" chooses", ""
+	if conf != nil {
+		current = conf.Model
+	}
+	if m.pickerFor == pickTypeModel {
+		def, current = m.defaultModel(id), m.typeModel()
+	}
+	items := []widget.PickerItem{{Label: "Default", Detail: def}}
 	for _, model := range models {
 		items = append(items, widget.PickerItem{Label: model.ID, Detail: model.Label})
 	}
-	marked := 0
-	if cur != nil {
-		for _, model := range cur.Models {
+	if conf != nil {
+		for _, model := range conf.Models {
 			items = append(items, widget.PickerItem{Label: model, Detail: "added"})
 		}
-		for i, it := range items[1:] {
-			if cur.Model == it.Label {
-				marked = i + 1
-			}
+	}
+	marked := 0
+	for i, it := range items[1:] {
+		if current == it.Label {
+			marked = i + 1
 		}
+	}
+	if marked == 0 && current != "" && m.pickerFor == pickTypeModel {
+		items = append(items, widget.PickerItem{Label: current, Detail: notListed})
+		marked = len(items) - 1
 	}
 	m.picker.Marked, m.picker.Cursor = marked, marked
 	m.picker.SetItems(items)
@@ -107,6 +124,9 @@ func (m Model) modelPicked(r widget.PickerResult) (Model, tea.Cmd) {
 			model = ""
 		}
 		m.picker = nil
+		if m.pickerFor == pickTypeModel {
+			return m.setType(&settings.TrackType{Engine: m.pickerEngine, Model: model})
+		}
 		return m.editEngine(m.pickerEngine, func(s *settings.Engine) { s.Model = model })
 	}
 	return m, nil
