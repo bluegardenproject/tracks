@@ -115,10 +115,15 @@ func (s *Store) tracks(ctx context.Context, where string, args ...any) ([]track.
 	if err := rows.Err(); err != nil || len(out) == 0 {
 		return out, err
 	}
-	return out, s.addRepos(ctx, out, index)
+	if err := s.addRepos(ctx, out, index); err != nil {
+		return nil, err
+	}
+	return out, s.addPRs(ctx, out, index)
 }
 
-func (s *Store) addRepos(ctx context.Context, tracks []track.Track, index map[string]int) error {
+// idList is the IDs of tracks as query arguments, and their
+// placeholders.
+func idList(tracks []track.Track) ([]any, string) {
 	ids := make([]any, 0, len(tracks))
 	marks := make([]byte, 0, 2*len(tracks))
 	for _, t := range tracks {
@@ -128,8 +133,13 @@ func (s *Store) addRepos(ctx context.Context, tracks []track.Track, index map[st
 		}
 		marks = append(marks, '?')
 	}
+	return ids, string(marks)
+}
+
+func (s *Store) addRepos(ctx context.Context, tracks []track.Track, index map[string]int) error {
+	ids, marks := idList(tracks)
 	rows, err := s.db.QueryContext(ctx, "SELECT track_id, repo_id, name, path, worktree, branch, base FROM track_repos "+
-		"WHERE track_id IN ("+string(marks)+") ORDER BY track_id, position", ids...)
+		"WHERE track_id IN ("+marks+") ORDER BY track_id, position", ids...)
 	if err != nil {
 		return err
 	}
