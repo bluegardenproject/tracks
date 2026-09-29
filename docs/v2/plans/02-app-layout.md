@@ -31,7 +31,7 @@ type Source interface {
 - `source.Windows` is the implementation until the daemon exists. It reads the tracks from their tmux windows (`trackwin.List`), which carry the kind and repo as window options. A daemon-backed source replaces it in chunk 5; the screens don't change.
 - `Track` is plain display data: number (the window index), name, kind, repo and status.
 - **Status is out of scope for now:** every track shows "running" until the status model exists.
-- Screens poll: Station reads the tracks every 2 seconds. A change stream can replace polling when the daemon provides one.
+- Station reads the tracks whenever the daemon's change stream says they changed ([12-change-stream-and-derail.md](12-change-stream-and-derail.md)).
 
 ## Styles (`internal/v2/ui/style`)
 
@@ -92,7 +92,7 @@ Most replace tmux defaults that don't fit Tracks. The keys run the hidden `track
 The Station tab shows titled frames: the track list on 3/5 of the width (slug, type, status, model and cost), and on the rest a Fast Track placeholder (10 lines) above the selected track's details. Short windows drop Fast Track before cutting the details.
 
 - Up and down (or `j`/`k`), the mouse wheel and clicks select a row. Enter or a double click switches to the track's window, landing on its agent pane.
-- Tracks opened or closed elsewhere show up within 2 seconds.
+- Tracks opened or closed elsewhere show up at once.
 - **Details:** the track's ID (its window number), repos with branch and worktree path, engine and model, session ID and pull request. Windows too narrow for both show the list alone.
 - **Actions:** buttons, each with an underlined key: Open (`o`, Enter), End (`e`, asks first; closes the window for now), Copy path (`c`), Copy session (`s`) and Open PR (`p`).
 
