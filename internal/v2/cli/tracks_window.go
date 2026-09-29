@@ -59,6 +59,9 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Clean: func(id string, force bool) ([]string, error) {
 					return cleanTrack(cmd.Context(), daemon, rpc.CleanParams{ID: id, Force: force})
 				},
+				Archive: func(id string, force bool) ([]string, error) {
+					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
+				},
 				NewTrack: func() error {
 					client, err := c.ClientOf(os.Getenv("TMUX_PANE"))
 					if err != nil {
@@ -142,6 +145,14 @@ func resumeTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, p rpc.
 func cleanTrack(ctx context.Context, daemon daemonCalls, p rpc.CleanParams) (unsaved []string, err error) {
 	err = daemon.do(ctx, func(client rpc.Client) (err error) {
 		unsaved, err = client.Clean(ctx, p)
+		return err
+	})
+	return unsaved, err
+}
+
+func archiveTrack(ctx context.Context, daemon daemonCalls, p rpc.ArchiveParams) (unsaved []string, err error) {
+	err = daemon.do(ctx, func(client rpc.Client) (err error) {
+		unsaved, err = client.Archive(ctx, p)
 		return err
 	})
 	return unsaved, err

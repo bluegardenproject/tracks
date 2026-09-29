@@ -30,9 +30,12 @@ type Config struct {
 	Open, End TrackFunc
 	// Resume starts an ended track again. Unsaved is Clean's check: the
 	// work in an ended track's worktrees that exists nowhere else.
-	Resume  ResumeFunc
+	Resume ResumeFunc
+	// Archive takes an ended track out of Station, as Clean removing
+	// its worktrees first.
 	Unsaved func(id string) ([]string, error)
 	Clean   CleanFunc
+	Archive CleanFunc
 	// NewTrack opens the New track form and returns once it closes.
 	NewTrack func() error
 	OpenURL  func(url string) error
@@ -62,6 +65,7 @@ type Model struct {
 	resume        ResumeFunc
 	unsaved       func(id string) ([]string, error)
 	cleanFn       CleanFunc
+	archiveFn     CleanFunc
 	newTrack      func() error
 	openURL       func(url string) error
 	repoSource    source.Repos
@@ -92,7 +96,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
-		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean,
+		resume: c.Resume, unsaved: c.Unsaved, cleanFn: c.Clean, archiveFn: c.Archive,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, engines: newEnginesTab()}
@@ -136,6 +140,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.resumed(msg)
 	case checkedMsg:
 		return m.checked(msg), nil
+	case archivedMsg:
+		return m.archived(msg)
 	case cleanedMsg:
 		return m.cleaned(msg)
 	case reposMsg:
