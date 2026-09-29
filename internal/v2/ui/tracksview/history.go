@@ -21,7 +21,7 @@ type historyState struct {
 // unsavedChoices are the picker's rows for Tracks with unsaved work.
 var unsavedChoices = []struct{ value, label string }{
 	{settings.UnsavedSkip, "Skip them"},
-	{settings.UnsavedKeep, "Archive, keep the worktrees"},
+	{settings.UnsavedKeep, "Archive, remove nothing"},
 }
 
 type (
