@@ -4,6 +4,7 @@ package claude
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,11 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-// Command is how Claude Code starts on s's track, as in v1.
+// ErrNoSession is returned when resuming a track without a session ID.
+var ErrNoSession = errors.New("track has no session ID")
+
+// Command is how Claude Code starts on s's track, as in v1. Unlike v1,
+// an ask or plan track resumes in plan mode too.
 func Command(s agents.Spec) (agents.Start, error) {
 	t := s.Track
 	if len(t.Repos) == 0 && t.Kind.Worktrees() {
@@ -60,12 +65,21 @@ func Command(s agents.Spec) (agents.Start, error) {
 	}
 
 	line := agents.NewLine(s.Program)
-	if prompt != "" {
-		line.Arg(prompt)
+	if s.Resume {
+		if t.Session == "" {
+			return agents.Start{}, ErrNoSession
+		}
+		line.Set("--resume", t.Session)
+	} else {
+		if prompt != "" {
+			line.Arg(prompt)
+		}
+		line.SetIf("--session-id", t.Session)
 	}
-	line.SetIf("--session-id", t.Session)
 	line.SetIf("--permission-mode", mode)
-	line.SetIf("--model", t.Model)
+	if !s.Resume {
+		line.SetIf("--model", t.Model)
+	}
 	for _, d := range dirs {
 		line.Set("--add-dir", d)
 	}

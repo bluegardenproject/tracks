@@ -74,7 +74,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 	}
 
 	line := agents.NewLine(s.Program)
-	if prompt != "" {
+	if prompt != "" && !s.Resume {
 		line.Arg(prompt)
 	}
 	line.Set("--resume", t.Session)
@@ -86,6 +86,8 @@ func Command(s agents.Spec) (agents.Start, error) {
 	for _, d := range dirs {
 		line.Set("--add-dir", d)
 	}
-	line.SetIf("--model", t.Model)
+	if !s.Resume {
+		line.SetIf("--model", t.Model)
+	}
 	return agents.Start{Command: s.Wrap(line.Build()), Dir: dir}, nil
 }

@@ -151,6 +151,61 @@ func TestCursorMatchesV1(t *testing.T) {
 	}
 }
 
+func TestClaudeResumeMatchesV1(t *testing.T) {
+	for _, c := range spawnCases {
+		t.Run(c.name, func(t *testing.T) {
+			v2, v1, cfg := c.tracks(t)
+			opts, err := v1claude.BuildResumeOptions(cfg, v1, "/data/tracks", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts.BinDir = "/data/tracks/bin"
+			// v1 resumes ask and plan in the configured mode.
+			if c.kind.ReadOnly() {
+				opts.PermissionMode = "plan"
+			}
+			s := c.spec(v2, "claude")
+			s.Resume = true
+			got, err := claude.Command(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := opts.ShellCommand(); got.Command != want {
+				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
+			}
+			if got.Dir != opts.CWD {
+				t.Errorf("dir = %q, want %q", got.Dir, opts.CWD)
+			}
+		})
+	}
+}
+
+func TestCursorResumeMatchesV1(t *testing.T) {
+	for _, c := range spawnCases {
+		t.Run(c.name, func(t *testing.T) {
+			v2, v1, cfg := c.tracks(t)
+			opts, err := v1cursor.BuildResumeOptions(cfg, v1, "/data/tracks", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts.BinDir = "/data/tracks/bin"
+			opts.Force = opts.Force && c.auto
+			s := c.spec(v2, "agent")
+			s.Resume = true
+			got, err := cursor.Command(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := opts.ShellCommand(); got.Command != want {
+				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
+			}
+			if got.Dir != opts.CWD {
+				t.Errorf("dir = %q, want %q", got.Dir, opts.CWD)
+			}
+		})
+	}
+}
+
 func TestCommandErrors(t *testing.T) {
 	norepos := spawnCase{kind: track.Work, auto: true}
 	v2, _, _ := norepos.tracks(t)
@@ -164,5 +219,10 @@ func TestCommandErrors(t *testing.T) {
 	v2, _, _ = nochat.tracks(t)
 	if _, err := cursor.Command(nochat.spec(v2, "agent")); err != cursor.ErrNoChat {
 		t.Errorf("cursor without a chat: %v", err)
+	}
+	s := nochat.spec(v2, "claude")
+	s.Resume = true
+	if _, err := claude.Command(s); err != claude.ErrNoSession {
+		t.Errorf("resuming claude without a session: %v", err)
 	}
 }
