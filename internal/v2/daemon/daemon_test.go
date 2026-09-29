@@ -30,8 +30,9 @@ func (noWindows) List() ([]trackwin.Info, error) { return nil, nil }
 func (noWindows) Open(trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no windows")
 }
-func (noWindows) Close(string) error           { return nil }
-func (noWindows) Attention(string, bool) error { return nil }
+func (noWindows) Close(string) error            { return nil }
+func (noWindows) Attention(string, bool) error  { return nil }
+func (noWindows) Screen(string) (string, error) { return "", nil }
 
 // config puts the daemon's files in a short folder: a Unix socket path
 // has to stay under about 100 bytes.

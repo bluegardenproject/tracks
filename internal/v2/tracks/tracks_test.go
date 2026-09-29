@@ -115,9 +115,13 @@ type fakeWindows struct {
 	opened  []trackwin.Spec
 	closed  []string
 	fail    bool
-	// attention is each window's mark, as last set.
+	// attention is each window's mark, as last set; screens what each
+	// window's agent pane shows.
 	attention map[string]bool
+	screens   map[string]string
 }
+
+func (w *fakeWindows) Screen(window string) (string, error) { return w.screens[window], nil }
 
 func (w *fakeWindows) List() ([]trackwin.Info, error) { return w.windows, nil }
 

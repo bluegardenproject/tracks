@@ -91,6 +91,11 @@ func (c *Client) ListPanes(window string) ([]Pane, error) {
 	return panes, nil
 }
 
+// CapturePane returns what pane shows, its visible rows only.
+func (c *Client) CapturePane(pane string) (string, error) {
+	return c.run("capture-pane", "-p", "-t", pane)
+}
+
 // SourceFile loads a config file into the running server.
 func (c *Client) SourceFile(path string) error {
 	_, err := c.run("source-file", path)
