@@ -10,7 +10,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
 )
 
-// Created is a new track and its window.
+// Created is a new or resumed track and its window.
 type Created struct {
 	Track  track.Track
 	Window trackwin.Window
@@ -68,6 +68,22 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 	}
 
 	progress(fmt.Sprintf("Starting %s…", info.Name))
+	win, err := s.open(t, info, start)
+	if err != nil {
+		removeWorktrees()
+		return Created{}, err
+	}
+	if err := s.Store.AddTrack(undo, t); err != nil {
+		_ = s.Windows.Close(win.ID)
+		removeWorktrees()
+		return Created{}, fmt.Errorf("save the track: %w", err)
+	}
+	return Created{Track: t, Window: win}, nil
+}
+
+// open opens t's window with the agent start runs. When setting the
+// window up fails, it closes it again.
+func (s *Service) open(t track.Track, info agents.Engine, start agents.Start) (trackwin.Window, error) {
 	terminals := 0
 	if t.Terminal {
 		terminals = 1
@@ -76,23 +92,13 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 		Track: t.ID, Name: t.Name, Kind: string(t.Kind), Repo: repoNames(t.Repos), Dir: start.Dir,
 		Agent: trackwin.Process{Title: info.Name, Command: start.Command}, Terminals: terminals,
 	})
-	closeWindow := func() {
+	if err != nil {
 		if win.ID != "" {
 			_ = s.Windows.Close(win.ID)
 		}
+		return trackwin.Window{}, fmt.Errorf("open the window: %w", err)
 	}
-	if err != nil {
-		closeWindow()
-		removeWorktrees()
-		return Created{}, fmt.Errorf("open the window: %w", err)
-	}
-
-	if err := s.Store.AddTrack(undo, t); err != nil {
-		closeWindow()
-		removeWorktrees()
-		return Created{}, fmt.Errorf("save the track: %w", err)
-	}
-	return Created{Track: t, Window: win}, nil
+	return win, nil
 }
 
 func repoNames(repos []track.Repo) string {
