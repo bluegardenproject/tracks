@@ -28,6 +28,7 @@ const (
 	actionOpenPR
 	actionConfirmEnd
 	actionConfirmClean
+	actionConfirmRecreate
 	actionCancel
 )
 
@@ -66,6 +67,15 @@ var (
 		{actionCancel, "Cancel", "n", -1},
 	}
 )
+
+// confirmRecreate are the buttons for n missing worktrees.
+func confirmRecreate(n int) []action {
+	label := "Re-create worktree"
+	if n > 1 {
+		label += "s"
+	}
+	return []action{{actionConfirmRecreate, label, "y", -1}, {actionCancel, "Cancel", "n", -1}}
+}
 
 // actionsFor are t's buttons.
 func actionsFor(t source.Track) []action {
@@ -145,10 +155,16 @@ func (m Model) details(width int) ([]string, []hit) {
 	if q := m.station.asking; q != nil {
 		var ask []string
 		switch {
-		case !q.clean:
+		case q.kind == askEnd:
 			ask, buttons = []string{"End " + t.Name + "? Its window and agent close."}, confirmEnd
-		case len(q.unsaved) > 0:
-			ask, buttons = q.unsaved, confirmCleanAnyway
+		case q.kind == askRecreate:
+			heading := "Worktree couldn't be found"
+			if len(q.lines) > 1 {
+				heading = "Worktrees couldn't be found"
+			}
+			ask, buttons = append([]string{heading}, q.lines...), confirmRecreate(len(q.lines))
+		case len(q.lines) > 0:
+			ask, buttons = q.lines, confirmCleanAnyway
 		default:
 			ask, buttons = []string{"Remove the worktrees of " + t.Name + "? Its branches stay."}, confirmClean
 		}
@@ -213,6 +229,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return t.Session != ""
 	case actionOpenPR:
 		return t.PR != nil && t.PR.URL != ""
+	case actionResume:
+		return t.Status != source.Cleaned
 	case actionClean:
 		return t.Cleanable
 	}
@@ -247,33 +265,31 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	}
 	switch id {
 	case actionEnd:
-		m.station.asking = &question{id: t.ID, name: t.Name}
+		m.station.asking = &question{id: t.ID, name: t.Name, kind: askEnd}
 		return m, nil, true
 	case actionCancel:
 		m.station.asking = nil
 		return m, nil, true
 	case actionResume:
-		next, cmd := m.startResume(t)
+		next, cmd := m.startResume(t.ID, t.Name, false)
 		return next, cmd, true
 	case actionClean:
 		next, cmd := m.checkClean(t)
 		return next, cmd, true
-	case actionConfirmClean:
+	case actionConfirmEnd, actionConfirmClean, actionConfirmRecreate:
 		q := m.station.asking
 		m.station.asking = nil
 		if q == nil {
 			return m, nil, true
 		}
-		return m, m.clean(*q), true
+		next, cmd := m.confirm(*q)
+		return next, cmd, true
 	case actionCopyPath:
 		m.station.notice = notice{text: "Copied the worktree path."}
 		return m, tea.SetClipboard(t.Repos[0].Path), true
 	case actionCopySession:
 		m.station.notice = notice{text: "Copied the session ID."}
 		return m, tea.SetClipboard(t.Session), true
-	case actionConfirmEnd:
-		m.station.asking = nil
-		return m, m.act(actionEnd), true
 	}
 	return m, m.act(id), true
 }

@@ -52,14 +52,15 @@ type Source interface {
 }
 
 // The statuses until the status model exists: an open track is
-// running.
+// running, and a cleaned one ended and lost its worktrees to Clean.
 const (
 	Running = "running"
 	Ended   = "ended"
+	Cleaned = "cleaned"
 )
 
 // Open reports whether t has a window.
-func (t Track) Open() bool { return t.Status != Ended }
+func (t Track) Open() bool { return t.Status != Ended && t.Status != Cleaned }
 
 // Daemon reads the tracks from the daemon, with List.
 type Daemon struct {
@@ -87,7 +88,10 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, error) {
 			engine = e.Name
 		}
 		status := Running
-		if !l.Open() {
+		switch {
+		case l.Cleaned():
+			status = Cleaned
+		case !l.Open():
 			status = Ended
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: status,

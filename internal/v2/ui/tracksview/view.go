@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
 )
 
 const (
@@ -142,7 +143,9 @@ func (m Model) hints() string {
 		return "  " + joinKeys(key, text, questionKeys(*m.station.asking))
 	case m.tab == tabStation && len(m.station.tracks) > 0:
 		keys = stationKeys
-		if t, _ := m.selectedTrack(); !t.Open() {
+		if t, _ := m.selectedTrack(); t.Status == source.Cleaned {
+			keys = selectKeys
+		} else if !t.Open() {
 			keys = endedStationKeys
 		}
 	case m.tab == tabStation && m.station.err == nil:

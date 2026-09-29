@@ -21,7 +21,7 @@ func withEnded(c Config) Model {
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/aaa111", Path: "/tmp/wt/a/web"}}},
 		{ID: "b", Name: "rate-bug", Kind: "work", Status: source.Ended, Cleanable: true,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/abc123", Path: "/tmp/wt/b/web"}}, Session: "s-2"},
-		{ID: "c", Name: "old-fix", Kind: "work", Status: source.Ended,
+		{ID: "c", Name: "old-fix", Kind: "work", Status: source.Cleaned,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/def456", Removed: true}}},
 	}
 	return update(New(c), tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: tracks}, tea.KeyPressMsg{Code: tea.KeyDown})
@@ -30,11 +30,17 @@ func withEnded(c Config) Model {
 func key(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r} }
 
 func TestEndedRows(t *testing.T) {
-	checks := 0
-	m := withEnded(Config{Unsaved: func(string) ([]string, error) {
-		checks++
-		return nil, nil
-	}})
+	checks, resumes := 0, 0
+	m := withEnded(Config{
+		Unsaved: func(string) ([]string, error) {
+			checks++
+			return nil, nil
+		},
+		Resume: func(string, bool, func(string)) ([]string, error) {
+			resumes++
+			return nil, nil
+		},
+	})
 	view := plainView(m)
 	for _, want := range []string{"work · ended", " Resume ", " Clean ", "Enter resume", "/tmp/wt/b/web"} {
 		if !strings.Contains(view, want) {
@@ -46,21 +52,26 @@ func TestEndedRows(t *testing.T) {
 	}
 
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
-	if view := plainView(m); !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
+	view = plainView(m)
+	if !strings.Contains(view, "work · cleaned") || !strings.Contains(view, "removed") || strings.Contains(view, "/tmp/wt") {
 		t.Errorf("cleaned track: the worktree should show as removed:\n%s", view)
 	}
-	if m = settle(m, key('l')); checks != 0 || m.station.asking != nil {
-		t.Error("Clean ran on a cleaned track")
+	if strings.Contains(view, "Enter resume") {
+		t.Errorf("a cleaned track offers Enter to resume:\n%s", view)
+	}
+	for _, k := range []tea.KeyPressMsg{key('l'), key('r'), {Code: tea.KeyEnter}} {
+		if m = settle(m, k); checks != 0 || resumes != 0 || m.station.asking != nil {
+			t.Errorf("%s ran Clean or Resume on a cleaned track", k)
+		}
 	}
 }
 
 func TestResumeShowsProgress(t *testing.T) {
 	var resumed []string
-	m := withEnded(Config{Resume: func(id string, progress func(string)) error {
+	m := withEnded(Config{Resume: func(id string, _ bool, progress func(string)) ([]string, error) {
 		resumed = append(resumed, id)
-		progress("Re-creating the worktree for web…")
 		progress("Starting Claude Code…")
-		return nil
+		return nil, nil
 	}})
 	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(Model)
@@ -70,7 +81,7 @@ func TestResumeShowsProgress(t *testing.T) {
 		m = next.(Model)
 		notices = append(notices, m.station.notice.text)
 	}
-	want := []string{"Resuming rate-bug…", "Re-creating the worktree for web…", "Starting Claude Code…", "Resumed rate-bug."}
+	want := []string{"Resuming rate-bug…", "Starting Claude Code…", "Resumed rate-bug."}
 	if !slices.Equal(notices, want) || !slices.Equal(resumed, []string{"b"}) {
 		t.Errorf("resumed %v, hint row %q; want b and %q", resumed, notices, want)
 	}
@@ -79,10 +90,36 @@ func TestResumeShowsProgress(t *testing.T) {
 		tracks.Problem("Add Cursor on the Engines tab to resume this track."): "Add Cursor on the Engines tab to resume this track.",
 		errors.New("tmux is gone"): "Couldn't resume rate-bug: tmux is gone",
 	} {
-		m := withEnded(Config{Resume: func(string, func(string)) error { return err }})
+		m := withEnded(Config{Resume: func(string, bool, func(string)) ([]string, error) { return nil, err }})
 		if m = settle(m, key('r')); m.station.notice != (notice{want, true}) {
 			t.Errorf("failed resume: hint row %+v, want %q", m.station.notice, want)
 		}
+	}
+}
+
+func TestResumeAsksForMissingWorktree(t *testing.T) {
+	var recreated []bool
+	m := withEnded(Config{Resume: func(_ string, recreate bool, _ func(string)) ([]string, error) {
+		recreated = append(recreated, recreate)
+		if !recreate {
+			return []string{"web: /tmp/wt/b/web"}, nil
+		}
+		return nil, nil
+	}})
+
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	view := plainView(m)
+	for _, want := range []string{"Worktree couldn't be found", "web: /tmp/wt/b/web", " Re-create worktree ", " Cancel ", "y re-create"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("missing %q:\n%s", want, view)
+		}
+	}
+	if m = settle(m, tea.KeyPressMsg{Code: tea.KeyEnter}); m.station.asking != nil || !slices.Equal(recreated, []bool{false}) {
+		t.Fatalf("Enter should cancel: resumed %v", recreated)
+	}
+	m = press(t, settle(m, key('r')), "Re-create worktree")
+	if !slices.Equal(recreated, []bool{false, false, true}) || m.station.notice.text != "Resumed rate-bug." {
+		t.Errorf("re-create: resumed %v, hint row %q", recreated, m.station.notice.text)
 	}
 }
 

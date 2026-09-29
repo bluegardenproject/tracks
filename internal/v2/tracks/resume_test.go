@@ -39,12 +39,12 @@ func (f *fixture) ended(t *testing.T, cleaned bool) track.Track {
 func TestResume(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	tr := f.ended(t, true)
+	tr := f.ended(t, false)
 	// Another window took the name meanwhile.
 	f.windows.windows = append(f.windows.windows, trackwin.Info{Number: 1, Window: "@other", Track: "other", Name: tr.Name})
 
 	var steps []string
-	got, err := f.svc.Resume(ctx, tr.ID, func(s string) { steps = append(steps, s) })
+	got, err := f.svc.Resume(ctx, tr.ID, false, func(s string) { steps = append(steps, s) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,16 +58,39 @@ func TestResume(t *testing.T) {
 	if e := f.engine.spec; !e.Resume || !e.Auto || e.Track.Session != "session-1" {
 		t.Errorf("engine spec = %+v", e)
 	}
-	want := []string{"Re-creating the worktree for api…", "Re-creating the worktree for web…", "Starting Claude Code…"}
-	if !slices.Equal(steps, want) {
+	if !slices.Equal(steps, []string{"Starting Claude Code…"}) {
 		t.Errorf("progress = %q", steps)
 	}
 	saved, err := f.store.Track(ctx, tr.ID)
-	if err != nil || !saved.Open() || saved.Cleaned() || saved.Name != "fix-it-2" {
+	if err != nil || !saved.Open() || saved.Name != "fix-it-2" {
 		t.Errorf("saved = %+v, %v", saved, err)
 	}
 	if len(f.svc.busy) != 0 || len(f.svc.claimed) != 0 {
 		t.Errorf("still held: %v, %v", f.svc.busy, f.svc.claimed)
+	}
+}
+
+func TestResumeMissingWorktree(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	tr := f.ended(t, false)
+	f.worktrees.gone = map[string]bool{"web": true}
+
+	_, err := f.svc.Resume(ctx, tr.ID, false, func(string) {})
+	var missing Missing
+	if !errors.As(err, &missing) || len(missing) != 1 || missing[0].Name != "web" {
+		t.Fatalf("err = %v, want web missing", err)
+	}
+	if saved, _ := f.store.Track(ctx, tr.ID); saved.Open() || len(f.windows.opened) != 1 {
+		t.Fatal("Resume went on without the worktree")
+	}
+
+	var steps []string
+	if _, err := f.svc.Resume(ctx, tr.ID, true, func(s string) { steps = append(steps, s) }); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Re-creating the worktree for web…", "Starting Claude Code…"}; !slices.Equal(steps, want) {
+		t.Errorf("progress = %q", steps)
 	}
 }
 
@@ -84,10 +107,11 @@ func TestResumeRollsBack(t *testing.T) {
 	} {
 		t.Run(c.step, func(t *testing.T) {
 			f := newFixture(t)
-			tr := f.ended(t, true)
-			f.windows.closed, f.worktrees.cleaned = nil, nil
+			tr := f.ended(t, false)
+			f.worktrees.gone = map[string]bool{"api": true, "web": true}
+			f.windows.closed = nil
 			c.fail(f)
-			if _, err := f.svc.Resume(context.Background(), tr.ID, func(string) {}); !errors.Is(err, errStep) {
+			if _, err := f.svc.Resume(context.Background(), tr.ID, true, func(string) {}); !errors.Is(err, errStep) {
 				t.Fatalf("err = %v", err)
 			}
 			if got := slices.Equal(f.worktrees.cleaned, []string{tr.ID}); got != c.removed {
@@ -96,8 +120,8 @@ func TestResumeRollsBack(t *testing.T) {
 			if got := len(f.windows.closed) == 1; got != c.close {
 				t.Errorf("window closed: %v, want %v", got, c.close)
 			}
-			if saved, _ := f.store.Track(context.Background(), tr.ID); saved.Open() || !saved.Cleaned() {
-				t.Errorf("the track didn't stay ended and cleaned: %+v", saved)
+			if saved, _ := f.store.Track(context.Background(), tr.ID); saved.Open() {
+				t.Errorf("the track didn't stay ended: %+v", saved)
 			}
 			if len(f.svc.busy) != 0 || len(f.svc.claimed) != 0 {
 				t.Errorf("still held: %v, %v", f.svc.busy, f.svc.claimed)
@@ -110,6 +134,7 @@ func TestResumeChecks(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	tr := f.ended(t, false)
+	cleaned := f.ended(t, true)
 	open, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why"}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +145,7 @@ func TestResumeChecks(t *testing.T) {
 	}{
 		{"open", open.Track.ID, "already open", func() {}},
 		{"gone", "20260928-101500-ffffff", "That track is gone.", func() {}},
+		{"cleaned", cleaned.ID, "was cleaned, so it can't be resumed.", func() {}},
 		{"busy", tr.ID, "fix-it is busy.", func() { f.svc.busy = map[string]bool{tr.ID: true} }},
 		{"engine removed", tr.ID, "Add Claude Code on the Engines tab to resume this track.", func() {
 			f.svc.busy = nil
@@ -129,7 +155,7 @@ func TestResumeChecks(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			c.prepare()
 			opened := len(f.windows.opened)
-			_, err := f.svc.Resume(ctx, c.id, func(string) {})
+			_, err := f.svc.Resume(ctx, c.id, true, func(string) {})
 			var p Problem
 			if !errors.As(err, &p) || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("err = %v, want a problem with %q", err, c.want)

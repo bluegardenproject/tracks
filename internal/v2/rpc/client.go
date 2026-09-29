@@ -92,9 +92,11 @@ func (c Client) End(ctx context.Context, id string) error {
 	return c.Call(ctx, End, EndParams{ID: id}, nil, nil)
 }
 
-func (c Client) Resume(ctx context.Context, id string, progress func(string)) (CreateResult, error) {
-	var r CreateResult
-	return r, c.Call(ctx, Resume, EndParams{ID: id}, &r, progress)
+// Resume returns the worktrees it couldn't find instead of resuming,
+// unless p.Recreate.
+func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string)) (ResumeResult, error) {
+	var r ResumeResult
+	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
 // Clean returns the unsaved work it found instead of removing it,
