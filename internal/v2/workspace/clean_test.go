@@ -68,10 +68,13 @@ func TestCleanAndRestoreWork(t *testing.T) {
 		t.Errorf("restoring worktrees that exist: %v, %v", made, err)
 	}
 
+	run(t, wt, "branch", "-m", "fix/rates")
+	if b := w.Branches(ctx, tr); b[0].Branch != "fix/rates" || tr.Repos[0].Branch == "fix/rates" {
+		t.Errorf("Branches = %+v, want the renamed branch in a copy", b)
+	}
 	if err := w.RemoveWorktrees(ctx, tr.ID, tr.Repos); err != nil {
 		t.Fatal(err)
 	}
-	run(t, api.Path, "branch", "-D", repos[0].Branch)
 	if _, err := w.Restore(ctx, tr, noProgress); err == nil || !strings.Contains(err.Error(), "no longer exists in api") {
 		t.Errorf("restoring onto a deleted branch: %v", err)
 	}

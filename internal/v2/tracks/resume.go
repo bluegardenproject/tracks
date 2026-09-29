@@ -93,6 +93,14 @@ func (s *Service) Clean(ctx context.Context, id string, force bool) ([]workspace
 			return unsaved, err
 		}
 	}
+	// Resume re-creates the worktrees on the branches they're on now.
+	for i, r := range s.Worktrees.Branches(ctx, t) {
+		if r.Branch != t.Repos[i].Branch {
+			if err := s.Store.SetBranch(ctx, t.ID, i, r.Branch); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := s.Worktrees.RemoveWorktrees(ctx, t.ID, t.Repos); err != nil {
 		return nil, err
 	}

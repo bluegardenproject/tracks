@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -104,6 +105,25 @@ func unsaved(ctx context.Context, r track.Repo, detached bool) (Unsaved, error) 
 	}
 	u.Commits, err = strconv.Atoi(strings.TrimSpace(out))
 	return u, err
+}
+
+// Branches are t's repos with each work worktree's branch as it is now,
+// since the agent renames the one it started on. A worktree that's
+// gone or detached keeps the branch recorded.
+func (w *Worktrees) Branches(ctx context.Context, t track.Track) []track.Repo {
+	repos := slices.Clone(t.Repos)
+	if t.Kind != track.Work {
+		return repos
+	}
+	for i, r := range repos {
+		if r.Worktree == "" || !exists(r.Worktree) {
+			continue
+		}
+		if b, err := git.NewWorktreeClient(r.Worktree).CurrentBranch(ctx); err == nil && b != "" {
+			repos[i].Branch = b
+		}
+	}
+	return repos
 }
 
 // RemoveWorktrees removes repos' worktrees of track id, whatever they

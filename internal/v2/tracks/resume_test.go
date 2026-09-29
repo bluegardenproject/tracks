@@ -175,11 +175,16 @@ func TestClean(t *testing.T) {
 		t.Fatal("Clean removed worktrees with unsaved work")
 	}
 
+	f.worktrees.renamed = map[string]string{"api": "fix/login"}
 	if unsaved, err := f.svc.Clean(ctx, id, true); err != nil || len(unsaved) != 0 {
 		t.Fatalf("forced Clean = %v, %v", unsaved, err)
 	}
-	if saved, _ := f.store.Track(ctx, id); !saved.Cleaned() || !slices.Equal(f.worktrees.cleaned, []string{id}) {
+	saved, _ := f.store.Track(ctx, id)
+	if !saved.Cleaned() || !slices.Equal(f.worktrees.cleaned, []string{id}) {
 		t.Errorf("after Clean: %+v, removed %v", saved, f.worktrees.cleaned)
+	}
+	if saved.Repos[0].Branch != "fix/login" {
+		t.Errorf("branch after Clean = %s, want the one the agent renamed it to", saved.Repos[0].Branch)
 	}
 	if _, err := f.svc.Clean(ctx, id, true); err != nil || len(f.worktrees.cleaned) != 1 {
 		t.Errorf("cleaning twice: %v, removed %v", err, f.worktrees.cleaned)

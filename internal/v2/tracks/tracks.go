@@ -36,6 +36,7 @@ type Store interface {
 	CloseTrack(ctx context.Context, id string, at time.Time) error
 	ReopenTrack(ctx context.Context, id, name string) error
 	CleanTrack(ctx context.Context, id string, at time.Time) error
+	SetBranch(ctx context.Context, id string, position int, branch string) error
 }
 
 // Worktrees makes and removes a track's worktrees.
@@ -45,6 +46,8 @@ type Worktrees interface {
 	Remove(ctx context.Context, t track.Track) error
 	Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
 	Unsaved(ctx context.Context, t track.Track) ([]workspace.Unsaved, error)
+	// Branches are t's repos on the branches their worktrees are on.
+	Branches(ctx context.Context, t track.Track) []track.Repo
 	// RemoveWorktrees removes the worktrees and keeps the branches.
 	RemoveWorktrees(ctx context.Context, id string, repos []track.Repo) error
 }

@@ -72,6 +72,11 @@ func (s *Store) CleanTrack(ctx context.Context, id string, at time.Time) error {
 	return s.updateTrack(ctx, id, "UPDATE tracks SET cleaned_at = ? WHERE id = ?", at.UnixMilli(), id)
 }
 
+// SetBranch records that track id's repo at position is on branch.
+func (s *Store) SetBranch(ctx context.Context, id string, position int, branch string) error {
+	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
+}
+
 // updateTrack runs query on id's row; ErrNotFound when there's none.
 func (s *Store) updateTrack(ctx context.Context, id, query string, args ...any) error {
 	res, err := s.db.ExecContext(ctx, query, args...)
