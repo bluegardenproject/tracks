@@ -1,6 +1,6 @@
 # Plan: change stream and Derail
 
-**Status: change stream built, Derail planned.** Part of the [v2 masterplan](../masterplan.md). It finishes chunk 4 (storage): the daemon tells the Tracks window when tracks change, instead of Station reading the list every 2 seconds. It also adds **Derail**, which deletes a track for good. The event timeline and the rest of History (text search, more filters, paging) move to the masterplan's [Future features](../masterplan.md#future-features).
+**Status: built.** Part of the [v2 masterplan](../masterplan.md). It finishes chunk 4 (storage): the daemon tells the Tracks window when tracks change, instead of Station reading the list every 2 seconds. It also adds **Derail**, which deletes a track for good. The event timeline and the rest of History (text search, more filters, paging) move to the masterplan's [Future features](../masterplan.md#future-features).
 
 ## What users get
 
@@ -21,15 +21,15 @@
 
 - **Only ended tracks,** done or closed, archived ones included. An open track shows End; Derail appears once it's ended.
 - **It deletes:** the track's worktrees (if Clean hasn't removed them), its local branches in the repos' checkouts, its hooks folder, and its row in the database with its repos and PRs. Pushed branches and PRs on GitHub stay. The agent's own session files stay where the agent keeps them.
-- **Before deleting,** it checks for work that would be lost: unsaved work in the worktrees, as Clean does, and commits that exist only on the track's branches (on no other branch and no remote), which matters once the worktrees are gone. It lists what it finds and offers **Derail anyway** or Cancel. Without any, it asks: "Derail rate-bug? Its worktrees, branches and record are deleted for good." with **Derail** or Cancel. Enter never confirms; `y` does.
+- **Before deleting,** Station runs Derail's check alone (`derail` with `check`), which deletes nothing. It looks for work that would be lost: unsaved work in the worktrees, as Clean does, and commits that exist only on the track's branches (on no other branch and no remote), which matters once the worktrees are gone. It lists what it finds and offers **Derail anyway** or Cancel. Without any, it asks: "Derail rate-bug? Its worktrees, branches and record are deleted for good." with **Derail** or Cancel. Enter never confirms; `y` does.
 - **An open PR** adds a line to the question: "Its PR #12 stays open on GitHub."
 - **Key:** `d`.
 
 ## Model
 
 - `tracks.Changes` with `Subscribe() (<-chan struct{}, func())`, `Notify()` and `Close()`; channels of one, so a slow reader gets one line for many changes.
-- `tracks.Service`: `Derail(ctx, id, force) ([]workspace.Unsaved, error)`; Sweep compares the window list.
-- `workspace`: the commits that exist only on a track's branches; deleting its branches.
+- `tracks.Service`: `Derail(ctx, id, force) ([]workspace.Unsaved, error)` and its check `Lost(ctx, id)`; Sweep compares the window list.
+- `workspace`: `Lost`, the work derailing would lose, counting the commits on a work track's branches that no other branch and no remote has; `Derail`, removing the worktrees and deleting the branches, except a repo's base or the branch its primary checkout is on.
 - `store`: `DeleteTrack(id)`, with its repos and PRs.
 - `rpc`, `daemon`: `watch` and `derail`; the wrapped Store; closing `Changes` at shutdown.
 - `ui/tracksview`: the stream instead of the refresh; the Derail button and its questions. `cli`: the wiring.
@@ -47,4 +47,4 @@
 
 Two branches, each its own PR:
 1. **`feat/v2-change-stream`:** this plan and the masterplan's Future features; the change stream and Station on it.
-2. **`feat/v2-derail`:** Derail; chunk 4 marked done in the masterplan, and plans 11 and 12 and the storage draft deleted, as the docs rules say.
+2. **`feat/v2-derail`:** Derail; chunk 4 marked done in the masterplan.
