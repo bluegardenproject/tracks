@@ -1,6 +1,6 @@
 # Plan: resuming and cleaning tracks
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). Ended tracks stay in Station. **Resume** starts their agent again on its session, and **Clean** removes their worktrees.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). Ended tracks stay in Station. **Resume** starts their agent again on its session, and **Clean** removes their worktrees.
 
 ## What users get
 
@@ -13,7 +13,7 @@
   - The track's engine must still be on the Engines tab: "Add Cursor on the Engines tab to resume this track."
   - Progress shows in Station's hint row ("Re-creating the worktree for web…", "Starting Claude Code…"). A failure undoes what Resume made, the window and the re-created worktrees, and says why; the track stays ended.
 - **Clean** removes an ended track's worktrees and their folder. Branches stay, as in v1. Tracks without worktrees (Ask, Plan, Doc) have no Clean.
-  - It checks every worktree first. When one has uncommitted changes, untracked files or commits that exist nowhere else, it lists them and asks: "web: 3 uncommitted files. Remove anyway / Cancel". Otherwise it asks once: "Remove the worktrees of rate-bug? Its branches stay."
+  - It checks every worktree first. When one has changed or untracked files or commits that exist nowhere else, it lists them and asks: "web: 3 changed files and 1 commit that exists nowhere else. Remove anyway / Cancel". Only `y` or a click removes then; Enter cancels, since on an ended track it otherwise resumes. Otherwise it asks once: "Remove the worktrees of rate-bug? Its branches stay."
   - Commits count as existing nowhere else when no remote branch has them. A Review worktree is detached, so for it these are the commits made since its checkout.
   - A cleaned track shows "removed" in place of its worktree paths. Resume brings them back.
 - **End** stays as it is: the window closes, and the worktrees stay.
@@ -38,7 +38,7 @@ A failure undoes the steps before it: the window closes, and only the worktrees 
 
 ## The daemon
 
-- **Methods:** `resume` and `clean` join `create`, `list` and `end`. `clean` returns what it found as a problem, and removes anyway only when called with `force`, which "Remove anyway" sends.
+- **Methods:** `resume` and `clean` join `create`, `list` and `end`. `clean` with `check` only looks, for Station's first question. Without it, `clean` removes the worktrees when it finds no unsaved work, and otherwise returns what it found and removes nothing. With `force`, which "Remove anyway" sends, it removes them anyway.
 - **`list`** returns the ended tracks too.
 
 ## Database
@@ -61,7 +61,7 @@ No new packages. Changed:
 - `agents/claude` and `agents/cursor`: the resume command lines.
 - `tracks`: Resume, Clean, the per-track claim, ended tracks in List, and the sweep's healing.
 - `rpc` and `daemon`: the `resume` and `clean` methods.
-- `ui/source`: ended tracks, their status, and the two calls.
+- `ui/source`: ended tracks, their status, and removed worktrees.
 - `ui/tracksview`: ended rows, their actions, Clean's questions and Resume's progress.
 - `cli`: Station's Resume and Clean through the daemon.
 
@@ -83,4 +83,4 @@ No new packages. Changed:
 
 ## Delivery
 
-One branch, `feat/v2-resume-clean`, with these commits: this plan; `track` and `store`; `workspace`; the command lines in `agents`; `tracks`; `rpc` and `daemon`; Station; docs.
+One branch, `feat/v2-resume-clean`, with these commits: this plan; `track` and `store`; `workspace`; the command lines in `agents`; `tracks`; `rpc` and `daemon`; Clean's check alone; Station; docs.
