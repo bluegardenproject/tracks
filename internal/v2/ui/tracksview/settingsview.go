@@ -118,11 +118,16 @@ func (m Model) sectionBody(width, height int) []string {
 	case sectionKeys:
 		lines := m.keyLines()
 		return lines[min(m.settings.keysOffset, len(lines)):min(len(lines), m.settings.keysOffset+height)]
+	case sectionTrack:
+		return strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(trackSettingsLater), "\n")
 	case sectionFastTracks:
 		return m.fastTracks(width)
 	}
 	return m.about(width)
 }
+
+// trackSettingsLater is the Track section until it's built.
+const trackSettingsLater = "Defaults for each track type, such as the engine it runs on, come here later."
 
 // generalIntro is General's text above the theme field.
 func (m Model) generalIntro(width int) []string {
