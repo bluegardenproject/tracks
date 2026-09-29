@@ -18,6 +18,9 @@ type Spec struct {
 	Program string
 	// Auto is the engine's auto mode, from the Engines tab.
 	Auto bool
+	// Resume continues the track's session: the session brings back its
+	// prompt and model, so neither is passed.
+	Resume bool
 	// DraftPRs names the track's repos that open pull requests as
 	// drafts.
 	DraftPRs []string
