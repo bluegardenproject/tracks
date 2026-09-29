@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	// refreshEvery is how often Station reads the tracks again, so
-	// tracks opened or closed elsewhere show up.
-	refreshEvery = 2 * time.Second
 	// doubleClick is the longest gap between two clicks on a row that
 	// open its track.
 	doubleClick = 400 * time.Millisecond
@@ -32,14 +29,11 @@ const (
 )
 
 type (
-	// tracksMsg carries the tracks; poll schedules the next read.
 	tracksMsg struct {
 		tracks []source.Track
 		filter track.Filter
 		err    error
-		poll   bool
 	}
-	refreshMsg struct{}
 	// doneMsg reports an action on a track: ok is shown on success.
 	doneMsg struct {
 		ok     string
@@ -63,6 +57,7 @@ type station struct {
 	hoverAdd    bool // the mouse is on Add new Track
 	hoverClear  bool // the mouse is on Clear filter
 	notice      notice
+	offline     bool // the daemon's change stream broke
 }
 
 // question is what Station asks before ending, cleaning or archiving a
@@ -129,14 +124,14 @@ func statusLabel(t source.Track) string {
 	return t.Status.Label + " · " + t.PRStatus.Label
 }
 
-func (m Model) loadTracks(poll bool) tea.Cmd {
+func (m Model) loadTracks() tea.Cmd {
 	if m.source == nil {
 		return nil
 	}
 	src := m.source
 	return func() tea.Msg {
 		tracks, f, err := src.Tracks(context.Background())
-		return tracksMsg{tracks, f, err, poll}
+		return tracksMsg{tracks, f, err}
 	}
 }
 
@@ -164,7 +159,7 @@ func (m Model) done(msg doneMsg) (Model, tea.Cmd) {
 		m.station.notice = notice{text: msg.ok}
 	}
 	if msg.reload {
-		return m, m.loadTracks(false)
+		return m, m.loadTracks()
 	}
 	return m, nil
 }

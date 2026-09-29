@@ -57,5 +57,5 @@ func (m Model) archived(msg archivedMsg) (Model, tea.Cmd) {
 	default:
 		m.station.notice = notice{text: "Archived " + msg.name + "."}
 	}
-	return m, m.loadTracks(false)
+	return m, m.loadTracks()
 }

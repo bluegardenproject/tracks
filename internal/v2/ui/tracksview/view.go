@@ -127,6 +127,8 @@ func (m Model) hints() string {
 	switch {
 	case m.tab == tabStation && m.station.asking != nil:
 		return "  " + joinKeys(key, text, questionKeys(*m.station.asking))
+	case m.tab == tabStation && m.station.offline:
+		return "  " + text.Render("Reconnecting to the daemon…")
 	case m.tab == tabStation && len(m.station.tracks) > 0:
 		keys = stationKeys
 		if t, _ := m.selectedTrack(); t.Archived {

@@ -161,6 +161,12 @@ func (d daemonCalls) station(ctx context.Context) (listed []tracks.Listed, f tra
 	return listed, f, err
 }
 
+// watch follows the daemon's change stream, starting the daemon when it
+// isn't running.
+func (d daemonCalls) watch(ctx context.Context, changed func()) error {
+	return d.do(ctx, func(c rpc.Client) error { return c.Watch(ctx, changed) })
+}
+
 // stopDaemon asks the daemon to shut down and waits until it's gone.
 func stopDaemon(ctx context.Context, client rpc.Client) error {
 	if err := client.Shutdown(ctx); errors.Is(err, rpc.ErrNotRunning) {
