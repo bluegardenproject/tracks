@@ -43,9 +43,9 @@ func TestStationFilter(t *testing.T) {
 	if err != nil || filter.String() != want.String() || len(listed) != 2 {
 		t.Fatalf("Station filtered = %+v, %+v, %v", listed, filter, err)
 	}
-	// Newest first, with their windows.
-	if listed[0].ID != ids[2] || listed[1].ID != ids[0] || listed[0].Number == 0 || listed[0].Window == "" {
-		t.Errorf("filtered = %+v, want three then one, with their windows", listed)
+	// In the order they were created, with their windows.
+	if listed[0].ID != ids[0] || listed[1].ID != ids[2] || listed[1].Number == 0 || listed[1].Window == "" {
+		t.Errorf("filtered = %+v, want one then three, with their windows", listed)
 	}
 
 	if err := f.svc.SetFilter(ctx, track.Filter{Archived: true}); err != nil {
@@ -64,7 +64,8 @@ func TestStationFilter(t *testing.T) {
 	if err := f.svc.SetFilter(ctx, track.Filter{}); err != nil {
 		t.Fatal(err)
 	}
-	if listed, filter, _ := f.svc.Station(ctx); filter.On() || len(listed) != 3 {
-		t.Errorf("cleared: %d tracks, %+v; want all three", len(listed), filter)
+	listed, filter, _ = f.svc.Station(ctx)
+	if filter.On() || len(listed) != 3 || listed[0].ID != ids[0] || listed[1].ID != ids[1] || listed[2].ID != ids[2] {
+		t.Errorf("cleared: %+v, %+v; want all three, ended two in its place", listed, filter)
 	}
 }

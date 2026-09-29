@@ -78,8 +78,8 @@ type Daemon struct {
 	Station func(ctx context.Context) ([]tracks.Listed, track.Filter, error)
 }
 
-// Tracks lists the open tracks in window order, then the ended ones,
-// most recently ended first; or under a filter, the tracks it picks.
+// Tracks lists Station's tracks, under its filter when one is on, in
+// the order they were created.
 func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 	listed, f, err := d.Station(ctx)
 	if err != nil {
