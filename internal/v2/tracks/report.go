@@ -27,7 +27,27 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 	if next == t.State {
 		return nil
 	}
-	return s.Store.SetState(ctx, id, next)
+	if err := s.Store.SetState(ctx, id, next); err != nil {
+		return err
+	}
+	if on := next.Status().Attention; on != t.Status().Attention && next.Open() {
+		return s.markWindow(id, on)
+	}
+	return nil
+}
+
+// markWindow marks track id's window as needing the user, or not.
+func (s *Service) markWindow(id string, on bool) error {
+	infos, err := s.Windows.List()
+	if err != nil {
+		return err
+	}
+	for _, in := range infos {
+		if in.Track == id {
+			return s.Windows.Attention(in.Window, on)
+		}
+	}
+	return nil
 }
 
 // reopen records that ended track id's window is open again, under

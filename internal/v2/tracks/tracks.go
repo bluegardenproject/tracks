@@ -59,6 +59,8 @@ type Windows interface {
 	List() ([]trackwin.Info, error)
 	Open(s trackwin.Spec) (trackwin.Window, error)
 	Close(window string) error
+	// Attention marks window as needing the user, or not.
+	Attention(window string, on bool) error
 }
 
 // Service creates, lists and ends tracks.
@@ -196,3 +198,7 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 }
 
 func (w TmuxWindows) Close(window string) error { return w.Tmux.KillWindow(window) }
+
+func (w TmuxWindows) Attention(window string, on bool) error {
+	return trackwin.SetAttention(w.Tmux, window, on)
+}

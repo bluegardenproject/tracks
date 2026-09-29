@@ -27,7 +27,19 @@ const (
 	dirOption   = "@tracks_dir"
 	kindOption  = "@tracks_kind"
 	repoOption  = "@tracks_repo"
+	// AttentionOption is set while the track needs the user; the
+	// footer marks its slot.
+	AttentionOption = "@tracks_attention"
 )
+
+// SetAttention marks window as needing the user, or not.
+func SetAttention(t Tmux, window string, on bool) error {
+	value := ""
+	if on {
+		value = "1"
+	}
+	return t.SetWindowOption(window, AttentionOption, value)
+}
 
 // Process is a command shown in a pane under a title.
 type Process struct {

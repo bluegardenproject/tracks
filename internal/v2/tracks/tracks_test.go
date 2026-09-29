@@ -115,9 +115,19 @@ type fakeWindows struct {
 	opened  []trackwin.Spec
 	closed  []string
 	fail    bool
+	// attention is each window's mark, as last set.
+	attention map[string]bool
 }
 
 func (w *fakeWindows) List() ([]trackwin.Info, error) { return w.windows, nil }
+
+func (w *fakeWindows) Attention(window string, on bool) error {
+	if w.attention == nil {
+		w.attention = map[string]bool{}
+	}
+	w.attention[window] = on
+	return nil
+}
 
 func (w *fakeWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 	w.opened = append(w.opened, s)
