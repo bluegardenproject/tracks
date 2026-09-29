@@ -163,7 +163,7 @@ func TestCleanAsksFirst(t *testing.T) {
 }
 
 func TestStatusTokensAreThemeTokens(t *testing.T) {
-	for _, s := range track.Statuses {
+	for _, s := range slices.Concat(track.Statuses, track.PRStatuses) {
 		if !slices.Contains(theme.All, theme.Token(s.Token)) {
 			t.Errorf("%s's token %q isn't a theme token", s.ID, s.Token)
 		}
