@@ -133,6 +133,13 @@ func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string
 	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
+// Promote makes an Ask or Plan track a Work track with its own
+// worktrees.
+func (c Client) Promote(ctx context.Context, p PromoteParams, progress func(string)) (CreateResult, error) {
+	var r CreateResult
+	return r, c.Call(ctx, Promote, p, &r, progress)
+}
+
 // AddRepo gives a work track a worktree of another repo.
 func (c Client) AddRepo(ctx context.Context, p AddRepoParams, progress func(string)) (AddRepoResult, error) {
 	var r AddRepoResult

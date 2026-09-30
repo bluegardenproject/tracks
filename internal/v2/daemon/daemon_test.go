@@ -128,6 +128,9 @@ func TestDaemon(t *testing.T) {
 	if err := client.Report(ctx, rpc.ReportParams{ID: "20260928-101500-abc123", Event: "agent.waiting"}); !errors.As(err, &p) {
 		t.Errorf("reporting on a missing track: %v, want a problem", err)
 	}
+	if _, err := client.Promote(ctx, rpc.PromoteParams{ID: "20260928-101500-abc123"}, nil); !errors.As(err, &p) {
+		t.Errorf("promoting a missing track: %v, want a problem", err)
+	}
 	if _, err := client.AddRepo(ctx, rpc.AddRepoParams{ID: "20260928-101500-abc123", Repo: "web"}, nil); !errors.As(err, &p) {
 		t.Errorf("adding a repo to a missing track: %v, want a problem", err)
 	}
