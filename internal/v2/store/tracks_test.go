@@ -129,6 +129,7 @@ func TestStateAndName(t *testing.T) {
 	for name, err := range map[string]error{
 		"rename": s.Rename(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
 		"set the cost of": s.SetCost(ctx, "nope", 1), "add a repo to": s.AddTrackRepo(ctx, "nope", track.Repo{Name: "web"}),
+		"promote": s.Promote(ctx, track.Track{ID: "nope", Kind: track.Work}),
 	} {
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s an unknown track: %v, want ErrNotFound", name, err)
@@ -204,5 +205,37 @@ func TestAddTrackRepo(t *testing.T) {
 	}
 	if got, _ := s.Track(ctx, "a"); got.Repos[1].Branch != "fix/docs" || got.Repos[0].Branch != "tracks/a" {
 		t.Errorf("the added repo isn't at position 1: %+v", got.Repos)
+	}
+}
+
+func TestPromote(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.Now()
+	tr := track.Track{ID: "a", Kind: track.Plan, Name: "a", Engine: "claude", Session: "s1", Prompt: "Plan it", CreatedAt: now,
+		Repos: []track.Repo{{Name: "web", Path: "/src/web", Base: "main"}, {Name: "api", Path: "/src/api", Base: "develop"}}}
+	if err := s.AddTrack(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetState(ctx, "a", track.State{ClosedAt: now, Waiting: true}); err != nil {
+		t.Fatal(err)
+	}
+	tr.Kind, tr.Session, tr.Prompt = track.Work, "s2", "Plan it\n\nDo it"
+	tr.Repos[0].Worktree, tr.Repos[0].Branch = "/wt/a/web", "tracks/a"
+	tr.Repos[1].Worktree, tr.Repos[1].Branch = "/wt/a/api", "tracks/a"
+	if err := s.Promote(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Track(ctx, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != track.Work || got.Session != "s2" || got.Prompt != "Plan it\n\nDo it" || !got.Open() || got.Waiting {
+		t.Errorf("promoted %+v; want an open work track on s2", got)
+	}
+	for i, r := range got.Repos {
+		if r != tr.Repos[i] {
+			t.Errorf("repo %d = %+v, want %+v", i, r, tr.Repos[i])
+		}
 	}
 }
