@@ -48,6 +48,10 @@ type Store interface {
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (track.PRState, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
+	SaveDraft(ctx context.Context, d store.Draft) error
+	Drafts(ctx context.Context) ([]store.Draft, error)
+	Draft(ctx context.Context, id string) (store.Draft, error)
+	DeleteDraft(ctx context.Context, id string) (bool, error)
 }
 
 // Worktrees makes and removes a track's worktrees.

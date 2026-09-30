@@ -98,6 +98,9 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SavePR", func() error { _, err := w.SavePR(ctx, "a", merged, now); return err }, true},
 		{"SavePR", func() error { _, err := w.SavePR(ctx, "a", merged, now); return err }, false},
 		{"Rename", func() error { return w.Rename(ctx, "gone", "b") }, false},
+		{"SaveDraft", func() error { return w.SaveDraft(ctx, store.Draft{ID: "d", Request: "{}", FailedAt: now}) }, true},
+		{"DeleteDraft", func() error { _, err := w.DeleteDraft(ctx, "d"); return err }, true},
+		{"DeleteDraft", func() error { _, err := w.DeleteDraft(ctx, "d"); return err }, false},
 		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, true},
 		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, false},
 	}
@@ -114,7 +117,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 	}
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
-		"EndedBefore": true, "FilteredTracks": true, "Filter": true, "UnsettledPRs": true}
+		"EndedBefore": true, "FilteredTracks": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {

@@ -15,6 +15,16 @@ type Listed struct {
 	track.Track
 	Window string
 	Number int // the window's index
+	// Draft is set on a draft's row, whose Track is what was asked for.
+	Draft *Draft `json:",omitempty"`
+}
+
+// Status is the track's status, or Draft on a draft's row.
+func (l Listed) Status() track.Status {
+	if l.Draft != nil {
+		return track.Draft
+	}
+	return l.Track.Status()
 }
 
 // List returns the open tracks whose windows exist, in window order,

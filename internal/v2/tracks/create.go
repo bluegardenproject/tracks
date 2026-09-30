@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -19,8 +20,26 @@ type Created struct {
 // Create makes the track req asks for, as v1 does: check, ID, session,
 // worktrees, the engine's command line, the window, and the database
 // row last. progress is told each slow step. When a step fails, what
-// was made is undone and nothing is saved.
+// was made is undone and req is kept as the draft req.Draft; a success
+// deletes that draft.
 func (s *Service) Create(ctx context.Context, req Request, progress func(string)) (Created, error) {
+	if req.Draft == "" {
+		req.Draft = NewID(s.now())
+	}
+	created, err := s.create(ctx, req, progress)
+	// The draft is kept or dropped even when ctx is cancelled.
+	undo := context.WithoutCancel(ctx)
+	if err != nil {
+		if kerr := s.keepDraft(undo, req, err); kerr != nil {
+			err = errors.Join(err, kerr)
+		}
+		return created, err
+	}
+	_, _ = s.Store.DeleteDraft(undo, req.Draft)
+	return created, nil
+}
+
+func (s *Service) create(ctx context.Context, req Request, progress func(string)) (Created, error) {
 	set, err := s.Settings()
 	if err != nil {
 		return Created{}, err
