@@ -94,3 +94,24 @@ func TestInstallReviewers(t *testing.T) {
 		t.Error("a missing reviewer was not written")
 	}
 }
+
+func TestReviewerInstructions(t *testing.T) {
+	got := ReviewerInstructions()
+	if strings.HasPrefix(got, "---") || strings.Contains(got, "x-tracks-managed") {
+		t.Errorf("the frontmatter is left in:\n%s", got[:min(200, len(got))])
+	}
+	for _, want := range []string{"You are a code-review specialist.", "REVIEW OUTCOME: blocked", "## Candor level"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the instructions lack %q", want)
+		}
+	}
+	for in, want := range map[string]string{
+		"---\nname: x\n---\nbody":            "body",
+		"body":                               "body",
+		"---\nname: x\n---\nbody\n---\nmore": "body\n---\nmore",
+	} {
+		if got := frontmatter.ReplaceAllString(in, ""); got != want {
+			t.Errorf("%q stripped to %q, want %q", in, got, want)
+		}
+	}
+}

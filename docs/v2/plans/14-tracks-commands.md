@@ -17,7 +17,7 @@ Cursor's pre-push review, as v1's. Cursor can't hand work to a subagent, so this
 - **The diff:** the branch against `origin/<base>` of the track repo the command runs in (found from the working directory), plus the uncommitted changes. `--base <ref>` overrides the base. With no changes: "No changes against origin/main: nothing to review."
 - **The reviewer:** `agent -p` with the `tracks-v2-reviewer` instructions (the Claude subagent's, frontmatter removed), the track's candor, and the diff on stdin. It runs on Cursor's default model from the Engines tab, with no permission flags, so it can read files and nothing else.
 - **It prints the report,** which ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`, and "Running the reviewer in a separate agent session…" on stderr first.
-- **Guards, as v1's:** a reviewer that runs `tracks review` gets "Already inside a review: a reviewer doesn't review itself." (an environment marker, and a lock per track in the state directory). A review times out after 10 minutes; diffs over 1 MB are cut and the reviewer is told.
+- **Guards, as v1's:** a reviewer that runs `tracks review` gets "Already inside a review: a reviewer doesn't review itself." (an environment marker, and a lock per track in the state directory). A review times out after 15 minutes; diffs over 1 MB are cut and the reviewer is told.
 - Claude tracks don't need it: their prompt calls the `tracks-v2-reviewer` subagent. The command works in them too.
 
 ### `tracks promote <id>`
