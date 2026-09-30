@@ -7,7 +7,7 @@
 - **Two frames:** on the left quarter, "Settings" with one stacked button per section (like the Repositories tab's New button); on the other three quarters, the selected section under its name.
   - Up and down (or `j`/`k`) and clicks choose a section. Enter or a click inside moves focus into it; Tab and Shift+Tab move within; Esc goes back. Both frames use `border.default`.
   - Narrow windows show whichever frame has focus.
-- **General:** preferences. For now one, **Theme**: a field showing the file in use (`[ default.yaml ▾ ]`) and its display name. Enter or a click opens the **theme picker**.
+- **General:** preferences. **Theme**: a field showing the file in use (`[ default.yaml ▾ ]`) and its display name. Enter or a click opens the **theme picker**. Below it, **Notifications**: a toggle for each channel and event, from [16-notifications.md](16-notifications.md).
 - **Theme picker:** an overlay centred on the window, listing every theme file by file name with its display name beside: the built-ins first, then the themes folder's files by file name. The one in use is marked. Choosing one applies it everywhere at once and remembers it; Esc or a click outside closes it. Files that aren't valid themes are listed greyed out with the reason, and can't be chosen.
 - **Fast Tracks:** third in the list, below **Tracks** (each track type's default agent and model, [09-track-type-defaults.md](09-track-type-defaults.md)). Until Fast Tracks are built it shows the empty state: a " + New " button, a line on what Fast Tracks are, and a centred, framed "Create your first Fast Track now" button. Both buttons are placeholders that say Fast Tracks aren't built yet; the section doesn't take focus.
 - **Theme Creator:** edits a theme.
