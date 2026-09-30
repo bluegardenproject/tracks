@@ -149,6 +149,25 @@ func TestDaemon(t *testing.T) {
 			t.Errorf("derailing a missing track with %+v: %v, want a problem", params, err)
 		}
 	}
+	if _, err := client.Create(ctx, rpc.CreateParams{Request: tracks.Request{Kind: track.Ask, Prompt: "Why?", Engine: "nope"}}, nil); !errors.As(err, &p) {
+		t.Fatalf("creating on an unknown engine: %v, want a problem", err)
+	}
+	listed, _, err := client.Station(ctx)
+	if err != nil || len(listed) != 1 || listed[0].Draft == nil || listed[0].Status() != track.Draft || listed[0].Draft.Error != string(p) {
+		t.Fatalf("Station = %+v, %v; want the failed creation's draft", listed, err)
+	}
+	if req, err := client.Draft(ctx, listed[0].ID); err != nil || req.Prompt != "Why?" || req.Draft != listed[0].ID {
+		t.Errorf("Draft = %+v, %v", req, err)
+	}
+	if err := client.DiscardDraft(ctx, listed[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.DiscardDraft(ctx, listed[0].ID); !errors.As(err, &p) {
+		t.Errorf("discarding a missing draft: %v, want a problem", err)
+	}
+	if _, err := client.Draft(ctx, listed[0].ID); !errors.As(err, &p) {
+		t.Errorf("reading a missing draft: %v, want a problem", err)
+	}
 	if err := client.SetFilter(ctx, track.Filter{Started: track.Between}); !errors.As(err, &p) {
 		t.Errorf("an invalid filter: %v, want a problem", err)
 	}

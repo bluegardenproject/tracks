@@ -146,6 +146,17 @@ func (c Client) Restart(ctx context.Context, p RestartParams, progress func(stri
 	return r, c.Call(ctx, Restart, p, &r, progress)
 }
 
+// Draft is the request a draft keeps, to start it again.
+func (c Client) Draft(ctx context.Context, id string) (tracks.Request, error) {
+	var r tracks.Request
+	return r, c.Call(ctx, Draft, DraftParams{ID: id}, &r, nil)
+}
+
+// DiscardDraft deletes a draft.
+func (c Client) DiscardDraft(ctx context.Context, id string) error {
+	return c.Call(ctx, DiscardDraft, DraftParams{ID: id}, nil, nil)
+}
+
 // AddRepo gives a work track a worktree of another repo.
 func (c Client) AddRepo(ctx context.Context, p AddRepoParams, progress func(string)) (AddRepoResult, error) {
 	var r AddRepoResult
