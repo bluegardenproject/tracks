@@ -20,7 +20,7 @@
 ## Derail
 
 - **Only ended tracks,** done or closed, archived ones included. An open track shows End; Derail appears once it's ended.
-- **It deletes:** the track's worktrees (if Clean hasn't removed them), its local branches in the repos' checkouts, its hooks folder, and its row in the database with its repos and PRs. Pushed branches and PRs on GitHub stay. The agent's own session files stay where the agent keeps them.
+- **It deletes:** the track's worktrees (if Clean, later Archive, hasn't removed them), its local branches in the repos' checkouts, its hooks folder, and its row in the database with its repos and PRs. Pushed branches and PRs on GitHub stay. The agent's own session files stay where the agent keeps them.
 - **Before deleting,** Station runs Derail's check alone (`derail` with `check`), which deletes nothing. It looks for work that would be lost: unsaved work in the worktrees, as Clean does, and commits that exist only on the track's branches (on no other branch and no remote), which matters once the worktrees are gone. It lists what it finds and offers **Derail anyway** or Cancel. Without any, it asks: "Derail rate-bug? Its worktrees, branches and record are deleted for good." with **Derail** or Cancel. Enter never confirms; `y` does.
 - **An open PR** adds a line to the question: "Its PR #12 stays open on GitHub."
 - **Key:** `d`.

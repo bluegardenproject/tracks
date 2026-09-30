@@ -20,7 +20,7 @@ Declared once, in `track`: the track statuses in `status.go`, the PR statuses in
 | `active` | active | the track's window is open (the default) | no |
 | `action_required` | action required | the agent waits on a dialog in its window | yes |
 | `done` | done | ended: its window is closed | no |
-| `closed` | closed | cleaned: its worktrees are gone | no |
+| `closed` | closed | archived (was: cleaned, before [13-archive-replaces-clean.md](13-archive-replaces-clean.md)) | no |
 
 **PR status**, derived from the track's PRs, one of:
 
@@ -42,7 +42,7 @@ Declared once, in `track`: the track statuses in `status.go`, the PR statuses in
 |---|---|---|
 | `created`, `resumed` | Create, Resume | active; the agent's dialog state cleared |
 | `ended` | End, or the sweep finding the window gone | done |
-| `cleaned` | Clean | closed |
+| `cleaned` | Clean, now Archive | closed; since plan 13 it only records that the worktrees are gone |
 | `agent.waiting` | a hook, or the pane check | action required, while active |
 | `agent.working` | a hook, or the pane check | active, while action required |
 

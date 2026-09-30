@@ -1,6 +1,6 @@
 # Plan: archive and filters
 
-**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream came next ([12-change-stream-and-derail.md](12-change-stream-and-derail.md)); the per-track event timeline is a future feature.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 4 (storage): removing tracks from Station, auto-archive and filters. The change stream came next ([12-change-stream-and-derail.md](12-change-stream-and-derail.md)); the per-track event timeline is a future feature. [13-archive-replaces-clean.md](13-archive-replaces-clean.md) later changed Archive: it removes the branches too, closed means archived, and Unarchive gives done.
 
 ## What users get
 
