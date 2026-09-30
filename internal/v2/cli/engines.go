@@ -64,6 +64,24 @@ func (h history) Save(history settings.History) error {
 	return settings.Save(h.path, s)
 }
 
+type notifications struct{ path string }
+
+var _ source.Notifications = notifications{}
+
+func (n notifications) Load() (settings.Notifications, error) {
+	s, err := settings.Load(n.path)
+	return s.Notifications, err
+}
+
+func (n notifications) Save(notify settings.Notifications) error {
+	s, err := settings.Load(n.path)
+	if err != nil {
+		return err
+	}
+	s.Notifications = notify
+	return settings.Save(n.path, s)
+}
+
 func (engines) Check(ctx context.Context, e agents.Engine) (agents.Found, error) {
 	return agents.Check(ctx, e)
 }

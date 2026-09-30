@@ -33,8 +33,12 @@ type settingsTab struct {
 	fastHover      int  // the Fast Tracks button under the mouse
 	types          typesState
 	history        historyState
-	keysOffset     int
-	creator        themecreator.Model
+	notify         notifyState
+	// generalFocus is General's field with focus, generalHover the one
+	// under the mouse: see notifyRows.
+	generalFocus, generalHover int
+	keysOffset                 int
+	creator                    themecreator.Model
 	// leaving is where to go once the creator has let go.
 	leaving *settingsLeave
 	notice  notice
@@ -69,7 +73,7 @@ type (
 )
 
 func newSettingsTab(applied theme.Theme) settingsTab {
-	return settingsTab{hover: -1, types: typesState{hover: typeHit{-1, -1}}, creator: themecreator.New(applied, applied)}
+	return settingsTab{hover: -1, generalHover: -1, types: typesState{hover: typeHit{-1, -1}}, creator: themecreator.New(applied, applied)}
 }
 
 func (m Model) loadThemes() tea.Cmd {
@@ -293,9 +297,7 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 	switch s.section {
 	case sectionGeneral:
-		if key == "enter" || key == "space" {
-			return m.openPicker(pickUse)
-		}
+		return m.generalKey(key)
 	case sectionTracks:
 		return m.typesKey(key)
 	case sectionKeys:

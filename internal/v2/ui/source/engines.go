@@ -19,6 +19,12 @@ type History interface {
 	Save(settings.History) error
 }
 
+// Notifications keeps Settings → General → Notifications.
+type Notifications interface {
+	Load() (settings.Notifications, error)
+	Save(settings.Notifications) error
+}
+
 // Engines keeps the engines' settings and asks their CLIs.
 type Engines interface {
 	Load() (settings.Engines, error)

@@ -143,7 +143,8 @@ func (m Model) general(width int) []string {
 	if err := m.settings.themesErr; err != nil {
 		lines = append(lines, "", m.fg(theme.StateDangerText).Render(cut("Couldn't read the themes folder: "+err.Error(), width)))
 	}
-	return lines
+	notify, _ := m.notifyView(width)
+	return append(append(lines, ""), notify...)
 }
 
 // themeFieldWidth is the width inside the theme field's brackets.
@@ -158,7 +159,7 @@ func (m Model) themeField(width int) string {
 		e = s.themes[i]
 	}
 	fw := m.themeFieldWidth()
-	field := m.selectField(fileName(e), fw, s.fieldHover || (s.editing && s.section == sectionGeneral))
+	field := m.selectField(fileName(e), fw, s.fieldHover || s.editing && s.section == sectionGeneral && s.generalFocus == 0)
 	name := t.DisplayName
 	if t.BuiltIn {
 		name += ", built-in"
@@ -242,7 +243,12 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 	case sectionGeneral:
 		s.editing = true
 		if m.onThemeField(x, y) {
+			s.generalFocus = 0
 			return m.openPicker(pickUse)
+		}
+		if f := m.generalAt(bx, by); f > 0 {
+			s.generalFocus = f
+			return m.pressGeneral()
 		}
 	case sectionCreator:
 		var focus tea.Cmd
@@ -289,6 +295,12 @@ func (m Model) settingsHover(x, y int) Model {
 		s.hover = i
 	}
 	s.fieldHover = m.onThemeField(x, y)
+	s.generalHover = -1
+	if s.section == sectionGeneral {
+		if bx, by, ok := m.inSection(x, y); ok {
+			s.generalHover = m.generalAt(bx, by)
+		}
+	}
 	s.types.hover = typeHit{-1, -1}
 	if s.section == sectionTracks {
 		if bx, by, ok := m.inSection(x, y); ok {
