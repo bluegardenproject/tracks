@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux/tmuxtest"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
@@ -140,5 +141,53 @@ func TestRespawn(t *testing.T) {
 	}
 	if in := infos[0]; in.Kind != "work" || in.Repo != "api,web" || in.Dir != worktree || in.Track != "t1" {
 		t.Errorf("window is %+v; want it on the work track's worktree", in)
+	}
+}
+
+func TestAgentExit(t *testing.T) {
+	c := tmux.New(tmuxtest.Socket(t))
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	failing := agents.Wrapper{TrackID: "t1"}.Command(agents.NewLine("sh").Arg("-c").Arg("exit 3").Build())
+	w, err := trackwin.Open(c, "tracks", trackwin.Spec{
+		Track: "t1", Name: "rate-bug", Kind: "work", Dir: dir,
+		Agent: trackwin.Process{Title: "Claude Code", Command: "SHELL=/bin/sh " + failing},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exit := func() string {
+		infos, err := trackwin.List(c, "tracks")
+		if err != nil || len(infos) != 1 {
+			t.Fatalf("windows %+v, %v", infos, err)
+		}
+		return infos[0].Exit
+	}
+	for range 100 {
+		if exit() != "" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := exit(); got != "3" {
+		t.Fatalf("exit = %q, want the agent's 3", got)
+	}
+	if panes := mustPanes(t, c, w.ID); len(panes) != 1 {
+		t.Errorf("panes %+v; the agent's pane should stay, at a shell", panes)
+	}
+
+	if _, err := trackwin.Respawn(c, w.ID, trackwin.Spec{
+		Track: "t1", Name: "rate-bug", Kind: "work", Dir: dir, Agent: trackwin.Process{Title: "Claude Code", Command: "sleep 60"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := exit(); got != "" {
+		t.Errorf("exit = %q after a respawn, want it cleared", got)
 	}
 }

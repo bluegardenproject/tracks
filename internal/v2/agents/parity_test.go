@@ -18,8 +18,11 @@ import (
 
 // v2Names and v2JiraErrors are what v2 changes in v1's prompts, and
 // withoutDevServers what it leaves out; withoutLinks takes out the one
-// thing it adds.
+// thing it adds. v2Exit adds the line saving the agent's exit code to
+// v1's command.
 var (
+	v2Exit = strings.NewReplacer("\nexec ${SHELL:-bash} -l",
+		"\ncode=$?\ntmux set-option -w -t \"$TMUX_PANE\" @tracks_exit \"$code\" 2>/dev/null\nexec ${SHELL:-bash} -l")
 	v2Names      = strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
 	v2JiraErrors = strings.NewReplacer("  4. Any Atlassian-tool error is non-fatal — note it in your reply and carry on with the actual work.",
 		"  4. An error while assigning or moving the ticket is non-fatal — note it in your reply and carry on with the actual work. "+
@@ -150,7 +153,7 @@ func TestClaudeMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2JiraErrors.Replace(v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand()))); withoutLinks(t, got.Command) != want {
+			if want := v2Exit.Replace(v2JiraErrors.Replace(v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand())))); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
@@ -175,7 +178,7 @@ func TestCursorMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand())); withoutLinks(t, got.Command) != want {
+			if want := v2Exit.Replace(v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand()))); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
@@ -204,7 +207,7 @@ func TestClaudeResumeMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := opts.ShellCommand(); got.Command != want {
+			if want := v2Exit.Replace(opts.ShellCommand()); got.Command != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
@@ -230,7 +233,7 @@ func TestCursorResumeMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := opts.ShellCommand(); got.Command != want {
+			if want := v2Exit.Replace(opts.ShellCommand()); got.Command != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {

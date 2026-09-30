@@ -6,8 +6,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/shellx"
 )
 
-// The pane scaffolding and quoting are v1's (internal/agent), without
-// the exit sentinel, which comes with supervision.
+// The pane scaffolding and quoting are v1's (internal/agent). v1's exit
+// sentinel file is a window option here.
+
+// ExitOption is the window option the wrapper saves the agent's exit
+// code in, for the daemon to find.
+const ExitOption = "@tracks_exit"
 
 // Wrapper is the shell scaffolding tracks puts around an agent command
 // inside a tmux pane: the environment every track exports, and the
@@ -39,6 +43,9 @@ type Wrapper struct {
 // this must produce a string rather than an argv.
 func (w Wrapper) Command(line CommandLine) string {
 	inner := string(line)
+	// tmux keeps the code as long as the window lives, so a daemon that
+	// was down when the agent exited still finds it.
+	inner += "\ncode=$?\ntmux set-option -w -t \"$TMUX_PANE\" " + ExitOption + " \"$code\" 2>/dev/null"
 	// The pane stays alive as a login shell once the agent exits, so
 	// the user can keep working in the worktree.
 	inner += "\nexec ${SHELL:-bash} -l"

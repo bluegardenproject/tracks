@@ -9,6 +9,7 @@ type Info struct {
 	Kind   string
 	Repo   string
 	Dir    string // the working directory, a worktree of Repo
+	Exit   string // the agent's exit code once it exited, "" while it runs
 }
 
 // List returns the tracks of session in window order. The Tracks
@@ -23,7 +24,7 @@ func List(t Tmux, session string) ([]Info, error) {
 		if w.Index == 0 {
 			continue
 		}
-		tracks = append(tracks, Info{Number: w.Index, Window: w.ID, Track: w.Track, Name: w.Name, Kind: w.Kind, Repo: w.Repo, Dir: w.Dir})
+		tracks = append(tracks, Info{Number: w.Index, Window: w.ID, Track: w.Track, Name: w.Name, Kind: w.Kind, Repo: w.Repo, Dir: w.Dir, Exit: w.Exit})
 	}
 	return tracks, nil
 }
