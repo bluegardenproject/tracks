@@ -13,6 +13,9 @@ type Engine interface {
 	// Session makes the ID the track's conversation keeps for life.
 	Session(ctx context.Context, program string) (string, error)
 	Command(s agents.Spec) (agents.Start, error)
+	// LastReply is what session's last turn ended with, "" when the
+	// engine can't say.
+	LastReply(session string) string
 }
 
 var engines = map[string]Engine{
@@ -24,6 +27,7 @@ type claudeEngine struct{}
 
 func (claudeEngine) Session(context.Context, string) (string, error) { return claude.NewSession(), nil }
 func (claudeEngine) Command(s agents.Spec) (agents.Start, error)     { return claude.Command(s) }
+func (claudeEngine) LastReply(session string) string                 { return claude.LastReply(session) }
 
 type cursorEngine struct{}
 
@@ -31,6 +35,9 @@ func (cursorEngine) Session(ctx context.Context, program string) (string, error)
 	return cursor.CreateChat(ctx, program)
 }
 func (cursorEngine) Command(s agents.Spec) (agents.Start, error) { return cursor.Command(s) }
+
+// LastReply is "": Tracks can't read Cursor's chats.
+func (cursorEngine) LastReply(string) string { return "" }
 
 func (s *Service) engine(id string) (Engine, bool) {
 	all := s.Engines

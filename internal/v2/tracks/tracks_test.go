@@ -39,6 +39,13 @@ func (s *failingStore) AddTrackRepo(ctx context.Context, id string, r track.Repo
 	return s.Store.AddTrackRepo(ctx, id, r)
 }
 
+func (s *failingStore) Promote(ctx context.Context, t track.Track) error {
+	if s.fail {
+		return errStep
+	}
+	return s.Store.Promote(ctx, t)
+}
+
 func (s *failingStore) Rename(ctx context.Context, id, name string) error {
 	if s.fail {
 		return errStep
@@ -135,8 +142,10 @@ func (w *fakeWorktrees) RemoveWorktrees(_ context.Context, id string, repos []tr
 type fakeWindows struct {
 	windows []trackwin.Info
 	opened  []trackwin.Spec
-	closed  []string
-	fail    bool
+	// respawned are the specs windows were respawned on.
+	respawned []trackwin.Spec
+	closed    []string
+	fail      bool
 	// attention is each window's mark, as last set; screens what each
 	// window's agent pane shows.
 	attention map[string]bool
@@ -166,6 +175,14 @@ func (w *fakeWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{ID: id, Agent: "%1"}, nil
 }
 
+func (w *fakeWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, error) {
+	w.respawned = append(w.respawned, s)
+	if w.fail {
+		return trackwin.Window{ID: window}, errStep
+	}
+	return trackwin.Window{ID: window, Agent: "%1"}, nil
+}
+
 func (w *fakeWindows) Close(window string) error {
 	w.closed = append(w.closed, window)
 	w.windows = slices.DeleteFunc(w.windows, func(in trackwin.Info) bool { return in.Window == window })
@@ -175,7 +192,10 @@ func (w *fakeWindows) Close(window string) error {
 type fakeEngine struct {
 	failSession, failCommand bool
 	spec                     agents.Spec
+	replies                  map[string]string // by session
 }
+
+func (e *fakeEngine) LastReply(session string) string { return e.replies[session] }
 
 func (e *fakeEngine) Session(context.Context, string) (string, error) {
 	if e.failSession {

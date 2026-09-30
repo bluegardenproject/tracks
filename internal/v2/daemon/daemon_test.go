@@ -32,7 +32,10 @@ func (noWindows) List() ([]trackwin.Info, error) { return nil, nil }
 func (noWindows) Open(trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no windows")
 }
-func (noWindows) Close(string) error            { return nil }
+func (noWindows) Close(string) error { return nil }
+func (noWindows) Respawn(string, trackwin.Spec) (trackwin.Window, error) {
+	return trackwin.Window{}, errors.New("no tmux in this test")
+}
 func (noWindows) Attention(string, bool) error  { return nil }
 func (noWindows) Screen(string) (string, error) { return "", nil }
 

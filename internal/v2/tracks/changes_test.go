@@ -90,6 +90,8 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SetCost", func() error { return w.SetCost(ctx, "a", 1.5) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "a", track.Repo{Name: "api", Path: "/src/api"}) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "gone", track.Repo{Name: "api"}) }, false},
+		{"Promote", func() error { return w.Promote(ctx, track.Track{ID: "a", Kind: track.Work, Session: "s2"}) }, true},
+		{"Promote", func() error { return w.Promote(ctx, track.Track{ID: "gone", Kind: track.Work}) }, false},
 		{"SetFilter", func() error { return w.SetFilter(ctx, track.Filter{Archived: true}) }, true},
 		{"AddPR", func() error { _, err := w.AddPR(ctx, "a", pr, now); return err }, true},
 		{"AddPR", func() error { _, err := w.AddPR(ctx, "a", pr, now); return err }, false},

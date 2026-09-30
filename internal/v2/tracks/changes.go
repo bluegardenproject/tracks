@@ -121,6 +121,10 @@ func (w watched) AddTrackRepo(ctx context.Context, id string, r track.Repo) erro
 	return w.notify(w.Store.AddTrackRepo(ctx, id, r))
 }
 
+func (w watched) Promote(ctx context.Context, t track.Track) error {
+	return w.notify(w.Store.Promote(ctx, t))
+}
+
 func (w watched) AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error) {
 	added, err := w.Store.AddPR(ctx, id, pr, at)
 	if added {
