@@ -31,10 +31,13 @@ var (
 	Active         = Status{ID: "active", Label: "active", Badge: BadgeInfo, Priority: 2}
 	Done           = Status{ID: "done", Label: "done", Badge: BadgeInfo, Priority: 3}
 	Closed         = Status{ID: "closed", Label: "closed", Badge: BadgeInfo, Priority: 4}
+	// Draft is a creation that failed, kept to start again. It's no
+	// stored track's: Apply never sets it.
+	Draft = Status{ID: "draft", Label: "draft", Badge: BadgeWarning, Priority: 5}
 )
 
 // Statuses are every track status, by priority.
-var Statuses = []Status{Error, ActionRequired, Exited, Active, Done, Closed}
+var Statuses = []Status{Error, ActionRequired, Exited, Active, Done, Closed, Draft}
 
 // How the agent exited, in State.Exit: with code 0, or any other.
 const (

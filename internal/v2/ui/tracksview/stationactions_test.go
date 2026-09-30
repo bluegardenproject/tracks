@@ -145,7 +145,7 @@ func TestStatusBadgesAreThemeTokens(t *testing.T) {
 		}
 		wantBg, wantText := theme.StateInfoBg, theme.StateInfoText
 		switch s {
-		case track.ActionRequired, track.Exited:
+		case track.ActionRequired, track.Exited, track.Draft:
 			wantBg, wantText = theme.StateWarningBg, theme.StateWarningText
 		case track.Error:
 			wantBg, wantText = theme.StateDangerBg, theme.StateDangerText
