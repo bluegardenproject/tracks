@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/daemon"
+	"github.com/bluegardenproject/tracks/internal/v2/notifier"
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
 	"github.com/bluegardenproject/tracks/internal/v2/settings"
@@ -58,6 +59,8 @@ func newDaemonCmd(version string) *cobra.Command {
 			}
 			c := tmux.New(paths.TmuxSocket)
 			changes := &tracks.Changes{}
+			load := func() (settings.Settings, error) { return settings.Load(paths.Settings) }
+			notices := &notifier.Notifier{Tmux: c, Session: sessionName, Settings: load, Log: logger.Printf}
 			err = daemon.Run(ctx, daemon.Config{
 				Paths: paths, Version: version, Session: sessionName, Tmux: c, Home: home, Log: logger,
 				Tracks: &tracks.Service{
@@ -65,11 +68,13 @@ func newDaemonCmd(version string) *cobra.Command {
 					Changes:   changes,
 					Worktrees: &workspace.Worktrees{Root: paths.Worktrees},
 					Windows:   tracks.TmuxWindows{Tmux: c, Session: sessionName},
-					Settings:  func() (settings.Settings, error) { return settings.Load(paths.Settings) },
+					Settings:  load,
 					SocketDir: paths.DataDir,
 					BinDir:    paths.BinDir,
 					HooksDir:  filepath.Join(paths.DataDir, "hooks"),
 					GitHub:    tracks.GH{},
+					// Sending may wait on osascript and tmux; the daemon doesn't.
+					Notify: func(n tracks.Notice) { go notices.Send(n) },
 				},
 			})
 			switch {
