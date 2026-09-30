@@ -61,6 +61,18 @@ var (
 	downKey  = tea.KeyPressMsg{Code: tea.KeyDown}
 )
 
+func TestSettingsFramesStartWithABlankLine(t *testing.T) {
+	m := openSettings(t, newFakeThemes())
+	lines := strings.Split(plainView(m), "\n")
+	top := m.contentTop()
+	if blank := lines[top+1]; strings.Trim(blank, " │") != "" {
+		t.Errorf("the frames' first line isn't blank: %q", blank)
+	}
+	if first := lines[top+2]; !strings.Contains(first, sectionTitles[0]) || !strings.Contains(first, "Theme") {
+		t.Errorf("the section list and the section should start on the next line: %q", first)
+	}
+}
+
 func TestChoosingATheme(t *testing.T) {
 	f := newFakeThemes()
 	m := openSettings(t, f)

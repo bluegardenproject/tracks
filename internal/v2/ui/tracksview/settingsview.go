@@ -38,7 +38,8 @@ func (m Model) settingsPanes() settingsPanes {
 	return settingsPanes{side: true, sideX: stationLeft, sideW: total}
 }
 
-// sectionWidth and sectionHeight are the section frame's inside.
+// sectionWidth and sectionHeight are the section frame's inside, below
+// the blank line both frames start with.
 func (m Model) sectionWidth() int {
 	p := m.settingsPanes()
 	w := p.secW
@@ -48,20 +49,20 @@ func (m Model) sectionWidth() int {
 	return max(0, w-4)
 }
 
-func (m Model) sectionHeight() int { return max(0, m.contentHeight()-2) }
+func (m Model) sectionHeight() int { return max(0, m.contentHeight()-3) }
 
-// bodyTop is the first line inside the frames.
-func (m Model) bodyTop() int { return m.contentTop() + 1 }
+// bodyTop is the frames' first line after the blank one.
+func (m Model) bodyTop() int { return m.contentTop() + 2 }
 
 func (m Model) settingsView(width, height int) []string {
 	p := m.settingsPanes()
 	s := m.settings
 	var left, right []string
 	if p.side {
-		left = m.frame("Settings", theme.BorderDefault, m.sectionList(p.sideW-4), p.sideW, height)
+		left = m.frame("Settings", theme.BorderDefault, append([]string{""}, m.sectionList(p.sideW-4)...), p.sideW, height)
 	}
 	if p.section {
-		right = m.frame(sectionTitles[s.section], theme.BorderDefault, m.sectionBody(p.secW-4, height-2), p.secW, height)
+		right = m.frame(sectionTitles[s.section], theme.BorderDefault, append([]string{""}, m.sectionBody(p.secW-4, m.sectionHeight())...), p.secW, height)
 	}
 	margin := strings.Repeat(" ", stationLeft)
 	lines := make([]string, height)
