@@ -55,6 +55,9 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Resume: func(id string, recreate bool, progress func(string)) ([]string, error) {
 					return resumeTrack(cmd.Context(), daemon, c, rpc.ResumeParams{ID: id, Recreate: recreate}, progress)
 				},
+				Promote: func(id string, progress func(string)) error {
+					return promoteTrack(cmd.Context(), daemon, c, id, progress)
+				},
 				Archive: func(id string, force bool) ([]string, error) {
 					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
 				},
@@ -139,16 +142,36 @@ func resumeTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, p rpc.
 	if err != nil || len(r.Missing) > 0 {
 		return r.Missing, err
 	}
+	return nil, switchToWindow(c, r.Window)
+}
+
+// promoteTrack promotes the track through the daemon and switches to
+// its window.
+func promoteTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, id string, progress func(string)) error {
+	var r rpc.CreateResult
+	err := daemon.do(ctx, func(client rpc.Client) (err error) {
+		r, err = client.Promote(ctx, rpc.PromoteParams{ID: id}, progress)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return switchToWindow(c, r.Window)
+}
+
+// switchToWindow switches the client to the track window with ID
+// window, if it's still there.
+func switchToWindow(c *tmux.Client, window string) error {
 	infos, err := trackwin.List(c, sessionName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, in := range infos {
-		if in.Window == r.Window {
-			return nil, trackwin.Switch(c, sessionName, strconv.Itoa(in.Number), 0)
+		if in.Window == window {
+			return trackwin.Switch(c, sessionName, strconv.Itoa(in.Number), 0)
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 func archiveTrack(ctx context.Context, daemon daemonCalls, p rpc.ArchiveParams) (lost []string, err error) {

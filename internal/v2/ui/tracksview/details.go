@@ -3,6 +3,7 @@ package tracksview
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -30,6 +31,7 @@ const (
 	actionArchive
 	actionUnarchive
 	actionDerail
+	actionPromote
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
@@ -80,13 +82,22 @@ func confirmRecreate(n int) []action {
 	return []action{{actionConfirmRecreate, label, "y", -1}, {actionCancel, "Cancel", "n", -1}}
 }
 
+// promoteAction is an Ask or Plan track's, after Open or Resume.
+var promoteAction = action{actionPromote, "Promote", "m", 3}
+
 // actionsFor are t's buttons.
 func actionsFor(t source.Track) []action {
 	switch {
-	case t.Open():
-		return openActions
 	case t.Archived:
 		return archivedActions
+	case t.Kind != string(track.Ask) && t.Kind != string(track.Plan):
+	case t.Open():
+		return slices.Insert(slices.Clone(openActions), 2, promoteAction)
+	default:
+		return slices.Insert(slices.Clone(endedActions), 1, promoteAction)
+	}
+	if t.Open() {
+		return openActions
 	}
 	return endedActions
 }
@@ -252,6 +263,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return !t.Open() && !t.Archived
 	case actionDerail:
 		return !t.Open()
+	case actionPromote:
+		return len(t.Repos) > 0
 	}
 	return true
 }
@@ -297,6 +310,9 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case actionDerail:
 		next, cmd := m.checkDerail(t)
+		return next, cmd, true
+	case actionPromote:
+		next, cmd := m.startPromote(t.ID, t.Name)
 		return next, cmd, true
 	case actionConfirmEnd, actionConfirmRecreate, actionConfirmArchive, actionConfirmDerail:
 		q := m.station.asking
