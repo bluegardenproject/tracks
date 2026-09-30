@@ -47,6 +47,7 @@ var statusSQL = map[string]string{
 	track.Active.ID:         "(closed_at IS NULL AND agent_exit = '' AND waiting = 0)",
 	track.Done.ID:           "(closed_at IS NOT NULL AND archived_at IS NULL)",
 	track.Closed.ID:         "archived_at IS NOT NULL",
+	track.Draft.ID:          "0",
 }
 
 // FilteredTracks are the tracks f picks at now, newest first, at most
