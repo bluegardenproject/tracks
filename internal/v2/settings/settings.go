@@ -20,6 +20,8 @@ type Settings struct {
 	Engines Engines `yaml:"engines,omitempty"`
 	Tracks  Tracks  `yaml:"tracks,omitempty"`
 	History History `yaml:"history,omitempty"`
+
+	Notifications Notifications `yaml:"notifications,omitempty"`
 }
 
 // Load reads the file at path. A missing file gives the defaults.
