@@ -108,6 +108,19 @@ func (c *Client) DisplayMessage(msg string) error {
 	return err
 }
 
+// RespawnPane kills what pane runs and starts command in dir there.
+func (c *Client) RespawnPane(pane, dir, command string) error {
+	args := []string{"respawn-pane", "-k", "-t", pane}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	_, err := c.run(args...)
+	return err
+}
+
 // SelectPane makes pane the active pane of its window.
 func (c *Client) SelectPane(pane string) error {
 	_, err := c.run("select-pane", "-t", pane)

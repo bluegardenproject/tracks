@@ -2,8 +2,11 @@ package trackwin_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux/tmuxtest"
@@ -88,4 +91,54 @@ func byRole(panes []tmux.Pane, role string) tmux.Pane {
 		}
 	}
 	return tmux.Pane{}
+}
+
+func TestRespawn(t *testing.T) {
+	c := tmux.New(tmuxtest.Socket(t))
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	w, err := trackwin.Open(c, "tracks", trackwin.Spec{
+		Track: "t1", Name: "rate-bug", Kind: "plan", Repo: "api", Dir: dir,
+		Agent: trackwin.Process{Title: "Claude Code", Command: "sleep 60"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := mustPanes(t, c, w.ID)
+
+	worktree := t.TempDir()
+	got, err := trackwin.Respawn(c, w.ID, trackwin.Spec{
+		Track: "t1", Name: "rate-bug", Kind: "work", Repo: "api,web", Dir: worktree,
+		Agent: trackwin.Process{Title: "Claude Code", Command: "pwd > " + filepath.Join(dir, "pwd") + "; sleep 60"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := mustPanes(t, c, w.ID)
+	if got.ID != w.ID || got.Agent != w.Agent || len(after) != len(before) {
+		t.Errorf("respawned %+v with panes %+v; want the same window and agent pane", got, after)
+	}
+	var ran []byte
+	for range 50 {
+		if ran, err = os.ReadFile(filepath.Join(dir, "pwd")); err == nil && len(ran) > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if real, _ := filepath.EvalSymlinks(worktree); strings.TrimSpace(string(ran)) != real && strings.TrimSpace(string(ran)) != worktree {
+		t.Errorf("the agent started in %q, want %s", ran, worktree)
+	}
+	infos, err := trackwin.List(c, "tracks")
+	if err != nil || len(infos) != 1 {
+		t.Fatalf("windows %+v, %v", infos, err)
+	}
+	if in := infos[0]; in.Kind != "work" || in.Repo != "api,web" || in.Dir != worktree || in.Track != "t1" {
+		t.Errorf("window is %+v; want it on the work track's worktree", in)
+	}
 }

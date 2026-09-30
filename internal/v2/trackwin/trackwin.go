@@ -69,6 +69,7 @@ type Window struct {
 type Tmux interface {
 	NewWindow(session, name, dir, command string) (window, pane string, err error)
 	SplitPane(target string, dir tmux.Split, percent int, cwd, command string) (string, error)
+	RespawnPane(pane, dir, command string) error
 	ListPanes(window string) ([]tmux.Pane, error)
 	SetPaneOption(pane, name, value string) error
 	SelectPane(pane string) error
@@ -109,6 +110,33 @@ func Open(t Tmux, session string, s Spec) (Window, error) {
 		}
 	}
 	return w, t.SelectPane(agent)
+}
+
+// Respawn restarts window's agent pane on s's agent, in s.Dir, and
+// makes the window s's: its kind, repos and directory. Its other panes
+// stay as they are. It's how a track changes kind without a new window.
+func Respawn(t Tmux, window string, s Spec) (Window, error) {
+	panes, err := t.ListPanes(window)
+	if err != nil {
+		return Window{}, err
+	}
+	agent, _ := layout(panes)
+	if agent == nil {
+		return Window{}, fmt.Errorf("window %s has no agent pane", window)
+	}
+	w := Window{ID: window, Agent: agent.ID}
+	for name, value := range map[string]string{dirOption: s.Dir, kindOption: s.Kind, repoOption: s.Repo} {
+		if err := t.SetWindowOption(window, name, value); err != nil {
+			return w, err
+		}
+	}
+	if err := t.RespawnPane(agent.ID, s.Dir, s.Agent.Command); err != nil {
+		return w, err
+	}
+	if err := label(t, agent.ID, RoleAgent, s.Agent.Title); err != nil {
+		return w, err
+	}
+	return w, t.SelectPane(agent.ID)
 }
 
 // ErrNotTrackWindow means the window isn't a track's, such as the
