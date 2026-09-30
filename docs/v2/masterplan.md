@@ -18,7 +18,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 2 | Global app layout: Tracks window (placeholder), track windows, footer navigation, menus | [02-app-layout.md](plans/02-app-layout.md); popups in [06-add-track.md](plans/06-add-track.md) | in progress |
 | 3 | Tracks window layout: banner and tab navigation, no tab content yet | — | done |
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | repos in [03-repositories.md](plans/03-repositories.md); the storage draft and plans 11 to 13 (archive, auto-archive and filters; change stream and Derail; Archive replacing Clean) are in git history | done |
-| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md), Clean since replaced by Archive; default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md); the commands the prompts promise in [14-tracks-commands.md](plans/14-tracks-commands.md) | started: form layout; creating, ending, resuming and archiving tracks; defaults per track type |
+| 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md), Clean since replaced by Archive; default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md); the commands the prompts promise in [14-tracks-commands.md](plans/14-tracks-commands.md) | started: form layout; creating, ending, resuming and archiving tracks; defaults per track type; the `tracks` commands and helpers |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md); the hooks for status in [10-track-status.md](plans/10-track-status.md) | started: track and PR status from hooks |
 | 7 | Tracks window content: tabs (Station, Repositories, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
@@ -32,12 +32,6 @@ What v1 does that v2 still lacks, and whether v2.0.0 needs it. Compared with v1'
 Needed before v2.0.0:
 
 - **Model in the New Track form:** pick the model per track, next to the engine; the type's default preselected.
-- **The `tracks` commands the prompts promise** ([14-tracks-commands.md](plans/14-tracks-commands.md)): in a track pane `tracks` runs v2, which has none of them yet, so the prompts point at commands that fail.
-  - `tracks review`: Cursor's pre-push review. Without it the agent reviews its own diff.
-  - `tracks promote <id>`: an Ask or Plan track gets its own worktree.
-  - `tracks terminal`: a terminal pane in the track's window.
-  - `tracks add-repo <repo>`: a repo joins a running track, for the Claude skill below.
-- **The global helpers v1 installs** (also in plan 14): the Cursor rule (`~/.cursor/rules/tracks.mdc`) and the `tracks-add-repo` Claude skill. v2 installs only the reviewer agents; the others work today only where v1 installed them.
 - **Supervision** (chunk 5): an agent that exits or crashes, leaving its pane at the shell, puts its track in an **error** status in Station, from the [status model](#track-status).
 - **Desktop notifications:** macOS notifications and the terminal bell, per event, as v1 has them.
 - **Failed creations kept as drafts:** a creation that fails keeps what was typed, to start it again from Station.
