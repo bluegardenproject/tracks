@@ -43,7 +43,7 @@ type Config struct {
 		Tell(client, msg string) error
 	}
 	Session string
-	// Home is where the reviewer subagents are installed.
+	// Home is where the Claude helpers are installed.
 	Home string
 	Log  *log.Logger
 	// Every is how often the windows are checked; 0 is 2 s. PollEvery is

@@ -128,7 +128,7 @@ func TestStateAndName(t *testing.T) {
 	}
 	for name, err := range map[string]error{
 		"rename": s.Rename(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
-		"set the cost of": s.SetCost(ctx, "nope", 1),
+		"set the cost of": s.SetCost(ctx, "nope", 1), "add a repo to": s.AddTrackRepo(ctx, "nope", track.Repo{Name: "web"}),
 	} {
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s an unknown track: %v, want ErrNotFound", name, err)
@@ -180,5 +180,29 @@ func TestDatabaseIsPrivate(t *testing.T) {
 		if got := info.Mode().Perm(); got != want {
 			t.Errorf("%s has mode %o, want %o", filepath.Base(p), got, want)
 		}
+	}
+}
+
+func TestAddTrackRepo(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	tr := track.Track{ID: "a", Kind: track.Work, Name: "a", Engine: "claude", CreatedAt: time.Now(),
+		Repos: []track.Repo{{Name: "web", Path: "/src/web", Worktree: "/wt/a/web", Branch: "tracks/a", Base: "main"}}}
+	if err := s.AddTrack(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+	docs := track.Repo{Name: "docs", Path: "/src/docs", Worktree: "/wt/a/docs", Branch: "tracks/a", Base: "develop"}
+	if err := s.AddTrackRepo(ctx, "a", docs); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Track(ctx, "a")
+	if err != nil || len(got.Repos) != 2 || got.Repos[0].Name != "web" || got.Repos[1] != docs {
+		t.Fatalf("repos %+v, %v; want web, then docs", got.Repos, err)
+	}
+	if err := s.SetBranch(ctx, "a", 1, "fix/docs"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Track(ctx, "a"); got.Repos[1].Branch != "fix/docs" || got.Repos[0].Branch != "tracks/a" {
+		t.Errorf("the added repo isn't at position 1: %+v", got.Repos)
 	}
 }

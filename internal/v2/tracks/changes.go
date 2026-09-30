@@ -117,6 +117,10 @@ func (w watched) SetBranch(ctx context.Context, id string, position int, branch 
 	return w.notify(w.Store.SetBranch(ctx, id, position, branch))
 }
 
+func (w watched) AddTrackRepo(ctx context.Context, id string, r track.Repo) error {
+	return w.notify(w.Store.AddTrackRepo(ctx, id, r))
+}
+
 func (w watched) AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error) {
 	added, err := w.Store.AddPR(ctx, id, pr, at)
 	if added {

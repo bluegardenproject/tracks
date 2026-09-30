@@ -43,6 +43,7 @@ type Store interface {
 	Rename(ctx context.Context, id, name string) error
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
+	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
@@ -51,6 +52,8 @@ type Store interface {
 // Worktrees makes and removes a track's worktrees.
 type Worktrees interface {
 	Add(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
+	// AddRepo makes r's worktree for work track id on branch.
+	AddRepo(ctx context.Context, id string, r track.Repo, branch string, progress func(string)) (track.Repo, error)
 	// Remove undoes Add, branches included.
 	Remove(ctx context.Context, t track.Track) error
 	// Missing are t's repos whose worktree is gone, which Restore

@@ -162,3 +162,34 @@ func TestParseReview(t *testing.T) {
 		}
 	}
 }
+
+func TestAddRepo(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	docs := repo(t, root, "docs")
+	w := &Worktrees{Root: filepath.Join(root, "worktrees")}
+
+	got, err := w.AddRepo(ctx, "t1", docs, "fix/rates", noProgress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(w.Root, "t1", "docs"); got.Worktree != want || got.Branch != "fix/rates" || got.Name != "docs" {
+		t.Errorf("added %+v, want docs at %s on fix/rates", got, want)
+	}
+	if b := run(t, got.Worktree, "branch", "--show-current"); b != "fix/rates" {
+		t.Errorf("worktree is on %s", b)
+	}
+	if s := subject(t, got.Worktree); s != "base" {
+		t.Errorf("worktree starts at %q, want origin/main", s)
+	}
+
+	other := repo(t, root, "other")
+	run(t, other.Path, "branch", "fix/rates")
+	if _, err := w.AddRepo(ctx, "t1", other, "fix/rates", noProgress); err == nil || err.Error() != "other already has a branch fix/rates" {
+		t.Errorf("a branch the repo has: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(w.Root, "t1", "other")); !os.IsNotExist(err) {
+		t.Errorf("a refused repo left a worktree: %v", err)
+	}
+}

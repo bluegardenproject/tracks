@@ -32,6 +32,13 @@ func (s *failingStore) AddTrack(ctx context.Context, t track.Track) error {
 	return s.Store.AddTrack(ctx, t)
 }
 
+func (s *failingStore) AddTrackRepo(ctx context.Context, id string, r track.Repo) error {
+	if s.fail {
+		return errStep
+	}
+	return s.Store.AddTrackRepo(ctx, id, r)
+}
+
 func (s *failingStore) Rename(ctx context.Context, id, name string) error {
 	if s.fail {
 		return errStep
@@ -61,6 +68,15 @@ func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(stri
 		}
 	}
 	return repos, nil
+}
+
+func (w *fakeWorktrees) AddRepo(_ context.Context, id string, r track.Repo, branch string, progress func(string)) (track.Repo, error) {
+	if w.fail {
+		return track.Repo{}, errStep
+	}
+	progress("Fetching…")
+	r.Worktree, r.Branch = "/wt/"+id+"/"+r.Name, branch
+	return r, nil
 }
 
 func (w *fakeWorktrees) Remove(_ context.Context, t track.Track) error {
