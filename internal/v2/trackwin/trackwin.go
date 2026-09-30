@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
 )
 
@@ -113,8 +114,9 @@ func Open(t Tmux, session string, s Spec) (Window, error) {
 }
 
 // Respawn restarts window's agent pane on s's agent, in s.Dir, and
-// makes the window s's: its kind, repos and directory. Its other panes
-// stay as they are. It's how a track changes kind without a new window.
+// makes the window s's: its kind, repos and directory. The old agent's
+// exit code is cleared; the other panes stay as they are. It's how a
+// track restarts its agent, or changes kind, without a new window.
 func Respawn(t Tmux, window string, s Spec) (Window, error) {
 	panes, err := t.ListPanes(window)
 	if err != nil {
@@ -125,6 +127,9 @@ func Respawn(t Tmux, window string, s Spec) (Window, error) {
 		return Window{}, fmt.Errorf("window %s has no agent pane", window)
 	}
 	w := Window{ID: window, Agent: agent.ID}
+	if err := t.SetWindowOption(window, agents.ExitOption, ""); err != nil {
+		return w, err
+	}
 	if err := t.RespawnPane(agent.ID, s.Dir, s.Agent.Command); err != nil {
 		return w, err
 	}

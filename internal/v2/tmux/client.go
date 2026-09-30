@@ -75,28 +75,29 @@ type Window struct {
 	Index int
 	Name  string
 	// Track, Kind, Repo and Dir are the @tracks_id, @tracks_kind,
-	// @tracks_repo and @tracks_dir options of a track's window.
-	Track, Kind, Repo, Dir string
+	// @tracks_repo and @tracks_dir options of a track's window; Exit its
+	// @tracks_exit, the agent's exit code once it exited.
+	Track, Kind, Repo, Dir, Exit string
 }
 
 // ListWindows returns session's windows, in order.
 func (c *Client) ListWindows(session string) ([]Window, error) {
 	out, err := c.run("list-windows", "-t", "="+session, "-F",
-		"#{window_id}\t#{window_index}\t#{@tracks_id}\t#{@tracks_kind}\t#{@tracks_repo}\t#{@tracks_dir}\t#{window_name}")
+		"#{window_id}\t#{window_index}\t#{@tracks_id}\t#{@tracks_kind}\t#{@tracks_repo}\t#{@tracks_dir}\t#{@tracks_exit}\t#{window_name}")
 	if err != nil {
 		return nil, err
 	}
 	var windows []Window
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "\t", 7)
-		if len(f) != 7 {
+		f := strings.SplitN(line, "\t", 8)
+		if len(f) != 8 {
 			continue
 		}
 		index, err := strconv.Atoi(f[1])
 		if err != nil {
 			return nil, fmt.Errorf("window index %q: %w", f[1], err)
 		}
-		windows = append(windows, Window{ID: f[0], Index: index, Track: f[2], Kind: f[3], Repo: f[4], Dir: f[5], Name: f[6]})
+		windows = append(windows, Window{ID: f[0], Index: index, Track: f[2], Kind: f[3], Repo: f[4], Dir: f[5], Exit: f[6], Name: f[7]})
 	}
 	return windows, nil
 }
