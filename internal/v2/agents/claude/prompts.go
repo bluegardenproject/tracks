@@ -66,7 +66,6 @@ const taskSuffix = "" +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. " +
 	"If you open several, emit one such line per PR — the dashboard " +
 	"tracks each one and rolls them up into the track's status.\n\n" +
-	agents.DevServerContract + "\n\n" +
 	agents.TerminalContract + "\n\n" +
 	"**Jira sync** (only if your task prompt references a Jira-style " +
 	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +

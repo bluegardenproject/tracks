@@ -74,6 +74,7 @@ Not needed: v1's scripting commands (`ls`, `new`, `attach`, `done`, `kill`, `for
 
   v2 copies these texts unchanged, and a test compares v2's assembled prompts with v1's for the same track, so a drift fails CI; from v2.0.0, when v1 is deleted, golden files take over. Only names that must differ while v1 and v2 run side by side (such as the helpers' file names) may change, and each such change is listed here: the `tracks-reviewer` agent is `tracks-v2-reviewer` in v2, and `tracks-docs-reviewer` is `tracks-v2-docs-reviewer`. Improving a prompt is a decision of its own, discussed and agreed first, never a side effect of other work. Agreed improvements, which the test lists as v2's changes:
   - **Links you cannot read** (`agents.LinksContract`), after the task in every start prompt, both engines: an agent that can't open a linked Jira ticket, Confluence page or other link (MCP missing or not signed in) stops and asks whether to wait for the user to authenticate or to skip the link, instead of planning without it. Claude's Jira sync keeps "non-fatal" for assigning and moving the ticket only.
+  - **No dev-server text** (`agents.DevServerContract`) in the work and review prompts until the proxy redesign brings `tracks up` back: v2.0.0 has no dev servers, and the text would send agents to a command that fails.
 
   Letting users edit the prompts comes later, with v1's text as the default.
 - **Install with Homebrew:** `brew install` is offered next to `scripts/install.sh`, by v2.0.0 at the latest. Requirements:

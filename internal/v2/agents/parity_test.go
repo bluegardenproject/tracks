@@ -16,14 +16,33 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-// v2Names and v2JiraErrors are what v2 changes in v1's prompts;
-// withoutLinks takes out the one thing it adds.
+// v2Names and v2JiraErrors are what v2 changes in v1's prompts, and
+// withoutDevServers what it leaves out; withoutLinks takes out the one
+// thing it adds.
 var (
 	v2Names      = strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
 	v2JiraErrors = strings.NewReplacer("  4. Any Atlassian-tool error is non-fatal — note it in your reply and carry on with the actual work.",
 		"  4. An error while assigning or moving the ticket is non-fatal — note it in your reply and carry on with the actual work. "+
 			"A ticket you cannot read is not: follow **Links you cannot read**.")
 )
+
+// withoutDevServers takes the dev-server text out of v1's command for
+// a work or review track, quoted twice as the pane's command line and
+// its sh -c are.
+func (c spawnCase) withoutDevServers(t *testing.T, command string) string {
+	t.Helper()
+	if c.kind == track.Doc || c.kind.ReadOnly() {
+		return command
+	}
+	quoted := agents.DevServerContract + "\n\n"
+	for range 2 {
+		quoted = strings.ReplaceAll(quoted, "'", `'\''`)
+	}
+	if !strings.Contains(command, quoted) {
+		t.Errorf("v1's command lacks the dev-server text:\n%s", command)
+	}
+	return strings.Replace(command, quoted, "", 1)
+}
 
 func withoutLinks(t *testing.T, command string) string {
 	t.Helper()
@@ -131,7 +150,7 @@ func TestClaudeMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2JiraErrors.Replace(v2Names.Replace(opts.ShellCommand())); withoutLinks(t, got.Command) != want {
+			if want := v2JiraErrors.Replace(v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand()))); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
@@ -156,7 +175,7 @@ func TestCursorMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2Names.Replace(opts.ShellCommand()); withoutLinks(t, got.Command) != want {
+			if want := v2Names.Replace(c.withoutDevServers(t, opts.ShellCommand())); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {

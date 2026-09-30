@@ -57,7 +57,8 @@ const DocResponseStyle = "" +
 	"report itself."
 
 // DevServerContract tells the agent to start dev servers through
-// tracks rather than in its own pane.
+// tracks rather than in its own pane. v2 leaves it out of the prompts
+// until it has dev servers again, with the proxy redesign.
 //
 // Shared because the capability is tracks', not the assistant's: the
 // pane env reaches every provider identically, so an agent without
