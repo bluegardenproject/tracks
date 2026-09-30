@@ -39,7 +39,10 @@
   - Then it says "Creating tracks isn't built yet." The form stays open.
   - Cancel or Esc closes; with anything typed, it asks "Discard this track?" first.
 - **Keys:** Tab and Shift+Tab move between fields, Space toggles a checkbox, Enter in the prompt adds a line. The hint row lists the keys for the field with focus. Clicks focus fields, and controls highlight under the mouse. The form scrolls with the focus, or the wheel, when it's taller than the popup.
-- **No engine or model choice:** tracks will use the engines' defaults from the Engines tab.
+- **Runs on:** the last field, the agent and model side by side (`[ Claude Code ▾ ]  [ opus ▾ ]`). They start on the type's, from Settings → Tracks, and follow the type until the user picks others. Clicks, or Enter on the focused one, open a picker; ←/→ go between them, ↑/↓ leave the row.
+  - **The agent picker** lists the agents added on the Engines tab. Picking another starts it on **Default**; picking the type's agent again brings back the type's model.
+  - **The model picker** is Settings → Tracks's: **Default** ("Claude Code's default: opus"), then Claude Code's aliases and the models added on the Engines tab, or Cursor's `agent --list-models`. Cursor's list is asked for in the background when the form opens; until it arrives the picker says "Loading models…", and when it fails it says why and Enter asks again.
+  - A type set to an agent that isn't added shows it with "Cursor isn't added on the Engines tab. Add it there, or pick another agent." below the fields, and Create moves the focus there instead of creating. With no agent added, the field says **None added**.
 
 ## How the popups open
 
@@ -55,7 +58,7 @@ The type descriptions, the template prompts, the candor levels and labels, and t
 ## Later, not in this plan
 
 - Creating the track: worktrees, the agent and its prompt (chunk 5).
-- Choosing the engine and model per track, Resume, and starting from a Fast Track.
+- Resume, and starting from a Fast Track.
 - More Quick Access entries.
 
 ## Packages
