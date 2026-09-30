@@ -8,6 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/usage"
+	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/source"
@@ -105,8 +107,10 @@ const (
 )
 
 func cells(t source.Track) []string {
-	model, cost := "—", "—"
-	if t.Model != "" {
+	model, cost := "default", "—"
+	if t.Model != "" && t.Engine == agents.Claude.Name {
+		model = usage.ShortModel(t.Model)
+	} else if t.Model != "" {
 		model = t.Model
 	}
 	if t.Cost > 0 {
