@@ -1,5 +1,10 @@
 package claude
 
+import (
+	"regexp"
+	"strings"
+)
+
 // The reviewer subagents are v1's (internal/daemon/skill.go), word for
 // word but for their names; a test compares them.
 
@@ -474,3 +479,14 @@ counts exactly like one that came from a failed fact-check.
   written. Judge it against its goal (given or inferred) and audience.
 - **Be brief.** This is read in a terminal pane.
 `
+
+// frontmatter matches the YAML block the agent definitions open with.
+var frontmatter = regexp.MustCompile(`(?s)\A---\n.*?\n---\n`)
+
+// ReviewerInstructions is the reviewer subagent's prompt without its
+// frontmatter, for `tracks review`: Cursor tracks are reviewed to the
+// same standard as Claude tracks. It is the built-in text, never the
+// installed file, which the user may have replaced with their own.
+func ReviewerInstructions() string {
+	return strings.TrimSpace(frontmatter.ReplaceAllString(reviewerAgent, ""))
+}

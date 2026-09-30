@@ -40,6 +40,7 @@ func newRoot(version string) *cobra.Command {
 		newFooterCmd(),
 		newHookCmd(),
 		newTerminalCmd(),
+		newReviewCmd(),
 	)
 	return root
 }
