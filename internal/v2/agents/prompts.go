@@ -95,6 +95,27 @@ const TerminalContract = "" +
 	"in the track window's right-hand pane column and returns immediately. " +
 	"`$TRACKS_ID` is already set, so do not pass `--track`."
 
+// LinksContract is v2's own, not v1's: every start prompt carries it,
+// right after the task. It has no apostrophes, so quoting leaves it as
+// written and the v1 parity test can find it.
+//
+// It exists because an agent that can't read a linked ticket or page
+// tends to plan from the rest of the prompt instead, and the link is
+// often where the requirements are.
+const LinksContract = "" +
+	"**Links you cannot read.** If the task links to something you " +
+	"cannot open (a Jira ticket, a Confluence page, a Google Doc, a " +
+	"Figma file, a GitHub page) because an MCP server is missing or not " +
+	"authenticated, or the page needs a login, STOP before you plan, " +
+	"explore or change anything. Do not guess what it says and do not " +
+	"make a plan from the rest of the prompt: the link usually holds " +
+	"the requirements. Tell the user which link failed and why, then " +
+	"ask one question: should you wait while they authenticate or add " +
+	"the MCP server, or skip the link and go on without it? Wait for " +
+	"the answer. If they authenticated, read the link again before " +
+	"anything else. The same applies when a subagent reports that it " +
+	"could not read a link."
+
 // DraftPRSuffix builds the prompt fragment instructing the agent to
 // open PRs as drafts. When every repo on the track wants drafts (the
 // common single-repo case) it stays generic; otherwise it names the

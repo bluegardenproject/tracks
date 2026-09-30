@@ -31,7 +31,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 		dirs = append(dirs, docDir)
 	}
 
-	prompt := strings.TrimRight(t.Prompt, " \t\n\r")
+	prompt := strings.TrimRight(t.Prompt, " \t\n\r") + "\n\n" + agents.LinksContract
 	mode := "default"
 	if s.Auto {
 		mode = "auto"

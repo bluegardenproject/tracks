@@ -81,8 +81,10 @@ const taskSuffix = "" +
 	"match for \"In Review\" (or \"Code Review\" / \"Awaiting Review\"). " +
 	"Do NOT add a comment with the PR URL — the PR is already linked " +
 	"automatically and a comment would be duplicate noise.\n" +
-	"  4. Any Atlassian-tool error is non-fatal — note it in your " +
-	"reply and carry on with the actual work.\n\n" +
+	"  4. An error while assigning or moving the ticket is " +
+	"non-fatal — note it in your reply and carry on with the actual " +
+	"work. A ticket you cannot read is not: follow **Links you cannot " +
+	"read**.\n\n" +
 	"**Response style.** These sessions are read in a dashboard, not " +
 	"a chat window — keep answers short.\n" +
 	"  - Lead with the result or conclusion; drop preamble (\"I'll " +
