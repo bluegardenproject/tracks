@@ -25,6 +25,11 @@ type Request struct {
 	Opinion    bool   `json:"opinion,omitempty"`
 	ClaimCheck bool   `json:"claim_check,omitempty"`
 	Terminal   bool   `json:"terminal,omitempty"`
+	// Engine is the engine picked for this track, "" for the type's.
+	// Model goes with it: "" is the engine's default from the Engines
+	// tab.
+	Engine string `json:"engine,omitempty"`
+	Model  string `json:"model,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:
