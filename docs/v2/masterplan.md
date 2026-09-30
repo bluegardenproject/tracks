@@ -20,10 +20,35 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 4 | Storage: SQLite, list queries, auto-archive, change stream | repos in [03-repositories.md](plans/03-repositories.md); the storage draft and plans 11 to 13 (archive, auto-archive and filters; change stream and Derail; Archive replacing Clean) are in git history | done |
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md), Clean since replaced by Archive; default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: form layout; creating, ending, resuming and archiving tracks; defaults per track type |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md); the hooks for status in [10-track-status.md](plans/10-track-status.md) | started: track and PR status from hooks |
-| 7 | Tracks window content: tabs (Station, Repositories, Proxy, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
+| 7 | Tracks window content: tabs (Station, Repositories, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
 | 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
+
+## v2.0.0 scope
+
+What v1 does that v2 still lacks, and whether v2.0.0 needs it. Compared with v1's commands, daemon, config and dashboard.
+
+Needed before v2.0.0:
+
+- **Model in the New Track form:** pick the model per track, next to the engine; the type's default preselected.
+- **The `tracks` commands the prompts promise:** in a track pane `tracks` runs v2, which has none of them yet, so the prompts point at commands that fail.
+  - `tracks review`: Cursor's pre-push review. Without it the agent reviews its own diff.
+  - `tracks promote <id>`: an Ask or Plan track gets its own worktree.
+  - `tracks terminal`: a terminal pane in the track's window.
+  - `tracks add-repo <repo>`: a repo joins a running track, for the Claude skill below.
+- **The global helpers v1 installs:** the Cursor rule (`~/.cursor/rules/tracks.mdc`) and the `tracks-add-repo` Claude skill. v2 installs only the reviewer agents; the others work today only where v1 installed them.
+- **Supervision** (chunk 5): an agent that exits or crashes, leaving its pane at the shell, puts its track in an **error** status in Station, from the [status model](#track-status).
+- **Desktop notifications:** macOS notifications and the terminal bell, per event, as v1 has them.
+- **Failed creations kept as drafts:** a creation that fails keeps what was typed, to start it again from Station.
+- **The findings from testing:** the folder trust prompt, Cursor's `create-chat` under a custom `XDG_CONFIG_HOME`, Cursor's plan-approval dialog, the overlay colours.
+
+After v2.0.0:
+
+- **Proxy and dev servers, one topic of their own:** the Proxy tab, `tracks up`/`down`/`services`/`url` and the repos' `services` config. v1's proxy UI and UX didn't work, so this is redesigned rather than ported.
+- **Worktree setup:** v1's dependency install, copying ignored files (`.env`) into new worktrees, and submodules.
+
+Not needed: v1's scripting commands (`ls`, `new`, `attach`, `done`, `kill`, `forget`, `gc`), which the Tracks window, Archive, Derail and auto-archive replace, and the branch types, which v1 never used. `tracks update` and Homebrew are chunk 8's.
 
 ## Decisions
 
@@ -162,7 +187,7 @@ Designed in [10-track-status.md](plans/10-track-status.md): a track status (acti
 ## Open questions
 
 - **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). This goes into a glossary here once agreed.
-- **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Proxy, Engines, Settings.
+- **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Engines, Settings; Proxy comes back with the proxy redesign after v2.0.0.
 - **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by using it.
 - **v1 data:** fresh start, or a read-only import into History at release.
 - **Homebrew:** our own tap (`bluegardenproject/tap`) or homebrew-core, which needs a build from source and wider use first. And whether v1 gets the formula before v2.0.0, since the release workflow is shared.
@@ -183,6 +208,7 @@ Designed in [10-track-status.md](plans/10-track-status.md): a track status (acti
 Known gaps left on purpose, each with when it has to be done. Remove an entry in the PR that fixes it.
 
 - **Renaming a repo that tracks use:** tracks now link their repos by ID, but a repo's name and path still can't change while running tracks use it, since their windows and worktrees were made from them. Allow it once repos are written through the daemon.
+- **The model a track runs:** Station shows the model picked at creation, "default" for none. A Claude track's transcripts name the model each turn used, so the cost pass can record it and show it instead, including a switch with `/model`. Cursor's default is "auto", which picks per request: show "auto" rather than "default".
 - **Case-insensitive repo names fold only A–Z:** SQLite's `NOCASE` treats `Über` and `über` as different names. Add a normalized name column if that ever matters.
 
 ## Future features
