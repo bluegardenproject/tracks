@@ -41,8 +41,10 @@ func (s *Store) SetFilter(ctx context.Context, f track.Filter) error {
 // statusSQL is the condition for each track status, as State.Status
 // derives it.
 var statusSQL = map[string]string{
-	track.Active.ID:         "(closed_at IS NULL AND waiting = 0)",
-	track.ActionRequired.ID: "(closed_at IS NULL AND waiting != 0)",
+	track.Error.ID:          "(closed_at IS NULL AND agent_exit = 'failed')",
+	track.ActionRequired.ID: "(closed_at IS NULL AND agent_exit = '' AND waiting != 0)",
+	track.Exited.ID:         "(closed_at IS NULL AND agent_exit = 'exited')",
+	track.Active.ID:         "(closed_at IS NULL AND agent_exit = '' AND waiting = 0)",
 	track.Done.ID:           "(closed_at IS NOT NULL AND archived_at IS NULL)",
 	track.Closed.ID:         "archived_at IS NOT NULL",
 }

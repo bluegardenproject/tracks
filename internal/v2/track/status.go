@@ -4,7 +4,7 @@ import "time"
 
 // Status is one value of a track's status. ID is how it's stored and
 // sent, Label how it's shown, Badge the theme state its badge is drawn
-// in: BadgeInfo or BadgeWarning. A lower Priority is shown first where
+// in: BadgeInfo, BadgeWarning or BadgeDanger. A lower Priority is shown first where
 // only one fits; Attention says the track needs the user.
 type Status struct {
 	ID        string
@@ -19,19 +19,28 @@ type Status struct {
 const (
 	BadgeInfo    = "info"
 	BadgeWarning = "warning"
+	BadgeDanger  = "danger"
 )
 
 // The track statuses. Adding one is an entry here and in Statuses, the
 // event that sets it in Apply, and their tests.
 var (
-	Active         = Status{ID: "active", Label: "active", Badge: BadgeInfo, Priority: 1}
+	Error          = Status{ID: "error", Label: "error", Badge: BadgeDanger, Priority: -1, Attention: true}
 	ActionRequired = Status{ID: "action_required", Label: "action required", Badge: BadgeWarning, Attention: true}
-	Done           = Status{ID: "done", Label: "done", Badge: BadgeInfo, Priority: 2}
-	Closed         = Status{ID: "closed", Label: "closed", Badge: BadgeInfo, Priority: 3}
+	Exited         = Status{ID: "exited", Label: "agent exited", Badge: BadgeWarning, Priority: 1}
+	Active         = Status{ID: "active", Label: "active", Badge: BadgeInfo, Priority: 2}
+	Done           = Status{ID: "done", Label: "done", Badge: BadgeInfo, Priority: 3}
+	Closed         = Status{ID: "closed", Label: "closed", Badge: BadgeInfo, Priority: 4}
 )
 
 // Statuses are every track status, by priority.
-var Statuses = []Status{ActionRequired, Active, Done, Closed}
+var Statuses = []Status{Error, ActionRequired, Exited, Active, Done, Closed}
+
+// How the agent exited, in State.Exit: with code 0, or any other.
+const (
+	ExitOK     = "exited"
+	ExitFailed = "failed"
+)
 
 // State is what a track's status is derived from. Only Apply changes
 // it.
@@ -40,6 +49,7 @@ type State struct {
 	CleanedAt  time.Time // set when Archive removed its worktrees
 	ArchivedAt time.Time // zero while it's listed in Station
 	Waiting    bool      // its agent waits on a dialog in its window
+	Exit       string    // how its agent exited: "" while it runs, ExitOK or ExitFailed
 }
 
 // Open reports whether the track's window is still open.
@@ -59,6 +69,10 @@ func (s State) Status() Status {
 		return Closed
 	case !s.Open():
 		return Done
+	case s.Exit == ExitFailed:
+		return Error
+	case s.Exit == ExitOK:
+		return Exited
 	case s.Waiting:
 		return ActionRequired
 	}
@@ -83,19 +97,24 @@ const (
 	// track's window, and that it's gone.
 	AgentWaiting Event = "agent.waiting"
 	AgentWorking Event = "agent.working"
+	// AgentExited and AgentFailed say the agent exited, with code 0 or
+	// with another, leaving a shell in its pane.
+	AgentExited Event = "agent.exited"
+	AgentFailed Event = "agent.failed"
 )
 
 // Valid reports whether e is an event Apply knows.
 func (e Event) Valid() bool {
 	switch e {
-	case Created, Resumed, Ended, Cleaned, Archived, Unarchived, AgentWaiting, AgentWorking:
+	case Created, Resumed, Ended, Cleaned, Archived, Unarchived, AgentWaiting, AgentWorking, AgentExited, AgentFailed:
 		return true
 	}
 	return false
 }
 
 // Apply is s after e, which happened at at. An event that doesn't fit
-// the state, such as the agent's on an ended track, changes nothing.
+// the state, such as the agent's on an ended track or on one whose
+// agent exited, changes nothing.
 func (s State) Apply(e Event, at time.Time) State {
 	switch e {
 	case Created, Resumed:
@@ -115,8 +134,15 @@ func (s State) Apply(e Event, at time.Time) State {
 	case Unarchived:
 		s.ArchivedAt = time.Time{}
 	case AgentWaiting, AgentWorking:
-		if s.Open() {
+		if s.Open() && s.Exit == "" {
 			s.Waiting = e == AgentWaiting
+		}
+	case AgentExited, AgentFailed:
+		if s.Open() {
+			s.Waiting, s.Exit = false, ExitOK
+			if e == AgentFailed {
+				s.Exit = ExitFailed
+			}
 		}
 	}
 	return s

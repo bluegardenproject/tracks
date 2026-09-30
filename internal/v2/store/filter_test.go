@@ -64,6 +64,8 @@ func TestFilteredTracks(t *testing.T) {
 	add("done", now.AddDate(0, 0, -3), track.State{ClosedAt: ended}, track.PRMerged)
 	add("cleaned", now.AddDate(0, 0, -10), track.State{ClosedAt: ended, CleanedAt: ended})
 	add("archived", now.AddDate(0, 0, -40), track.State{ClosedAt: ended, CleanedAt: ended, ArchivedAt: ended}, track.PRClosed)
+	add("failed", now.AddDate(0, -2, 0), track.State{Exit: track.ExitFailed, Waiting: true})
+	add("exited", now.AddDate(0, -3, 0), track.State{Exit: track.ExitOK})
 
 	ids := func(f track.Filter, limit int) []string {
 		t.Helper()
@@ -88,6 +90,8 @@ func TestFilteredTracks(t *testing.T) {
 		{track.Filter{Statuses: []string{"done"}}, 500, []string{"done", "cleaned"}},
 		{track.Filter{Archived: true, Statuses: []string{"closed"}}, 500, []string{"archived"}},
 		{track.Filter{Statuses: []string{"active"}}, 500, []string{"active"}},
+		{track.Filter{Statuses: []string{"error"}}, 500, []string{"failed"}},
+		{track.Filter{Statuses: []string{"exited", "action_required"}}, 500, []string{"waiting", "exited"}},
 		{track.Filter{PRStatuses: []string{"none"}}, 1, []string{"active"}},
 		{track.Filter{PRStatuses: []string{"open", "merged"}}, 500, []string{"waiting", "done"}},
 		{track.Filter{Archived: true}, 500, []string{"archived"}},

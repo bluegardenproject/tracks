@@ -12,6 +12,8 @@ func TestApply(t *testing.T) {
 		waiting = State{Waiting: true}
 		done    = State{ClosedAt: then}
 		cleaned = State{ClosedAt: then, CleanedAt: then}
+		exited  = State{Exit: ExitOK}
+		failed  = State{Exit: ExitFailed}
 	)
 	tests := []struct {
 		from State
@@ -44,6 +46,17 @@ func TestApply(t *testing.T) {
 		{State{ClosedAt: then, ArchivedAt: then}, Cleaned, State{ClosedAt: then, CleanedAt: now, ArchivedAt: then}},
 		{State{ClosedAt: then, ArchivedAt: then}, Resumed, active},
 		{done, Unarchived, done},
+		{active, AgentExited, exited},
+		{waiting, AgentFailed, failed},
+		{exited, AgentFailed, failed},
+		{failed, AgentExited, exited},
+		{exited, AgentWaiting, exited},
+		{failed, AgentWorking, failed},
+		{failed, Resumed, active},
+		{exited, Created, active},
+		{failed, Ended, State{ClosedAt: now}},
+		{done, AgentFailed, done},
+		{cleaned, AgentExited, cleaned},
 	}
 	for _, tt := range tests {
 		if got := tt.from.Apply(tt.e, now); got != tt.want {
@@ -57,6 +70,9 @@ func TestStatusOf(t *testing.T) {
 	for s, want := range map[State]Status{
 		{}:                                 Active,
 		{Waiting: true}:                    ActionRequired,
+		{Exit: ExitOK}:                     Exited,
+		{Exit: ExitFailed}:                 Error,
+		{ClosedAt: then, Exit: ExitFailed}: Done,
 		{ClosedAt: then}:                   Done,
 		{ClosedAt: then, Waiting: true}:    Done,
 		{ClosedAt: then, CleanedAt: then}:  Done,
@@ -80,7 +96,7 @@ func TestStatuses(t *testing.T) {
 			t.Errorf("Statuses should be in priority order: %s after %s", s.ID, Statuses[i-1].ID)
 		}
 	}
-	if !ActionRequired.Attention || Active.Attention || Done.Attention || Closed.Attention {
-		t.Error("only action required needs attention")
+	if !ActionRequired.Attention || !Error.Attention || Exited.Attention || Active.Attention || Done.Attention || Closed.Attention {
+		t.Error("only action required and error need attention")
 	}
 }

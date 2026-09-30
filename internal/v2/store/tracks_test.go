@@ -117,6 +117,15 @@ func TestStateAndName(t *testing.T) {
 	if d, _ := s.Track(ctx, "d"); !d.Waiting || d.Status() != track.ActionRequired {
 		t.Errorf("d = %+v, want waiting", d.State)
 	}
+	if err := s.SetState(ctx, "d", track.State{Exit: track.ExitFailed}); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.Track(ctx, "d"); d.Exit != track.ExitFailed || d.Status() != track.Error {
+		t.Errorf("d = %+v, want its agent failed", d.State)
+	}
+	if err := s.SetState(ctx, "d", track.State{Waiting: true}); err != nil {
+		t.Fatal(err)
+	}
 	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2"), s.SetCost(ctx, "b", 3.45)); err != nil {
 		t.Fatal(err)
 	}
