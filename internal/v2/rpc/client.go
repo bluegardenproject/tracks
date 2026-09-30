@@ -140,6 +140,12 @@ func (c Client) Promote(ctx context.Context, p PromoteParams, progress func(stri
 	return r, c.Call(ctx, Promote, p, &r, progress)
 }
 
+// Restart starts an open track's agent again, once it exited.
+func (c Client) Restart(ctx context.Context, p RestartParams, progress func(string)) (CreateResult, error) {
+	var r CreateResult
+	return r, c.Call(ctx, Restart, p, &r, progress)
+}
+
 // AddRepo gives a work track a worktree of another repo.
 func (c Client) AddRepo(ctx context.Context, p AddRepoParams, progress func(string)) (AddRepoResult, error) {
 	var r AddRepoResult

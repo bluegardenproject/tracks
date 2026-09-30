@@ -25,6 +25,7 @@ const (
 	Derail    = "derail"
 	AddRepo   = "add-repo"
 	Promote   = "promote"
+	Restart   = "restart"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
@@ -125,6 +126,11 @@ type ResumeParams struct {
 
 // PromoteParams names the Ask or Plan track to promote.
 type PromoteParams struct {
+	ID string `json:"id"`
+}
+
+// RestartParams names the open track whose agent exited.
+type RestartParams struct {
 	ID string `json:"id"`
 }
 

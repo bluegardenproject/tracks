@@ -96,6 +96,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Derail:  c.derail,
 		rpc.AddRepo: c.addRepo,
 		rpc.Promote: c.promote,
+		rpc.Restart: c.restart,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -146,6 +147,20 @@ func (c Config) promote(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	c.Log.Printf("promoted %s, %s, to a Work track", p.ID, promoted.Track.Name)
 	return rpc.CreateResult{ID: p.ID, Name: promoted.Track.Name, Window: promoted.Window.ID}, nil
+}
+
+func (c Config) restart(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.RestartParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	restarted, err := c.Tracks.Restart(ctx, p.ID, call.Progress)
+	if err != nil {
+		c.Log.Printf("restarting %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	c.Log.Printf("restarted %s's agent", restarted.Track.Name)
+	return rpc.CreateResult{ID: p.ID, Name: restarted.Track.Name, Window: restarted.Window.ID}, nil
 }
 
 func (c Config) addRepo(ctx context.Context, call *rpc.Call) (any, error) {
