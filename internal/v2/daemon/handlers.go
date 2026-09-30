@@ -10,7 +10,9 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/v2/agents/claude"
+	"github.com/bluegardenproject/tracks/internal/v2/agents/cursor"
 	"github.com/bluegardenproject/tracks/internal/v2/rpc"
+	"github.com/bluegardenproject/tracks/internal/v2/settings"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
@@ -257,12 +259,22 @@ func (c Config) outcome(created tracks.Created, err error) string {
 }
 
 // helpers installs what the prompts rely on: the reviewer subagents,
-// the add-repo skill, and a `tracks` on the tracks' PATH that runs this
-// build's v2 app.
+// the add-repo skill, the Cursor rule once Cursor is added, and a
+// `tracks` on the tracks' PATH that runs this build's v2 app.
 func (c Config) helpers() {
 	skipped, err := claude.InstallHelpers(c.Home)
 	if err != nil {
 		c.Log.Printf("installing the Claude helpers: %v", err)
+	}
+	if s, err := settings.Load(c.Paths.Settings); err != nil {
+		c.Log.Printf("reading the settings for the Cursor rule: %v", err)
+	} else if s.Engines.Cursor != nil {
+		path, ok, err := cursor.InstallRule(c.Home)
+		if err != nil {
+			c.Log.Printf("installing the Cursor rule: %v", err)
+		} else if !ok {
+			skipped = append(skipped, path)
+		}
 	}
 	for _, path := range skipped {
 		c.Log.Printf("not overwriting %s: it lacks the x-tracks-managed marker, so it isn't Tracks'", path)
