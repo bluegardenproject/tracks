@@ -22,7 +22,7 @@ func withEnded(c Config) Model {
 	tracks := []source.Track{
 		{ID: "a", Number: 1, Name: "open-one", Kind: "work", Status: track.Active,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/aaa111", Path: "/tmp/wt/a/web"}}},
-		{ID: "b", Name: "rate-bug", Kind: "work", Status: track.Done, Removable: true,
+		{ID: "b", Name: "rate-bug", Title: "Rate bug on checkout", Kind: "work", Status: track.Done, Removable: true,
 			Repos: []source.Repo{{Name: "web", Branch: "tracks/abc123", Path: "/tmp/wt/b/web"}}, Session: "s-2",
 			Created: time.Date(2026, 9, 28, 10, 15, 0, 0, time.Local)},
 		{ID: "c", Name: "old-fix", Kind: "work", Status: track.Done,

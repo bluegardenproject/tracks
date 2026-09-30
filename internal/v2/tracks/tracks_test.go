@@ -264,6 +264,23 @@ func TestCreateWork(t *testing.T) {
 	if saved := f.saved(t); len(saved) != 1 || saved[0].ID != tr.ID || saved[0].Repos[0].Worktree != tr.Repos[0].Worktree {
 		t.Errorf("saved = %+v", saved)
 	}
+	if tr.Title != "" {
+		t.Errorf("a track without a name has the title %q", tr.Title)
+	}
+}
+
+func TestCreateKeepsTheName(t *testing.T) {
+	f := newFixture(t)
+	got, err := f.svc.Create(context.Background(), Request{Kind: track.Ask, Name: "  Why is login slow? ", Prompt: "Why"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Track.Title != "Why is login slow?" || got.Track.Name != "why-is-login-slow" {
+		t.Errorf("title %q, slug %q", got.Track.Title, got.Track.Name)
+	}
+	if saved := f.saved(t); saved[0].Title != "Why is login slow?" {
+		t.Errorf("saved title %q", saved[0].Title)
+	}
 }
 
 func TestCreateRollsBack(t *testing.T) {

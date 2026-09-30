@@ -38,7 +38,10 @@ func (k Kind) ReadOnly() bool { return k == Ask || k == Plan }
 type Track struct {
 	ID   string
 	Kind Kind
-	Name string // its window's name
+	Name string // its window's name, the slug
+	// Title is the name the user typed, as typed; "" when they left it
+	// empty and the slug came from the prompt or the document.
+	Title string
 	// Engine is the agent CLI's id, Model what it was started with ("" is
 	// the engine's own default), Session the ID that resumes it.
 	Engine, Model, Session string

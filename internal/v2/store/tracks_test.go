@@ -25,7 +25,7 @@ func TestTracksRoundTrip(t *testing.T) {
 	}
 	created := time.UnixMilli(time.Now().UnixMilli())
 	work := track.Track{
-		ID: "20260928-151500-a1b2c3", Kind: track.Work, Name: "rate-bug", Engine: "claude", Model: "opus",
+		ID: "20260928-151500-a1b2c3", Kind: track.Work, Name: "rate-bug", Title: "Rate bug", Engine: "claude", Model: "opus",
 		Session: "0b6f…", Prompt: "Fix the rate bug", Terminal: true, Opinion: true, ClaimCheck: true, CreatedAt: created,
 		Repos: []track.Repo{
 			{RepoID: web.ID, Name: "web", Path: "/src/web", Worktree: "/wt/web", Branch: "tracks/a1b2c3", Base: "main"},

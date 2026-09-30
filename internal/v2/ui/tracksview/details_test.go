@@ -81,6 +81,16 @@ func TestFastTrackGivesWayToDetails(t *testing.T) {
 	}
 }
 
+func TestNameAndSlug(t *testing.T) {
+	m := withEnded(Config{})
+	if view := plainView(m); strings.Count(view, "│ Rate bug on checkout ") != 2 || !strings.Contains(view, "Slug      rate-bug") {
+		t.Errorf("the list row and the details should show the name, the details the slug too:\n%s", view)
+	}
+	if view := plainView(settle(m, tea.KeyPressMsg{Code: tea.KeyDown})); !strings.Contains(view, "│ old-fix ") || !strings.Contains(view, "Slug      old-fix") {
+		t.Errorf("a track without a name shows its slug:\n%s", view)
+	}
+}
+
 func TestDetailsShowWhenCreated(t *testing.T) {
 	m := withEnded(Config{})
 	if view := plainView(m); !strings.Contains(view, "Created   2026-09-28 10:15") {

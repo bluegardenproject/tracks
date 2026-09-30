@@ -3,6 +3,7 @@
 package source
 
 import (
+	"cmp"
 	"context"
 	"time"
 
@@ -17,9 +18,11 @@ type Track struct {
 	// Number is the track's window index, as the footer and keys use
 	// it; 0 for an ended track, which has no window.
 	Number int
-	Name   string
-	Kind   string
-	Status track.Status
+	// Name is the window's name, the slug; Title the name the user
+	// typed, "" for none.
+	Name, Title string
+	Kind        string
+	Status      track.Status
 	// Removable says Archive would remove worktrees and branches: the
 	// track ended, has worktrees, and Archive hasn't removed them yet.
 	Removable bool
@@ -82,6 +85,10 @@ func (t Track) Removed() bool {
 	return false
 }
 
+// Shown is what t is called in Station: the name the user typed, or
+// the slug.
+func (t Track) Shown() string { return cmp.Or(t.Title, t.Name) }
+
 // Open reports whether t has a window.
 func (t Track) Open() bool { return t.Status != track.Done && t.Status != track.Closed }
 
@@ -114,7 +121,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		if e, ok := agents.ByID(l.Engine); ok {
 			engine = e.Name
 		}
-		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Kind: string(l.Kind), Status: l.Status(),
+		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}

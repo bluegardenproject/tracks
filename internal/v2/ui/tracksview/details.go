@@ -121,7 +121,7 @@ func (m Model) details(width int) ([]string, []hit) {
 	muted := func(s string) string { return m.fg(theme.TextMuted).Render(s) }
 
 	about := muted(t.Kind+"  ") + m.statusBadges(t, lipgloss.NewStyle())
-	name := m.fg(theme.TextDefault).Bold(true).Render(t.Name)
+	name := m.fg(theme.TextDefault).Bold(true).Render(t.Shown())
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	number := muted("none")
 	if t.Number > 0 {
@@ -131,7 +131,7 @@ func (m Model) details(width int) ([]string, []hit) {
 	if !t.Created.IsZero() {
 		created = value(t.Created.Local().Format(createdLayout))
 	}
-	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("ID") + number, label("Created") + created}
+	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("Slug") + value(t.Name), label("ID") + number, label("Created") + created}
 
 	for i, r := range t.Repos {
 		l := label("")
