@@ -8,7 +8,7 @@
 
 - Run in a track's pane, it opens a shell in the track window's right column, in the track's directory, and focuses it: "Opened a terminal in rate-bug." It's the same pane the form's Terminal checkbox opens, so several stack like the ones the Tracks window opens.
 - `--track <id>` picks another track; the prompts tell agents they never need it.
-- Outside a track, without `--track`: "tracks terminal works inside a track: $TRACKS_ID isn't set." A track whose window is closed: "rate-bug's window isn't open."
+- Outside a track, without `--track`: "tracks terminal works inside a track: $TRACKS_ID isn't set." A track whose window is closed: "track <id> has no open window."
 
 ### `tracks review`
 
@@ -48,8 +48,8 @@ Installed when the daemon starts, next to the reviewer subagents, with the same 
 
 ## How it works
 
-- **The commands run in the pane,** where `TRACKS_ID` and `TRACKS_SOCKET_DIR` are set, and ask the daemon, as the popups do. `review` is the exception: it runs git and the reviewer itself and only asks the daemon for the track's repos and candor.
-- **New daemon methods:** `terminal`, `promote` (with progress) and `add-repo` (with progress), and `track` for one track's record.
+- **The commands run in the pane,** where `TRACKS_ID` and `TRACKS_SOCKET_DIR` are set. `terminal` finds the track's window in tmux and adds the pane itself, as the Tracks window's key does. `review` runs git and the reviewer itself and only asks the daemon for the track's repos and candor. `promote` and `add-repo` ask the daemon, as the popups do.
+- **New daemon methods:** `promote` and `add-repo`, both with progress, and `track` for one track's record.
 - **Promote** reuses Create's steps: worktrees, a new session, hooks, the agent's command, the window. It saves the track's new type, repos, session and prompt in one store write, then closes the old window.
 - **The last reply** comes from the session's Claude transcript, which the cost already reads.
 
