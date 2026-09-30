@@ -191,7 +191,7 @@ func TestUnsavedChangesAsk(t *testing.T) {
 		t.Fatalf("Discard: tab %d, stored %q; want Settings and api unchanged", m.tab, f.entries[0].Name)
 	}
 
-	m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = typeText(m, "-2")
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEscape}, tea.KeyPressMsg{Code: 's', Text: "s"})

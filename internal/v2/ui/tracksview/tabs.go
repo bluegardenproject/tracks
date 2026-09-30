@@ -7,8 +7,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 )
 
-// tab is one tab of the Tracks window. Its content is a placeholder
-// until chunk 7.
+// tab is one tab of the Tracks window.
 type tab struct {
 	title string
 	about string
@@ -18,7 +17,6 @@ type tab struct {
 const (
 	tabStation = iota
 	tabRepositories
-	tabProxy
 	tabEngines
 	tabSettings
 )
@@ -26,7 +24,6 @@ const (
 var tabs = []tab{
 	tabStation:      {"Station", "Your tracks, with their status and actions."},
 	tabRepositories: {"Repositories", "The repositories tracks are created from."},
-	tabProxy:        {"Proxy", "Dev servers and the local proxy."},
 	tabEngines:      {"Engines", "The agent CLIs that tracks run."},
 	tabSettings:     {"Settings", "The theme, keys and where Tracks keeps its files."},
 }

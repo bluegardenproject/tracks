@@ -1,9 +1,8 @@
 // Package tracksview is the Tracks window, window 0 of every Tracks
-// session: the banner, and the tabs Station, Repositories, Proxy,
-// Engines and Settings, switched with Tab, Shift+Tab or a click.
-// Station lists the tracks, Repositories manages the repos, Engines sets
-// up the agent CLIs, Settings holds the preferences and the theme
-// creator; Proxy is a placeholder until chunk 7.
+// session: the banner, and the tabs Station, Repositories, Engines and
+// Settings, switched with Tab, Shift+Tab or a click. Station lists the
+// tracks, Repositories manages the repos, Engines sets up the agent
+// CLIs, Settings holds the preferences and the theme creator.
 package tracksview
 
 import (
