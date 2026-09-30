@@ -27,7 +27,7 @@ var (
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	repoFormKeys     = []keyHelp{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back to the list"}}
 	settingsListKeys = []keyHelp{{"↑/↓", "section"}, {"Enter", "open"}}
-	themeFieldKeys   = []keyHelp{{"Enter", "pick a theme"}, {"Esc", "back"}}
+	generalKeys      = []keyHelp{{"↑/↓", "field"}, {"Enter", "pick a theme or toggle"}, {"Esc", "back"}}
 	pickerKeys       = []keyHelp{{"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 	creatorKeys      = []keyHelp{{"Tab", "next"}, {"↑/↓", "token"}, {"Enter", "next or press"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back"}}
 	scrollKeys       = []keyHelp{{"↑/↓", "scroll"}, {"Esc", "back"}}
@@ -83,7 +83,7 @@ func keyGroups() []keyGroup {
 		{"Repositories", append(append([]keyHelp{}, repoListKeys...), repoFormKeys...)},
 		{"Engines", append(append([]keyHelp{}, engineListKeys...), engineKeys...)},
 		{"Model picker", modelPickerKeys},
-		{"Settings", append(append([]keyHelp{}, settingsListKeys...), themeFieldKeys...)},
+		{"Settings", append(append([]keyHelp{}, settingsListKeys...), generalKeys...)},
 		{"Theme picker", pickerKeys},
 		{"Theme Creator", creatorKeys},
 		{"Every window", append(prefixKeys(), keyHelp{"Click", "a track in the footer to switch to it"})},

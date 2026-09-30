@@ -160,7 +160,7 @@ func (m Model) hints() string {
 	case m.tab == tabSettings && s.editing:
 		switch s.section {
 		case sectionGeneral:
-			return "  " + joinKeys(key, text, themeFieldKeys)
+			return "  " + joinKeys(key, text, generalKeys)
 		case sectionCreator:
 			return "  " + joinKeys(key, text, creatorKeys)
 		case sectionTracks:

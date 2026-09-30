@@ -67,6 +67,8 @@ type Config struct {
 	TrackTypes source.TrackTypes
 	// History keeps Tracks History, the auto-archive settings.
 	History source.History
+	// Notifications keeps Settings → General → Notifications.
+	Notifications source.Notifications
 	// About is what the Settings tab's About section lists, label and
 	// value.
 	About [][2]string
@@ -97,6 +99,7 @@ type Model struct {
 	engineSource  source.Engines
 	typeSource    source.TrackTypes
 	historySource source.History
+	notifySource  source.Notifications
 	aboutFacts    [][2]string
 	width, height int
 	tab           int
@@ -122,7 +125,7 @@ func New(c Config) Model {
 		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
-		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, engines: newEnginesTab()}
+		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
 	if c.Watch != nil {
 		m.watchFn, m.changes = c.Watch, make(chan watchMsg, 1)
 	}
@@ -132,7 +135,7 @@ func New(c Config) Model {
 // Init reads the tracks, repos and themes, and follows the tracks'
 // changes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory())
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify())
 }
 
 // Update handles resizes, data and input. The Tracks window never quits
@@ -198,6 +201,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.setHistory(msg), nil
 	case historySavedMsg:
 		return m.historySaved(msg)
+	case notifyMsg:
+		return m.setNotify(msg), nil
+	case notifySavedMsg:
+		return m.notifySaved(msg)
 	case typesSavedMsg:
 		return m.typesSaved(msg)
 	case themecreator.SaveMsg, themecreator.CreateMsg, themecreator.SavedMsg, themecreator.DoneMsg, themecreator.StayMsg, themecreator.LoadMsg:
@@ -387,7 +394,7 @@ func (m Model) switchTab(i int) (Model, tea.Cmd) {
 		m.engines.input.Blur()
 		return m.loadEngines()
 	case tabSettings:
-		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadHistory())
+		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify())
 	}
 	return m, nil
 }
