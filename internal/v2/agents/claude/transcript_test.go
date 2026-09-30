@@ -80,3 +80,18 @@ func TestCarriedIsCut(t *testing.T) {
 		t.Error("a short reply was changed")
 	}
 }
+
+func TestStarted(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	project := filepath.Join(dir, "projects", "-src-api")
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "s1.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !Started("s1") || Started("s2") {
+		t.Errorf("Started(s1) = %v, Started(s2) = %v; want only the session with a transcript", Started("s1"), Started("s2"))
+	}
+}

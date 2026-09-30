@@ -16,6 +16,9 @@ type Engine interface {
 	// LastReply is what session's last turn ended with, "" when the
 	// engine can't say.
 	LastReply(session string) string
+	// Started reports whether session can be resumed: an agent that
+	// never ran may not have made it.
+	Started(session string) bool
 }
 
 var engines = map[string]Engine{
@@ -28,6 +31,7 @@ type claudeEngine struct{}
 func (claudeEngine) Session(context.Context, string) (string, error) { return claude.NewSession(), nil }
 func (claudeEngine) Command(s agents.Spec) (agents.Start, error)     { return claude.Command(s) }
 func (claudeEngine) LastReply(session string) string                 { return claude.LastReply(session) }
+func (claudeEngine) Started(session string) bool                     { return claude.Started(session) }
 
 type cursorEngine struct{}
 
@@ -38,6 +42,9 @@ func (cursorEngine) Command(s agents.Spec) (agents.Start, error) { return cursor
 
 // LastReply is "": Tracks can't read Cursor's chats.
 func (cursorEngine) LastReply(string) string { return "" }
+
+// Started is true: Session makes the chat before the agent runs.
+func (cursorEngine) Started(string) bool { return true }
 
 func (s *Service) engine(id string) (Engine, bool) {
 	all := s.Engines
