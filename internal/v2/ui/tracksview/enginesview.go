@@ -53,12 +53,8 @@ func (m Model) enginesContent() ([]string, []engineHit) {
 		}
 		b := engineBody{m: m, id: en.ID}
 		b.draw(en, max(0, w-4))
-		color := theme.BorderDefault
-		if e.editing && e.focus.engine == en.ID {
-			color = theme.BorderFocus
-		}
 		top := len(lines) + 1
-		for _, l := range m.frame(en.Name, color, b.lines, w, len(b.lines)+2) {
+		for _, l := range m.frame(en.Name, theme.BorderDefault, b.lines, w, len(b.lines)+2) {
 			add(l)
 		}
 		for _, h := range b.hits {
