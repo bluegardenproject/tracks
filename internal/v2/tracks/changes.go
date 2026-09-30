@@ -133,10 +133,10 @@ func (w watched) AddPR(ctx context.Context, id string, pr track.PR, at time.Time
 	return added, err
 }
 
-func (w watched) SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error) {
-	changed, err := w.Store.SavePR(ctx, id, pr, at)
-	if changed {
+func (w watched) SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (track.PRState, error) {
+	was, err := w.Store.SavePR(ctx, id, pr, at)
+	if err == nil && was != pr.State {
 		w.changes.Notify()
 	}
-	return changed, err
+	return was, err
 }

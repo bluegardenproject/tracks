@@ -46,7 +46,7 @@ type Store interface {
 	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
 	Promote(ctx context.Context, t track.Track) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
-	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
+	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (track.PRState, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
 }
 
@@ -103,6 +103,9 @@ type Service struct {
 	// Changes hears when the track windows change, which Store doesn't
 	// see; give Store as Watched with the same Changes for the rest.
 	Changes *Changes
+	// Notify hears the notices: a track needing the user or failing,
+	// its PRs opening or settling. nil tells nobody.
+	Notify func(Notice)
 	// Now and NewID are the clock and the track IDs; nil is the real
 	// ones.
 	Now   func() time.Time

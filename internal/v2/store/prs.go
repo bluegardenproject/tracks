@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/v2/track"
@@ -28,20 +29,24 @@ func (s *Store) AddPR(ctx context.Context, id string, pr track.PR, at time.Time)
 }
 
 // SavePR records pr as GitHub has it now, adding it to track id's when
-// it's new. changed is whether it's new or its state is.
-func (s *Store) SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (changed bool, err error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE track_prs SET checked_at = ? WHERE track_id = ? AND url = ? AND state = ?",
-		millis(pr.CheckedAt), id, pr.URL, string(pr.State))
-	if err != nil {
-		return false, err
+// it's new. was is the state it had, "" when it's new: it changed
+// unless was is pr.State.
+func (s *Store) SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (was track.PRState, err error) {
+	err = s.db.QueryRowContext(ctx, "SELECT state FROM track_prs WHERE track_id = ? AND url = ?", id, pr.URL).Scan(&was)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	} else if err != nil {
+		return "", err
 	}
-	if n, err := res.RowsAffected(); err != nil || n > 0 {
-		return false, err
+	if was == pr.State {
+		_, err = s.db.ExecContext(ctx, "UPDATE track_prs SET checked_at = ? WHERE track_id = ? AND url = ?",
+			millis(pr.CheckedAt), id, pr.URL)
+		return was, err
 	}
 	_, err = s.db.ExecContext(ctx, "INSERT INTO track_prs (track_id, url, repo, number, state, found_at, checked_at) "+
 		"VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (track_id, url) DO UPDATE SET state = excluded.state, checked_at = excluded.checked_at",
 		id, pr.URL, pr.Repo, pr.Number, string(pr.State), at.UnixMilli(), millis(pr.CheckedAt))
-	return err == nil, err
+	return was, err
 }
 
 // UnsettledPRs are the PRs still open or in draft, of every track.
