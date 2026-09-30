@@ -198,7 +198,10 @@ type fakeEngine struct {
 	failSession, failCommand bool
 	spec                     agents.Spec
 	replies                  map[string]string // by session
+	unstarted                bool              // sessions have no transcript
 }
+
+func (e *fakeEngine) Started(string) bool { return !e.unstarted }
 
 func (e *fakeEngine) LastReply(session string) string { return e.replies[session] }
 

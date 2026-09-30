@@ -33,6 +33,10 @@ func LastReply(session string) string {
 	return carried(last)
 }
 
+// Started reports whether session has a transcript: Claude writes it
+// once the session starts, so without one there's nothing to resume.
+func Started(session string) bool { return len(usage.Locate(session, "")) > 0 }
+
 type transcriptLine struct {
 	Type    string `json:"type"`
 	IsMeta  bool   `json:"isMeta"`
