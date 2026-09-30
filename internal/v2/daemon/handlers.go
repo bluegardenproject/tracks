@@ -93,6 +93,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Archive: c.archive,
 		rpc.Derail:  c.derail,
 		rpc.AddRepo: c.addRepo,
+		rpc.Promote: c.promote,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -129,6 +130,20 @@ func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	c.Log.Printf("resumed %s, %s", p.ID, resumed.Track.Name)
 	return rpc.ResumeResult{CreateResult: rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}}, nil
+}
+
+func (c Config) promote(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.PromoteParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	promoted, err := c.Tracks.Promote(ctx, p.ID, call.Progress)
+	if err != nil {
+		c.Log.Printf("promoting %s failed: %v", p.ID, err)
+		return nil, err
+	}
+	c.Log.Printf("promoted %s, %s, to a Work track", p.ID, promoted.Track.Name)
+	return rpc.CreateResult{ID: p.ID, Name: promoted.Track.Name, Window: promoted.Window.ID}, nil
 }
 
 func (c Config) addRepo(ctx context.Context, call *rpc.Call) (any, error) {

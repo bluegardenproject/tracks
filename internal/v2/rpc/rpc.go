@@ -24,6 +24,7 @@ const (
 	Report    = "report"
 	Derail    = "derail"
 	AddRepo   = "add-repo"
+	Promote   = "promote"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
@@ -120,6 +121,11 @@ type ReportParams struct {
 type ResumeParams struct {
 	ID       string `json:"id"`
 	Recreate bool   `json:"recreate,omitempty"`
+}
+
+// PromoteParams names the Ask or Plan track to promote.
+type PromoteParams struct {
+	ID string `json:"id"`
 }
 
 // AddRepoParams names a work track and the repo, from the
