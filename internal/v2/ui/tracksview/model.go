@@ -40,6 +40,9 @@ type Config struct {
 	Archive DiscardFunc
 	Derail  DiscardFunc
 	Lost    func(id string) ([]string, error)
+	// Promote makes an Ask or Plan track a Work track and switches to
+	// it, telling progress each slow step.
+	Promote func(id string, progress func(string)) error
 	// Unarchive puts an archived track back in Station; SetFilter puts
 	// Station under a filter, the zero Filter clearing it.
 	Unarchive func(id string) error
@@ -75,6 +78,7 @@ type Model struct {
 	changes       chan watchMsg // from watchFn, nil without it
 	open, end     TrackFunc
 	resume        ResumeFunc
+	promote       func(id string, progress func(string)) error
 	archiveFn     DiscardFunc
 	derailFn      DiscardFunc
 	lostFn        func(id string) ([]string, error)
@@ -111,7 +115,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, openURL: c.OpenURL,
-		resume: c.Resume, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
+		resume: c.Resume, promote: c.Promote, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, engines: newEnginesTab()}
@@ -154,6 +158,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.done(msg)
 	case resumeEvent:
 		return m.resumed(msg)
+	case promoteEvent:
+		return m.promoted(msg)
 	case checkedMsg:
 		return m.checked(msg), nil
 	case archivedMsg:
