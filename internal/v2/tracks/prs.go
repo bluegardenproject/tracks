@@ -26,8 +26,12 @@ func (s *Service) SeePRs(ctx context.Context, id string, urls []string) error {
 		if !ok || reviewed(t, pr) {
 			continue
 		}
-		if _, err := s.Store.AddPR(ctx, id, pr, s.now()); err != nil {
+		added, err := s.Store.AddPR(ctx, id, pr, s.now())
+		if err != nil {
 			return err
+		}
+		if added {
+			s.notify(prNotice(id, t.Name, pr, ""))
 		}
 	}
 	return nil

@@ -30,6 +30,7 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 	if err := s.Store.SetState(ctx, id, next); err != nil {
 		return err
 	}
+	s.notify(statusNotice(id, t.Name, t.Status(), next.Status()))
 	if on := next.Status().Attention; on != t.Status().Attention && next.Open() {
 		return s.markWindow(id, on)
 	}

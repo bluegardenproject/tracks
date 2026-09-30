@@ -27,19 +27,19 @@ func TestPRs(t *testing.T) {
 	}
 	merged := web
 	merged.State, merged.CheckedAt = track.PRMerged, now.Add(time.Minute)
-	if changed, err := s.SavePR(ctx, "a", merged, now.Add(time.Minute)); err != nil || !changed {
-		t.Fatalf("saving a merged PR = %v, %v; want it changed", changed, err)
+	if was, err := s.SavePR(ctx, "a", merged, now.Add(time.Minute)); err != nil || was != track.PROpen {
+		t.Fatalf("saving a merged PR = %q, %v; want it was open", was, err)
 	}
 	if added, err := s.AddPR(ctx, "a", web, now.Add(2*time.Minute)); err != nil || added {
 		t.Errorf("adding a known PR again = %v, %v; want it left as it is", added, err)
 	}
-	if changed, err := s.SavePR(ctx, "a", api, now.Add(3*time.Minute)); err != nil || !changed {
-		t.Fatalf("saving a new PR = %v, %v; want it changed", changed, err)
+	if was, err := s.SavePR(ctx, "a", api, now.Add(3*time.Minute)); err != nil || was != "" {
+		t.Fatalf("saving a new PR = %q, %v; want no state before", was, err)
 	}
 	checked := merged
 	checked.CheckedAt = now.Add(4 * time.Minute)
-	if changed, err := s.SavePR(ctx, "a", checked, now.Add(4*time.Minute)); err != nil || changed {
-		t.Errorf("saving a PR checked again = %v, %v; want it unchanged", changed, err)
+	if was, err := s.SavePR(ctx, "a", checked, now.Add(4*time.Minute)); err != nil || was != track.PRMerged {
+		t.Errorf("saving a PR checked again = %q, %v; want it was merged", was, err)
 	}
 	merged.CheckedAt = checked.CheckedAt
 	if _, err := s.AddPR(ctx, "b", web, now); err != nil {
