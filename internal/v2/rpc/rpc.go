@@ -26,6 +26,9 @@ const (
 	AddRepo   = "add-repo"
 	Promote   = "promote"
 	Restart   = "restart"
+	// Draft returns a draft's request; DiscardDraft deletes it.
+	Draft        = "draft"
+	DiscardDraft = "discard-draft"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
@@ -131,6 +134,11 @@ type PromoteParams struct {
 
 // RestartParams names the open track whose agent exited.
 type RestartParams struct {
+	ID string `json:"id"`
+}
+
+// DraftParams names a draft, a creation that failed.
+type DraftParams struct {
 	ID string `json:"id"`
 }
 

@@ -97,6 +97,20 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.AddRepo: c.addRepo,
 		rpc.Promote: c.promote,
 		rpc.Restart: c.restart,
+		rpc.Draft: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.DraftParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return c.Tracks.Draft(ctx, p.ID)
+		},
+		rpc.DiscardDraft: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.DraftParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return nil, c.Tracks.DiscardDraft(ctx, p.ID)
+		},
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
