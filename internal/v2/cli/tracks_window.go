@@ -85,7 +85,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return openNewTrack(c, paths, client)
+					return openNewTrack(c, paths, client, "")
 				},
 				OpenURL:       openBrowser,
 				Repos:         repoSource,

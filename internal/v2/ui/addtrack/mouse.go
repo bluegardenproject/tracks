@@ -164,11 +164,18 @@ func (m Model) pickerBox() (x, y, w, h int) {
 
 const discardText = "What you entered is lost."
 
+func (m Model) discardText() string {
+	if m.drafted {
+		return draftDiscardText
+	}
+	return discardText
+}
+
 // discardBox is the question over the form, centred, and where it goes.
 func (m Model) discardBox() (x, y int, box []string) {
 	row, _ := m.discardButtons()
-	w := min(m.width, max(len(discardText), 30)+4)
-	box = widget.Frame(m.palette, "Discard this track?", []string{m.fg(theme.TextMuted).Render(discardText), "", row}, w, 5, theme.OverlayBorderFocus)
+	w := min(m.width, max(len(m.discardText()), 30)+4)
+	box = widget.Frame(m.palette, "Discard this track?", []string{m.fg(theme.TextMuted).Render(m.discardText()), "", row}, w, 5, theme.OverlayBorderFocus)
 	return (m.width - w) / 2, (m.height - 5) / 2, box
 }
 
