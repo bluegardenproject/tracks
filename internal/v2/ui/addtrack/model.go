@@ -4,7 +4,6 @@ package addtrack
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textarea"
@@ -23,17 +22,12 @@ type Config struct {
 	// why they couldn't be read.
 	Repos    []string
 	ReposErr error
-	// RunsOn is what each type's tracks run on; a type that's missing
-	// has no engine added.
-	RunsOn map[track.Kind]RunsOn
-	Create CreateFunc
-}
-
-// RunsOn is an engine's name and its model, "" for its own default.
-// Missing says the engine isn't added, so Create would refuse.
-type RunsOn struct {
-	Engine, Model string
-	Missing       bool
+	// RunsOn is what each type's tracks run on, Engines the engines
+	// added, and Models lists the models of one that lists its own.
+	RunsOn  map[track.Kind]RunsOn
+	Engines []Engine
+	Models  ModelsFunc
+	Create  CreateFunc
 }
 
 // Model is the form.
@@ -65,6 +59,14 @@ type Model struct {
 	discard *question
 
 	runsOn   map[track.Kind]RunsOn
+	engines  []Engine
+	modelsFn ModelsFunc
+	listed   map[string]listing
+	// engine and model are what the track runs on: the type's, until
+	// chosen picks others.
+	engine, model string
+	chosen        bool
+
 	create   CreateFunc
 	creating *creation
 	failure  string // why the last Create failed
@@ -92,10 +94,13 @@ func New(c Config) Model {
 		hover:    noHit,
 		errs:     map[control]string{},
 		runsOn:   c.RunsOn,
+		engines:  c.Engines,
+		modelsFn: c.Models,
+		listed:   asking(c.Engines, c.Models),
 		create:   c.Create,
 	}
 	m.setPrompt(kinds[Work].prompt)
-	return m
+	return m.followType(Work)
 }
 
 func newPrompt() textarea.Model {
@@ -113,8 +118,9 @@ func (m *Model) setPrompt(text string) {
 	m.prompt.MoveToBegin()
 }
 
-// Init implements tea.Model.
-func (m Model) Init() tea.Cmd { return nil }
+// Init implements tea.Model. It asks the engines that list their own
+// models for them, so the model picker has them when it opens.
+func (m Model) Init() tea.Cmd { return m.listCmds() }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -124,6 +130,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case createEvent:
 		m, cmd = m.created(msg)
+	case modelsMsg:
+		m = m.gotModels(msg)
 	case tea.KeyPressMsg:
 		if m.creating != nil {
 			return m.creatingKey(msg.String())
@@ -154,7 +162,7 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case m.discard != nil:
 		return m.discardKey(key)
 	case m.picker != nil:
-		return m.pickerKey(key), nil
+		return m.pickerKey(key)
 	}
 	m.notice = ""
 	switch key {
@@ -197,6 +205,8 @@ func (m Model) key(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		case "down":
 			return m.move(1, false)
 		}
+	case ctlEngine, ctlModel:
+		return m.runsOnKey(key)
 	case ctlCandor:
 		switch key {
 		case "enter", "space":
@@ -355,6 +365,7 @@ func (m Model) setKind(k Kind) Model {
 		m.repo = slices.Index(m.repos, picked[0])
 	}
 	m.kind = k
+	m = m.followType(k)
 	m.name.Placeholder = namePlaceholder(k)
 	m.errs = map[control]string{}
 	return m
@@ -409,7 +420,7 @@ func (m Model) close() (Model, tea.Cmd) {
 func (m Model) dirty() bool {
 	prompt := strings.TrimSpace(m.prompt.Value())
 	return m.target.Value() != "" || m.document.Value() != "" || m.name.Value() != "" ||
-		len(m.pickedRepos()) > 0 || m.terminal || m.candor != track.DefaultCandor || slices.Contains(m.sections, false) ||
+		len(m.pickedRepos()) > 0 || m.terminal || m.chosen || m.candor != track.DefaultCandor || slices.Contains(m.sections, false) ||
 		prompt != "" && prompt != strings.TrimSpace(kinds[m.kind].prompt)
 }
 
@@ -434,51 +445,4 @@ func (m Model) answer(choice int) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
-}
-
-func (m Model) openCandor() Model {
-	items := make([]widget.PickerItem, 0, track.MaxCandor)
-	for level := track.MinCandor; level <= track.MaxCandor; level++ {
-		label := track.CandorLabel(level)
-		if level == track.DefaultCandor {
-			label += " (default)"
-		}
-		items = append(items, widget.PickerItem{Label: strconv.Itoa(level), Detail: label})
-	}
-	p := widget.NewPicker("Candor", items, m.candor-track.MinCandor)
-	m.picker, m.pickerFor = &p, ctlCandor
-	return m
-}
-
-func (m Model) pickerKey(key string) Model {
-	p := *m.picker
-	m.picker = &p
-	return m.pickerDone(p.Key(key))
-}
-
-// pickerDone follows up on the picker closing. The repos ticked stay
-// ticked however it closed.
-func (m Model) pickerDone(r widget.PickerResult) Model {
-	if r != widget.PickerChosen && r != widget.PickerClosed {
-		return m
-	}
-	p := m.picker
-	m.picker = nil
-	switch {
-	case m.pickerFor == ctlRepos:
-		m.picked = map[string]bool{}
-		for i, on := range p.Ticked {
-			if on {
-				m.picked[m.repos[i]] = true
-			}
-		}
-		delete(m.errs, ctlRepos)
-	case r == widget.PickerClosed:
-	case m.pickerFor == ctlRepo:
-		m.repo = p.Cursor
-		delete(m.errs, ctlRepo)
-	case m.pickerFor == ctlCandor:
-		m.candor = p.Cursor + track.MinCandor
-	}
-	return m
 }

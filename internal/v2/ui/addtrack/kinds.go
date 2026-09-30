@@ -31,6 +31,8 @@ const (
 	ctlSections
 	ctlCandor
 	ctlPrompt
+	ctlEngine
+	ctlModel
 	ctlCreate
 	ctlCancel
 )
@@ -111,7 +113,7 @@ Context for the review (optional — fill in or delete):
 // controls are kind's controls in focus order.
 func controls(k Kind) []control {
 	out := append([]control{ctlType}, kinds[k].fields...)
-	return append(out, ctlCreate, ctlCancel)
+	return append(out, ctlEngine, ctlModel, ctlCreate, ctlCancel)
 }
 
 func candorLabel(level int) string { return fmt.Sprintf("%d — %s", level, track.CandorLabel(level)) }
