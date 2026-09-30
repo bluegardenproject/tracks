@@ -41,6 +41,7 @@ type Store interface {
 	SetState(ctx context.Context, id string, st track.State) error
 	DeleteTrack(ctx context.Context, id string) error
 	Rename(ctx context.Context, id, name string) error
+	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
@@ -115,6 +116,9 @@ type Service struct {
 	// windows are the track windows the last Sweep saw; only Sweep
 	// uses them.
 	windows []trackwin.Info
+	// transcripts are the signatures of the open Claude tracks'
+	// transcripts the last Costs read; only Costs uses them.
+	transcripts map[string]string
 }
 
 // ended is how many ended tracks List returns, the most recent ones.

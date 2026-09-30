@@ -21,11 +21,12 @@ import (
 // ErrRunning means another daemon holds the lock.
 var ErrRunning = errors.New("another daemon is running")
 
-// every is how often the windows are checked, pollEvery how often
-// GitHub is asked about the tracks' PRs, archiveEvery how often old
-// tracks are archived.
+// every is how often the windows are checked, costEvery how often the
+// tracks' transcripts are, pollEvery how often GitHub is asked about
+// the tracks' PRs, archiveEvery how often old tracks are archived.
 const (
 	every        = 2 * time.Second
+	costEvery    = 10 * time.Second
 	pollEvery    = time.Minute
 	archiveEvery = time.Hour
 )
@@ -101,11 +102,16 @@ func Run(ctx context.Context, c Config) error {
 	defer archives.Stop()
 	archiver := &poller{log: c.Log, what: "archiving old tracks"}
 	defer archiver.wait()
+	costs := time.NewTicker(costEvery)
+	defer costs.Stop()
+	coster := &poller{log: c.Log, what: "reading what the tracks cost"}
+	defer coster.wait()
 	defer cancelPoll()
 
 	c.Log.Printf("started, pid %d", os.Getpid())
 	prs.start(pollCtx, c.Tracks.PollPRs)
 	archiver.start(pollCtx, c.autoArchive)
+	coster.start(pollCtx, c.Tracks.Costs)
 	reason := ""
 	for reason == "" {
 		select {
@@ -119,6 +125,8 @@ func Run(ctx context.Context, c Config) error {
 			prs.start(pollCtx, c.Tracks.PollPRs)
 		case <-archives.C:
 			archiver.start(pollCtx, c.autoArchive)
+		case <-costs.C:
+			coster.start(pollCtx, c.Tracks.Costs)
 		case <-tick.C:
 			if !c.Tmux.HasSession(c.Session) {
 				reason = "the tmux session is gone"

@@ -145,6 +145,14 @@ func TestModelCell(t *testing.T) {
 	}
 }
 
+func TestCostCell(t *testing.T) {
+	for cost, want := range map[float64]string{0: "—", 0.004: "<$0.01", 3.456: "$3.46"} {
+		if got := cells(source.Track{Cost: cost})[4]; got != want {
+			t.Errorf("$%v shows %q, want %q", cost, got, want)
+		}
+	}
+}
+
 func TestStationHover(t *testing.T) {
 	var opened []int
 	m := withTracks(demoTracks(3), 120, 40, &opened)
