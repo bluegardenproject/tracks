@@ -76,11 +76,11 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 	case m.picker != nil:
 		x, y, w, h := m.pickerBox()
 		if mouse.X < x || mouse.X >= x+w || mouse.Y < y || mouse.Y >= y+h {
-			return m.pickerDone(widget.PickerClosed), nil
+			return m.pickerDone(widget.PickerClosed)
 		}
 		p := *m.picker
 		m.picker = &p
-		return m.pickerDone(p.Click(mouse.X-x, mouse.Y-y, w)), nil
+		return m.pickerDone(p.Click(mouse.X-x, mouse.Y-y, w))
 	}
 	m.notice = ""
 	h := m.at(mouse.X, mouse.Y)
@@ -112,6 +112,10 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 		m.terminal = !m.terminal
 	case ctlCandor:
 		m = m.openCandor()
+	case ctlEngine:
+		m = m.openEngines()
+	case ctlModel:
+		return m.openModels()
 	}
 	return m, nil
 }

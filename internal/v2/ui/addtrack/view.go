@@ -60,7 +60,7 @@ func (b *body) wrapped(t theme.Token, text string) {
 func (b *body) field(c control, about string) {
 	b.top = len(b.lines)
 	heading := b.m.fg(theme.TextDefault)
-	if b.m.focus == c {
+	if b.m.focus == c || c == ctlEngine && b.m.focus == ctlModel {
 		heading = b.m.fg(theme.TextAccent)
 	}
 	b.add(heading.Bold(true).Render(title(b.m.kind, c)))
@@ -74,7 +74,7 @@ func (b *body) end(c control) {
 		b.wrapped(theme.StateDangerText, problem)
 	}
 	for i := range b.hits {
-		if b.hits[i].ctl == c {
+		if h := b.hits[i].ctl; h == c || c == ctlEngine && h == ctlModel {
 			b.hits[i].top, b.hits[i].bottom = b.top, len(b.lines)
 		}
 	}
@@ -109,13 +109,11 @@ func (m Model) body(width int) ([]string, []hit) {
 		}
 		b.end(c)
 	}
-	if line := m.engineLine(); line != "" {
-		b.wrapped(theme.TextMuted, line)
-	}
+	b.field(ctlEngine, about(m.kind, ctlEngine))
+	b.runsOnRow()
+	b.end(ctlEngine)
 	if m.failure != "" {
 		b.wrapped(theme.StateDangerText, m.failure)
-	}
-	if m.engineLine() != "" || m.failure != "" {
 		b.add("")
 	}
 	b.buttons()
@@ -249,6 +247,12 @@ func (b *body) input(c control, in textinput.Model) {
 // selectField draws value, in fg, in a field that opens a picker. On
 // Repos it's lit only while the cursor is on it, not on a repo.
 func (b *body) selectField(c control, value string, fg theme.Token) {
+	b.hit(c, 0, 0, b.width, 1)
+	b.add(b.selectBox(c, value, fg, b.width))
+}
+
+// selectBox is a field that opens a picker, width cells wide.
+func (b *body) selectBox(c control, value string, fg theme.Token, width int) string {
 	m := b.m
 	bracket := b.bracket(c)
 	if m.focus == c && m.item != 0 && m.errs[c] == "" {
@@ -256,11 +260,10 @@ func (b *body) selectField(c control, value string, fg theme.Token) {
 	}
 	br := m.fg(bracket)
 	bg := lipgloss.NewStyle().Background(m.palette.Color(theme.InputBg))
-	inner := max(4, b.width-2)
+	inner := max(4, width-2)
 	value = cut(" "+value, inner-2)
-	b.hit(c, 0, 0, b.width, 1)
-	b.add(br.Render("[") + bg.Foreground(m.palette.Color(fg)).Render(value+strings.Repeat(" ", max(0, inner-2-lipgloss.Width(value)))) +
-		bg.Foreground(m.palette.Color(theme.TextMuted)).Render("▾ ") + br.Render("]"))
+	return br.Render("[") + bg.Foreground(m.palette.Color(fg)).Render(value+strings.Repeat(" ", max(0, inner-2-lipgloss.Width(value)))) +
+		bg.Foreground(m.palette.Color(theme.TextMuted)).Render("▾ ") + br.Render("]")
 }
 
 // prompt draws the text area in a box.
@@ -385,6 +388,8 @@ func (m Model) hints() string {
 			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "pick"})
 		case ctlCandor:
 			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "pick"})
+		case ctlEngine, ctlModel:
+			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "pick"}, widget.KeyHelp{Key: "←/→", Help: "agent or model"})
 		case ctlPrompt:
 			keys = append(keys, widget.KeyHelp{Key: "Enter", Help: "new line"})
 		case ctlCreate, ctlCancel:

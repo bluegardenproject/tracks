@@ -8,19 +8,24 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/v2/agents"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 )
 
+// claudeCode is Claude Code as the Engines tab has it: sonnet by
+// default, and one model added.
+var claudeCode = Engine{ID: "claude", Name: "Claude Code", Default: "sonnet", Models: agents.Claude.Models, Added: []string{"claude-opus-4-8"}}
+
 // ready is a Work form for repo tracks with a prompt, on Claude Code;
 // Ask tracks run on Cursor, which isn't added, and Plan tracks on nothing.
 func ready(t *testing.T, create CreateFunc) Model {
 	runsOn := map[track.Kind]RunsOn{
-		track.Work: {Engine: "Claude Code", Model: "opus"},
-		track.Ask:  {Engine: "Cursor", Missing: true},
+		track.Work: {Engine: "claude", Model: "opus"},
+		track.Ask:  {Engine: "cursor"},
 	}
-	m, _ := send(New(Config{Theme: theme.Default(), Repos: []string{"tracks"}, RunsOn: runsOn, Create: create}), resize)
+	m, _ := send(New(Config{Theme: theme.Default(), Repos: []string{"tracks"}, RunsOn: runsOn, Engines: []Engine{claudeCode}, Create: create}), resize)
 	m = m.setFocus(ctlRepos)
 	m, _ = send(m, space, space, enter)
 	m = m.setFocus(ctlPrompt)
@@ -50,8 +55,8 @@ func TestCreateSendsTheRequest(t *testing.T) {
 		progress("Fetching origin/main in tracks…")
 		return Created{Name: "fix-the-rate-bug", Window: "@4"}, nil
 	})
-	if lines, _ := m.body(90); !strings.Contains(strings.Join(lines, "\n"), "Runs on Claude Code, model opus.") {
-		t.Error("the form doesn't say what runs the track")
+	if view := plain(m); !strings.Contains(view, "[ Claude Code") || !strings.Contains(view, "[ opus ") {
+		t.Errorf("the form doesn't say what runs the track:\n%s", view)
 	}
 	m, cmd := pressCreate(t, m)
 	m, cmd = step(m, cmd)
@@ -62,7 +67,8 @@ func TestCreateSendsTheRequest(t *testing.T) {
 	if !quits(cmd) || m.Made() == nil || *m.Made() != (Created{Name: "fix-the-rate-bug", Window: "@4"}) {
 		t.Fatalf("after creating: quit %v, made %v", quits(cmd), m.Made())
 	}
-	if got.Kind != track.Work || len(got.Repos) != 1 || got.Repos[0] != "tracks" || got.Prompt != "Fix the rate bug" {
+	if got.Kind != track.Work || len(got.Repos) != 1 || got.Repos[0] != "tracks" || got.Prompt != "Fix the rate bug" ||
+		got.Engine != "claude" || got.Model != "opus" {
 		t.Errorf("request = %+v", got)
 	}
 }
@@ -95,12 +101,14 @@ func TestCreateWithoutAnEngine(t *testing.T) {
 
 func TestRunsOnFollowsTheType(t *testing.T) {
 	m := ready(t, nil)
-	for k, want := range map[Kind]string{
-		Work: "Runs on Claude Code, model opus.",
-		Ask:  "Runs on Cursor, which isn't added on the Engines tab.",
-		Plan: "",
+	for k, want := range map[Kind][3]string{
+		Work:   {"Claude Code", "opus", ""},
+		Ask:    {"Cursor", "Default", "Cursor isn't added on the Engines tab. Add it there, or pick another agent."},
+		Plan:   {"None added", "Default", string(tracks.ErrNoEngine)},
+		Review: {"None added", "Default", string(tracks.ErrNoEngine)},
 	} {
-		if got := m.setKind(k).engineLine(); got != want {
+		n := m.setKind(k)
+		if got := [3]string{n.engineText(), n.modelText(), n.engineProblem()}; got != want {
 			t.Errorf("%s runs on %q, want %q", trackKinds[k], got, want)
 		}
 	}

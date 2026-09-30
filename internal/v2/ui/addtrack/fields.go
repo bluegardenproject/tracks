@@ -38,6 +38,8 @@ func title(k Kind, c control) string {
 			return "Question"
 		}
 		return "Prompt"
+	case ctlEngine, ctlModel:
+		return "Runs on"
 	}
 	return ""
 }
@@ -76,6 +78,8 @@ func about(k Kind, c control) string {
 			return "Sent to the agent as it is, without extra framing."
 		}
 		return "Prefilled: sharpen it or leave it as it is."
+	case ctlEngine:
+		return "The agent and model, the type's from Settings → Tracks unless you pick others."
 	}
 	return ""
 }

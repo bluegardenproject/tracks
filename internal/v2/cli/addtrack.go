@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/shellx"
@@ -58,7 +59,7 @@ func addTrack(ctx context.Context, version, client string) error {
 	names, reposErr := repoNames(ctx, paths)
 	conf := addtrack.Config{Theme: t, Repos: names, ReposErr: reposErr, Create: creator(c, paths, version, client)}
 	if s, err := settings.Load(paths.Settings); err == nil {
-		conf.RunsOn = runsOn(s)
+		conf.RunsOn, conf.Engines, conf.Models = runsOn(s), addedEngines(s), listModels
 	}
 	done, err := runPopup(ctx, addtrack.New(conf))
 	if err != nil {
@@ -70,16 +71,49 @@ func addTrack(ctx context.Context, version, client string) error {
 	return nil
 }
 
-// runsOn is what each type of track runs on, as Create would pick it.
+// runsOn is what each type of track runs on, as Create would pick it:
+// the engine, and the type's own model on top of the engine's default.
 func runsOn(s settings.Settings) map[track.Kind]addtrack.RunsOn {
 	on := map[track.Kind]addtrack.RunsOn{}
 	for _, k := range track.Kinds {
-		id, model := s.RunsOn(string(k))
-		if e, ok := agents.ByID(id); ok {
-			on[k] = addtrack.RunsOn{Engine: e.Name, Model: model, Missing: s.Engines.Get(id) == nil}
+		id, _ := s.RunsOn(string(k))
+		if _, ok := agents.ByID(id); !ok {
+			continue
 		}
+		var model string
+		if d := s.Tracks.Get(string(k)); d != nil {
+			model = d.Model
+		}
+		on[k] = addtrack.RunsOn{Engine: id, Model: model}
 	}
 	return on
+}
+
+// addedEngines are the engines added on the Engines tab.
+func addedEngines(s settings.Settings) []addtrack.Engine {
+	var out []addtrack.Engine
+	for _, e := range agents.All {
+		if conf := s.Engines.Get(e.ID); conf != nil {
+			out = append(out, addtrack.Engine{
+				ID: e.ID, Name: e.Name, Default: conf.Model,
+				Models: e.Models, Added: conf.Models, Lists: e.ListsModels,
+			})
+		}
+	}
+	return out
+}
+
+// listModels asks the CLI of the engine with id for its models.
+func listModels(ctx context.Context, id string) ([]agents.Model, error) {
+	e, ok := agents.ByID(id)
+	if !ok {
+		return nil, fmt.Errorf("tracks doesn't know the engine %q", id)
+	}
+	found, err := agents.Check(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	return agents.ListModels(ctx, found.Path)
 }
 
 // creator creates tracks through a daemon of this build, which tells

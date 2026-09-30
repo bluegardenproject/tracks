@@ -1,6 +1,7 @@
 package addtrack
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"strings"
@@ -38,6 +39,7 @@ func (m Model) request() tracks.Request {
 	r := tracks.Request{
 		Kind: trackKinds[m.kind], Name: strings.TrimSpace(m.name.Value()), Prompt: m.prompt.Value(),
 		Terminal: m.terminal && m.kind == Work,
+		Engine:   m.engine, Model: m.model,
 	}
 	switch m.kind {
 	case Review:
@@ -57,9 +59,9 @@ func (m Model) request() tracks.Request {
 
 // startCreate sends the request and waits for the first event.
 func (m Model) startCreate() (Model, tea.Cmd) {
-	if _, ok := m.runsOn[trackKinds[m.kind]]; !ok || m.create == nil {
-		m.notice = string(tracks.ErrNoEngine)
-		return m, nil
+	if problem := m.engineProblem(); problem != "" || m.create == nil {
+		m.notice = cmp.Or(problem, string(tracks.ErrNoEngine))
+		return m.setFocus(ctlEngine), nil
 	}
 	events := make(chan createEvent, 16)
 	ctx, hangUp := context.WithCancel(context.Background())
@@ -114,19 +116,3 @@ func (m Model) creatingKey(key string) (Model, tea.Cmd) {
 
 // Made is the track the form created, nil when it closed without one.
 func (m Model) Made() *Created { return m.made }
-
-// engineLine says what runs the track.
-func (m Model) engineLine() string {
-	on, ok := m.runsOn[trackKinds[m.kind]]
-	if !ok {
-		return ""
-	}
-	line := "Runs on " + on.Engine
-	if on.Missing {
-		return line + ", which isn't added on the Engines tab."
-	}
-	if on.Model != "" {
-		line += ", model " + on.Model
-	}
-	return line + "."
-}
