@@ -28,8 +28,9 @@ var Keys = []widget.KeyHelp{
 	{Key: "Tab/↑/↓", Help: "move"}, {Key: "Space", Help: "tick"}, {Key: "Enter", Help: "apply"}, {Key: "Esc", Help: "cancel"},
 }
 
-// statusOrder is the track statuses in the popup's order.
-var statusOrder = []track.Status{track.Active, track.ActionRequired, track.Done, track.Closed}
+// statusOrder is the track statuses in the popup's order. Closed is
+// left out: only archived tracks are, which Archived only picks.
+var statusOrder = []track.Status{track.Active, track.ActionRequired, track.Done}
 
 // startedChoices are the Started presets, as the popup names them.
 var startedChoices = []struct {
