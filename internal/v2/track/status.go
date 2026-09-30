@@ -4,8 +4,8 @@ import "time"
 
 // Status is one value of a track's status. ID is how it's stored and
 // sent, Label how it's shown, Badge the theme state its badge is drawn
-// in: BadgeInfo, BadgeWarning or BadgeDanger. A lower Priority is shown first where
-// only one fits; Attention says the track needs the user.
+// in: BadgeInfo, BadgeWarning or BadgeDanger. A lower Priority is shown
+// first where only one fits; Attention says the track needs the user.
 type Status struct {
 	ID        string
 	Label     string
