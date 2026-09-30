@@ -20,7 +20,7 @@ Declared once, in `track`: the track statuses in `status.go`, the PR statuses in
 | `active` | active | the track's window is open (the default) | no |
 | `action_required` | action required | the agent waits on a dialog in its window | yes |
 | `done` | done | ended: its window is closed | no |
-| `closed` | closed | archived (was: cleaned, before [13-archive-replaces-clean.md](13-archive-replaces-clean.md)) | no |
+| `closed` | closed | archived (was: cleaned, before Archive replaced Clean) | no |
 
 **PR status**, derived from the track's PRs, one of:
 

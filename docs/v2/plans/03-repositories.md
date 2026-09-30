@@ -1,6 +1,6 @@
 # Plan: Repositories tab and the database
 
-**Status: built.** Part of the [v2 masterplan](../masterplan.md). This is the first real feature: repos live in SQLite and are managed on the Repositories tab of the Tracks window. It starts chunk 4 ([storage draft](drafts/storage.md)) with the repos table only.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md). This is the first real feature: repos live in SQLite and are managed on the Repositories tab of the Tracks window. It started chunk 4 (storage) with the repos table only.
 
 ## What users get
 
