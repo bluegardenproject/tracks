@@ -134,6 +134,8 @@ func Run(ctx context.Context, c Config) error {
 				c.Log.Printf("checking the windows: %v", err)
 			} else if err := c.Tracks.CheckScreens(ctx); err != nil {
 				c.Log.Printf("checking the agents' screens: %v", err)
+			} else {
+				c.checkExits(ctx)
 			}
 		}
 	}
@@ -141,6 +143,17 @@ func Run(ctx context.Context, c Config) error {
 	c.Tracks.Changes.Close()
 	ln.Close()
 	return <-served
+}
+
+// checkExits records the agents that exited, logging their codes.
+func (c Config) checkExits(ctx context.Context) {
+	exits, err := c.Tracks.CheckExits(ctx)
+	for _, e := range exits {
+		c.Log.Printf("%s's agent exited with code %s", e.Name, e.Code)
+	}
+	if err != nil {
+		c.Log.Printf("checking the agents' exits: %v", err)
+	}
 }
 
 // lock takes the lock file at path, or fails with ErrRunning while

@@ -180,6 +180,11 @@ func (w *fakeWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, 
 	if w.fail {
 		return trackwin.Window{ID: window}, errStep
 	}
+	for i := range w.windows {
+		if w.windows[i].Window == window {
+			w.windows[i].Exit = ""
+		}
+	}
 	return trackwin.Window{ID: window, Agent: "%1"}, nil
 }
 
