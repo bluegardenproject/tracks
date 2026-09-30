@@ -1,6 +1,6 @@
 # Plan: notifications
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), the [v2.0.0 scope](../masterplan.md#v200-scope). A track that needs you shows it in Station and the footer, which you only see while you look at Tracks. This plan adds macOS notifications and the terminal bell, as v1 has them, for the events that matter in v2.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), the [v2.0.0 scope](../masterplan.md#v200-scope). A track that needs you shows it in Station and the footer, which you only see while you look at Tracks. This plan adds macOS notifications and the terminal bell, as v1 has them, for the events that matter in v2.
 
 ## What users get
 
@@ -13,7 +13,7 @@
 | PR opened | a track gets a new open or draft PR | Tracks: rate-bug opened a PR | acme/api#12 |
 | PR merged or closed | a PR Tracks knew as open is merged or closed | Tracks: rate-bug's PR was merged (or closed) | acme/api#12 |
 
-- **Two channels,** each on by default: a macOS notification, and the terminal bell. The bell rings in the track's window, so tmux marks the window in the footer and passes the bell on to your terminal, which may bounce its Dock icon or flash its tab.
+- **Two channels,** each on by default: a macOS notification, and the terminal bell. The bell rings in the track's window, and tmux passes it on to your terminal, which may bounce its Dock icon or flash its tab.
 - **Nothing fires for the track on screen:** when a Tracks client shows the track's window, you're already looking at it.
 - **Action required notifies at most once every 2 minutes per track,** as v1: an agent that asks several questions in a row doesn't flood you.
 - **Settings → General → Notifications** has a toggle for each channel and each event, saved at once.
@@ -36,10 +36,10 @@ notifications:
 
 - **The events come from two places.** `Report`, the one way a track's status changes, compares the status before and after: a change into action required or error is a notice. The PR changes come from the store: `AddPR` (the hooks) reports a new PR, and `SavePR` (the poll) now returns the state the PR had before, so a new open PR is "opened" and a change from open or draft to merged or closed is "merged or closed". A PR the poll finds already merged, such as on an old branch, doesn't notify.
 - **`tracks.Service.Notify`** receives each notice: the track's ID and name, the event, a title and a body. The daemon sets it to a notifier; without one nothing is sent, which is what the tests of everything else see.
-- **The notifier** (new package `notifier`) reads the settings for each notice, drops it when its event is off, when a client of the Tracks session shows the track's window (`list-clients`), or within 2 minutes of the track's last action required. Then it sends on each channel that's on:
+- **The notifier** (new package `notifier`) reads the settings for each notice, drops it when its event is off, when a client of the Tracks session shows the track's window (`list-clients`), or within 2 minutes of the last action required it sent for the track: one skipped because the window was on screen doesn't count. Then it sends on each channel that's on:
   - **macOS:** v1's `notify` package, unchanged: `osascript`, best effort.
   - **Bell:** a BEL written to the tty of the track's agent pane (`#{pane_tty}`). v1 wrote it to the daemon's `/dev/tty`; v2's daemon has none.
-- **Delivery never blocks the daemon:** each notice is sent in its own goroutine, and failures are logged once, not per notice.
+- **Delivery never blocks the daemon:** each notice is sent in its own goroutine. Unreadable settings and a bell that can't ring are logged; `osascript` is best effort and reports nothing.
 
 ## Packages
 
