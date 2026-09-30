@@ -96,7 +96,7 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 	return m, m.act(actionEnd)
 }
 
-var columns = []string{"Slug", "Type", "Status", "Model", "Cost"}
+var columns = []string{"Name", "Type", "Status", "Model", "Cost"}
 
 // statusColumn is drawn as badges; costColumn is right-aligned.
 const (
@@ -112,7 +112,7 @@ func cells(t source.Track) []string {
 	if t.Cost > 0 {
 		cost = fmt.Sprintf("$%.2f", t.Cost)
 	}
-	return []string{t.Name, t.Kind, statusText(t), model, cost}
+	return []string{t.Shown(), t.Kind, statusText(t), model, cost}
 }
 
 func (m Model) loadTracks() tea.Cmd {

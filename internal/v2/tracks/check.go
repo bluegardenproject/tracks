@@ -32,7 +32,7 @@ type Request struct {
 // It also returns the repos that open draft pull requests.
 func (s *Service) check(ctx context.Context, req Request) (track.Track, []string, error) {
 	t := track.Track{
-		Kind: req.Kind, Name: strings.TrimSpace(req.Name), Prompt: req.Prompt,
+		Kind: req.Kind, Name: strings.TrimSpace(req.Name), Title: strings.TrimSpace(req.Name), Prompt: req.Prompt,
 		Opinion: true, ClaimCheck: true,
 	}
 	if !t.Kind.Valid() {

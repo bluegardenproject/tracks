@@ -102,7 +102,7 @@ func TestStationEmptyAndFailing(t *testing.T) {
 		return nil
 	}}), tea.WindowSizeMsg{Width: 100, Height: 30}, tracksMsg{})
 	view := plainView(m)
-	for _, want := range []string{"Tracks", "Slug", "Add new Track", "Fast Track", "Enter add a new track"} {
+	for _, want := range []string{"Tracks", "Name", "Add new Track", "Fast Track", "Enter add a new track"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("no tracks: missing %q:\n%s", want, view)
 		}
