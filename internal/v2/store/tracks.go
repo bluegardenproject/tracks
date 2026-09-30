@@ -88,6 +88,35 @@ func (s *Store) SetBranch(ctx context.Context, id string, position int, branch s
 	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
 }
 
+// Promote saves t, an Ask or Plan track made a Work track: its kind,
+// session and prompt, its repos' worktrees and branches by position,
+// and that it's open again. ErrNotFound when there's no track t.ID.
+func (s *Store) Promote(ctx context.Context, t track.Track) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx,
+		"UPDATE tracks SET kind = ?, session_id = ?, prompt = ?, closed_at = NULL, cleaned_at = NULL, waiting = 0 WHERE id = ?",
+		string(t.Kind), t.Session, t.Prompt, t.ID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	for i, r := range t.Repos {
+		if _, err := tx.ExecContext(ctx, "UPDATE track_repos SET worktree = ?, branch = ? WHERE track_id = ? AND position = ?",
+			r.Worktree, r.Branch, t.ID, i); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // AddTrackRepo adds r to track id's repos, after the others; ErrNotFound
 // when there's no track id.
 func (s *Store) AddTrackRepo(ctx context.Context, id string, r track.Repo) error {
