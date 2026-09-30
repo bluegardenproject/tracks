@@ -3,7 +3,6 @@ package addtrack
 import (
 	"cmp"
 	"context"
-	"errors"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -39,7 +38,7 @@ func (m Model) request() tracks.Request {
 	r := tracks.Request{
 		Kind: trackKinds[m.kind], Name: strings.TrimSpace(m.name.Value()), Prompt: m.prompt.Value(),
 		Terminal: m.terminal && m.kind == Work,
-		Engine:   m.engine, Model: m.model,
+		Engine:   m.engine, Model: m.model, Draft: m.draft,
 	}
 	switch m.kind {
 	case Review:
@@ -65,6 +64,7 @@ func (m Model) startCreate() (Model, tea.Cmd) {
 	}
 	events := make(chan createEvent, 16)
 	ctx, hangUp := context.WithCancel(context.Background())
+	m.draft = m.draftID()
 	create, req := m.create, m.request()
 	go func() {
 		created, err := create(ctx, req, func(s string) { events <- createEvent{progress: s} })
@@ -92,11 +92,7 @@ func (m Model) created(e createEvent) (Model, tea.Cmd) {
 	m.creating.hangUp()
 	m.creating, m.notice = nil, ""
 	if e.err != nil {
-		m.failure = e.err.Error()
-		var p tracks.Problem
-		if !errors.As(e.err, &p) {
-			m.failure = "Couldn't create the track: " + m.failure
-		}
+		m.failure, m.drafted = tracks.Failure(e.err), true
 		return m, nil
 	}
 	m.made = &e.created

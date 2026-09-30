@@ -25,9 +25,9 @@ const (
 	formMinHeight = 30
 )
 
-// openNewTrack opens the New track form over client and returns once
-// it closes.
-func openNewTrack(c *tmux.Client, paths platform.Paths, client string) error {
+// openNewTrack opens the New track form over client, filled with draft
+// unless it's "", and returns once it closes.
+func openNewTrack(c *tmux.Client, paths platform.Paths, client, draft string) error {
 	command, err := selfCommand()
 	if err != nil {
 		return err
@@ -42,14 +42,21 @@ func openNewTrack(c *tmux.Client, paths platform.Paths, client string) error {
 		Client:     client,
 		Width:      strconv.Itoa(min(width, max(formMinWidth, width*formShare/100))),
 		Height:     strconv.Itoa(min(height, max(formMinHeight, height*formShare/100))),
-		Command:    command + " popup add-track " + shellx.Quote(client),
+		Command:    command + " popup add-track " + shellx.Quote(client) + draftFlag(draft),
 		Background: t.Value(theme.OverlayBg),
 	}, version)
 }
 
-// addTrack runs the New track form over client, and shows client the
-// track it creates.
-func addTrack(ctx context.Context, version, client string) error {
+func draftFlag(draft string) string {
+	if draft == "" {
+		return ""
+	}
+	return " --draft " + shellx.Quote(draft)
+}
+
+// addTrack runs the New track form over client, filled with draft
+// unless it's "", and shows client the track it creates.
+func addTrack(ctx context.Context, version, client, draft string) error {
 	paths, err := platform.Resolve()
 	if err != nil {
 		return err
@@ -61,7 +68,15 @@ func addTrack(ctx context.Context, version, client string) error {
 	if s, err := settings.Load(paths.Settings); err == nil {
 		conf.RunsOn, conf.Engines, conf.Models = runsOn(s), addedEngines(s), listModels
 	}
-	done, err := runPopup(ctx, addtrack.New(conf))
+	form := addtrack.New(conf)
+	if draft != "" {
+		if req, err := (rpc.Client{Socket: paths.Socket}).Draft(ctx, draft); err != nil {
+			form = form.Tell("Couldn't read the draft: " + err.Error())
+		} else {
+			form = form.Fill(req)
+		}
+	}
+	done, err := runPopup(ctx, form)
 	if err != nil {
 		return err
 	}

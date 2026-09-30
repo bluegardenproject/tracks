@@ -71,6 +71,10 @@ type Model struct {
 	creating *creation
 	failure  string // why the last Create failed
 	made     *Created
+	// draft is the ID a failure keeps the track under once it's picked;
+	// drafted says a draft keeps it, from a failure or from Fill.
+	draft   string
+	drafted bool
 
 	width, height, offset int
 }
