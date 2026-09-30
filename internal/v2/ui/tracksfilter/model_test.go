@@ -53,13 +53,16 @@ func TestTicksAndPresets(t *testing.T) {
 }
 
 func TestShowsTheFilterOn(t *testing.T) {
-	on := track.Filter{Statuses: []string{"active", "closed"}, PRStatuses: []string{"none"}, Started: track.Between, From: "2026-09-01", To: "2026-09-20"}
+	on := track.Filter{Statuses: []string{"active", "done"}, PRStatuses: []string{"none"}, Started: track.Between, From: "2026-09-01", To: "2026-09-20"}
 	m := run(on)
 	view := plain(m)
-	for _, want := range []string{"[x] active", "[ ] action required", "[x] closed", "[x] no PR", "[ ] Archived only", "(•) Between", "2026-09-01", "2026-09-20"} {
+	for _, want := range []string{"[x] active", "[ ] action required", "[x] done", "[x] no PR", "[ ] Archived only", "(•) Between", "2026-09-01", "2026-09-20"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}
+	}
+	if strings.Contains(view, "] closed") {
+		t.Errorf("closed is only archived tracks, which Archived only picks:\n%s", view)
 	}
 	if _, f := run(on, enter).Result(); !reflect.DeepEqual(f, on) {
 		t.Errorf("applied unchanged = %+v, want %+v", f, on)
