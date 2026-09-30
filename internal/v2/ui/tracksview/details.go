@@ -32,6 +32,7 @@ const (
 	actionUnarchive
 	actionDerail
 	actionPromote
+	actionRestart
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
@@ -82,24 +83,33 @@ func confirmRecreate(n int) []action {
 	return []action{{actionConfirmRecreate, label, "y", -1}, {actionCancel, "Cancel", "n", -1}}
 }
 
-// promoteAction is an Ask or Plan track's, after Open or Resume.
-var promoteAction = action{actionPromote, "Promote", "m", 3}
+// promoteAction is an Ask or Plan track's, after Open or Resume;
+// restartAction an open track's whose agent exited, after End.
+var (
+	promoteAction = action{actionPromote, "Promote", "m", 3}
+	restartAction = action{actionRestart, "Restart", "r", 0}
+)
 
 // actionsFor are t's buttons.
 func actionsFor(t source.Track) []action {
-	switch {
-	case t.Archived:
+	if t.Archived {
 		return archivedActions
-	case t.Kind != string(track.Ask) && t.Kind != string(track.Plan):
-	case t.Open():
-		return slices.Insert(slices.Clone(openActions), 2, promoteAction)
-	default:
-		return slices.Insert(slices.Clone(endedActions), 1, promoteAction)
 	}
-	if t.Open() {
-		return openActions
+	promotable := t.Kind == string(track.Ask) || t.Kind == string(track.Plan)
+	if !t.Open() {
+		if promotable {
+			return slices.Insert(slices.Clone(endedActions), 1, promoteAction)
+		}
+		return endedActions
 	}
-	return endedActions
+	actions := openActions
+	if promotable {
+		actions = slices.Insert(slices.Clone(actions), 2, promoteAction)
+	}
+	if t.Status == track.Exited || t.Status == track.Error {
+		actions = slices.Insert(slices.Clone(actions), 2, restartAction)
+	}
+	return actions
 }
 
 // mainAction is what Enter and a double click do to t.
@@ -313,6 +323,9 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case actionPromote:
 		next, cmd := m.startPromote(t.ID, t.Name)
+		return next, cmd, true
+	case actionRestart:
+		next, cmd := m.startRestart(t.ID, t.Name)
 		return next, cmd, true
 	case actionConfirmEnd, actionConfirmRecreate, actionConfirmArchive, actionConfirmDerail:
 		q := m.station.asking

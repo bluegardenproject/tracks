@@ -56,7 +56,14 @@ func newTracksWindowCmd(version string) *cobra.Command {
 					return resumeTrack(cmd.Context(), daemon, c, rpc.ResumeParams{ID: id, Recreate: recreate}, progress)
 				},
 				Promote: func(id string, progress func(string)) error {
-					return promoteTrack(cmd.Context(), daemon, c, id, progress)
+					return inPlace(cmd.Context(), daemon, c, func(client rpc.Client) (rpc.CreateResult, error) {
+						return client.Promote(cmd.Context(), rpc.PromoteParams{ID: id}, progress)
+					})
+				},
+				Restart: func(id string, progress func(string)) error {
+					return inPlace(cmd.Context(), daemon, c, func(client rpc.Client) (rpc.CreateResult, error) {
+						return client.Restart(cmd.Context(), rpc.RestartParams{ID: id}, progress)
+					})
 				},
 				Archive: func(id string, force bool) ([]string, error) {
 					return archiveTrack(cmd.Context(), daemon, rpc.ArchiveParams{ID: id, Force: force})
@@ -145,12 +152,12 @@ func resumeTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, p rpc.
 	return nil, switchToWindow(c, r.Window)
 }
 
-// promoteTrack promotes the track through the daemon and switches to
-// its window.
-func promoteTrack(ctx context.Context, daemon daemonCalls, c *tmux.Client, id string, progress func(string)) error {
+// inPlace runs call, a daemon method that restarts a track's agent,
+// and switches to the track's window.
+func inPlace(ctx context.Context, daemon daemonCalls, c *tmux.Client, call func(rpc.Client) (rpc.CreateResult, error)) error {
 	var r rpc.CreateResult
 	err := daemon.do(ctx, func(client rpc.Client) (err error) {
-		r, err = client.Promote(ctx, rpc.PromoteParams{ID: id}, progress)
+		r, err = call(client)
 		return err
 	})
 	if err != nil {
