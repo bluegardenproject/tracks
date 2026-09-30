@@ -32,7 +32,7 @@ What v1 does that v2 still lacks, and whether v2.0.0 needs it. Compared with v1'
 Needed before v2.0.0:
 
 - **Model in the New Track form:** pick the model per track, next to the engine; the type's default preselected.
-- **Desktop notifications:** macOS notifications and the terminal bell, per event, as v1 has them.
+- **Desktop notifications** ([16-notifications.md](plans/16-notifications.md)): macOS notifications and the terminal bell, per event, as v1 has them.
 - **Failed creations kept as drafts:** a creation that fails keeps what was typed, to start it again from Station.
 - **The findings from testing:** the folder trust prompt, Cursor's `create-chat` under a custom `XDG_CONFIG_HOME`, Cursor's plan-approval dialog, the overlay colours.
 
