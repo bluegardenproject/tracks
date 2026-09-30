@@ -18,6 +18,8 @@ func repo(t *testing.T) string {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	dir := t.TempDir()
 	run := func(args ...string) {
 		t.Helper()

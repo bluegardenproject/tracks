@@ -55,7 +55,7 @@ func TestReviewersMatchV1(t *testing.T) {
 	}
 }
 
-func TestInstallReviewers(t *testing.T) {
+func TestInstallHelpers(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".claude", "agents")
 	mine := filepath.Join(dir, "tracks-v2-docs-reviewer.md")
@@ -70,7 +70,7 @@ func TestInstallReviewers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	skipped, err := InstallReviewers(home)
+	skipped, err := InstallHelpers(home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +87,14 @@ func TestInstallReviewers(t *testing.T) {
 	if err := os.Remove(mine); err != nil {
 		t.Fatal(err)
 	}
-	if skipped, err := InstallReviewers(home); err != nil || len(skipped) != 0 {
+	if skipped, err := InstallHelpers(home); err != nil || len(skipped) != 0 {
 		t.Fatalf("second install: %v, %v", skipped, err)
 	}
 	if b, _ := os.ReadFile(mine); string(b) != docsReviewerAgent {
 		t.Error("a missing reviewer was not written")
+	}
+	if b, _ := os.ReadFile(filepath.Join(home, ".claude", "skills", "tracks-v2-add-repo", "SKILL.md")); string(b) != addRepoSkill {
+		t.Error("the add-repo skill was not written")
 	}
 }
 

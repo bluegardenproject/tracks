@@ -92,6 +92,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Resume:  c.resume,
 		rpc.Archive: c.archive,
 		rpc.Derail:  c.derail,
+		rpc.AddRepo: c.addRepo,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -128,6 +129,20 @@ func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	c.Log.Printf("resumed %s, %s", p.ID, resumed.Track.Name)
 	return rpc.ResumeResult{CreateResult: rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}}, nil
+}
+
+func (c Config) addRepo(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.AddRepoParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	r, err := c.Tracks.AddRepo(ctx, p.ID, p.Repo, call.Progress)
+	if err != nil {
+		c.Log.Printf("adding %s to %s failed: %v", p.Repo, p.ID, err)
+		return nil, err
+	}
+	c.Log.Printf("added %s to %s at %s", r.Name, p.ID, r.Worktree)
+	return rpc.AddRepoResult{Name: r.Name, Worktree: r.Worktree}, nil
 }
 
 func (c Config) archive(ctx context.Context, call *rpc.Call) (any, error) {
@@ -227,11 +242,12 @@ func (c Config) outcome(created tracks.Created, err error) string {
 }
 
 // helpers installs what the prompts rely on: the reviewer subagents,
-// and a `tracks` on the tracks' PATH that runs this build's v2 app.
+// the add-repo skill, and a `tracks` on the tracks' PATH that runs this
+// build's v2 app.
 func (c Config) helpers() {
-	skipped, err := claude.InstallReviewers(c.Home)
+	skipped, err := claude.InstallHelpers(c.Home)
 	if err != nil {
-		c.Log.Printf("installing the reviewer subagents: %v", err)
+		c.Log.Printf("installing the Claude helpers: %v", err)
 	}
 	for _, path := range skipped {
 		c.Log.Printf("not overwriting %s: it lacks the x-tracks-managed marker, so it isn't Tracks'", path)

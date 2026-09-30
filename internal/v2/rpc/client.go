@@ -133,6 +133,12 @@ func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string
 	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
+// AddRepo gives a work track a worktree of another repo.
+func (c Client) AddRepo(ctx context.Context, p AddRepoParams, progress func(string)) (AddRepoResult, error) {
+	var r AddRepoResult
+	return r, c.Call(ctx, AddRepo, p, &r, progress)
+}
+
 // Archive returns the work that would be lost instead of archiving the
 // track, when there's some and not p.Force.
 func (c Client) Archive(ctx context.Context, p ArchiveParams) ([]string, error) {

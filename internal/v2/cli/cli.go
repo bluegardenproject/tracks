@@ -41,6 +41,7 @@ func newRoot(version string) *cobra.Command {
 		newHookCmd(),
 		newTerminalCmd(),
 		newReviewCmd(),
+		newAddRepoCmd(),
 	)
 	return root
 }

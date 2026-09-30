@@ -37,7 +37,8 @@ A repo from the Repositories tab joins a running Work track.
 
 - It gets a worktree on the track's branch, from `origin/<base>`, fetched first as Create does, and the track lists it from then on: Station, the details, Archive and Derail all include it.
 - It prints the worktree's path: "Added tracks-docs at /…/worktrees/<id>/tracks-docs. You can read and write files there."
-- **Refused:** a repo Tracks doesn't know, with the ones it does ("No repo named tracks-doc on the Repositories tab. Repos: tracks, tracks-docs."), one already in the track, and tracks without worktrees ("rate-bug has no worktrees: promote it first." for Ask and Plan, and Review and Doc tracks, which check out a PR or attach repos read-only).
+- **Refused:** a repo Tracks doesn't know, with the ones it does ("No repo named tracks-doc on the Repositories tab. Repos: tracks, tracks-docs."), one already in the track, a repo that already has a branch of the track's name, and tracks without worktrees of their own: "rate-bug has no worktrees: promote it first." for Ask and Plan, "Only Work tracks can add repos." for Review and Doc, which check out a PR or attach repos read-only, and archived tracks, whose worktrees are gone.
+- **The branch** is the one the track's first worktree is on now: agents often rename the branch they started on.
 
 ### The global helpers
 

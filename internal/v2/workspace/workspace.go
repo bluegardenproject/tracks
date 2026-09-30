@@ -92,6 +92,25 @@ func (w *Worktrees) add(ctx context.Context, r track.Repo, review Review, progre
 	return nil
 }
 
+// AddRepo checks r out into Root/<id>/<repo> for a work track on
+// branch, new in r, from origin/<base>. A branch r already has is
+// refused rather than checked out: it isn't the track's.
+func (w *Worktrees) AddRepo(ctx context.Context, id string, r track.Repo, branch string, progress func(string)) (track.Repo, error) {
+	exists, err := git.NewPrimaryRepoClient(r.Path).BranchExists(ctx, branch)
+	if err != nil {
+		return track.Repo{}, fmt.Errorf("check branch %s in %s: %w", branch, r.Name, err)
+	}
+	if exists {
+		return track.Repo{}, fmt.Errorf("%s already has a branch %s", r.Name, branch)
+	}
+	r.Worktree = filepath.Join(w.Root, id, r.Name)
+	r.Branch = branch
+	if err := w.add(ctx, r, Review{}, progress); err != nil {
+		return track.Repo{}, err
+	}
+	return r, nil
+}
+
 // Remove undoes Add for a track that is being rolled back: its
 // worktrees, their folder, and a work track's new branches.
 func (w *Worktrees) Remove(ctx context.Context, t track.Track) error {

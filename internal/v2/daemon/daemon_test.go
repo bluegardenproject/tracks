@@ -107,6 +107,9 @@ func TestDaemon(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "agents", "tracks-v2-reviewer.md")); err != nil {
 		t.Errorf("reviewer not installed: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-v2-add-repo", "SKILL.md")); err != nil {
+		t.Errorf("add-repo skill not installed: %v", err)
+	}
 	if info, err := os.Stat(c.Paths.Socket); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("socket mode: %v, %v", info.Mode(), err)
 	}
@@ -121,6 +124,9 @@ func TestDaemon(t *testing.T) {
 	}
 	if err := client.Report(ctx, rpc.ReportParams{ID: "20260928-101500-abc123", Event: "agent.waiting"}); !errors.As(err, &p) {
 		t.Errorf("reporting on a missing track: %v, want a problem", err)
+	}
+	if _, err := client.AddRepo(ctx, rpc.AddRepoParams{ID: "20260928-101500-abc123", Repo: "web"}, nil); !errors.As(err, &p) {
+		t.Errorf("adding a repo to a missing track: %v, want a problem", err)
 	}
 	if _, err := client.Archive(ctx, rpc.ArchiveParams{ID: "20260928-101500-abc123"}); !errors.As(err, &p) {
 		t.Errorf("archiving a missing track: %v, want a problem", err)

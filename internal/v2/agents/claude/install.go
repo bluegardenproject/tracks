@@ -18,16 +18,18 @@ const managedMarker = "x-tracks-managed:"
 // it belongs in the frontmatter at the top.
 const markerScanLimit = 4096
 
-// InstallReviewers writes the reviewer subagents the prompts call into
-// home's .claude/agents. A file there without the marker is the user's
-// and stays untouched; its path is returned in skipped.
-func InstallReviewers(home string) (skipped []string, err error) {
-	dir := filepath.Join(home, ".claude", "agents")
+// InstallHelpers writes what the prompts rely on into home's .claude:
+// the reviewer subagents, and the add-repo skill. A file there without
+// the marker is the user's and stays untouched; its path is returned
+// in skipped.
+func InstallHelpers(home string) (skipped []string, err error) {
+	dir := filepath.Join(home, ".claude")
 	for _, f := range []struct{ name, content string }{
-		{"tracks-v2-reviewer.md", reviewerAgent},
-		{"tracks-v2-docs-reviewer.md", docsReviewerAgent},
+		{"agents/tracks-v2-reviewer.md", reviewerAgent},
+		{"agents/tracks-v2-docs-reviewer.md", docsReviewerAgent},
+		{"skills/tracks-v2-add-repo/SKILL.md", addRepoSkill},
 	} {
-		path := filepath.Join(dir, f.name)
+		path := filepath.Join(dir, filepath.FromSlash(f.name))
 		ok, err := writeManaged(path, []byte(f.content))
 		if err != nil {
 			return skipped, err

@@ -88,6 +88,19 @@ func (s *Store) SetBranch(ctx context.Context, id string, position int, branch s
 	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
 }
 
+// AddTrackRepo adds r to track id's repos, after the others; ErrNotFound
+// when there's no track id.
+func (s *Store) AddTrackRepo(ctx context.Context, id string, r track.Repo) error {
+	var repoID any
+	if r.RepoID != 0 {
+		repoID = r.RepoID
+	}
+	return s.updateTrack(ctx, id,
+		"INSERT INTO track_repos (track_id, position, repo_id, name, path, worktree, branch, base) "+
+			"SELECT id, (SELECT COALESCE(MAX(position) + 1, 0) FROM track_repos WHERE track_id = ?), ?, ?, ?, ?, ?, ? FROM tracks WHERE id = ?",
+		id, repoID, r.Name, r.Path, r.Worktree, r.Branch, r.Base, id)
+}
+
 // DeleteTrack deletes track id with its repos and PRs; ErrNotFound when
 // there's none.
 func (s *Store) DeleteTrack(ctx context.Context, id string) error {

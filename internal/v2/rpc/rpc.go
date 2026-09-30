@@ -23,6 +23,7 @@ const (
 	Filter    = "filter"
 	Report    = "report"
 	Derail    = "derail"
+	AddRepo   = "add-repo"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
@@ -119,6 +120,19 @@ type ReportParams struct {
 type ResumeParams struct {
 	ID       string `json:"id"`
 	Recreate bool   `json:"recreate,omitempty"`
+}
+
+// AddRepoParams names a work track and the repo, from the
+// Repositories tab, that joins it.
+type AddRepoParams struct {
+	ID   string `json:"id"`
+	Repo string `json:"repo"`
+}
+
+// AddRepoResult is the repo that joined and its worktree.
+type AddRepoResult struct {
+	Name     string `json:"name"`
+	Worktree string `json:"worktree"`
 }
 
 // ResumeResult is the resumed track, or the worktrees that couldn't be
