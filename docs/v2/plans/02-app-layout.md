@@ -31,7 +31,7 @@ type Source interface {
 - `source.Windows` is the implementation until the daemon exists. It reads the tracks from their tmux windows (`trackwin.List`), which carry the kind and repo as window options. A daemon-backed source replaces it in chunk 5; the screens don't change.
 - `Track` is plain display data: number (the window index), name, kind, repo and status.
 - **Status is out of scope for now:** every track shows "running" until the status model exists.
-- Station reads the tracks whenever the daemon's change stream says they changed ([12-change-stream-and-derail.md](12-change-stream-and-derail.md)).
+- Station reads the tracks whenever the daemon's change stream says they changed.
 
 ## Styles (`internal/v2/ui/style`)
 

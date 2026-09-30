@@ -58,7 +58,7 @@ v1's `watchTrackProcess` ([`internal/daemon/supervisor.go`](../../../../internal
 ## Daemon side
 
 - **Protocol:** a `hook` method with `{TrackID, Provider, Event, At, ToolSummary, Message, NotificationType, StopStatus, TranscriptPath}`.
-- **State function:** a pure `applyHook(track, event) (track, effects)`. Effects are notify, start the PR watcher, refresh branches, refresh usage. Every accepted event is also appended to the timeline ([storage draft](storage.md)).
+- **State function:** a pure `applyHook(track, event) (track, effects)`. Effects are notify, start the PR watcher, refresh branches, refresh usage. Every accepted event could also go to a timeline, a future feature in the masterplan.
 - **Supervision** (`internal/v2/supervise`): `hookMode` is `pending`, `hooks` or `legacy`. The 2-second tick keeps only liveness (sentinel file and `kill -0`).
 
 ## Fallbacks
