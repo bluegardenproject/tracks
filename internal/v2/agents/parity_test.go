@@ -16,8 +16,23 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
-// v2Names is the one change v2 makes to v1's prompts.
-var v2Names = strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
+// v2Names and v2JiraErrors are what v2 changes in v1's prompts;
+// withoutLinks takes out the one thing it adds.
+var (
+	v2Names      = strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
+	v2JiraErrors = strings.NewReplacer("  4. Any Atlassian-tool error is non-fatal — note it in your reply and carry on with the actual work.",
+		"  4. An error while assigning or moving the ticket is non-fatal — note it in your reply and carry on with the actual work. "+
+			"A ticket you cannot read is not: follow **Links you cannot read**.")
+)
+
+func withoutLinks(t *testing.T, command string) string {
+	t.Helper()
+	links := "\n\n" + agents.LinksContract
+	if strings.Count(command, links) != 1 {
+		t.Errorf("the command should carry the links rule once:\n%s", command)
+	}
+	return strings.Replace(command, links, "", 1)
+}
 
 type spawnCase struct {
 	name      string
@@ -116,7 +131,7 @@ func TestClaudeMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2Names.Replace(opts.ShellCommand()); got.Command != want {
+			if want := v2JiraErrors.Replace(v2Names.Replace(opts.ShellCommand())); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
@@ -141,7 +156,7 @@ func TestCursorMatchesV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := v2Names.Replace(opts.ShellCommand()); got.Command != want {
+			if want := v2Names.Replace(opts.ShellCommand()); withoutLinks(t, got.Command) != want {
 				t.Errorf("command\n got: %s\nwant: %s", got.Command, want)
 			}
 			if got.Dir != opts.CWD {
