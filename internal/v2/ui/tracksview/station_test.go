@@ -129,6 +129,22 @@ func TestStationEmptyAndFailing(t *testing.T) {
 	}
 }
 
+func TestModelCell(t *testing.T) {
+	for _, c := range []struct {
+		engine, model, want string
+	}{
+		{"Claude Code", "", "default"},
+		{"Claude Code", "claude-opus-4-5-20251101", "opus-4-5"},
+		{"Claude Code", "sonnet", "sonnet"},
+		{"Cursor", "gpt-5", "gpt-5"},
+		{"Cursor", "", "default"},
+	} {
+		if got := cells(source.Track{Engine: c.engine, Model: c.model})[3]; got != c.want {
+			t.Errorf("%s %q shows %q, want %q", c.engine, c.model, got, c.want)
+		}
+	}
+}
+
 func TestStationHover(t *testing.T) {
 	var opened []int
 	m := withTracks(demoTracks(3), 120, 40, &opened)
