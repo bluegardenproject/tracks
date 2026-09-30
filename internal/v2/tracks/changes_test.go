@@ -87,6 +87,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SetState", func() error { return w.SetState(ctx, "a", track.State{Waiting: true}) }, true},
 		{"Rename", func() error { return w.Rename(ctx, "a", "b") }, true},
 		{"SetBranch", func() error { return w.SetBranch(ctx, "a", 0, "fix") }, true},
+		{"SetCost", func() error { return w.SetCost(ctx, "a", 1.5) }, true},
 		{"SetFilter", func() error { return w.SetFilter(ctx, track.Filter{Archived: true}) }, true},
 		{"AddPR", func() error { _, err := w.AddPR(ctx, "a", pr, now); return err }, true},
 		{"AddPR", func() error { _, err := w.AddPR(ctx, "a", pr, now); return err }, false},

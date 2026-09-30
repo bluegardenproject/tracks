@@ -123,7 +123,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
-			Engine: engine, Model: l.Model, Session: l.Session, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
+			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
 	}
 	return out, f, nil
 }

@@ -109,6 +109,10 @@ func (w watched) Rename(ctx context.Context, id, name string) error {
 	return w.notify(w.Store.Rename(ctx, id, name))
 }
 
+func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
+	return w.notify(w.Store.SetCost(ctx, id, cost))
+}
+
 func (w watched) SetBranch(ctx context.Context, id string, position int, branch string) error {
 	return w.notify(w.Store.SetBranch(ctx, id, position, branch))
 }

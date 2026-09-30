@@ -117,17 +117,18 @@ func TestStateAndName(t *testing.T) {
 	if d, _ := s.Track(ctx, "d"); !d.Waiting || d.Status() != track.ActionRequired {
 		t.Errorf("d = %+v, want waiting", d.State)
 	}
-	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2")); err != nil {
+	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2"), s.SetCost(ctx, "b", 3.45)); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" {
-		t.Errorf("reopened b = %+v; want open, not cleaned, named b-2", b)
+	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" || b.Cost != 3.45 {
+		t.Errorf("reopened b = %+v; want open, not cleaned, named b-2, $3.45", b)
 	}
 	if open, _ := s.OpenTracks(ctx); len(open) != 2 || open[0].ID != "b" || open[1].ID != "d" {
 		t.Errorf("OpenTracks after reopening b = %+v", open)
 	}
 	for name, err := range map[string]error{
 		"rename": s.Rename(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
+		"set the cost of": s.SetCost(ctx, "nope", 1),
 	} {
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s an unknown track: %v, want ErrNotFound", name, err)

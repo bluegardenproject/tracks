@@ -2,7 +2,6 @@ package tracksview
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -114,7 +113,7 @@ func cells(t source.Track) []string {
 		model = t.Model
 	}
 	if t.Cost > 0 {
-		cost = fmt.Sprintf("$%.2f", t.Cost)
+		cost = usage.FormatCost(t.Cost)
 	}
 	return []string{t.Shown(), t.Kind, statusText(t), model, cost}
 }

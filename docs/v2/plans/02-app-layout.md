@@ -89,7 +89,7 @@ Most replace tmux defaults that don't fit Tracks. The keys run the hidden `track
 
 ## Tracks window: Station (`internal/v2/ui/tracksview`) (built)
 
-The Station tab shows titled frames: the track list on 3/5 of the width (slug, type, status, model and cost), and on the rest a Fast Track placeholder (10 lines) above the selected track's details. Short windows drop Fast Track before cutting the details.
+The Station tab shows titled frames: the track list on 3/5 of the width (the name typed, else the slug; type, status, the model picked at creation, and a Claude track's cost read from its transcripts as v1 does), and on the rest a Fast Track placeholder (10 lines) above the selected track's details. Short windows drop Fast Track before cutting the details.
 
 - Up and down (or `j`/`k`), the mouse wheel and clicks select a row. Enter or a double click switches to the track's window, landing on its agent pane.
 - Tracks opened or closed elsewhere show up at once.
