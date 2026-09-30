@@ -143,12 +143,15 @@ func TestStatusBadgesAreThemeTokens(t *testing.T) {
 		if !slices.Contains(theme.All, bg) || !slices.Contains(theme.All, text) {
 			t.Errorf("%s's badge %q isn't a theme state", s.ID, s.Badge)
 		}
-		if want := theme.StateInfoBg; s == track.ActionRequired {
-			if bg != theme.StateWarningBg || text != theme.StateWarningText {
-				t.Errorf("action required is drawn in %s on %s, want the warning badge", text, bg)
-			}
-		} else if bg != want || text != theme.StateInfoText {
-			t.Errorf("%s is drawn in %s on %s, want the info badge", s.ID, text, bg)
+		wantBg, wantText := theme.StateInfoBg, theme.StateInfoText
+		switch s {
+		case track.ActionRequired, track.Exited:
+			wantBg, wantText = theme.StateWarningBg, theme.StateWarningText
+		case track.Error:
+			wantBg, wantText = theme.StateDangerBg, theme.StateDangerText
+		}
+		if bg != wantBg || text != wantText {
+			t.Errorf("%s is drawn in %s on %s, want %s on %s", s.ID, text, bg, wantText, wantBg)
 		}
 	}
 }
