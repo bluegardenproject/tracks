@@ -26,6 +26,9 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 		return Created{}, err
 	}
 	id, model := set.RunsOn(string(req.Kind))
+	if req.Engine != "" {
+		id, model = req.Engine, req.Model
+	}
 	engine, ok := s.engine(id)
 	info, known := agents.ByID(id)
 	switch {
@@ -33,11 +36,16 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 		return Created{}, ErrNoEngine
 	case !ok || !known:
 		return Created{}, Problem(fmt.Sprintf("Tracks doesn't know the engine %s.", id))
+	case set.Engines.Get(id) == nil && req.Engine != "":
+		return Created{}, Problem(fmt.Sprintf("Add %s on the Engines tab, or pick another agent.", info.Name))
 	case set.Engines.Get(id) == nil:
 		return Created{}, Problem(fmt.Sprintf("Add %s on the Engines tab, or pick another agent for %s tracks in Settings → Tracks.",
 			info.Name, title(req.Kind)))
 	}
 	conf := set.Engines.Get(id)
+	if model == "" {
+		model = conf.Model
+	}
 
 	t, drafts, err := s.check(ctx, req)
 	if err != nil {

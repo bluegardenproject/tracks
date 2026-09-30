@@ -400,6 +400,35 @@ func TestCreateRunsOnTheTypesAgent(t *testing.T) {
 	}
 }
 
+func TestCreateRunsOnTheAgentPicked(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	f.engines = settings.Engines{Claude: &settings.Engine{Model: "opus"}, Cursor: &settings.Engine{}}
+	f.types.Set("ask", &settings.TrackType{Engine: "claude", Model: "sonnet"})
+	for _, c := range []struct {
+		engine, model, want string
+	}{
+		{"cursor", "gpt-5", "gpt-5"},
+		{"cursor", "", ""},
+		{"claude", "", "opus"},
+		{"claude", "haiku", "haiku"},
+	} {
+		got, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why", Engine: c.engine, Model: c.model}, func(string) {})
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.engine, c.model, err)
+		}
+		if got.Track.Engine != c.engine || got.Track.Model != c.want {
+			t.Errorf("picked %s %q, runs on %s %q; want %q", c.engine, c.model, got.Track.Engine, got.Track.Model, c.want)
+		}
+	}
+
+	f.engines.Cursor = nil
+	_, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why", Engine: "cursor"}, func(string) {})
+	if err == nil || err.Error() != "Add Cursor on the Engines tab, or pick another agent." {
+		t.Errorf("a picked agent that isn't added: %v", err)
+	}
+}
+
 func TestCreateKinds(t *testing.T) {
 	doc := filepath.Join(t.TempDir(), "spec.md")
 	if err := os.WriteFile(doc, nil, 0o600); err != nil {
