@@ -1,6 +1,6 @@
 # Plan: resuming and cleaning tracks
 
-**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). Ended tracks stay in Station. **Resume** starts their agent again on its session, and **Clean** removes their worktrees for good.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), chunk 5 (real tracks). Ended tracks stay in Station. **Resume** starts their agent again on its session, and **Clean** removes their worktrees for good. Clean was later replaced by Archive, which removes the branches too: see [13-archive-replaces-clean.md](13-archive-replaces-clean.md).
 
 ## What users get
 
