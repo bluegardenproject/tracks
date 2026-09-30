@@ -125,13 +125,13 @@ func Respawn(t Tmux, window string, s Spec) (Window, error) {
 		return Window{}, fmt.Errorf("window %s has no agent pane", window)
 	}
 	w := Window{ID: window, Agent: agent.ID}
+	if err := t.RespawnPane(agent.ID, s.Dir, s.Agent.Command); err != nil {
+		return w, err
+	}
 	for name, value := range map[string]string{dirOption: s.Dir, kindOption: s.Kind, repoOption: s.Repo} {
 		if err := t.SetWindowOption(window, name, value); err != nil {
 			return w, err
 		}
-	}
-	if err := t.RespawnPane(agent.ID, s.Dir, s.Agent.Command); err != nil {
-		return w, err
 	}
 	if err := label(t, agent.ID, RoleAgent, s.Agent.Title); err != nil {
 		return w, err
