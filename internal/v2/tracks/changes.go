@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 )
 
@@ -123,6 +124,18 @@ func (w watched) AddTrackRepo(ctx context.Context, id string, r track.Repo) erro
 
 func (w watched) Promote(ctx context.Context, t track.Track) error {
 	return w.notify(w.Store.Promote(ctx, t))
+}
+
+func (w watched) SaveDraft(ctx context.Context, d store.Draft) error {
+	return w.notify(w.Store.SaveDraft(ctx, d))
+}
+
+func (w watched) DeleteDraft(ctx context.Context, id string) (bool, error) {
+	deleted, err := w.Store.DeleteDraft(ctx, id)
+	if deleted {
+		w.changes.Notify()
+	}
+	return deleted, err
 }
 
 func (w watched) AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error) {

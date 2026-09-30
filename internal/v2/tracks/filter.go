@@ -20,8 +20,13 @@ func (s *Service) Station(ctx context.Context) ([]Listed, track.Filter, error) {
 	if err != nil {
 		return nil, f, err
 	}
+	drafts, err := s.drafts(ctx, f, s.now())
+	if err != nil {
+		return nil, f, err
+	}
 	if !f.On() {
 		listed, err := s.List(ctx)
+		listed = append(listed, drafts...)
 		byCreation(listed)
 		return listed, f, err
 	}
@@ -42,6 +47,7 @@ func (s *Service) Station(ctx context.Context) ([]Listed, track.Filter, error) {
 			}
 		}
 	}
+	out = append(out, drafts...)
 	byCreation(out)
 	return out, f, nil
 }

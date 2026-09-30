@@ -30,6 +30,9 @@ type Request struct {
 	// tab.
 	Engine string `json:"engine,omitempty"`
 	Model  string `json:"model,omitempty"`
+	// Draft is the draft a failure keeps the request as, and a success
+	// deletes; "" is a new one.
+	Draft string `json:"draft,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:
