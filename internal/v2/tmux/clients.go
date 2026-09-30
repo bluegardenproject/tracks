@@ -1,6 +1,9 @@
 package tmux
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // ClientOf is the client showing pane: of those attached to its
 // session, the one used last.
@@ -10,6 +13,16 @@ func (c *Client) ClientOf(pane string) (string, error) {
 		err = errors.New("no client shows the pane")
 	}
 	return client, err
+}
+
+// ShownWindows are the windows of session that its attached clients
+// show.
+func (c *Client) ShownWindows(session string) ([]string, error) {
+	out, err := c.run("list-clients", "-t", "="+session, "-F", "#{window_id}")
+	if err != nil || out == "" {
+		return nil, err
+	}
+	return strings.Split(out, "\n"), nil
 }
 
 // SwitchClient shows target, a window, on client.

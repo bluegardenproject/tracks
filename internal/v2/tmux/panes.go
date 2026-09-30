@@ -24,6 +24,7 @@ type Pane struct {
 	// the pane overwrite.
 	Title, Role              string
 	Left, Top, Width, Height int
+	TTY                      string // the terminal the pane's programs write to
 }
 
 // NewWindow adds a window to session without selecting it. Its first
@@ -72,21 +73,21 @@ func (c *Client) SplitPane(target string, dir Split, percent int, cwd, command s
 // ListPanes returns the panes of window.
 func (c *Client) ListPanes(window string) ([]Pane, error) {
 	out, err := c.run("list-panes", "-t", window, "-F",
-		"#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{@tracks_role}\t#{@tracks_title}")
+		"#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_tty}\t#{@tracks_role}\t#{@tracks_title}")
 	if err != nil {
 		return nil, err
 	}
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "\t", 7)
-		if len(f) != 7 {
+		f := strings.SplitN(line, "\t", 8)
+		if len(f) != 8 {
 			continue
 		}
 		n := make([]int, 4)
 		for i := range n {
 			n[i], _ = strconv.Atoi(f[i+1])
 		}
-		panes = append(panes, Pane{ID: f[0], Left: n[0], Top: n[1], Width: n[2], Height: n[3], Role: f[5], Title: f[6]})
+		panes = append(panes, Pane{ID: f[0], Left: n[0], Top: n[1], Width: n[2], Height: n[3], TTY: f[5], Role: f[6], Title: f[7]})
 	}
 	return panes, nil
 }
