@@ -106,14 +106,7 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 // open opens t's window with the agent start runs. When setting the
 // window up fails, it closes it again.
 func (s *Service) open(t track.Track, info agents.Engine, start agents.Start) (trackwin.Window, error) {
-	terminals := 0
-	if t.Terminal {
-		terminals = 1
-	}
-	win, err := s.Windows.Open(trackwin.Spec{
-		Track: t.ID, Name: t.Name, Kind: string(t.Kind), Repo: repoNames(t.Repos), Dir: start.Dir,
-		Agent: trackwin.Process{Title: info.Name, Command: start.Command}, Terminals: terminals,
-	})
+	win, err := s.Windows.Open(windowSpec(t, info, start))
 	if err != nil {
 		if win.ID != "" {
 			_ = s.Windows.Close(win.ID)
@@ -121,6 +114,18 @@ func (s *Service) open(t track.Track, info agents.Engine, start agents.Start) (t
 		return trackwin.Window{}, fmt.Errorf("open the window: %w", err)
 	}
 	return win, nil
+}
+
+// windowSpec is t's window, with the agent start runs.
+func windowSpec(t track.Track, info agents.Engine, start agents.Start) trackwin.Spec {
+	terminals := 0
+	if t.Terminal {
+		terminals = 1
+	}
+	return trackwin.Spec{
+		Track: t.ID, Name: t.Name, Kind: string(t.Kind), Repo: repoNames(t.Repos), Dir: start.Dir,
+		Agent: trackwin.Process{Title: info.Name, Command: start.Command}, Terminals: terminals,
+	}
 }
 
 func repoNames(repos []track.Repo) string {

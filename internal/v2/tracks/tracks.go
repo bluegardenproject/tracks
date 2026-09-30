@@ -44,6 +44,7 @@ type Store interface {
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
+	Promote(ctx context.Context, t track.Track) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
@@ -79,6 +80,8 @@ type Windows interface {
 	Attention(window string, on bool) error
 	// Screen is what window's agent pane shows.
 	Screen(window string) (string, error)
+	// Respawn restarts window's agent on s, keeping the window.
+	Respawn(window string, s trackwin.Spec) (trackwin.Window, error)
 }
 
 // Service creates, lists and ends tracks.
@@ -231,6 +234,10 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 }
 
 func (w TmuxWindows) Close(window string) error { return w.Tmux.KillWindow(window) }
+
+func (w TmuxWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, error) {
+	return trackwin.Respawn(w.Tmux, window, s)
+}
 
 func (w TmuxWindows) Attention(window string, on bool) error {
 	return trackwin.SetAttention(w.Tmux, window, on)
