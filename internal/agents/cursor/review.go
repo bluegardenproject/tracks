@@ -58,7 +58,7 @@ type ReviewRequest struct {
 	Diff string
 
 	// Instructions is the reviewer's prompt — the shipped
-	// tracks-v2-reviewer definition, so both providers review to one
+	// tracks-reviewer definition, so both providers review to one
 	// standard.
 	Instructions string
 

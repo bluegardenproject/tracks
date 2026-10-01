@@ -1,6 +1,6 @@
 ---
 x-tracks-managed: "1"
-name: tracks-v2-docs-reviewer
+name: tracks-docs-reviewer
 description: |
   Document review specialist — specs, design docs, RFCs, ADRs, READMEs,
   one-pagers, and slide decks exported to PDF. Reviews a local file (or a

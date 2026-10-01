@@ -6,23 +6,22 @@ import (
 	"github.com/bluegardenproject/tracks/internal/agents"
 )
 
-// rule is installed at ~/.cursor/rules/tracks-v2.mdc. A global rule
-// loads in every Cursor session, so its first line gates it to v2's
-// track panes, and it stays short. v1's rule, where v1 installed it,
-// loads there too: this one says its dev-server commands don't exist.
+// rule is installed at ~/.cursor/rules/tracks.mdc. A global rule loads
+// in every Cursor session, so its first line gates it to track panes,
+// and it stays short.
 const rule = `---
 x-tracks-managed: "1"
-description: How to behave inside a Tracks v2 track (applies only when TRACKS_ID and TRACKS_NEW_APP are set)
+description: How to behave inside a Tracks track (applies only when TRACKS_ID is set)
 alwaysApply: true
 ---
 
-# Tracks v2 tracks
+# Tracks tracks
 
-**This rule applies only when both ` + "`TRACKS_ID`" + ` and ` + "`TRACKS_NEW_APP`" + ` are set.**
-If either isn't, ignore everything below.
+**This rule applies only when the ` + "`TRACKS_ID`" + ` environment variable is set.**
+If it isn't, ignore everything below.
 
-When they are, you run in a track of
-[tracks](https://github.com/bluegardenproject/tracks) v2, in a tmux pane the
+When it is, you run in a track of
+[tracks](https://github.com/bluegardenproject/tracks), in a tmux pane the
 user can switch into at any time.
 
 ## What that changes
@@ -31,9 +30,8 @@ user can switch into at any time.
   read-only for reference are their PRIMARY checkouts — the working copies
   their editor watches. Never edit, commit, or push in those.
 - **There are no dev-server commands.** ` + "`tracks up`" + `, ` + "`tracks down`" + `,
-  ` + "`tracks services`" + ` and ` + "`tracks url`" + ` don't exist in this Tracks; a rule
-  that sends you to them is for an older one. Never background a server
-  with ` + "`&`" + `: ask the user how they run it.
+  ` + "`tracks services`" + ` and ` + "`tracks url`" + ` don't exist. Never background a
+  server with ` + "`&`" + `: ask the user how they run it.
 - **Track commands.** ` + "`$TRACKS_ID`" + ` is already set, so ` + "`--track`" + ` is never needed.
   - ` + "`tracks terminal`" + ` opens a terminal pane beside this one, when the user
     asks for a shell.
@@ -59,7 +57,7 @@ preamble.
 // InstallRule writes the rule into home's .cursor/rules. A file there
 // without the marker is the user's and stays untouched: ok is false.
 func InstallRule(home string) (path string, ok bool, err error) {
-	path = filepath.Join(home, ".cursor", "rules", "tracks-v2.mdc")
+	path = filepath.Join(home, ".cursor", "rules", "tracks.mdc")
 	ok, err = agents.WriteManaged(path, []byte(rule))
 	return path, ok, err
 }

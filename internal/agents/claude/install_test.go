@@ -10,8 +10,8 @@ import (
 
 func TestReviewerNames(t *testing.T) {
 	for _, r := range []string{reviewerAgent, docsReviewerAgent} {
-		if !regexp.MustCompile(`(?m)^name: tracks-v2-(docs-)?reviewer$`).MatchString(r) {
-			t.Errorf("reviewer has no v2 name:\n%s", r[:200])
+		if !regexp.MustCompile(`(?m)^name: tracks-(docs-)?reviewer$`).MatchString(r) {
+			t.Errorf("reviewer has no plain name:\n%s", r[:200])
 		}
 	}
 }
@@ -19,11 +19,11 @@ func TestReviewerNames(t *testing.T) {
 func TestInstallHelpers(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".claude", "agents")
-	mine := filepath.Join(dir, "tracks-v2-docs-reviewer.md")
+	mine := filepath.Join(dir, "tracks-docs-reviewer.md")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ours := filepath.Join(dir, "tracks-v2-reviewer.md")
+	ours := filepath.Join(dir, "tracks-reviewer.md")
 	if err := os.WriteFile(ours, []byte("---\nx-tracks-managed: \"1\"\nold\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestInstallHelpers(t *testing.T) {
 	if b, _ := os.ReadFile(mine); string(b) != docsReviewerAgent {
 		t.Error("a missing reviewer was not written")
 	}
-	if b, _ := os.ReadFile(filepath.Join(home, ".claude", "skills", "tracks-v2-add-repo", "SKILL.md")); string(b) != addRepoSkill {
+	if b, _ := os.ReadFile(filepath.Join(home, ".claude", "skills", "tracks-add-repo", "SKILL.md")); string(b) != addRepoSkill {
 		t.Error("the add-repo skill was not written")
 	}
 }

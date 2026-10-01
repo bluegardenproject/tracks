@@ -109,13 +109,13 @@ func TestDaemon(t *testing.T) {
 	}
 
 	shim, err := os.ReadFile(filepath.Join(c.Paths.BinDir, "tracks"))
-	if err != nil || !strings.Contains(string(shim), `--new-app "$@"`) {
+	if err != nil || !strings.Contains(string(shim), `"$@"`) || strings.Contains(string(shim), "--new-app") {
 		t.Errorf("tracks command = %q, %v", shim, err)
 	}
-	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "agents", "tracks-v2-reviewer.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "agents", "tracks-reviewer.md")); err != nil {
 		t.Errorf("reviewer not installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-v2-add-repo", "SKILL.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-add-repo", "SKILL.md")); err != nil {
 		t.Errorf("add-repo skill not installed: %v", err)
 	}
 	if info, err := os.Stat(c.Paths.Socket); err != nil || info.Mode().Perm() != 0o600 {

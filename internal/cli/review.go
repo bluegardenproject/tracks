@@ -29,7 +29,7 @@ func newReviewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "review",
 		Short: "review this track's branch with a separate Cursor agent",
-		Long: "Runs the tracks-v2-reviewer as a second Cursor agent with a fresh chat, " +
+		Long: "Runs the tracks-reviewer as a second Cursor agent with a fresh chat, " +
 			"so it reads the diff without the working agent's history. Cursor can't " +
 			"hand work to a custom subagent the way Claude Code does; this is the " +
 			"equivalent for Cursor tracks.\n\n" +

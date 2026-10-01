@@ -1,6 +1,4 @@
-// Package cli is the command tree of the Tracks v2 app, reached with
-// `tracks --new-app` in builds tagged v2 (`make dev`). See
-// docs/v2/masterplan.md.
+// Package cli is the command tree of tracks.
 package cli
 
 import (
@@ -9,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Execute runs the v2 command tree with args (the flag already removed);
-// built is when the binary was built.
+// Execute runs the command tree with args; built is when the binary was
+// built.
 func Execute(ctx context.Context, args []string, version, built string) error {
 	root := newRoot(version)
 	root.AddCommand(newVersionCmd(version, built))
@@ -20,8 +18,8 @@ func Execute(ctx context.Context, args []string, version, built string) error {
 
 func newRoot(version string) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "tracks --new-app",
-		Short:         "Tracks v2 (dev build)",
+		Use:           "tracks",
+		Short:         "tracks — coding agents in parallel over git worktrees",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -55,7 +55,7 @@ isn't true". That is still within the register; losing it is not.
 // `REVIEW OUTCOME:` line so callers can grep the verdict.
 const reviewerAgent = `---
 x-tracks-managed: "1"
-name: tracks-v2-reviewer
+name: tracks-reviewer
 description: |
   Code-review specialist. Use this agent BEFORE committing, pushing, or
   opening a pull request — especially inside a ` + "`tracks`" + ` worktree. The
@@ -124,13 +124,13 @@ commit, push, edit files, or run anything that modifies state.
 `
 
 // docsReviewerAgent is the system prompt for the document review
-// subagent (doc tracks). Separate from tracks-v2-reviewer
+// subagent (doc tracks). Separate from tracks-reviewer
 // because almost nothing carries over: the target is a file rather
 // than a diff, "correct" means claims that survive checking rather
 // than code that compiles, and the report has to earn its place with
 // a reader who is not looking at a PR.
 //
-// Note the deliberate absence of a `tools:` line. tracks-v2-reviewer
+// Note the deliberate absence of a `tools:` line. tracks-reviewer
 // pins an allowlist, but that would exclude every MCP tool — and the
 // Atlassian tool names embed a per-user server name we can't discover
 // reliably (account-level connectors aren't in ~/.claude.json). Jira
@@ -138,7 +138,7 @@ commit, push, edit files, or run anything that modifies state.
 // toolset and the read-only contract is enforced in the body instead.
 const docsReviewerAgent = `---
 x-tracks-managed: "1"
-name: tracks-v2-docs-reviewer
+name: tracks-docs-reviewer
 description: |
   Document review specialist — specs, design docs, RFCs, ADRs, READMEs,
   one-pagers, and slide decks exported to PDF. Reviews a local file (or a

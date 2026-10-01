@@ -27,13 +27,13 @@ func loadTheme(paths platform.Paths) (theme.Theme, error) {
 // themeConfPath holds the tmux side of the applied theme.
 func themeConfPath(paths platform.Paths) string { return filepath.Join(paths.DataDir, "theme.conf") }
 
-// selfCommand runs this Tracks v2, quoted for a shell.
+// selfCommand runs this tracks binary, quoted for a shell.
 func selfCommand() (string, error) {
 	self, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("find own binary: %w", err)
 	}
-	return shellx.QuoteIfNeeded(self) + " --new-app", nil
+	return shellx.QuoteIfNeeded(self), nil
 }
 
 // writeThemeConf renders t for tmux: colours and the footer rows.

@@ -1,6 +1,5 @@
-// Package platform resolves where Tracks v2 keeps its files and which
-// tmux server it runs on. Every v2 location differs from v1's, so both
-// apps can run side by side.
+// Package platform resolves where Tracks keeps its files and which tmux
+// server it runs on.
 package platform
 
 import (
@@ -9,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// Paths are where Tracks v2 keeps its files.
+// Paths are where Tracks keeps its files.
 type Paths struct {
 	// ConfigDir holds the settings, the user's themes and overrides.
 	ConfigDir string
@@ -53,8 +52,8 @@ func resolve(e env) Paths {
 	if stateHome == "" {
 		stateHome = filepath.Join(e.home, ".local", "state")
 	}
-	state := filepath.Join(stateHome, "tracks-v2")
-	config := filepath.Join(configHome, "tracks-v2")
+	state := filepath.Join(stateHome, "tracks")
+	config := filepath.Join(configHome, "tracks")
 	return Paths{
 		ConfigDir:  config,
 		Settings:   filepath.Join(config, "settings.yaml"),
@@ -66,6 +65,6 @@ func resolve(e env) Paths {
 		Lock:       filepath.Join(state, "daemon.lock"),
 		Log:        filepath.Join(state, "daemon.log"),
 		BinDir:     filepath.Join(state, "bin"),
-		TmuxSocket: "tracks-v2",
+		TmuxSocket: "tracks",
 	}
 }

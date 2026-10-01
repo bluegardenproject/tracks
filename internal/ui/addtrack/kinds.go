@@ -79,7 +79,7 @@ diff you want to review.
 Invoke the dedicated review subagent rather than reviewing yourself:
 
   Task({
-    subagent_type: "tracks-v2-reviewer",
+    subagent_type: "tracks-reviewer",
     prompt: "Review the current branch against its base and report findings."
   })
 

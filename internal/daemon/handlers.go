@@ -305,7 +305,7 @@ func (c Config) outcome(created tracks.Created, err error) string {
 
 // helpers installs what the prompts rely on: the reviewer subagents,
 // the add-repo skill, the Cursor rule once Cursor is added, and a
-// `tracks` on the tracks' PATH that runs this build's v2 app.
+// `tracks` on the tracks' PATH that runs this build.
 func (c Config) helpers() {
 	skipped, err := claude.InstallHelpers(c.Home)
 	if err != nil {
@@ -342,7 +342,7 @@ func writeShim(dir string) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	script := "#!/bin/sh\nexec " + shellx.Quote(exe) + " --new-app \"$@\"\n"
+	script := "#!/bin/sh\nexec " + shellx.Quote(exe) + " \"$@\"\n"
 	if _, err := tmp.WriteString(script); err != nil {
 		tmp.Close()
 		return err

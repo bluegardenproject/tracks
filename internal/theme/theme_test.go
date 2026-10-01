@@ -50,8 +50,8 @@ func TestParseRejects(t *testing.T) {
 	}
 }
 
-// Colours come only from tokens, so no colour value may appear in v2
-// code outside this package. Tests may use values as data.
+// Colours come only from tokens, so no colour value may appear in code
+// outside this package. Tests may use values as data.
 func TestNoColourLiteralsOutsideTheme(t *testing.T) {
 	literal := regexp.MustCompile(`"#[0-9a-fA-F]{3,8}"|lipgloss\.Color\("|\\x1b\[[34]8;|\\033\[[34]8;|\b[fb]g=(#|colou?r\d)`)
 	root, err := filepath.Abs("..")

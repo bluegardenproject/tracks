@@ -1,6 +1,6 @@
 ---
 x-tracks-managed: "1"
-name: tracks-v2-add-repo
+name: tracks-add-repo
 description: |
   Add another repository to the current `tracks` track. Use this when the
   task needs to touch a repo that wasn't part of the track's worktrees.
@@ -9,7 +9,7 @@ description: |
   name and that repo's checkout is not in your current working set.
 ---
 
-# tracks-v2-add-repo
+# tracks-add-repo
 
 You are running inside a `tracks` worktree. Your current track ID is
 exported as `$TRACKS_ID`.

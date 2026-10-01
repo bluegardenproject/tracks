@@ -1,6 +1,6 @@
 ---
 x-tracks-managed: "1"
-name: tracks-v2-reviewer
+name: tracks-reviewer
 description: |
   Code-review specialist. Use this agent BEFORE committing, pushing, or
   opening a pull request — especially inside a `tracks` worktree. The

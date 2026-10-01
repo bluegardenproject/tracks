@@ -13,10 +13,10 @@ import (
 func newStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
-		Short: "stop Tracks v2 and its tmux server",
+		Short: "stop Tracks and its tmux server",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			const name = "Tracks v2"
+			const name = "Tracks"
 			paths, err := platform.Resolve()
 			if err != nil {
 				return err

@@ -48,12 +48,12 @@ func TestLocationOf(t *testing.T) {
 		want Location
 	}{
 		{"", Outside},
-		{"/private/tmp/tmux-501/tracks-v2,123,0", OwnServer},
+		{"/private/tmp/tmux-501/tracks,123,0", OwnServer},
 		{"/private/tmp/tmux-501/default,123,2", OtherServer},
-		{"/private/tmp/tmux-501/tracks-v2-demo,123,0", OtherServer},
+		{"/private/tmp/tmux-501/tracks-demo,123,0", OtherServer},
 	}
 	for _, tt := range tests {
-		if got := LocationOf(tt.env, "tracks-v2"); got != tt.want {
+		if got := LocationOf(tt.env, "tracks"); got != tt.want {
 			t.Errorf("LocationOf(%q) = %v, want %v", tt.env, got, tt.want)
 		}
 	}
@@ -68,7 +68,7 @@ func TestArgsAddSocket(t *testing.T) {
 }
 
 func TestRealSocketPanicsInTests(t *testing.T) {
-	for _, socket := range []string{"tracks-v2", "default"} {
+	for _, socket := range []string{"tracks", "default"} {
 		func() {
 			defer func() {
 				if recover() == nil {
@@ -88,9 +88,9 @@ func TestConfRender(t *testing.T) {
 	for name, conf := range confs {
 		t.Run(name, func(t *testing.T) {
 			conf.DefaultTerminal = "tmux-256color"
-			conf.OverrideFile = "/home/u/.config/tracks-v2/tmux.conf"
-			conf.Command = "'/opt/tracks' --new-app"
-			conf.ThemeFile = "/home/u/.local/state/tracks-v2/theme.conf"
+			conf.OverrideFile = "/home/u/.config/tracks/tmux.conf"
+			conf.Command = "'/opt/tracks'"
+			conf.ThemeFile = "/home/u/.local/state/tracks/theme.conf"
 			got, err := conf.Render()
 			if err != nil {
 				t.Fatal(err)
