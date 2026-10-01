@@ -1,8 +1,10 @@
 package tmux_test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -83,6 +85,9 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	}
 	if err := c.SelectWindow("tracks:0"); err != nil {
 		t.Error(err)
+	}
+	if pid, err := c.ServerPID(); err != nil || strconv.Itoa(pid) != tmuxOut("display-message", "-p", "#{pid}") || pid == os.Getpid() {
+		t.Errorf("ServerPID = %d, %v; want the server's", pid, err)
 	}
 
 	if err := c.KillServer(); err != nil {

@@ -37,10 +37,12 @@ type Config struct {
 	Paths   platform.Paths
 	Version string
 	Tracks  *tracks.Service
-	// Tmux is the Tracks server: the daemon exits once Session is gone,
-	// and tells a client how a creation went when its form closed.
+	// Tmux is the Tracks server: the daemon exits once Session is gone
+	// or the server restarted, and tells a client how a creation went
+	// when its form closed.
 	Tmux interface {
 		HasSession(name string) bool
+		ServerPID() (int, error)
 		Tell(client, msg string) error
 	}
 	Session string
@@ -114,6 +116,7 @@ func Run(ctx context.Context, c Config) error {
 	defer coster.wait()
 	defer cancelPoll()
 
+	server, _ := c.Tmux.ServerPID()
 	c.Log.Printf("started, pid %d", os.Getpid())
 	prs.start(pollCtx, c.Tracks.PollPRs)
 	archiver.start(pollCtx, c.autoArchive)
@@ -136,6 +139,9 @@ func Run(ctx context.Context, c Config) error {
 		case <-tick.C:
 			if !c.Tmux.HasSession(c.Session) {
 				reason = "the tmux session is gone"
+			} else if c.restarted(server) {
+				// Another daemon interrupts the tracks this one would end.
+				reason = "the tmux server restarted"
 			} else if err := c.Tracks.Sweep(ctx); err != nil {
 				c.Log.Printf("checking the windows: %v", err)
 			} else if err := c.Tracks.CheckScreens(ctx); err != nil {
@@ -149,6 +155,13 @@ func Run(ctx context.Context, c Config) error {
 	c.Tracks.Changes.Close()
 	ln.Close()
 	return <-served
+}
+
+// restarted reports whether the tmux server isn't the one with pid
+// any more, as when Tracks closed and opened again between two checks.
+func (c Config) restarted(pid int) bool {
+	now, err := c.Tmux.ServerPID()
+	return err == nil && pid != 0 && now != pid
 }
 
 // checkExits records the agents that exited, logging their codes.
