@@ -75,7 +75,7 @@ func TestFastTrackGivesWayToDetails(t *testing.T) {
 		if got := strings.Contains(out, "Fast Track"); got != size.fastTrack {
 			t.Errorf("%d lines: Fast Track shown %v, want %v", size.h, got, size.fastTrack)
 		}
-		if !strings.Contains(out, "Open PR") {
+		if !strings.Contains(out, "Copy session") {
 			t.Errorf("%d lines: the details lost their buttons", size.h)
 		}
 	}

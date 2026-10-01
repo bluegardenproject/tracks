@@ -94,7 +94,7 @@ The Station tab shows titled frames: the track list on 3/5 of the width (the nam
 - Up and down (or `j`/`k`), the mouse wheel and clicks select a row. Enter or a double click switches to the track's window, landing on its agent pane.
 - Tracks opened or closed elsewhere show up at once.
 - **Details:** the track's ID (its window number), repos with branch and worktree path, engine and model, session ID and pull request. Windows too narrow for both show the list alone.
-- **Actions:** buttons, each with an underlined key: Open (`o`, Enter), End (`e`, asks first; closes the window for now), Copy path (`c`), Copy session (`s`) and Open PR (`p`).
+- **Actions:** buttons, each with an underlined key: Open (`o`, Enter), End (`e`, asks first; closes the window for now), Copy path (`c`) and Copy session (`s`). The agent handles the track's PRs, so there's no button for them.
 
 ### Next: Fast Track
 

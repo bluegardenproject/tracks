@@ -211,6 +211,7 @@ Ideas worked out far enough to keep, but not planned in any chunk. One moves int
 
 - **Event timeline per track:** prompts, approvals, PRs opened and merged, turns and errors, resumes, usage per turn, stored as events from the agent hooks and shown in the track's details. Moved out of chunk 4: its use cases aren't clear yet. Needs a retention setting (`events_retention_days`) if the file grows.
 - **History:** a text search on the slug, branch and prompt; filters by repo, track type and engine; paging past the filter's 500 tracks. Moved out of chunk 4 after the first filters.
+- **PR actions in the details:** a track's PRs are the agent's to open and handle, so the details only list them. Buttons such as opening one in the browser come back once it's clear which actions belong to Tracks rather than the agent.
 
 ## Existing work
 

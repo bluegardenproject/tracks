@@ -11,7 +11,6 @@ import (
 )
 
 func TestPRStatus(t *testing.T) {
-	var opened []string
 	prs := []track.PR{
 		{URL: "https://github.com/acme/web/pull/6", Repo: "acme/web", Number: 6, State: track.PRMerged},
 		{URL: "https://github.com/acme/web/pull/7", Repo: "acme/web", Number: 7, State: track.PROpen},
@@ -26,10 +25,7 @@ func TestPRStatus(t *testing.T) {
 	}
 	merged := withPRs(prs[:1])
 	merged.ID, merged.Number, merged.Name, merged.Status = "b", 0, "merged-one", track.Done
-	m := update(New(Config{Version: "test", Theme: theme.Default(), OpenURL: func(u string) error {
-		opened = append(opened, u)
-		return nil
-	}}), tea.WindowSizeMsg{Width: 140, Height: 40},
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 140, Height: 40},
 		tracksMsg{tracks: []source.Track{withPRs(prs), merged, {ID: "c", Number: 2, Name: "no-pr", Kind: "ask", Status: track.Active}}})
 
 	view := plainView(m)
@@ -45,8 +41,7 @@ func TestPRStatus(t *testing.T) {
 		}
 	}
 
-	m = clickButton(t, m, "Open PR")
-	if len(opened) != 1 || opened[0] != prs[1].URL {
-		t.Errorf("opened %q, want the first PR still open, %s", opened, prs[1].URL)
+	if strings.Contains(view, "Open PR") {
+		t.Errorf("the details offer no button for PRs, the agent handles them:\n%s", view)
 	}
 }

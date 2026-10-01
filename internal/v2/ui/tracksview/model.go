@@ -55,7 +55,6 @@ type Config struct {
 	NewTrack     func() error
 	StartDraft   func(id string) error
 	DiscardDraft func(id string) error
-	OpenURL      func(url string) error
 	// Repos manages the repositories; ReposErr is why there are none,
 	// such as a database that didn't open.
 	Repos    source.Repos
@@ -96,7 +95,6 @@ type Model struct {
 	newTrack      func() error
 	startDraft    func(id string) error
 	discardDraft  func(id string) error
-	openURL       func(url string) error
 	repoSource    source.Repos
 	reposErr      error
 	themeSource   source.Themes
@@ -126,7 +124,7 @@ type Model struct {
 // New returns the Tracks window for c.
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
-		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft, openURL: c.OpenURL,
+		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
 		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
