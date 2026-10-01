@@ -1,0 +1,21 @@
+=== Window labels
+"Rate bug" "" "anything" -> "rate-bug"
+"  " "" "Investigate the rate spike on swap quotes since Monday" -> "investigate-the-rate-spike-on-sw"
+"fix: a.b c" "" "Investigate the rate spike on swap quotes since Monday" -> "fix-a-b-c"
+"" "/Users/u/Downloads/Q3 Architecture.deck.pdf" "Investigate the rate spike on swap quotes since Monday" -> "q3-architecture-deck"
+"own name" "/tmp/x.md" "" -> "own-name"
+"" "" "日本語だけ" -> ""
+
+=== Candor 1 to 10, default 3
+0 -> 3 direct — plain statements, no hedging
+1 -> 1 radical candor — lead with the problem, no cushioning
+2 -> 2 radical candor — blunt, with minimal framing
+3 -> 3 direct — plain statements, no hedging
+4 -> 4 direct — states the problem, adds the why
+5 -> 5 measured — neutral and even-handed
+6 -> 6 measured — findings posed as shared problems
+7 -> 7 diplomatic — leads with what works, findings as suggestions
+8 -> 8 diplomatic — soft framing, problems posed as questions
+9 -> 9 gently framed — heavily cushioned, nothing stated flatly
+10 -> 10 gently framed — maximally kind wording, still nothing omitted
+11 -> 3 direct — plain statements, no hedging
