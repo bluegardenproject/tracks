@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bluegardenproject/tracks/internal/usage"
 )
 
 // CurrentSchemaVersion is the SchemaVersion this binary writes. Older
@@ -231,23 +233,8 @@ type TrackRepo struct {
 }
 
 // Usage is the token spend + USD cost of a track, summed from Claude
-// Code's session transcript by internal/usage. Token counts are the
-// *billed* sums across every API call — InputTokens re-counts the
-// growing context each turn, which is correct for cost but is not a
-// measure of context size.
-type Usage struct {
-	InputTokens         int64   `json:"input_tokens,omitempty"`
-	OutputTokens        int64   `json:"output_tokens,omitempty"`
-	CacheReadTokens     int64   `json:"cache_read_tokens,omitempty"`
-	CacheCreationTokens int64   `json:"cache_creation_tokens,omitempty"`
-	CostUSD             float64 `json:"cost_usd,omitempty"`
-}
-
-// IsZero reports whether no usage has been recorded yet.
-func (u Usage) IsZero() bool {
-	return u.InputTokens == 0 && u.OutputTokens == 0 &&
-		u.CacheReadTokens == 0 && u.CacheCreationTokens == 0 && u.CostUSD == 0
-}
+// Code's session transcript by internal/usage.
+type Usage = usage.Usage
 
 // ServiceStatus is a dev server's lifecycle phase within a track.
 type ServiceStatus string
