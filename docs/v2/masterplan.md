@@ -21,7 +21,7 @@ This file is the single source of truth for direction, decisions and status. Imp
 | 5 | Real tracks: v2 daemon, agents (with v1's prompts, see Decisions), create/end/resume, supervision | the creation form's layout in [06-add-track.md](plans/06-add-track.md); creating tracks in [07-create-track.md](plans/07-create-track.md); resuming and cleaning in [08-resume-and-clean.md](plans/08-resume-and-clean.md), Clean since replaced by Archive; default agents and models per track type in [09-track-type-defaults.md](plans/09-track-type-defaults.md); the commands the prompts promise in [14-tracks-commands.md](plans/14-tracks-commands.md); supervision in [15-supervision.md](plans/15-supervision.md); notifications in [16-notifications.md](plans/16-notifications.md); failed creations kept as drafts in [17-drafts.md](plans/17-drafts.md); closing Tracks and reopening its tracks in [18-close-and-reopen.md](plans/18-close-and-reopen.md) | started: form layout; creating, ending, resuming and archiving tracks; defaults per track type; the `tracks` commands and helpers; supervision; notifications; drafts; closing Tracks and reopening its tracks |
 | 6 | Agent hooks instead of screen polling | [drafts/hooks.md](plans/drafts/hooks.md); the hooks for status in [10-track-status.md](plans/10-track-status.md) | started: track and PR status from hooks |
 | 7 | Tracks window content: tabs (Station, Repositories, Engines, Settings), track actions | Repositories in [03-repositories.md](plans/03-repositories.md), Settings in [04-settings.md](plans/04-settings.md), Engines in [05-engines.md](plans/05-engines.md), Settings → Tracks in [09-track-type-defaults.md](plans/09-track-type-defaults.md) | started: Station, Repositories, Settings |
-| 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, Homebrew install | not written yet | later |
+| 8 | v2.0.0 release: delete v1, move `internal/v2` up, drop flag and build tag, take over the plain paths and helper names, a short glossary in the README | not written yet | later |
 
 Chunks 1 to 3 come first. Chunk 3 started before chunk 2's data interface and popups, which follow it. Chunk 2 uses placeholder statuses; the [track status model](#track-status) is designed before chunk 3, or chunk 3 uses placeholders too. After chunk 3, the order of 4 to 7 is decided by what the layout work shows.
 
@@ -37,12 +37,14 @@ After v2.0.0:
 
 - **Proxy and dev servers, one topic of their own:** the Proxy tab, `tracks up`/`down`/`services`/`url` and the repos' `services` config. v1's proxy UI and UX didn't work, so this is redesigned rather than ported.
 - **Worktree setup:** v1's dependency install, copying ignored files (`.env`) into new worktrees, and submodules.
+- **Homebrew:** see Decisions. Until then, Tracks installs with `scripts/install.sh` or a local build.
 
-Not needed: v1's scripting commands (`ls`, `new`, `attach`, `done`, `kill`, `forget`, `gc`), which the Tracks window, Archive, Derail and auto-archive replace, and the branch types, which v1 never used. `tracks update` and Homebrew are chunk 8's.
+Not needed: v1's scripting commands (`ls`, `new`, `attach`, `done`, `kill`, `forget`, `gc`), which the Tracks window, Archive, Derail and auto-archive replace, and the branch types, which v1 never used. Importing v1's tracks: v2.0.0 starts fresh. `tracks update` is chunk 8's.
 
 ## Decisions
 
-- **v2 is a release milestone, not a separate codebase.** It lives in this repo on `main`, next to v1, and is tagged v2.0.0 when done. It doesn't need to be compatible with v1 data or config; importing v1 tracks is undecided.
+- **v2 is a release milestone, not a separate codebase.** It lives in this repo on `main`, next to v1, and is tagged v2.0.0 when done. It doesn't need to be compatible with v1 data or config, and it doesn't import v1's tracks: v2.0.0 starts fresh.
+- **Paths at release: v2 takes over the plain names.** `~/.local/state/tracks`, `~/.config/tracks`, the `tracks` tmux socket, and the helpers without `-v2` (`tracks-reviewer`, `tracks-docs-reviewer`, `tracks-add-repo`, `~/.cursor/rules/tracks.mdc`), which replace v1's. None of v2's files has a v1 file's name; both keep worktrees in `worktrees/`, where v2 ignores v1's. v1's leftovers stay unused, and users delete them by hand: v1 was never published.
 - **Engine: tmux stays.** It renders agent TUIs faithfully, splits panes next to an agent, keeps sessions alive when the UI closes, and works over SSH.
 - **Dedicated tmux server:** v2 runs on its own socket with a config it generates. The user's personal `~/.tmux.conf` and other sessions are never involved.
 - **Start from a plain terminal:** started inside another tmux, Tracks refuses with a clear message instead of nesting. The prefix stays Ctrl+b.
@@ -67,7 +69,7 @@ Not needed: v1's scripting commands (`ls`, `new`, `attach`, `done`, `kill`, `for
   - **No dev-server text** (`agents.DevServerContract`) in the work and review prompts until the proxy redesign brings `tracks up` back: v2.0.0 has no dev servers, and the text would send agents to a command that fails.
 
   Letting users edit the prompts comes later, with v1's text as the default.
-- **Install with Homebrew:** `brew install` is offered next to `scripts/install.sh`, by v2.0.0 at the latest. Requirements:
+- **Install with Homebrew, after v2.0.0:** `brew install` is offered next to `scripts/install.sh`; v2.0.0 installs locally. Requirements:
   - The formula installs the release binaries the release workflow already builds and checks against `SHA256SUMS`, and each release updates it automatically.
   - It depends on tmux, so a brew install brings everything Tracks needs to start.
   - A brew-installed Tracks leaves updates to `brew upgrade`: `tracks update` and the update check say so instead of replacing the binary.
@@ -178,14 +180,11 @@ Designed in [10-track-status.md](plans/10-track-status.md): a track status (acti
 
 ## Open questions
 
-- **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). This goes into a glossary here once agreed.
+- **Naming:** railroad terms for app concepts, used the same way in the UI, commands, code and docs. Proposals so far: **engine** for an agent CLI (Claude, Cursor; the settings section "Engines"), **stationed** (or **parked**) for a finished track, **Back on track** to resume one, **Depot** for archived tracks. Plain words stay where users must react quickly (needs approval, errors). The words in use go into a short glossary in the README at release, so GitHub shows it; little effort until then.
 - **Track list tab:** named **Station** (decided in chunk 3). Other tabs: Repositories, Engines, Settings; Proxy comes back with the proxy redesign after v2.0.0.
 - **Tracks window:** what Enter does on a track (open an action panel or switch to its window), and where details are shown. To be decided in chunk 3 or 7, informed by using it.
-- **v1 data:** fresh start, or a read-only import into History at release.
-- **Homebrew:** our own tap (`bluegardenproject/tap`) or homebrew-core, which needs a build from source and wider use first. And whether v1 gets the formula before v2.0.0, since the release workflow is shared.
-- **Final paths at release:** keep the `-v2` names or take over the plain ones.
+- **Homebrew, after v2.0.0:** our own tap (`bluegardenproject/tap`) or homebrew-core, which needs a build from source and wider use first.
 - **Hover in the footer:** is it worth a Bubble Tea footer pane per window? This is decided after trying the tmux footer in chunk 2.
-- **Terminal padding:** terminals like Ghostty draw their own padding in their background colour, a frame around Tracks. Options: document `window-padding-color = extend`, or have Tracks set the terminal background with OSC 11 while it runs.
 - **The v1 menu rebuild** (uncommitted, Charm v1, on the `tracks/09ad3c-menu` branch): ship it to v1 too, or keep it only as the reference for Quick Access.
 
 ## Risks
