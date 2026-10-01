@@ -1,0 +1,96 @@
+=== work
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== work not auto
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''default'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== work all drafts
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== work some drafts
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== review
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== review blunt
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== ask
+dir: /tmp/track/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''plan'\'' --add-dir '\''/tmp/track/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== ask alone
+dir: ~
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''plan'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== plan
+dir: /tmp/track/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''plan'\'' --add-dir '\''/tmp/track/api'\'' --add-dir '\''/tmp/track/web'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== doc file
+dir: /tmp/track
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''default'\'' --add-dir '\''/tmp/track'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== doc folder
+dir: /tmp/track/docs
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''default'\'' --add-dir '\''/tmp/track/docs'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== doc with repos
+dir: /tmp/track
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''default'\'' --add-dir '\''/tmp/track/api'\'' --add-dir '\''/tmp/track/web'\'' --add-dir '\''/tmp/track'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+

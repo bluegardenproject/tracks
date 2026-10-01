@@ -1,14 +1,12 @@
 package tmux
 
 import (
-	"flag"
-	"os"
 	"path/filepath"
 	"slices"
 	"testing"
-)
 
-var update = flag.Bool("update", false, "rewrite golden files")
+	"github.com/bluegardenproject/tracks/internal/v2/golden"
+)
 
 func TestParseVersion(t *testing.T) {
 	tests := map[string]Version{
@@ -117,19 +115,7 @@ var testThemeConf = ThemeConf{
 
 func checkGolden(t *testing.T, name, got string) {
 	t.Helper()
-	golden := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Errorf("output differs from %s (run with -update to accept):\n%s", golden, got)
-	}
+	golden.Check(t, filepath.Join("testdata", name), got)
 }
 
 func TestPopupArgs(t *testing.T) {
