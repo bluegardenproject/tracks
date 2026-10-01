@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -76,6 +77,11 @@ func Run(ctx context.Context, c Config) error {
 		return err
 	}
 	c.helpers()
+	if names, err := c.Tracks.Interrupt(ctx); err != nil {
+		c.Log.Printf("interrupting the tracks without a window: %v", err)
+	} else if len(names) > 0 {
+		c.Log.Printf("their windows closed with Tracks: %s", strings.Join(names, ", "))
+	}
 
 	stop := make(chan struct{})
 	var once sync.Once
