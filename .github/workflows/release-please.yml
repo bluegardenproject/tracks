@@ -31,7 +31,7 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.27"
 
       - name: Get dependencies
         if: ${{ steps.release.outputs.release_created }}
