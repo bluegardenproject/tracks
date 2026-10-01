@@ -5,7 +5,7 @@
 ## What users get
 
 - **Ended tracks stay in Station's list** with the open ones: the open ones first, in window order, then the ended ones, most recently ended first. An ended track has no window number, and its status is **ended**, or **cleaned** once Clean removed its worktrees. Filters come later.
-- **An ended track's details** offer **Resume** (`r`), **Clean** (`l`), Copy path, Copy session and Open PR. Enter resumes it. A cleaned track can't be resumed or cleaned again; a way to resume one comes later, through the settings.
+- **An ended track's details** offer **Resume** (`r`), **Clean** (`l`), Copy path and Copy session. Enter resumes it. A cleaned track can't be resumed or cleaned again; a way to resume one comes later, through the settings.
 - **Resume:**
   - The track's window opens again under its name, or with `-2` when the name is taken, with a terminal pane if the track had one. Station switches to it, as Open does.
   - The engine continues the session, as in v1: `claude --resume <session>` or `agent --resume <chat>`, without the prompt and without `--model`, since a resumed session keeps its model. The permission mode and folders are Create's. Unlike v1, Ask and Plan resume in plan mode; v1 resumes them in the configured mode.

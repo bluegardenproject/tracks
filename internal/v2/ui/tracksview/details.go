@@ -35,7 +35,6 @@ const (
 	actionRestart
 	actionCopyPath
 	actionCopySession
-	actionOpenPR
 	actionStartDraft
 	actionDiscardDraft
 	actionConfirmEnd
@@ -61,7 +60,6 @@ var (
 		{actionEnd, "End", "e", 0},
 		{actionCopyPath, "Copy path", "c", 0},
 		{actionCopySession, "Copy session", "s", 5},
-		{actionOpenPR, "Open PR", "p", 5},
 	}
 	endedActions = append([]action{
 		{actionResume, "Resume", "r", 0},
@@ -274,9 +272,6 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return len(t.Repos) > 0 && t.Repos[0].Path != ""
 	case actionCopySession:
 		return t.Session != ""
-	case actionOpenPR:
-		_, ok := t.MainPR()
-		return ok
 	case actionResume:
 		return t.Status != track.Closed
 	case actionArchive:
@@ -358,8 +353,7 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 }
 
 // act runs an action that leaves the Tracks window or reloads it:
-// switching to the track, ending or unarchiving it, or opening its pull
-// request.
+// switching to the track, or ending or unarchiving it.
 func (m Model) act(id actionID) tea.Cmd {
 	t, ok := m.selectedTrack()
 	if !ok {
@@ -380,10 +374,6 @@ func (m Model) act(id actionID) tea.Cmd {
 		return run(func() error { return m.end(t.Number) }, "Ended "+t.Name+".", "Couldn't end "+t.Name, true)
 	case id == actionUnarchive && m.unarchive != nil:
 		return run(func() error { return m.unarchive(t.ID) }, "Unarchived "+t.Name+".", "Couldn't unarchive "+t.Name, true)
-	case id == actionOpenPR && m.openURL != nil:
-		if pr, ok := t.MainPR(); ok {
-			return run(func() error { return m.openURL(pr.URL) }, "", "Couldn't open the pull request", false)
-		}
 	}
 	return nil
 }

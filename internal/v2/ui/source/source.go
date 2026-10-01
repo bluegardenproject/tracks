@@ -62,8 +62,8 @@ type PR struct {
 	URL    string
 }
 
-// MainPR is the PR to open for t: the first one still open, else the
-// last one found.
+// MainPR is the PR that stands for t: the first one still open, else
+// the last one found.
 func (t Track) MainPR() (PR, bool) {
 	for _, p := range t.PRs {
 		if p.State == string(track.PROpen) || p.State == string(track.PRDraft) {
