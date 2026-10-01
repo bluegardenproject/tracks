@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/shellx"
@@ -45,6 +46,16 @@ func openNewTrack(c *tmux.Client, paths platform.Paths, client, draft string) er
 		Command:    command + " popup add-track " + shellx.Quote(client) + draftFlag(draft),
 		Background: t.Value(theme.OverlayBg),
 	}, version)
+}
+
+// formHere opens the New track form over the client showing this pane,
+// filled with draft unless it's "".
+func formHere(c *tmux.Client, paths platform.Paths, draft string) error {
+	client, err := c.ClientOf(os.Getenv("TMUX_PANE"))
+	if err != nil {
+		return err
+	}
+	return openNewTrack(c, paths, client, draft)
 }
 
 func draftFlag(draft string) string {

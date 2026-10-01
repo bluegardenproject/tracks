@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"os"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
@@ -80,12 +79,10 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				SetFilter: func(f track.Filter) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.SetFilter(cmd.Context(), f) })
 				},
-				NewTrack: func() error {
-					client, err := c.ClientOf(os.Getenv("TMUX_PANE"))
-					if err != nil {
-						return err
-					}
-					return openNewTrack(c, paths, client, "")
+				NewTrack:   func() error { return formHere(c, paths, "") },
+				StartDraft: func(id string) error { return formHere(c, paths, id) },
+				DiscardDraft: func(id string) error {
+					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.DiscardDraft(cmd.Context(), id) })
 				},
 				OpenURL:       openBrowser,
 				Repos:         repoSource,
