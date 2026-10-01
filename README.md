@@ -1,8 +1,9 @@
 # tracks
 
-Run multiple [Claude Code](https://docs.claude.com/en/docs/claude-code) agents
-in parallel, each in its own git worktree, coordinated from a single tmux
-session. Your editor's branch never moves while Claude is working.
+Run coding agents ([Claude Code](https://docs.claude.com/en/docs/claude-code)
+and the [Cursor CLI](https://cursor.com/cli)) in parallel, each in its own git
+worktree, from one tmux session. Your editor's checkout never moves while an
+agent works.
 
 ## Install
 
@@ -10,29 +11,27 @@ session. Your editor's branch never moves while Claude is working.
 curl -fsSL https://raw.githubusercontent.com/bluegardenproject/tracks/main/scripts/install.sh | bash
 ```
 
-Downloads the matching binary from the latest release into `~/.tracks` and
-adds it to your `PATH`, after checking it against the `SHA256SUMS` published
-with the release. If it can't verify the download — no checksums file, no
-digest tool, or a mismatch — it installs no binary and exits non-zero.
-Re-run it any time to upgrade — a daemon from the previous version restarts
-automatically on the next `tracks` run. Uninstall with
+Downloads the binary for your system from the latest release into `~/.tracks`
+and adds it to your `PATH`, after checking it against the `SHA256SUMS`
+published with the release. If it can't verify the download, it installs
+nothing and exits non-zero. Uninstall with
 [`scripts/uninstall.sh`](scripts/uninstall.sh).
 
-To upgrade later without leaving the session, use **Check for updates** in the
-menu (or `tracks update`; `tracks update --check` only reports). It swaps the
-binary in place and leaves whatever is running alone — the daemon and open
-windows stay on the old binary until the next `tracks` run restarts the daemon
-to match, which interrupts any track still going (**Reopen** brings those back).
+`tracks update` installs a newer release over the running binary
+(`tracks update --check` only reports). The daemon restarts on the next
+`tracks`, and tracks still running are interrupted; Resume brings them back.
 
-Requires `git`, `tmux`, and the `claude` CLI on `PATH`. Linux and macOS only.
+Requires `git`, tmux 3.2 or newer, and the `claude` or Cursor `agent` CLI on
+your `PATH`. Linux and macOS only.
 
 ### From source
 
 ```bash
-make install   # builds with Go 1.25 → ~/bin/tracks
+make build                            # ./tracks, with Go 1.25
+scripts/install.sh --local ./tracks   # into ~/.tracks, with the PATH setup
 ```
 
-Tracks v2 is in development in the same repo ([plan](docs/v2/masterplan.md)). `make dev && ./tracks --new-app` runs it next to an installed tracks without touching it.
+`make install` copies the build to `~/.tracks` directly.
 
 ## Use
 
@@ -40,94 +39,80 @@ Tracks v2 is in development in the same repo ([plan](docs/v2/masterplan.md)). `m
 tracks
 ```
 
-Starts the tmux session, launches the dashboard, brings up the daemon.
+Opens Tracks on its own tmux server, with the Tracks window first. Start it
+from a plain terminal: inside another tmux it refuses rather than nesting.
+Your `~/.tmux.conf` isn't used; personal tmux overrides go in
+`~/.config/tracks/tmux.conf`.
 
-Inside the session, press `<prefix>+t` to open the menu:
+The **Tracks window** has four tabs:
 
-- **New track** — pick a track type, then repos → slug → model → task
-  prompt. A **Work** track spawns Claude in a fresh worktree on
-  `<type>/<auto-slug>`; the slug is derived from the task prompt (a
-  Jira-style ticket like `ABC-123` becomes the prefix, followed by the
-  first few descriptive words). **Ask** and **Plan**
-  are read-only against your primary checkout and can be promoted to a
-  worktree later. **Review** checks a PR or branch out detached and diffs it.
-  **Doc review** points at a file on disk — a spec, one-pager, or deck
-  exported to PDF — and reports findings on it, then offers to save the report
-  next to the document. Two sections are switchable, both on by default:
-  **Opinion** (is the argument sound, does the content hold up, how easily
-  does it read) and **Claim check** (fact-check its claims against your repos,
-  GitHub, and Jira). Review and Doc review also ask for a **candor** level
-  from 1 (radical candor) to 10 (honest but gently framed), which changes how
-  the findings are worded and nothing else.
-- **Dashboard** — live list of all tracks, statuses, PR URLs.
-- **Reopen tracks from the last session** — brings back every track you had
-  open when tracks was last quit (see below).
-- **List / Attach… / End… / Kill…** — manage tracks.
-- **Settings** — add, edit, or remove repos, and choose which model tracks
-  run, via a guided form (no YAML editing).
-Inside a track, `tracks review` runs the code reviewer as a separate agent
-session that has not seen the working conversation, and prints its report.
-Claude tracks reach the same reviewer through their subagent; Cursor tracks
-use this command, because the Cursor CLI cannot delegate to a custom
-subagent. It reviews the branch against its repo's configured base plus any
-uncommitted work, and refuses to run from inside a review.
+- **Station:** your tracks with their status and PRs. Select one for its
+  details and actions: Resume, Archive, Derail, Promote.
+- **Repositories:** the repos tracks can work in, each with its base branch.
+- **Engines:** the agent CLIs Tracks found, their versions and models.
+- **Settings:** theme and theme creator, defaults per track type, archiving,
+  notifications, keys.
 
-- **Check for updates…** — compares your version against the latest GitHub
-  release and, after a confirm, installs it over the binary you're running.
-- **Quit session** — kills tmux and the daemon; running Claudes get SIGTERM.
+Every track has a window of its own: the agent on the left, terminals on the
+right. The footer on every window lists the tracks; click one, or use the keys
+below.
 
-When a track ends, its worktree is removed but the branch stays locally so
-you can `git checkout <branch>` from your editor afterwards.
+| Keys | |
+|---|---|
+| `Ctrl+b q` | Quick Access: New track, Tracks filter, Close Tracks |
+| `Ctrl+b n` / `p` | next / previous track |
+| `Ctrl+b <` / `>` | first / last track |
+| `Ctrl+b 1`…`9` | track by number |
+| `Ctrl+b t` | add a terminal to the track |
 
-## Quitting and coming back
+### Track types
 
-Quitting tracks doesn't finish your tracks. Anything still live is recorded
-as `interrupted` — its branch, worktree and Claude session all survive — and
-the next `tracks` offers to bring back everything you had open:
+- **Work:** a fresh worktree per repo, on a branch of its own.
+- **Ask** and **Plan:** read-only in your checkout. Promote one to make it a
+  Work track with its own worktrees.
+- **Review:** checks a PR or branch out and reviews it.
+- **Doc review:** reviews a file on disk (a spec, a one-pager, a deck as PDF),
+  optionally with an opinion and a check of its claims against your repos.
 
-```
-3 track(s) were open when tracks last stopped:
-  20260805-091305-1e1ec7  running     swap-rate-tooltip
-  20260805-095525-ee2eb3  running     reopen-tracks
-  20260804-142201-9c1f04  all merged  swap-release-notes
+Review and Doc review take a **candor** level from 1 (radical candor) to 10
+(honest, gently framed), which changes only how findings are worded.
 
-Reopen 3 track(s)? [Yes / Cancel]
-```
+### Inside a track
 
-The set is every track that still had a window, whatever it was doing — a
-finished or `pr merged` track you kept around to carry on with the same topic
-comes back with the running ones, so you don't re-supply the context. What
-takes a track out of the set is **closing** it, not finishing it.
+The agent can run these, and so can you in a track's terminal:
 
-Each reopened track gets its worktree back and a fresh window running
-`claude --resume`, so the conversation continues where it stopped — Claude
-picks up with the full history and waits for your next message. Cancel and
-they stay as they are; run `tracks reopen` (or the menu entry) whenever you
-want them. Nothing in that set is touched by `X` (clear completed) or
-`tracks gc`, so their worktrees wait for you — closing a track is what makes
-it sweepable again.
+- `tracks review` reviews the branch with a separate agent session.
+- `tracks terminal` opens a terminal pane beside the agent.
+- `tracks add-repo <repo>` adds a worktree of another repo to the track.
+- `tracks promote` turns an Ask or Plan track into a Work track.
 
-To be done with one, **close** it (`d` in the dashboard) — that removes the
-worktree and keeps the branch. **Removing** it (`x`) drops the dashboard entry
-itself; the worktree stays on disk until the next `tracks gc` reclaims it.
-Because that throws away the record — task prompt, cost, PR links, and the
-handle `tracks reopen` needs — `x` and `X` (remove all completed) ask for a
-`y`/`n` confirmation first.
+Agents announce a pull request with a line `TRACKS_PR_URL=<url>`; Station
+follows each PR until it's merged or closed.
 
-### Track status
+### Closing and coming back
 
-| status | meaning |
-| --- | --- |
-| `running` / `waiting` | Claude is working, or sitting at a question |
-| `pr open` / `prs open` | Claude finished and left pull requests open; the track stays alive so review comments and follow-up commits still land in it |
-| `pr merged` / `all merged` | every PR the track opened was merged — the work shipped |
-| `done` | finished without a merged PR: none was opened, one was closed unmerged, or you closed the track yourself |
-| `interrupted` | tracks was quit while this one was live — reopenable |
-| `errored` / `draft` | creation or the session failed / saved but never launched |
+Close Tracks from Quick Access, or with `tracks stop`. The tracks stay: the
+next `tracks` lists the ones that were open and offers to reopen them, each
+agent continuing its conversation where it stopped. Say no, and Resume in
+Station brings any of them back later.
 
-Every one of these except `draft` comes back on the next start if you still had
-it open — see [Quitting and coming back](#quitting-and-coming-back). A draft was
-never launched, so there is no session to resume; launch it with `L`.
+## Glossary
 
-Tracks that open several PRs get each one polled and listed separately in the
-dashboard's detail panel; emit one `TRACKS_PR_URL=<url>` line per PR.
+| Word | Meaning |
+|---|---|
+| track | one agent working on one task, in its own worktrees and window |
+| Station | the tab listing your tracks |
+| engine | an agent CLI a track runs on: Claude Code or Cursor |
+| Quick Access | the popup on `Ctrl+b q` |
+| Resume | start a track's agent again, continuing its conversation |
+| Promote | give an Ask or Plan track its own worktrees, as a Work track |
+| Archive | put a finished track away: its worktrees and local branches go, what was pushed stays, and the record moves to the archive |
+| Derail | delete a track for good: worktrees, branches and record |
+
+## Files
+
+`tracks paths` prints them. By default:
+
+- `~/.config/tracks`: `settings.yaml`, your themes, `tmux.conf` overrides
+- `~/.local/state/tracks`: the tracks database, the daemon's socket and log,
+  the worktrees
