@@ -29,6 +29,8 @@ func TestChoosing(t *testing.T) {
 		"f":                 {[]tea.Msg{tea.KeyPressMsg{Code: 'f', Text: "f"}}, TracksFilter},
 		"↓ Enter":           {[]tea.Msg{tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter}}, TracksFilter},
 		"a click on it too": {[]tea.Msg{tea.MouseClickMsg{X: 5, Y: 2, Button: tea.MouseLeft}}, TracksFilter},
+		"c":                 {[]tea.Msg{tea.KeyPressMsg{Code: 'c', Text: "c"}}, CloseTracks},
+		"↑ from the top":    {[]tea.Msg{tea.KeyPressMsg{Code: tea.KeyUp}, tea.KeyPressMsg{Code: tea.KeyEnter}}, NewTrack},
 	}
 	for name, tt := range tests {
 		if got := choose(tt.msgs...); got != tt.want {

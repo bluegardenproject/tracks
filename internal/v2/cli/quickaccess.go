@@ -12,6 +12,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/store"
 	"github.com/bluegardenproject/tracks/internal/v2/theme"
 	"github.com/bluegardenproject/tracks/internal/v2/tmux"
+	"github.com/bluegardenproject/tracks/internal/v2/ui/confirm"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/quickaccess"
 	"github.com/bluegardenproject/tracks/internal/v2/ui/style"
 	"github.com/spf13/cobra"
@@ -40,43 +41,72 @@ func newQuickAccessCmd() *cobra.Command {
 }
 
 func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
-	command, err := selfCommand()
+	picked, err := askInPopup(c, paths, client, "quick-access", quickaccess.Width, quickaccess.Height())
 	if err != nil {
 		return err
 	}
-	width, height, err := c.ClientSize(client)
-	if err != nil {
-		return err
-	}
-	version, _ := tmux.InstalledVersion()
-	border := tmux.PopupBorder(version)
-	t, _ := loadTheme(paths)
-	choice, err := os.CreateTemp("", "tracks-quick-access-*")
-	if err != nil {
-		return err
-	}
-	choice.Close()
-	defer os.Remove(choice.Name())
-
-	popup := tmux.Popup{
-		Client:     client,
-		Width:      strconv.Itoa(min(width, quickaccess.Width+border)),
-		Height:     strconv.Itoa(min(height, quickaccess.Height()+border)),
-		Command:    command + " popup quick-access " + shellx.Quote(choice.Name()),
-		Background: t.Value(theme.OverlayBg),
-	}
-	if err := c.Popup(popup, version); err != nil {
-		return err
-	}
-	picked, err := os.ReadFile(choice.Name())
-	if err != nil {
-		return err
-	}
-	switch strings.TrimSpace(string(picked)) {
+	switch picked {
 	case quickaccess.NewTrack:
 		return openNewTrack(c, paths, client, "")
 	case quickaccess.TracksFilter:
 		return openTracksFilter(c, paths, client)
+	case quickaccess.CloseTracks:
+		return closeFromQuickAccess(c, paths, client)
+	}
+	return nil
+}
+
+// askInPopup runs "popup <args> <answer-file>" in a popup over client,
+// at most w by h cells inside its border, and returns what it wrote to
+// the file.
+func askInPopup(c *tmux.Client, paths platform.Paths, client, args string, w, h int) (string, error) {
+	command, err := selfCommand()
+	if err != nil {
+		return "", err
+	}
+	width, height, err := c.ClientSize(client)
+	if err != nil {
+		return "", err
+	}
+	version, _ := tmux.InstalledVersion()
+	border := tmux.PopupBorder(version)
+	t, _ := loadTheme(paths)
+	answer, err := os.CreateTemp("", "tracks-popup-*")
+	if err != nil {
+		return "", err
+	}
+	answer.Close()
+	defer os.Remove(answer.Name())
+
+	popup := tmux.Popup{
+		Client:     client,
+		Width:      strconv.Itoa(min(width, w+border)),
+		Height:     strconv.Itoa(min(height, h+border)),
+		Command:    command + " popup " + args + " " + shellx.Quote(answer.Name()),
+		Background: t.Value(theme.OverlayBg),
+	}
+	if err := c.Popup(popup, version); err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(answer.Name())
+	return strings.TrimSpace(string(b)), err
+}
+
+var closeQuestion = confirm.Question{
+	Title:  "Close Tracks?",
+	Text:   []string{"Every window closes and the agents stop.", "Tracks offers to reopen the tracks when it starts again."},
+	Action: "Close Tracks",
+}
+
+// closeFromQuickAccess closes Tracks once the user confirms, and says
+// why over client when it can't.
+func closeFromQuickAccess(c *tmux.Client, paths platform.Paths, client string) error {
+	answer, err := askInPopup(c, paths, client, "close-tracks", closeQuestion.Width(), closeQuestion.Height())
+	if err != nil || answer != "yes" {
+		return err
+	}
+	if err := closeTracks(context.Background(), c, paths); err != nil {
+		return c.DisplayMessage("Couldn't close Tracks: " + err.Error())
 	}
 	return nil
 }
@@ -102,6 +132,26 @@ func newPopupCmd(version string) *cobra.Command {
 				chosen = m.Chosen()
 			}
 			return os.WriteFile(args[0], []byte(chosen), 0o600)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:  "close-tracks <answer-file>",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			paths, err := platform.Resolve()
+			if err != nil {
+				return err
+			}
+			t, _ := loadTheme(paths)
+			done, err := runPopup(cmd.Context(), confirm.New(t, closeQuestion))
+			if err != nil {
+				return err
+			}
+			answer := ""
+			if m, ok := done.(confirm.Model); ok && m.Confirmed() {
+				answer = "yes"
+			}
+			return os.WriteFile(args[0], []byte(answer), 0o600)
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
