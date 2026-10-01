@@ -46,6 +46,21 @@ func TestCursorDialogOpen(t *testing.T) {
  │     [ ] Blue                                 │
  │ ↑/↓ option · Enter next/submit · Esc to skip │
  └──────────────────────────────────────────────┘`
+	titled := ` ┌──────────────────────────────────────────────┐
+ │ Database choice                              │
+ │                                              │
+ │ Question 2 of 3                              │
+ │                                              │
+ │ 2. Which cache should the service use?       │
+ │                                              │
+ │   › [ ] Redis                                │
+ │     [ ] Memcached                            │
+ │                                              │
+ │ ↑/↓ option · ←/→ question · Space select ·   │
+ │ Enter next/submit · Esc to skip              │
+ └──────────────────────────────────────────────┘`
+	answered := `  AskQuestion Database choice (3)
+  → Add a follow-up`
 	working := `  I ran touch /tmp/probe.txt. Run this command? → Run (once) (y) was
   the approval you gave.
   → Add a follow-up
@@ -91,8 +106,8 @@ func TestCursorDialogOpen(t *testing.T) {
 	switched := `  SwitchMode → Agent
   → Add a follow-up`
 	for screen, want := range map[string]bool{
-		command: true, question: true, plan: true, longPlan: true, modeSwitch: true,
-		working: false, accepted: false, switched: false, "": false,
+		command: true, question: true, titled: true, plan: true, longPlan: true, modeSwitch: true,
+		working: false, answered: false, accepted: false, switched: false, "": false,
 	} {
 		if open, known := DialogOpen("cursor", screen); open != want || !known {
 			t.Errorf("DialogOpen(cursor, %q) = %v, %v; want %v", screen, open, known, want)

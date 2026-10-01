@@ -11,11 +11,12 @@ var (
 	// plan approvals all have one.
 	claudeDialog = regexp.MustCompile(`(?m)^\s*❯\s*\d+\.\s`)
 	// cursorDialog is the first option of Cursor's command approval,
-	// "→ Run (once) (y)", the title of its questions' box or of a plan
-	// awaiting approval, or the option to approve a mode switch. An
-	// accepted plan is titled "Plan", and an answered switch leaves
-	// "SwitchMode → Agent" in the chat.
-	cursorDialog = regexp.MustCompile(`(?m)^\s*(→ Run \(once\)|│ Clarifying Questions\s|│ Suggested Plan\s|(│\s*)?(→\s+)?Approve mode switch \(y\))`)
+	// "→ Run (once) (y)", the questions' box's "Question 1 of 2", the
+	// title of a plan awaiting approval, or the option to approve a
+	// mode switch. The questions' box takes the agent's title, so only
+	// its count is always there. An accepted plan is titled "Plan", and
+	// an answered switch leaves "SwitchMode → Agent" in the chat.
+	cursorDialog = regexp.MustCompile(`(?m)^\s*(→ Run \(once\)|│ Question \d+ of \d+\s|│ Suggested Plan\s|(│\s*)?(→\s+)?Approve mode switch \(y\))`)
 
 	readyToBuild = regexp.MustCompile(`^\s*│?\s*Ready to build\?\s*│?\s*$`)
 	planOption   = regexp.MustCompile(`^(→\s+)?\d\.\s+(Yes, build locally|Yes, build in cloud|No, propose changes)\s`)
