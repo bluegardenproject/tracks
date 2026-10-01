@@ -185,6 +185,7 @@ func (m Model) keyLines() []string {
 func (m Model) about(width int) []string {
 	lines := []string{
 		m.fg(theme.TextFaint).Render(pad("Version", aboutLabelWidth)) + m.fg(theme.TextDefault).Render(m.version),
+		"",
 	}
 	for _, f := range m.aboutFacts {
 		lines = append(lines, m.fg(theme.TextFaint).Render(pad(f[0], aboutLabelWidth))+

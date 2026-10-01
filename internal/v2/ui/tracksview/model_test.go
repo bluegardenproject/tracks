@@ -83,6 +83,18 @@ func TestShortWindowDropsBanner(t *testing.T) {
 	}
 }
 
+func TestVersionShowsOnlyInAbout(t *testing.T) {
+	m := update(New(Config{Version: "9.8.7", Theme: theme.Default(), About: [][2]string{{"Profile", "default"}}}),
+		tea.WindowSizeMsg{Width: 120, Height: 40})
+	if strings.Contains(plainView(m), "9.8.7") {
+		t.Error("the banner shouldn't show the version")
+	}
+	about := m.about(80)
+	if len(about) != 3 || !strings.Contains(about[0], "9.8.7") || about[1] != "" || !strings.Contains(about[2], "Profile") {
+		t.Errorf("About should show the version, a blank line, then the facts: %q", about)
+	}
+}
+
 var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 
 // clickLabel clicks where title is drawn in the tab row.

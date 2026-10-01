@@ -66,11 +66,10 @@ func (m Model) fg(token theme.Token) lipgloss.Style {
 }
 
 // bannerBlock is the banner with the build on the right of its last
-// lines.
+// line.
 func (m Model) bannerBlock() []string {
 	right := make([]string, bannerRows)
-	right[bannerRows-2] = m.fg(theme.TextFaint).Render("v2 dev build")
-	right[bannerRows-1] = m.fg(theme.TextFaint).Render(m.version)
+	right[bannerRows-1] = m.fg(theme.TextFaint).Render("v2 dev build")
 	lines := []string{strings.Repeat(" ", m.width)}
 	for i, b := range m.banner() {
 		left := "  " + b
