@@ -68,7 +68,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 			t.Errorf("option %s = %q, want %q", option, got, want)
 		}
 	}
-	for _, want := range []string{"TRACKS_NEW_APP=1", "COLORTERM=truecolor"} {
+	for _, want := range []string{"COLORTERM=truecolor"} {
 		name, _, _ := strings.Cut(want, "=")
 		if got := tmuxOut("show-environment", "-g", name); got != want {
 			t.Errorf("environment = %q, want %s", got, want)

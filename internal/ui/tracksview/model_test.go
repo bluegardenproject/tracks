@@ -74,11 +74,11 @@ func TestFrameFitsWindow(t *testing.T) {
 
 func TestShortWindowDropsBanner(t *testing.T) {
 	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: 40})
-	if !strings.Contains(m.View().Content, "v2 dev build") {
+	if !strings.Contains(m.View().Content, logo[0]) {
 		t.Error("banner missing at 120x40")
 	}
 	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 12})
-	if out := m.View().Content; strings.Contains(out, "v2 dev build") || !strings.Contains(out, "Station") {
+	if out := m.View().Content; strings.Contains(out, logo[0]) || !strings.Contains(out, "Station") {
 		t.Error("at 120x12 the banner should give way to the tabs")
 	}
 }

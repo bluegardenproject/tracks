@@ -34,12 +34,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	_, args := newAppRequested(os.Args[1:], os.Getenv)
-	if err := os.Setenv(newAppEnv, "1"); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	if err := cli.Execute(ctx, args, Version, BuildTime); err != nil {
+	if err := cli.Execute(ctx, os.Args[1:], Version, BuildTime); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

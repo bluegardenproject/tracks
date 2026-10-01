@@ -12,7 +12,7 @@ import (
 // counterpart to claude.taskSuffix.
 //
 // It is a rewrite rather than a copy, because the Claude version's
-// central instruction — invoke the `tracks-v2-reviewer` subagent via the
+// central instruction — invoke the `tracks-reviewer` subagent via the
 // Task tool — names a mechanism the Cursor CLI does not expose. Its
 // Task tool accepts only built-in types, and invoking a custom agent
 // by slash loads the definition into the *same* conversation.

@@ -52,7 +52,6 @@ set -g renumber-windows on
 set -g status-interval 15
 set -g pane-border-status top
 set-environment -g COLORTERM truecolor
-set-environment -g TRACKS_NEW_APP 1
 set-environment -gu TRACKS_ID
 set-environment -gu TRACKS_SOCKET_DIR
 # Prefix keys (tmux.Bindings). Switching to a track lands on its agent pane.

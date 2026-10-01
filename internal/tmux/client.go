@@ -1,5 +1,5 @@
 // Package tmux runs tmux commands against one tmux server, selected by
-// socket name (`tmux -L`). Tracks v2 never talks to the user's default
+// socket name (`tmux -L`). Tracks never talks to the user's default
 // tmux server.
 package tmux
 

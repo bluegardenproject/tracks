@@ -13,9 +13,9 @@ import (
 func InstallHelpers(home string) (skipped []string, err error) {
 	dir := filepath.Join(home, ".claude")
 	for _, f := range []struct{ name, content string }{
-		{"agents/tracks-v2-reviewer.md", reviewerAgent},
-		{"agents/tracks-v2-docs-reviewer.md", docsReviewerAgent},
-		{"skills/tracks-v2-add-repo/SKILL.md", addRepoSkill},
+		{"agents/tracks-reviewer.md", reviewerAgent},
+		{"agents/tracks-docs-reviewer.md", docsReviewerAgent},
+		{"skills/tracks-add-repo/SKILL.md", addRepoSkill},
 	} {
 		path := filepath.Join(dir, filepath.FromSlash(f.name))
 		ok, err := agents.WriteManaged(path, []byte(f.content))

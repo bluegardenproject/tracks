@@ -10,7 +10,7 @@ import (
 func newPathsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "paths",
-		Short: "print where Tracks v2 keeps its files",
+		Short: "print where Tracks keeps its files",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			p, err := platform.Resolve()

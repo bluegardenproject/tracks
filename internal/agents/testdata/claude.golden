@@ -13,7 +13,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -59,7 +59,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -105,7 +105,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -153,7 +153,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -201,7 +201,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -249,7 +249,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
 
 The review:
   1. Invoke the dedicated review subagent via the Task tool:
-     `Task({ subagent_type: "tracks-v2-reviewer", prompt: "Review my changes in this worktree before push." })`
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
      The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
   2. Read the findings. The subagent ends its report with one of:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
@@ -329,7 +329,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` doc-review track. The
 
 Run the review through the dedicated subagent rather than reviewing it yourself:
 
-    Task({ subagent_type: "tracks-v2-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
+    Task({ subagent_type: "tracks-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
 
 **Review brief.** These are the user'\''\'\'''\''s settings for this review. Append them verbatim to the subagent'\''\'\'''\''s prompt — they are not defaults for you to reinterpret, and a section switched off must stay off:
 
@@ -368,7 +368,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` doc-review track. The
 
 Run the review through the dedicated subagent rather than reviewing it yourself:
 
-    Task({ subagent_type: "tracks-v2-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
+    Task({ subagent_type: "tracks-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
 
 **Review brief.** These are the user'\''\'\'''\''s settings for this review. Append them verbatim to the subagent'\''\'\'''\''s prompt — they are not defaults for you to reinterpret, and a section switched off must stay off:
 
@@ -407,7 +407,7 @@ You'\''\'\'''\''re running interactively inside a `tracks` doc-review track. The
 
 Run the review through the dedicated subagent rather than reviewing it yourself:
 
-    Task({ subagent_type: "tracks-v2-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
+    Task({ subagent_type: "tracks-docs-reviewer", prompt: "Review the document at <path>. Repos attached for grounding: <names or none>." })
 
 **Review brief.** These are the user'\''\'\'''\''s settings for this review. Append them verbatim to the subagent'\''\'\'''\''s prompt — they are not defaults for you to reinterpret, and a section switched off must stay off:
 

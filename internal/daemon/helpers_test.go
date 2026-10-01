@@ -11,7 +11,7 @@ import (
 func TestHelpersInstallTheCursorRuleOnceCursorIsAdded(t *testing.T) {
 	c, _ := config(t)
 	c.Paths.Settings = filepath.Join(t.TempDir(), "settings.yaml")
-	rule := filepath.Join(c.Home, ".cursor", "rules", "tracks-v2.mdc")
+	rule := filepath.Join(c.Home, ".cursor", "rules", "tracks.mdc")
 
 	c.helpers()
 	if _, err := os.Stat(rule); !os.IsNotExist(err) {
@@ -24,7 +24,7 @@ func TestHelpersInstallTheCursorRuleOnceCursorIsAdded(t *testing.T) {
 	if _, err := os.Stat(rule); err != nil {
 		t.Errorf("the rule isn't written with Cursor added: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-v2-add-repo", "SKILL.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-add-repo", "SKILL.md")); err != nil {
 		t.Errorf("the add-repo skill isn't written: %v", err)
 	}
 }

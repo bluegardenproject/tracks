@@ -56,38 +56,6 @@ const DocResponseStyle = "" +
 	"preamble, no closing summary restating the report. Lead with the " +
 	"report itself."
 
-// DevServerContract tells the agent to start dev servers through
-// tracks rather than in its own pane. v2 leaves it out of the prompts
-// until it has dev servers again, with the proxy redesign.
-//
-// Shared because the capability is tracks', not the assistant's: the
-// pane env reaches every provider identically, so an agent without
-// this text has the capability and no idea it exists. The failure it
-// prevents is specific — asked to start the dev server, the agent runs
-// `pnpm dev` in its own pane and blocks, or backgrounds it with `&`
-// and loses the output.
-const DevServerContract = "" +
-	"**Dev-server services.** When the user asks you to start (or run, " +
-	"boot, spin up) the dev server, do NOT run `pnpm dev` / `npm " +
-	"start` / `pnpm install` yourself, and never background a server process (`… &` / `nohup`). Run `tracks up <name>` instead: " +
-	"it opens a dedicated pane in this track and runs the configured " +
-	"start steps there (dependency install first, then the server) so " +
-	"the process is visible and does not block you. It returns " +
-	"immediately; the install and boot continue in the pane.\n\n" +
-	"`$TRACKS_ID` is already set in the environment; the `--track` flag " +
-	"is never needed.\n" +
-	"  - `tracks services` lists configured services with status, port, " +
-	"and log path. Run this first to find the service name (if it " +
-	"prints nothing, this repo has no dev server configured; tell the " +
-	"user and stop).\n" +
-	"  - `tracks up` (no arg) starts ALL the track's services, each in its own pane — use this when asked to run the dev servers; `tracks up <name>` starts just one (its " +
-	"depends_on services first)\n" +
-	"  - `tracks down <name>` stops a running service\n" +
-	"  - `tracks url <name>` prints the URL (stable proxy + track port)\n\n" +
-	"To confirm the server came up, tail/cat the log path from `tracks " +
-	"services` (the pane also tees its output there); do not assume " +
-	"success just because `tracks up` returned. If `tracks up` itself errors (command not found, daemon unreachable, unknown service, any non-zero exit), STOP and report the exact error to the user — do not fall back to starting the server yourself."
-
 // TerminalContract tells agents how to open a user-facing shell without
 // launching a nested or background terminal process in their own pane.
 const TerminalContract = "" +
@@ -96,9 +64,7 @@ const TerminalContract = "" +
 	"in the track window's right-hand pane column and returns immediately. " +
 	"`$TRACKS_ID` is already set, so do not pass `--track`."
 
-// LinksContract is v2's own, not v1's: every start prompt carries it,
-// right after the task. It has no apostrophes, so quoting leaves it as
-// written and the v1 parity test can find it.
+// LinksContract is in every start prompt, right after the task.
 //
 // It exists because an agent that can't read a linked ticket or page
 // tends to plan from the rest of the prompt instead, and the link is

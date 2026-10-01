@@ -51,7 +51,7 @@ const taskSuffix = "" +
 	"docs) the review below is mandatory. When in doubt, review.\n\n" +
 	"The review:\n" +
 	"  1. Invoke the dedicated review subagent via the Task tool:\n" +
-	"     `Task({ subagent_type: \"tracks-v2-reviewer\", prompt: " +
+	"     `Task({ subagent_type: \"tracks-reviewer\", prompt: " +
 	"\"Review my changes in this worktree before push.\" })`\n" +
 	"     The subagent is auto-discovered from the user's global " +
 	"Claude config — no setup needed inside the worktree.\n" +
@@ -129,7 +129,7 @@ const docReviewTemplate = "" +
 	"**The document under review is:** `%[1]s`\n\n" +
 	"Run the review through the dedicated subagent rather than " +
 	"reviewing it yourself:\n\n" +
-	"    Task({ subagent_type: \"tracks-v2-docs-reviewer\", prompt: " +
+	"    Task({ subagent_type: \"tracks-docs-reviewer\", prompt: " +
 	"\"Review the document at <path>. Repos attached for grounding: " +
 	"<names or none>.\" })\n\n" +
 	"**Review brief.** These are the user's settings for this review. " +

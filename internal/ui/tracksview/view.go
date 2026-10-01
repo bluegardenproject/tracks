@@ -65,20 +65,11 @@ func (m Model) fg(token theme.Token) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(m.palette.Color(token))
 }
 
-// bannerBlock is the banner with the build on the right of its last
-// line.
+// bannerBlock is the banner between two blank lines.
 func (m Model) bannerBlock() []string {
-	right := make([]string, bannerRows)
-	right[bannerRows-1] = m.fg(theme.TextFaint).Render("v2 dev build")
 	lines := []string{strings.Repeat(" ", m.width)}
-	for i, b := range m.banner() {
-		left := "  " + b
-		gap := m.width - lipgloss.Width(left) - lipgloss.Width(right[i]) - 2
-		if gap < 2 {
-			lines = append(lines, pad(left, m.width))
-			continue
-		}
-		lines = append(lines, left+strings.Repeat(" ", gap)+right[i]+"  ")
+	for _, b := range m.banner() {
+		lines = append(lines, pad("  "+b, m.width))
 	}
 	return append(lines, strings.Repeat(" ", m.width))
 }

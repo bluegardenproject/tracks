@@ -1,4 +1,4 @@
-// Package daemon is the v2 daemon: one per user, started on the Tracks
+// Package daemon is the Tracks daemon: one per user, started on the Tracks
 // tmux server, it creates and ends tracks for the CLI and the popups
 // and notices when a track's window closes.
 package daemon
