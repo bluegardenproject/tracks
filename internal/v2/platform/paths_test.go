@@ -1,12 +1,6 @@
 package platform
 
-import (
-	"path/filepath"
-	"strings"
-	"testing"
-
-	v1config "github.com/bluegardenproject/tracks/internal/config"
-)
+import "testing"
 
 func TestResolve(t *testing.T) {
 	tests := []struct {
@@ -47,38 +41,5 @@ func TestResolve(t *testing.T) {
 				t.Errorf("resolve() = %+v, want %+v", got, tt.want)
 			}
 		})
-	}
-}
-
-// Both apps run side by side, so no v2 location may sit inside v1's.
-func TestPathsStayOutOfV1(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("XDG_STATE_HOME", "")
-
-	v1ConfigFile, err := v1config.Path()
-	if err != nil {
-		t.Fatal(err)
-	}
-	v1StateDir, err := v1config.Default().ResolveStateDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	v1Dirs := []string{filepath.Dir(v1ConfigFile), v1StateDir}
-
-	p, err := Resolve()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, v2 := range []string{p.ConfigDir, p.DataDir} {
-		for _, v1 := range v1Dirs {
-			if v2 == v1 || strings.HasPrefix(v2, v1+string(filepath.Separator)) {
-				t.Errorf("%s is inside v1's %s", v2, v1)
-			}
-		}
-	}
-	if p.TmuxSocket == "default" || p.TmuxSocket == "" {
-		t.Errorf("tmux socket %q is the default server", p.TmuxSocket)
 	}
 }

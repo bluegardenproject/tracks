@@ -32,15 +32,15 @@ func TestCommandsMatchGolden(t *testing.T) {
 		for _, resume := range []bool{false, true} {
 			var out strings.Builder
 			for _, c := range spawnCases {
-				v2, _, _ := c.tracks(t)
-				s := c.spec(v2, e.program)
+				tr := c.track(t)
+				s := c.spec(tr, e.program)
 				s.Resume = resume
 				got, err := e.command(s)
 				if err != nil {
 					t.Fatalf("%s %s: %v", e.name, c.name, err)
 				}
 				text := fmt.Sprintf("=== %s\ndir: %s\n\n%s\n\n", c.name, got.Dir, got.Command)
-				if dir := caseDir(v2); dir != "" {
+				if dir := caseDir(tr); dir != "" {
 					text = strings.ReplaceAll(text, dir, tempDir)
 				}
 				if home, err := os.UserHomeDir(); err == nil && got.Dir == home {
