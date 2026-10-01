@@ -9,9 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Execute runs the v2 command tree with args (the flag already removed).
-func Execute(ctx context.Context, args []string, version string) error {
+// Execute runs the v2 command tree with args (the flag already removed);
+// built is when the binary was built.
+func Execute(ctx context.Context, args []string, version, built string) error {
 	root := newRoot(version)
+	root.AddCommand(newVersionCmd(version, built))
 	root.SetArgs(args)
 	return root.ExecuteContext(ctx)
 }

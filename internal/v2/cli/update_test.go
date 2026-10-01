@@ -9,6 +9,15 @@ import (
 	"github.com/bluegardenproject/tracks/internal/update"
 )
 
+func TestVersion(t *testing.T) {
+	var out strings.Builder
+	c := newVersionCmd("2.0.0", "2026-10-01T12:00:00Z")
+	c.SetOut(&out)
+	if err := c.Execute(); err != nil || out.String() != "tracks 2.0.0 (built 2026-10-01T12:00:00Z)\n" {
+		t.Errorf("version printed %q, %v", out.String(), err)
+	}
+}
+
 func TestUpdate(t *testing.T) {
 	rel := update.Release{Tag: "v2.1.0", Version: "2.1.0", PageURL: "https://example.com/v2.1.0"}
 	var applied []string
