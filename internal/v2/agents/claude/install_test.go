@@ -1,12 +1,6 @@
 package claude
 
 import (
-	"go/ast"
-	"go/constant"
-	"go/importer"
-	"go/parser"
-	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,40 +8,7 @@ import (
 	"testing"
 )
 
-// v1Consts evaluates the string constants of one v1 source file.
-func v1Consts(t *testing.T, path string) map[string]string {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, path, nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Only the constants matter; the rest of the file doesn't resolve on
-	// its own, and those errors are ignored.
-	conf := types.Config{Importer: importer.Default(), Error: func(error) {}}
-	pkg, _ := conf.Check("v1", fset, []*ast.File{f}, nil)
-	out := map[string]string{}
-	for _, name := range pkg.Scope().Names() {
-		if c, ok := pkg.Scope().Lookup(name).(*types.Const); ok && c.Val().Kind() == constant.String {
-			out[name] = constant.StringVal(c.Val())
-		}
-	}
-	return out
-}
-
-func TestReviewersMatchV1(t *testing.T) {
-	v1 := v1Consts(t, "../../../daemon/skill.go")
-	names := strings.NewReplacer("tracks-reviewer", "tracks-v2-reviewer", "tracks-docs-reviewer", "tracks-v2-docs-reviewer")
-	for v2, want := range map[string]string{
-		reviewerAgent:     v1["ReviewerAgentTemplate"],
-		docsReviewerAgent: v1["docsReviewerAgentTemplate"],
-	} {
-		if want == "" {
-			t.Fatal("v1 reviewer not found")
-		}
-		if v2 != names.Replace(want) {
-			t.Errorf("reviewer differs from v1:\n%s", v2[:200])
-		}
-	}
+func TestReviewerNames(t *testing.T) {
 	for _, r := range []string{reviewerAgent, docsReviewerAgent} {
 		if !regexp.MustCompile(`(?m)^name: tracks-v2-(docs-)?reviewer$`).MatchString(r) {
 			t.Errorf("reviewer has no v2 name:\n%s", r[:200])

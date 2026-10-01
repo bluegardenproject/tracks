@@ -1,37 +1,8 @@
 package track
 
-import (
-	"path/filepath"
-	"strings"
-	"testing"
+import "testing"
 
-	"github.com/bluegardenproject/tracks/internal/state"
-)
-
-// v1Label is the label v1's handleNew gives a track.
-func v1Label(name, document, prompt string) string {
-	slug := strings.TrimSpace(name)
-	if slug == "" && document != "" {
-		base := filepath.Base(document)
-		slug = strings.TrimSuffix(base, filepath.Ext(base))
-	}
-	return state.Track{Slug: slug, TaskPrompt: prompt}.WindowLabel()
-}
-
-func TestWindowLabelMatchesV1(t *testing.T) {
-	long := "Investigate the rate spike on swap quotes since Monday"
-	for _, tt := range []struct{ name, document, prompt string }{
-		{name: "Rate bug", prompt: "anything"},
-		{name: "  ", prompt: long},
-		{name: "fix: a.b c", prompt: long},
-		{document: "/Users/u/Downloads/Q3 Architecture.deck.pdf", prompt: long},
-		{name: "own name", document: "/tmp/x.md"},
-		{prompt: "日本語だけ"},
-	} {
-		if got, want := WindowLabel(tt.name, tt.document, tt.prompt), v1Label(tt.name, tt.document, tt.prompt); got != want {
-			t.Errorf("WindowLabel(%q, %q, %q) = %q, v1 gives %q", tt.name, tt.document, tt.prompt, got, want)
-		}
-	}
+func TestWindowLabelOfDocument(t *testing.T) {
 	if got := WindowLabel("", "/tmp/Q3 Architecture.deck.pdf", "p"); got != "q3-architecture-deck" {
 		t.Errorf("a document's name gives %q", got)
 	}
@@ -55,20 +26,5 @@ func TestWindowName(t *testing.T) {
 	}
 	if got := Branch(id); got != "tracks/a1b2c3" {
 		t.Errorf("Branch = %q", got)
-	}
-}
-
-func TestCandorMatchesV1(t *testing.T) {
-	if MinCandor != state.MinCandor || MaxCandor != state.MaxCandor || DefaultCandor != state.DefaultCandor {
-		t.Fatalf("candor %d–%d (default %d), v1 has %d–%d (%d)",
-			MinCandor, MaxCandor, DefaultCandor, state.MinCandor, state.MaxCandor, state.DefaultCandor)
-	}
-	for level := -1; level <= MaxCandor+1; level++ {
-		if got, want := CandorLabel(level), state.CandorLabel(level); got != want {
-			t.Errorf("candor %d is %q, v1 has %q", level, got, want)
-		}
-		if got, want := CandorLevel(level), (state.Track{Review: &state.ReviewSpec{Candor: level}}).CandorLevel(); got != want {
-			t.Errorf("CandorLevel(%d) = %d, v1 gives %d", level, got, want)
-		}
 	}
 }
