@@ -131,7 +131,9 @@ func (m Model) hints() string {
 		return "  " + text.Render("Reconnecting to the daemon…")
 	case m.tab == tabStation && len(m.station.tracks) > 0:
 		keys = stationKeys
-		if t, _ := m.selectedTrack(); t.Archived {
+		if t, _ := m.selectedTrack(); t.Draft != nil {
+			keys = draftKeys
+		} else if t.Archived {
 			keys = archivedKeys
 		} else if t.Status == track.Closed {
 			keys = selectKeys

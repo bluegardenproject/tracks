@@ -36,7 +36,13 @@ type Track struct {
 	PRs                    []PR // in the order they were found
 	// PRStatus is where the PRs are; track.NoPRs without any.
 	PRStatus track.Status
+	// Draft is set on a creation that failed, kept to start again; the
+	// rest is what was asked for.
+	Draft *Draft
 }
+
+// Draft is why a creation failed, and the prompt it had.
+type Draft struct{ Error, Prompt string }
 
 // Repo is one repository of a track; Path is its worktree, or the
 // primary checkout for a track without worktrees. Removed says Archive
@@ -90,7 +96,9 @@ func (t Track) Removed() bool {
 func (t Track) Shown() string { return cmp.Or(t.Title, t.Name) }
 
 // Open reports whether t has a window.
-func (t Track) Open() bool { return t.Status != track.Done && t.Status != track.Closed }
+func (t Track) Open() bool {
+	return t.Status != track.Done && t.Status != track.Closed && t.Status != track.Draft
+}
 
 // Daemon reads the tracks from the daemon, with Station.
 type Daemon struct {
@@ -124,6 +132,9 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
+		if l.Draft != nil {
+			out[i].Draft = &Draft{Error: l.Draft.Error, Prompt: l.Draft.Request.Prompt}
+		}
 	}
 	return out, f, nil
 }

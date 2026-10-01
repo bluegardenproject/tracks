@@ -36,6 +36,8 @@ const (
 	actionCopyPath
 	actionCopySession
 	actionOpenPR
+	actionStartDraft
+	actionDiscardDraft
 	actionConfirmEnd
 	actionConfirmRecreate
 	actionConfirmArchive
@@ -92,6 +94,9 @@ var (
 
 // actionsFor are t's buttons.
 func actionsFor(t source.Track) []action {
+	if t.Draft != nil {
+		return draftActions
+	}
 	if t.Archived {
 		return archivedActions
 	}
@@ -115,6 +120,8 @@ func actionsFor(t source.Track) []action {
 // mainAction is what Enter and a double click do to t.
 func mainAction(t source.Track) actionID {
 	switch {
+	case t.Draft != nil:
+		return actionStartDraft
 	case t.Open():
 		return actionOpen
 	case t.Archived:
@@ -136,6 +143,9 @@ func (m Model) details(width int) ([]string, []hit) {
 	t, ok := m.selectedTrack()
 	if !ok {
 		return nil, nil
+	}
+	if t.Draft != nil {
+		return m.draftDetails(t, width)
 	}
 	label := func(s string) string { return m.fg(theme.TextFaint).Render(pad(s, labelWidth)) }
 	value := func(s string) string { return m.fg(theme.TextDefault).Render(s) }
@@ -341,6 +351,8 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	case actionCopySession:
 		m.station.notice = notice{text: "Copied the session ID."}
 		return m, tea.SetClipboard(t.Session), true
+	case actionStartDraft, actionDiscardDraft:
+		return m, m.draftAct(id, t), true
 	}
 	return m, m.act(id), true
 }

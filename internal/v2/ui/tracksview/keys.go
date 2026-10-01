@@ -21,6 +21,7 @@ var (
 	stationKeys      = []keyHelp{{"↑/↓", "select"}, {"Enter", "open"}}
 	endedStationKeys = []keyHelp{{"↑/↓", "select"}, {"Enter", "resume"}}
 	archivedKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "unarchive"}}
+	draftKeys        = []keyHelp{{"↑/↓", "select"}, {"Enter", "start again"}}
 	clearFilterKeys  = []keyHelp{{"x", "clear filter"}}
 	selectKeys       = []keyHelp{{"↑/↓", "select"}}
 	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
