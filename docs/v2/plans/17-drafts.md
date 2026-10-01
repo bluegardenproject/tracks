@@ -1,13 +1,13 @@
 # Plan: failed creations kept as drafts
 
-**Status: planned.** Part of the [v2 masterplan](../masterplan.md), the [v2.0.0 scope](../masterplan.md#v200-scope). A creation that fails today loses what was typed once the form is closed: the error shows in the status line, or on the form while it's open. This plan keeps it as a draft in Station, to start again.
+**Status: built.** Part of the [v2 masterplan](../masterplan.md), the [v2.0.0 scope](../masterplan.md#v200-scope). A creation that fails today loses what was typed once the form is closed: the error shows in the status line, or on the form while it's open. This plan keeps it as a draft in Station, to start again.
 
 ## What users get
 
 - **Every failed creation becomes a draft:** the track type, name, repos, prompt, options, agent and model, and why it failed. It doesn't matter whether the form was still open.
 - **A draft is a row in Station** with the **draft** status (warning badge), under the name typed or else the prompt's first line. Its details show why it failed and what was typed.
-- **Start again** (Enter, or its button) opens the New track form filled in with the draft, to change and create. **Discard** (`x`) deletes it.
-- **A draft goes away when a creation from it succeeds:** from the form it opened, or from the form that failed, when you retry there. Another failure updates the draft's reason instead of adding one.
+- **Start again** (Enter, or its button) opens the New track form filled in with the draft, to change and create. **Discard** (`d`) deletes it; `x` stays Station's key for clearing the filter.
+- **A draft goes away when a creation from it succeeds:** from the form it opened, or from the form that failed, when you retry there. Another failure updates the draft's reason instead of adding one. Closing the form keeps the draft, and its "Discard this track?" box says so.
 - **Station's filter:** drafts show when no filter is on, and under a filter only when its statuses include draft.
 
 ## How it works
@@ -16,7 +16,7 @@
 - **`tracks.Request.Draft`** is the draft's ID. The form picks one the first time it creates and keeps it for its retries; Start again passes the draft's. A creation without one, such as from the CLI, gets a new ID.
 - **`Create`** saves the draft when it fails, with the error as the form shows it, and deletes the draft when it succeeds.
 - **`Station`** adds the drafts as `Listed` rows with a `Draft` part (the error, the prompt), whose status is `track.Drafted`. It's declared with the other statuses; no stored track has it.
-- **RPC:** `draft` returns a draft's request, `discard-draft` deletes one. The form's popup takes `--draft <id>` and fills itself from the request; a repo or document that no longer exists shows as the form's usual field errors.
+- **RPC:** `draft` returns a draft's request, `discard-draft` deletes one. The form's popup takes `--draft <id>` and fills itself from the request. A repo no longer on the Repositories tab is left out and named in the form's hint row; a document that's gone leaves the field empty, which the form's checks report.
 
 ## Packages
 
