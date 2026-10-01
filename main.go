@@ -13,7 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bluegardenproject/tracks/internal/v2/cli"
+	"github.com/bluegardenproject/tracks/internal/cli"
 )
 
 // Version is the binary version, set at build time via:
