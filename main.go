@@ -1,7 +1,7 @@
-// Command tracks runs parallel Claude Code agents over git worktrees,
-// coordinated from a single tmux session. Each "track" is one agent
-// working on a fresh branch in an isolated worktree, so the user's
-// primary checkout (the one Cursor is watching) is never disturbed.
+// Command tracks runs coding agents in parallel over git worktrees,
+// coordinated from one tmux session. Each track is one agent working on
+// a branch of its own in an isolated worktree, so the user's primary
+// checkout is never disturbed.
 //
 // See README.md for the overall design.
 package main
@@ -13,7 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bluegardenproject/tracks/cmd"
+	"github.com/bluegardenproject/tracks/internal/v2/cli"
 )
 
 // Version is the binary version, set at build time via:
@@ -34,17 +34,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if newApp, args := newAppRequested(os.Args[1:], os.Getenv); newApp {
-		if err := runNewApp(ctx, args); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
-		return
+	_, args := newAppRequested(os.Args[1:], os.Getenv)
+	if err := os.Setenv(newAppEnv, "1"); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
 	}
-
-	cmd.SetVersion(Version, BuildTime)
-
-	if err := cmd.Execute(ctx); err != nil {
+	if err := cli.Execute(ctx, args, Version, BuildTime); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
