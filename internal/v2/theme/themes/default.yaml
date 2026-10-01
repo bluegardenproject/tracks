@@ -13,7 +13,7 @@ tokens:
   bg.hover:           "#2f2f35"
 
   border.default:     "#1ccde8"
-  border.focus:       "#f5d000"
+  border.focus:       "#d18b00"
   border.accent:      "#d18b00"
 
   state.success.text:        "#46eb00"
@@ -75,11 +75,11 @@ tokens:
   listItem.bg.active:       "#073542"
   listItem.text.active:     "#1ccde8"
 
-  overlay.bg:               "#303036"
+  overlay.bg:               "#14233b"
   overlay.bg.selected:      "#102547"
-  overlay.bg.hover:         "#102547"
+  overlay.bg.hover:         "#073542"
   overlay.border:           "#1ccde8"
-  overlay.border.focus:     "#f5d000"
+  overlay.border.focus:     "#1ccde8"
   overlay.text.default:     "#a1d2e3"
   overlay.text.muted:       "#4da5c4"
   overlay.text.faint:       "#71717a"

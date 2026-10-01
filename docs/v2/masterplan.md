@@ -31,7 +31,7 @@ What v1 does that v2 still lacks, and whether v2.0.0 needs it. Compared with v1'
 
 Needed before v2.0.0:
 
-- **The findings from testing:** the overlay colours, and Cursor's plan-approval and mode-switch markers confirmed on a real screen.
+- **The findings from testing:** Cursor's plan-approval and mode-switch markers confirmed on a real screen.
 
 After v2.0.0:
 
