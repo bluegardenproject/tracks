@@ -7,6 +7,7 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/bluegardenproject/tracks/main/scripts/install.sh | bash
+#   scripts/install.sh --local ./tracks   # install a binary you built (make build)
 
 set -e
 
@@ -20,6 +21,36 @@ NC='\033[0m'
 REPO="bluegardenproject/tracks"
 INSTALL_DIR="$HOME/.tracks"
 BINARY_NAME="tracks"
+
+# --local installs a binary from disk instead of the latest release. It
+# isn't verified: you built it, or chose it.
+LOCAL_BINARY=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --local)
+            if [ -z "${2:-}" ]; then
+                echo -e "${RED}Error: --local needs the path of a tracks binary${NC}"
+                exit 1
+            fi
+            LOCAL_BINARY="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: install.sh [--local <binary>]"
+            echo "  Without --local, installs the latest release, verified against its SHA256SUMS."
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Error: unknown argument: $1${NC}"
+            echo "Usage: install.sh [--local <binary>]"
+            exit 1
+            ;;
+    esac
+done
+if [ -n "$LOCAL_BINARY" ] && [ ! -f "$LOCAL_BINARY" ]; then
+    echo -e "${RED}Error: $LOCAL_BINARY is not a file${NC}"
+    exit 1
+fi
 
 echo -e "${BOLD}${BLUE}tracks Installer${NC}"
 echo -e "Installing to: ${YELLOW}$INSTALL_DIR${NC}"
@@ -51,69 +82,13 @@ echo -e "Detected: ${GREEN}$OS-$ARCH${NC}"
 
 # Verification is mandatory (see below), so an environment that can't
 # hash is a failure — say so now rather than after two downloads.
-if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+if [ -z "$LOCAL_BINARY" ] && ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
     echo -e "${RED}Error: neither sha256sum nor shasum is on PATH.${NC}"
     echo -e "${YELLOW}tracks verifies its download against the release checksums, so"
     echo -e "one of them is required. Install coreutils (or perl for shasum).${NC}"
     exit 1
 fi
 
-echo -e "${BLUE}Creating installation directory...${NC}"
-mkdir -p "$INSTALL_DIR"
-
-echo -e "${BLUE}Fetching latest release...${NC}"
-RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
-ASSET="tracks-$OS-$ARCH"
-RELEASE_JSON=$(curl -s "$RELEASE_URL")
-
-# `[^"]*` keeps a match inside one JSON string — the API answers on a
-# single line, so a greedy `.*` would splice the first URL in the response
-# onto the last asset name and yield a URL that 404s. Requiring
-# `/releases/download/` narrows it to release assets, though a download
-# URL quoted in the release notes still matches; what picks the right one
-# is `head -1` plus GitHub listing `assets` ahead of `body`. A wrong pick
-# is caught by the digest check below rather than installed — which now
-# means the install aborts, not that it quietly carries on.
-# `|| true` so a missing asset (e.g. before the first release exists,
-# when /releases/latest 404s) falls through to the friendly guard below
-# instead of aborting on grep's exit 1 under `set -e`.
-DOWNLOAD_URL=$(printf '%s' "$RELEASE_JSON" |
-    grep -o "https://[^\"]*/releases/download/[^\"]*$ASSET" | head -1 || true)
-CHECKSUMS_URL=$(printf '%s' "$RELEASE_JSON" |
-    grep -o "https://[^\"]*/releases/download/[^\"]*SHA256SUMS" | head -1 || true)
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo -e "${RED}Error: Could not find binary for $OS-$ARCH${NC}"
-    echo -e "${YELLOW}Available releases: https://github.com/$REPO/releases${NC}"
-    exit 1
-fi
-
-echo -e "Download URL: ${GREEN}$DOWNLOAD_URL${NC}"
-
-echo -e "${BLUE}Downloading tracks...${NC}"
-TEMP_FILE=$(mktemp)
-# One cleanup for every exit, including the ones no branch below handles:
-# a failing curl, or a failing mv after verification. After a successful
-# mv the path is gone and the rm is a harmless no-op. `|| true` keeps the
-# script's own exit status: bash replaces it with 1 if the trap's last
-# command fails, which an unremovable temp file would otherwise do.
-trap 'rm -f "$TEMP_FILE" || true' EXIT
-# -f: fail (non-zero exit) on an HTTP error instead of saving the error
-# body as if it were the binary.
-curl -fL -o "$TEMP_FILE" "$DOWNLOAD_URL"
-
-# --- Verify the download against the release's published digests ---
-# Every outcome except a verified match aborts, and the installed file is
-# only ever one SHA256SUMS vouches for.
-#
-# This used to warn-and-continue when a release published no SHA256SUMS,
-# because v1.1.0 and earlier don't have the file. /releases/latest always
-# serves the newest release, so from v1.1.1 on there is no legitimate way
-# to land on one without it — whereas removing the file is exactly what
-# someone with release-write access would do to get an unverified binary
-# installed. There is deliberately no override: an env var that switches
-# verification off is one social-engineering line away from being the
-# install instructions.
 # Prints the file's SHA-256, or returns non-zero if it can't be computed.
 # The status is taken from the digest tool itself, not from a pipeline —
 # `sha256sum | awk` would return awk's success and print nothing, turning
@@ -131,34 +106,105 @@ sha256_of() {
     printf '%s\n' "${hash_line%% *}"
 }
 
-echo -e "${BLUE}Verifying checksum...${NC}"
-if [ -z "$CHECKSUMS_URL" ]; then
-    echo -e "${RED}Error: this release publishes no SHA256SUMS — refusing to install.${NC}"
-    echo -e "${YELLOW}  Every release from v1.1.1 on publishes one, so this is unexpected.${NC}"
-    echo -e "${YELLOW}  Download and verify by hand: https://github.com/$REPO/releases${NC}"
-    exit 1
-elif ! SUMS=$(curl -fsSL "$CHECKSUMS_URL"); then
-    echo -e "${RED}Error: could not fetch SHA256SUMS — refusing to install.${NC}"
-    echo -e "${RED}  $CHECKSUMS_URL${NC}"
-    exit 1
-elif ! EXPECTED=$(printf '%s\n' "$SUMS" |
-    awk -v a="$ASSET" '$2 == a || $2 == "*" a {print $1}' | head -1) ||
-    [ -z "$EXPECTED" ]; then
-    echo -e "${RED}Error: SHA256SUMS does not list $ASSET — refusing to install.${NC}"
-    exit 1
-elif ! ACTUAL=$(sha256_of "$TEMP_FILE"); then
-    # "couldn't check" and "didn't match" get the same answer: both mean
-    # the binary is unverified. The preflight above catches a missing
-    # tool, so reaching here means the tool itself failed.
-    echo -e "${RED}Error: could not compute the checksum of the download — refusing to install.${NC}"
-    exit 1
-elif [ "$EXPECTED" != "$ACTUAL" ]; then
-    echo -e "${RED}Error: checksum mismatch for $ASSET — refusing to install.${NC}"
-    echo -e "${RED}  expected $EXPECTED${NC}"
-    echo -e "${RED}  actual   $ACTUAL${NC}"
-    exit 1
+# download_release saves the latest release's binary for this OS and
+# architecture at $TEMP_FILE, verified against its SHA256SUMS.
+download_release() {
+    echo -e "${BLUE}Fetching latest release...${NC}"
+    local release_url="https://api.github.com/repos/$REPO/releases/latest"
+    local asset="tracks-$OS-$ARCH"
+    local release_json
+    release_json=$(curl -s "$release_url")
+
+    # `[^"]*` keeps a match inside one JSON string — the API answers on a
+    # single line, so a greedy `.*` would splice the first URL in the response
+    # onto the last asset name and yield a URL that 404s. Requiring
+    # `/releases/download/` narrows it to release assets, though a download
+    # URL quoted in the release notes still matches; what picks the right one
+    # is `head -1` plus GitHub listing `assets` ahead of `body`. A wrong pick
+    # is caught by the digest check below rather than installed — which now
+    # means the install aborts, not that it quietly carries on.
+    # `|| true` so a missing asset (e.g. before the first release exists,
+    # when /releases/latest 404s) falls through to the friendly guard below
+    # instead of aborting on grep's exit 1 under `set -e`.
+    local download_url checksums_url
+    download_url=$(printf '%s' "$release_json" |
+        grep -o "https://[^\"]*/releases/download/[^\"]*$asset" | head -1 || true)
+    checksums_url=$(printf '%s' "$release_json" |
+        grep -o "https://[^\"]*/releases/download/[^\"]*SHA256SUMS" | head -1 || true)
+
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}Error: Could not find binary for $OS-$ARCH${NC}"
+        echo -e "${YELLOW}Available releases: https://github.com/$REPO/releases${NC}"
+        exit 1
+    fi
+
+    echo -e "Download URL: ${GREEN}$download_url${NC}"
+
+    echo -e "${BLUE}Downloading tracks...${NC}"
+    # -f: fail (non-zero exit) on an HTTP error instead of saving the error
+    # body as if it were the binary.
+    curl -fL -o "$TEMP_FILE" "$download_url"
+
+    # --- Verify the download against the release's published digests ---
+    # Every outcome except a verified match aborts, and the installed file is
+    # only ever one SHA256SUMS vouches for.
+    #
+    # This used to warn-and-continue when a release published no SHA256SUMS,
+    # because v1.1.0 and earlier don't have the file. /releases/latest always
+    # serves the newest release, so from v1.1.1 on there is no legitimate way
+    # to land on one without it — whereas removing the file is exactly what
+    # someone with release-write access would do to get an unverified binary
+    # installed. There is deliberately no override: an env var that switches
+    # verification off is one social-engineering line away from being the
+    # install instructions. (--local is no such switch: it never downloads.)
+    local sums expected actual
+    echo -e "${BLUE}Verifying checksum...${NC}"
+    if [ -z "$checksums_url" ]; then
+        echo -e "${RED}Error: this release publishes no SHA256SUMS — refusing to install.${NC}"
+        echo -e "${YELLOW}  Every release from v1.1.1 on publishes one, so this is unexpected.${NC}"
+        echo -e "${YELLOW}  Download and verify by hand: https://github.com/$REPO/releases${NC}"
+        exit 1
+    elif ! sums=$(curl -fsSL "$checksums_url"); then
+        echo -e "${RED}Error: could not fetch SHA256SUMS — refusing to install.${NC}"
+        echo -e "${RED}  $checksums_url${NC}"
+        exit 1
+    elif ! expected=$(printf '%s\n' "$sums" |
+        awk -v a="$asset" '$2 == a || $2 == "*" a {print $1}' | head -1) ||
+        [ -z "$expected" ]; then
+        echo -e "${RED}Error: SHA256SUMS does not list $asset — refusing to install.${NC}"
+        exit 1
+    elif ! actual=$(sha256_of "$TEMP_FILE"); then
+        # "couldn't check" and "didn't match" get the same answer: both mean
+        # the binary is unverified. The preflight above catches a missing
+        # tool, so reaching here means the tool itself failed.
+        echo -e "${RED}Error: could not compute the checksum of the download — refusing to install.${NC}"
+        exit 1
+    elif [ "$expected" != "$actual" ]; then
+        echo -e "${RED}Error: checksum mismatch for $asset — refusing to install.${NC}"
+        echo -e "${RED}  expected $expected${NC}"
+        echo -e "${RED}  actual   $actual${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}  ok — $asset matches SHA256SUMS${NC}"
+    fi
+}
+
+echo -e "${BLUE}Creating installation directory...${NC}"
+mkdir -p "$INSTALL_DIR"
+
+TEMP_FILE=$(mktemp)
+# One cleanup for every exit, including the ones no branch below handles:
+# a failing curl, or a failing mv after verification. After a successful
+# mv the path is gone and the rm is a harmless no-op. `|| true` keeps the
+# script's own exit status: bash replaces it with 1 if the trap's last
+# command fails, which an unremovable temp file would otherwise do.
+trap 'rm -f "$TEMP_FILE" || true' EXIT
+
+if [ -n "$LOCAL_BINARY" ]; then
+    echo -e "${BLUE}Copying $LOCAL_BINARY...${NC}"
+    cp "$LOCAL_BINARY" "$TEMP_FILE"
 else
-    echo -e "${GREEN}  ok — $ASSET matches SHA256SUMS${NC}"
+    download_release
 fi
 
 echo -e "${BLUE}Installing binary...${NC}"
@@ -263,7 +309,7 @@ echo -e "  ${GREEN}tracks${NC}          - Start the tmux session + dashboard"
 echo -e "  ${GREEN}tracks version${NC}  - Show the installed version"
 echo -e "  ${GREEN}tracks --help${NC}   - Show all commands"
 echo
-echo -e "${YELLOW}Requires ${BOLD}git${NC}${YELLOW}, ${BOLD}tmux${NC}${YELLOW}, and the ${BOLD}claude${NC}${YELLOW} CLI on your PATH.${NC}"
+echo -e "${YELLOW}Requires ${BOLD}git${NC}${YELLOW}, ${BOLD}tmux${NC}${YELLOW}, and the ${BOLD}claude${NC}${YELLOW} or Cursor ${BOLD}agent${NC}${YELLOW} CLI on your PATH.${NC}"
 echo -e "${YELLOW}If a tracks daemon from an older version is running, it restarts${NC}"
 echo -e "${YELLOW}automatically the next time you run ${BOLD}tracks${NC}${YELLOW}.${NC}"
 echo
