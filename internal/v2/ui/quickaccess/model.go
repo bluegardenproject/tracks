@@ -15,13 +15,19 @@ import (
 // Entry is something Quick Access opens; Key opens it directly.
 type Entry struct{ ID, Label, Key string }
 
-// NewTrack opens the New track form, TracksFilter the Tracks filter.
+// NewTrack opens the New track form, TracksFilter the Tracks filter;
+// CloseTracks closes Tracks, once confirmed.
 const (
 	NewTrack     = "new-track"
 	TracksFilter = "tracks-filter"
+	CloseTracks  = "close-tracks"
 )
 
-var entries = []Entry{{ID: NewTrack, Label: "New track", Key: "n"}, {ID: TracksFilter, Label: "Tracks filter", Key: "f"}}
+var entries = []Entry{
+	{ID: NewTrack, Label: "New track", Key: "n"},
+	{ID: TracksFilter, Label: "Tracks filter", Key: "f"},
+	{ID: CloseTracks, Label: "Close Tracks", Key: "c"},
+}
 
 // Keys are the keys Quick Access takes, for its hint row and the Keys
 // list.

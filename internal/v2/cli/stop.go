@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/bluegardenproject/tracks/internal/v2/platform"
@@ -25,14 +26,22 @@ func newStopCmd() *cobra.Command {
 				_, err := fmt.Fprintf(c.OutOrStdout(), "%s isn't running.\n", name)
 				return err
 			}
-			if err := stopDaemon(c.Context(), rpc.Client{Socket: paths.Socket}); err != nil {
-				return err
-			}
-			if err := server.KillServer(); err != nil {
+			if err := closeTracks(c.Context(), server, paths); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintf(c.OutOrStdout(), "%s stopped.\n", name)
 			return err
 		},
 	}
+}
+
+// closeTracks closes Tracks: the daemon first, which finishes the
+// creations under way, then the tmux server with every window. The
+// daemon interrupts the tracks left without a window when it next
+// starts.
+func closeTracks(ctx context.Context, server *tmux.Client, paths platform.Paths) error {
+	if err := stopDaemon(ctx, rpc.Client{Socket: paths.Socket}); err != nil {
+		return err
+	}
+	return server.KillServer()
 }
