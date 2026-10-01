@@ -159,7 +159,7 @@ func TestClicks(t *testing.T) {
 	if m = click(m, ctlType, int(Doc)); m.kind != Doc {
 		t.Errorf("clicking Doc review left kind %d", m.kind)
 	}
-	if m = click(m, ctlCandor, 0); m.picker == nil {
+	if m = click(m.setFocus(ctlCandor).follow(), ctlCandor, 0); m.picker == nil {
 		t.Error("clicking Candor didn't open its picker")
 	}
 }

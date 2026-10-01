@@ -13,7 +13,7 @@
   - When the agent isn't added, the fields say so below them: "Cursor isn't added on the Engines tab, so Work tracks can't start."
 - **A type the user hasn't set follows the Engines tab:** Claude Code with its default model, or Cursor when only Cursor is added, as tracks run today. Changing Claude Code's default model on the Engines tab changes every such type.
 - **Create** runs a track on its type's agent and model. A type set to an agent that isn't added refuses: "Add Cursor on the Engines tab, or pick another agent for Work tracks in Settings → Tracks." With no agent added at all, it says "Add an engine on the Engines tab first." as today.
-- **The New track form** shows what the chosen type runs on, above its buttons ("Runs on Claude Code, model opus.", or "Runs on Cursor, which isn't added on the Engines tab."), and updates when the type changes. The form's **Runs on** field, built since, lets the user pick another agent or model for one track; see [06-add-track.md](06-add-track.md).
+- **The New track form** shows what the chosen type runs on, above its buttons ("Runs on Claude Code, model opus.", or "Runs on Cursor, which isn't added on the Engines tab."), and updates when the type changes. The form's **Select engine** field, built since, below Name, lets the user pick another agent or model for one track; see [06-add-track.md](06-add-track.md).
 - **Resume** is unchanged: a track keeps the agent and model it was created with.
 
 ## Settings

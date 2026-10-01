@@ -110,10 +110,17 @@ Context for the review (optional — fill in or delete):
 	},
 }
 
-// controls are kind's controls in focus order.
+// controls are kind's controls in focus order, the engine's after the
+// name.
 func controls(k Kind) []control {
-	out := append([]control{ctlType}, kinds[k].fields...)
-	return append(out, ctlEngine, ctlModel, ctlCreate, ctlCancel)
+	out := []control{ctlType}
+	for _, c := range kinds[k].fields {
+		out = append(out, c)
+		if c == ctlName {
+			out = append(out, ctlEngine, ctlModel)
+		}
+	}
+	return append(out, ctlCreate, ctlCancel)
 }
 
 func candorLabel(level int) string { return fmt.Sprintf("%d — %s", level, track.CandorLabel(level)) }

@@ -108,10 +108,12 @@ func (m Model) body(width int) ([]string, []hit) {
 			b.prompt()
 		}
 		b.end(c)
+		if c == ctlName {
+			b.field(ctlEngine, about(m.kind, ctlEngine))
+			b.runsOnRow()
+			b.end(ctlEngine)
+		}
 	}
-	b.field(ctlEngine, about(m.kind, ctlEngine))
-	b.runsOnRow()
-	b.end(ctlEngine)
 	if m.failure != "" {
 		b.wrapped(theme.StateDangerText, m.failure)
 		b.add("")
