@@ -31,7 +31,7 @@ What v1 does that v2 still lacks, and whether v2.0.0 needs it. Compared with v1'
 
 Needed before v2.0.0:
 
-- **The findings from testing:** Cursor's `create-chat` under a custom `XDG_CONFIG_HOME`, Cursor's plan-approval dialog, the overlay colours.
+- **The findings from testing:** Cursor's plan-approval dialog, the overlay colours.
 
 After v2.0.0:
 
@@ -202,6 +202,7 @@ Known gaps left on purpose, each with when it has to be done. Remove an entry in
 - **Renaming a repo that tracks use:** tracks now link their repos by ID, but a repo's name and path still can't change while running tracks use it, since their windows and worktrees were made from them. Allow it once repos are written through the daemon.
 - **The model a track runs:** Station shows the model picked at creation, "default" for none. A Claude track's transcripts name the model each turn used, so the cost pass can record it and show it instead, including a switch with `/model`. Cursor's default is "auto", which picks per request: show "auto" rather than "default".
 - **The folder trust prompt:** an Ask or Plan track without repos starts its agent in the home folder, where Claude asks to trust the folder every time, since it doesn't remember the answer there. Cursor may ask too; not checked yet. A folder of Tracks' own for these tracks, trusted once, would fix it. Not needed for v2.0.0.
+- **Cursor's `create-chat` with an unused `XDG_CONFIG_HOME`:** when the variable points at a folder without Cursor's `cli-config.json`, as in an isolated test, `agent create-chat` hangs until Tracks' 30 s limit, and creating a Cursor track fails with "timed out". Users who set the variable have Cursor's config there. Copy the config in test setups, and give a clearer error than the timeout. Not needed for v2.0.0.
 - **Case-insensitive repo names fold only A–Z:** SQLite's `NOCASE` treats `Über` and `über` as different names. Add a normalized name column if that ever matters.
 
 ## Future features
