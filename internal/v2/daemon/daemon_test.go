@@ -205,6 +205,26 @@ func TestDaemon(t *testing.T) {
 	}
 }
 
+func TestInterruptsOnStart(t *testing.T) {
+	c, _ := config(t)
+	ctx := context.Background()
+	open := track.Track{ID: "20260928-101500-abc123", Kind: track.Ask, Name: "why", Engine: "claude", CreatedAt: time.Now()}
+	if err := c.Tracks.Store.AddTrack(ctx, open); err != nil {
+		t.Fatal(err)
+	}
+	done := start(t, c)
+	got, err := c.Tracks.Store.Track(ctx, open.ID)
+	if err != nil || got.Open() || !got.Interrupted {
+		t.Errorf("track = %+v, %v; want interrupted once the daemon answers", got.State, err)
+	}
+	if err := (rpc.Client{Socket: c.Paths.Socket}).Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := wait(t, done); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExitsWithTheSession(t *testing.T) {
 	c, tm := config(t)
 	done := start(t, c)

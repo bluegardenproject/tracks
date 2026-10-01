@@ -117,7 +117,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 	}
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
-		"EndedBefore": true, "FilteredTracks": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true}
+		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {
