@@ -29,6 +29,10 @@ const (
 	// Draft returns a draft's request; DiscardDraft deletes it.
 	Draft        = "draft"
 	DiscardDraft = "discard-draft"
+	// Interrupted lists the tracks whose windows closed with Tracks;
+	// Reopen resumes them.
+	Interrupted = "interrupted"
+	Reopen      = "reopen"
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"

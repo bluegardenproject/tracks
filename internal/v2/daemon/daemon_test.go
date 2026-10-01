@@ -19,6 +19,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/track"
 	"github.com/bluegardenproject/tracks/internal/v2/tracks"
 	"github.com/bluegardenproject/tracks/internal/v2/trackwin"
+	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
 type fakeTmux struct{ gone atomic.Bool }
@@ -212,12 +213,25 @@ func TestInterruptsOnStart(t *testing.T) {
 	if err := c.Tracks.Store.AddTrack(ctx, open); err != nil {
 		t.Fatal(err)
 	}
+	c.Tracks.Worktrees = &workspace.Worktrees{Root: t.TempDir()}
 	done := start(t, c)
 	got, err := c.Tracks.Store.Track(ctx, open.ID)
 	if err != nil || got.Open() || !got.Interrupted {
 		t.Errorf("track = %+v, %v; want interrupted once the daemon answers", got.State, err)
 	}
-	if err := (rpc.Client{Socket: c.Paths.Socket}).Shutdown(ctx); err != nil {
+	client := rpc.Client{Socket: c.Paths.Socket}
+	if listed, err := client.Interrupted(ctx); err != nil || len(listed) != 1 || listed[0].ID != open.ID {
+		t.Errorf("Interrupted = %+v, %v; want the track", listed, err)
+	}
+	var steps []string
+	reopened, err := client.Reopen(ctx, func(s string) { steps = append(steps, s) })
+	if err != nil || len(reopened) != 1 || reopened[0].ID != open.ID || !strings.Contains(reopened[0].Error, "Engines tab") {
+		t.Errorf("Reopen = %+v, %v; want it failing without Claude on the Engines tab", reopened, err)
+	}
+	if len(steps) != 1 || steps[0] != "Reopening why…" {
+		t.Errorf("progress = %q", steps)
+	}
+	if err := client.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := wait(t, done); err != nil {

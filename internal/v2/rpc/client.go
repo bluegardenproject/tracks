@@ -157,6 +157,19 @@ func (c Client) DiscardDraft(ctx context.Context, id string) error {
 	return c.Call(ctx, DiscardDraft, DraftParams{ID: id}, nil, nil)
 }
 
+// Interrupted are the tracks whose windows closed with Tracks, oldest
+// first.
+func (c Client) Interrupted(ctx context.Context) ([]track.Track, error) {
+	var r []track.Track
+	return r, c.Call(ctx, Interrupted, nil, &r, nil)
+}
+
+// Reopen resumes the interrupted tracks and says how each went.
+func (c Client) Reopen(ctx context.Context, progress func(string)) ([]tracks.Reopening, error) {
+	var r []tracks.Reopening
+	return r, c.Call(ctx, Reopen, nil, &r, progress)
+}
+
 // AddRepo gives a work track a worktree of another repo.
 func (c Client) AddRepo(ctx context.Context, p AddRepoParams, progress func(string)) (AddRepoResult, error) {
 	var r AddRepoResult
