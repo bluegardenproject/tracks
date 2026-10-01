@@ -305,7 +305,7 @@ echo
 echo -e "${BOLD}${GREEN}Installation Complete!${NC}"
 echo
 echo -e "${BOLD}Usage:${NC}"
-echo -e "  ${GREEN}tracks${NC}          - Start the tmux session + dashboard"
+echo -e "  ${GREEN}tracks${NC}          - Open Tracks in its tmux session"
 echo -e "  ${GREEN}tracks version${NC}  - Show the installed version"
 echo -e "  ${GREEN}tracks --help${NC}   - Show all commands"
 echo

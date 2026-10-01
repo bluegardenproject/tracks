@@ -44,7 +44,12 @@ done
 echo -e "${BOLD}${BLUE}tracks Uninstaller${NC}"
 echo
 
-# 1. Binary
+# 1. Binary, after stopping Tracks so no daemon or tmux server outlives
+# it. The tracks themselves stay and can be reopened after a reinstall.
+if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
+    echo -e "${BLUE}Stopping tracks...${NC}"
+    "$INSTALL_DIR/$BINARY_NAME" stop || echo -e "${YELLOW}  could not stop tracks; carrying on${NC}"
+fi
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "${BLUE}Removing binary directory:${NC} $INSTALL_DIR"
     rm -rf "$INSTALL_DIR"
@@ -99,7 +104,7 @@ if [ -f "$FISH_CONF" ]; then
 fi
 
 # 3. State directory — opt-in. It holds worktrees (possibly with
-# uncommitted work), the daemon socket, and proxy.json.
+# uncommitted work), the tracks database and the daemon socket.
 if [ -d "$STATE_DIR" ]; then
     case "$MODE" in
         keep)
@@ -137,5 +142,9 @@ echo -e "${BOLD}${GREEN}Uninstall complete.${NC}"
 echo
 echo -e "${YELLOW}Branches created by your tracks were left in each repo — they are${NC}"
 echo -e "${YELLOW}plain git branches and survive independently of tracks.${NC}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tracks"
+if [ -d "$CONFIG_DIR" ]; then
+    echo -e "${YELLOW}Your settings and themes stay in $CONFIG_DIR.${NC}"
+fi
 echo -e "${YELLOW}Open a new shell to drop $INSTALL_DIR from PATH.${NC}"
 echo
