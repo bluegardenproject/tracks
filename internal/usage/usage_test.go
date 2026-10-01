@@ -258,8 +258,8 @@ func TestFormatters(t *testing.T) {
 // per token, so a cost derived from these rates is not slightly off —
 // it is a number where there should be none.
 //
-// internal/daemon never lets a Cursor track reach this code
-// (hasParsableTranscript). This test pins the collision itself, so
+// tracks.Service.Costs never lets a Cursor track reach this code. This
+// test pins the collision itself, so
 // that anyone who later adds Cursor usage parsing meets the trap here
 // rather than discovering it in the dashboard.
 func TestCursorModelNamesCollideWithTheTable(t *testing.T) {
