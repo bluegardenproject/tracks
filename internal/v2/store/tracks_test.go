@@ -171,6 +171,39 @@ func TestArchivedTracks(t *testing.T) {
 	}
 }
 
+func TestInterruptedTracks(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.UnixMilli(1_790_000_000_000)
+	for i, id := range []string{"b", "a", "c", "d"} {
+		tr := track.Track{ID: id, Kind: track.Ask, Name: id, Engine: "claude", CreatedAt: now.Add(time.Duration(i) * time.Second)}
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	states := map[string]track.State{
+		"b": {ClosedAt: now, Interrupted: true},
+		"a": {ClosedAt: now},
+		"c": {ClosedAt: now, Interrupted: true},
+		"d": {ClosedAt: now, ArchivedAt: now, Interrupted: true},
+	}
+	for id, st := range states {
+		if err := s.SetState(ctx, id, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.InterruptedTracks(ctx)
+	if err != nil || len(got) != 2 || got[0].ID != "b" || got[1].ID != "c" || !got[0].Interrupted {
+		t.Fatalf("InterruptedTracks = %+v, %v; want b then c, not the archived d", got, err)
+	}
+	if err := s.Promote(ctx, track.Track{ID: "b", Kind: track.Work}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := s.Track(ctx, "b"); b.Interrupted {
+		t.Errorf("promoted b = %+v, want it no longer interrupted", b.State)
+	}
+}
+
 func TestDatabaseIsPrivate(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "state")

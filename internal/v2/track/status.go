@@ -53,6 +53,9 @@ type State struct {
 	ArchivedAt time.Time // zero while it's listed in Station
 	Waiting    bool      // its agent waits on a dialog in its window
 	Exit       string    // how its agent exited: "" while it runs, ExitOK or ExitFailed
+	// Interrupted says its window closed with Tracks, to be offered for
+	// reopening when Tracks starts again.
+	Interrupted bool
 }
 
 // Open reports whether the track's window is still open.
@@ -90,6 +93,9 @@ const (
 	Created Event = "created"
 	Resumed Event = "resumed"
 	Ended   Event = "ended"
+	// Interrupted ends a track whose window closed with Tracks, marking
+	// it to reopen.
+	Interrupted Event = "interrupted"
 	// Cleaned says Archive removed the worktrees and branches.
 	Cleaned Event = "cleaned"
 	// Archived takes an ended track out of Station, closing it;
@@ -109,7 +115,7 @@ const (
 // Valid reports whether e is an event Apply knows.
 func (e Event) Valid() bool {
 	switch e {
-	case Created, Resumed, Ended, Cleaned, Archived, Unarchived, AgentWaiting, AgentWorking, AgentExited, AgentFailed:
+	case Created, Resumed, Ended, Interrupted, Cleaned, Archived, Unarchived, AgentWaiting, AgentWorking, AgentExited, AgentFailed:
 		return true
 	}
 	return false
@@ -122,17 +128,17 @@ func (s State) Apply(e Event, at time.Time) State {
 	switch e {
 	case Created, Resumed:
 		return State{}
-	case Ended:
+	case Ended, Interrupted:
 		if s.Open() {
-			return State{ClosedAt: at}
+			return State{ClosedAt: at, Interrupted: e == Interrupted}
 		}
 	case Cleaned:
 		if !s.Open() && !s.Cleaned() {
-			s.CleanedAt = at
+			s.CleanedAt, s.Interrupted = at, false
 		}
 	case Archived:
 		if !s.Open() && !s.Archived() {
-			s.ArchivedAt = at
+			s.ArchivedAt, s.Interrupted = at, false
 		}
 	case Unarchived:
 		s.ArchivedAt = time.Time{}

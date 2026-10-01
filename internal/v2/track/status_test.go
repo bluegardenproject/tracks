@@ -14,6 +14,8 @@ func TestApply(t *testing.T) {
 		cleaned = State{ClosedAt: then, CleanedAt: then}
 		exited  = State{Exit: ExitOK}
 		failed  = State{Exit: ExitFailed}
+		// interrupted ends at now, so Cleaned and Archived at now fit it.
+		interrupted = State{ClosedAt: now, Interrupted: true}
 	)
 	tests := []struct {
 		from State
@@ -57,6 +59,14 @@ func TestApply(t *testing.T) {
 		{failed, Ended, State{ClosedAt: now}},
 		{done, AgentFailed, done},
 		{cleaned, AgentExited, cleaned},
+		{waiting, Interrupted, interrupted},
+		{failed, Interrupted, interrupted},
+		{done, Interrupted, done},
+		{interrupted, Ended, interrupted},
+		{interrupted, Resumed, active},
+		{interrupted, Cleaned, State{ClosedAt: now, CleanedAt: now}},
+		{interrupted, Archived, State{ClosedAt: now, ArchivedAt: now}},
+		{interrupted, AgentExited, interrupted},
 	}
 	for _, tt := range tests {
 		if got := tt.from.Apply(tt.e, now); got != tt.want {
@@ -68,15 +78,16 @@ func TestApply(t *testing.T) {
 func TestStatusOf(t *testing.T) {
 	then := time.UnixMilli(1000)
 	for s, want := range map[State]Status{
-		{}:                                 Active,
-		{Waiting: true}:                    ActionRequired,
-		{Exit: ExitOK}:                     Exited,
-		{Exit: ExitFailed}:                 Error,
-		{ClosedAt: then, Exit: ExitFailed}: Done,
-		{ClosedAt: then}:                   Done,
-		{ClosedAt: then, Waiting: true}:    Done,
-		{ClosedAt: then, CleanedAt: then}:  Done,
-		{ClosedAt: then, ArchivedAt: then}: Closed,
+		{}:                                  Active,
+		{Waiting: true}:                     ActionRequired,
+		{Exit: ExitOK}:                      Exited,
+		{Exit: ExitFailed}:                  Error,
+		{ClosedAt: then, Exit: ExitFailed}:  Done,
+		{ClosedAt: then}:                    Done,
+		{ClosedAt: then, Waiting: true}:     Done,
+		{ClosedAt: then, CleanedAt: then}:   Done,
+		{ClosedAt: then, Interrupted: true}: Done,
+		{ClosedAt: then, ArchivedAt: then}:  Closed,
 		{ClosedAt: then, CleanedAt: then, ArchivedAt: then}: Closed,
 	} {
 		if got := s.Status(); got != want {

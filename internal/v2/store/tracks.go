@@ -9,7 +9,7 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, cost, agent_exit"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, cost, agent_exit, interrupted"
 
 // AddTrack stores t and its repos in one transaction.
 func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
@@ -18,9 +18,9 @@ func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Cost, t.Exit)
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Cost, t.Exit, t.Interrupted)
 	if err != nil {
 		return err
 	}
@@ -67,10 +67,16 @@ func (s *Store) EndedBefore(ctx context.Context, at time.Time) ([]track.Track, e
 	return s.tracks(ctx, "WHERE closed_at < ? AND archived_at IS NULL ORDER BY closed_at, created_at", at.UnixMilli())
 }
 
+// InterruptedTracks are the tracks not archived whose window closed
+// with Tracks, oldest first.
+func (s *Store) InterruptedTracks(ctx context.Context) ([]track.Track, error) {
+	return s.tracks(ctx, "WHERE interrupted = 1 AND archived_at IS NULL ORDER BY created_at, id")
+}
+
 // SetState records st as id's state.
 func (s *Store) SetState(ctx context.Context, id string, st track.State) error {
-	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = ?, cleaned_at = ?, waiting = ?, archived_at = ?, agent_exit = ? WHERE id = ?",
-		millis(st.ClosedAt), millis(st.CleanedAt), st.Waiting, millis(st.ArchivedAt), st.Exit, id)
+	return s.updateTrack(ctx, id, "UPDATE tracks SET closed_at = ?, cleaned_at = ?, waiting = ?, archived_at = ?, agent_exit = ?, interrupted = ? WHERE id = ?",
+		millis(st.ClosedAt), millis(st.CleanedAt), st.Waiting, millis(st.ArchivedAt), st.Exit, st.Interrupted, id)
 }
 
 // Rename records that id's window is now called name.
@@ -98,7 +104,7 @@ func (s *Store) Promote(ctx context.Context, t track.Track) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	res, err := tx.ExecContext(ctx,
-		"UPDATE tracks SET kind = ?, session_id = ?, prompt = ?, closed_at = NULL, cleaned_at = NULL, waiting = 0, agent_exit = '' WHERE id = ?",
+		"UPDATE tracks SET kind = ?, session_id = ?, prompt = ?, closed_at = NULL, cleaned_at = NULL, waiting = 0, agent_exit = '', interrupted = 0 WHERE id = ?",
 		string(t.Kind), t.Session, t.Prompt, t.ID)
 	if err != nil {
 		return err
@@ -223,7 +229,7 @@ func scanTrack(row scanner) (track.Track, error) {
 	var created int64
 	var closed, cleaned, archived sql.NullInt64
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
-		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Cost, &t.Exit)
+		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Cost, &t.Exit, &t.Interrupted)
 	t.Kind = track.Kind(kind)
 	t.CreatedAt = time.UnixMilli(created)
 	if closed.Valid {
