@@ -13,5 +13,5 @@ func runNewApp(ctx context.Context, args []string) error {
 	if err := os.Setenv(newAppEnv, "1"); err != nil {
 		return err
 	}
-	return v2cli.Execute(ctx, args, Version)
+	return v2cli.Execute(ctx, args, Version, BuildTime)
 }
