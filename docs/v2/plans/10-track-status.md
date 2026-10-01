@@ -71,7 +71,7 @@ Declared once, in `track`: the track statuses in `status.go`, the PR statuses in
 
 The daemon's 2-second tick already sweeps the windows. It also reads the agent's pane (`capture-pane`, the visible screen only) in two cases:
 - **A Claude track in action required:** when two checks in a row find no dialog, it's active again. This covers Esc, which fires no hook. A dialog is its selected option, such as `❯ 1. Yes`, which Claude's permission prompts, questions and plan approvals all show.
-- **Every Cursor track:** a dialog on screen means action required at once, and two checks in a row without it mean active again. The markers come from a real session: the command approval's first option, `→ Run (once) (y)`, and the title of the questions' box, `│ Clarifying Questions`. Both are anchored at the line's start, so the agent quoting them in chat doesn't count. Other Cursor dialogs, such as a plan's approval, aren't known yet.
+- **Every Cursor track:** a dialog on screen means action required at once, and two checks in a row without it mean active again. The markers come from a real session: the command approval's first option, `→ Run (once) (y)`, and the title of the questions' box, `│ Clarifying Questions`. Both are anchored at the line's start, so the agent quoting them in chat doesn't count. A plan awaiting approval is titled `│ Suggested Plan`, and a mode switch offers `Approve mode switch (y)`; those markers come from Cursor's source, not yet from a real session. An accepted plan keeps its options, `→ 1. Yes, build locally`, on screen, so they count only when nothing follows the plan's box: Cursor hides the prompt until the decision. That catches a plan too long for its title to show.
 
 ## Pull requests
 

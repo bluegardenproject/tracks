@@ -50,7 +50,50 @@ func TestCursorDialogOpen(t *testing.T) {
   the approval you gave.
   → Add a follow-up
   Claude Opus 5.5 300K High · 8%`
-	for screen, want := range map[string]bool{command: true, question: true, working: false, "": false} {
+	plan := ` ┌──────────────────────────────────────┐
+ │ Suggested Plan                       │
+ │                                      │
+ │ 1. Add the flag                      │
+ │ 2. Test it                           │
+ │ ──────────────────────────────────── │
+ │                                      │
+ │ Ready to build?                      │
+ │                                      │
+ │  → 1. Yes, build locally (b)         │
+ │    2. Yes, build in cloud (c)        │
+ │    3. No, propose changes (p or Esc) │
+ │                                      │
+ └──────────────────────────────────────┘
+
+`
+	longPlan := ` │ 9. Release it                        │
+ │ ──────────────────────────────────── │
+ │                                      │
+ │ Ready to build?                      │
+ │                                      │
+ │  → 1. Yes, build locally (b)         │
+ │    2. No, propose changes (p or Esc) │
+ │                                      │
+ └──────────────────────────────────────┘`
+	accepted := ` │ Plan                                 │
+ │ Ready to build?                      │
+ │  → 1. Yes, build locally (enter)     │
+ │    2. No, propose changes (p or Esc) │
+ └──────────────────────────────────────┘
+
+  Adding the flag…
+  → Add a follow-up`
+	modeSwitch := ` Switch to Agent mode?
+ The plan is ready to build.
+  → Approve mode switch (y)
+    Reject (n or esc)
+ auto-rejects when the bar runs out`
+	switched := `  SwitchMode → Agent
+  → Add a follow-up`
+	for screen, want := range map[string]bool{
+		command: true, question: true, plan: true, longPlan: true, modeSwitch: true,
+		working: false, accepted: false, switched: false, "": false,
+	} {
 		if open, known := DialogOpen("cursor", screen); open != want || !known {
 			t.Errorf("DialogOpen(cursor, %q) = %v, %v; want %v", screen, open, known, want)
 		}
