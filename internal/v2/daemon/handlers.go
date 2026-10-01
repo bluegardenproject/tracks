@@ -111,6 +111,10 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.DiscardDraft(ctx, p.ID)
 		},
+		rpc.Interrupted: func(ctx context.Context, _ *rpc.Call) (any, error) {
+			return c.Tracks.Interrupted(ctx)
+		},
+		rpc.Reopen: c.reopen,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -147,6 +151,18 @@ func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	c.Log.Printf("resumed %s, %s", p.ID, resumed.Track.Name)
 	return rpc.ResumeResult{CreateResult: rpc.CreateResult{ID: p.ID, Name: resumed.Track.Name, Window: resumed.Window.ID}}, nil
+}
+
+func (c Config) reopen(ctx context.Context, call *rpc.Call) (any, error) {
+	reopened, err := c.Tracks.Reopen(ctx, call.Progress)
+	for _, r := range reopened {
+		if r.Error != "" {
+			c.Log.Printf("reopening %s failed: %s", r.ID, r.Error)
+		} else {
+			c.Log.Printf("reopened %s, %s", r.ID, r.Name)
+		}
+	}
+	return reopened, err
 }
 
 func (c Config) promote(ctx context.Context, call *rpc.Call) (any, error) {
