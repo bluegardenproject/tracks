@@ -50,6 +50,16 @@ func (c *Client) HasSession(name string) bool {
 	return exec.Command("tmux", c.args("has-session", "-t", "="+name)...).Run() == nil
 }
 
+// ServerPID is the server's process ID, which tells a restarted server
+// from the one before.
+func (c *Client) ServerPID() (int, error) {
+	out, err := c.run("display-message", "-p", "#{pid}")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(out)
+}
+
 // NewSession starts the server with configFile, unless it's already
 // running, and creates a detached session whose first window is
 // called window and runs command.

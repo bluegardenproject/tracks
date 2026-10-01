@@ -22,9 +22,13 @@ import (
 	"github.com/bluegardenproject/tracks/internal/v2/workspace"
 )
 
-type fakeTmux struct{ gone atomic.Bool }
+type fakeTmux struct {
+	gone atomic.Bool
+	pid  atomic.Int64
+}
 
 func (t *fakeTmux) HasSession(string) bool    { return !t.gone.Load() }
+func (t *fakeTmux) ServerPID() (int, error)   { return int(t.pid.Load()), nil }
 func (t *fakeTmux) Tell(string, string) error { return nil }
 
 type noWindows struct{}
@@ -243,6 +247,22 @@ func TestExitsWithTheSession(t *testing.T) {
 	c, tm := config(t)
 	done := start(t, c)
 	tm.gone.Store(true)
+	if err := wait(t, done); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExitsWhenTheServerRestarts(t *testing.T) {
+	c, tm := config(t)
+	tm.pid.Store(100)
+	done := start(t, c)
+	time.Sleep(30 * time.Millisecond)
+	select {
+	case err := <-done:
+		t.Fatalf("the daemon exited on its own server: %v", err)
+	default:
+	}
+	tm.pid.Store(200)
 	if err := wait(t, done); err != nil {
 		t.Fatal(err)
 	}
