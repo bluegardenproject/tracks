@@ -65,8 +65,18 @@ func start(version string) error {
 		}
 	}
 	// Without a daemon Tracks still opens; creating a track says why.
-	if _, err := ensureDaemon(context.Background(), c, paths, version); err != nil {
+	ctx := context.Background()
+	client, err := ensureDaemon(ctx, c, paths, version)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "tracks:", err)
+	} else if action == startCreate && stdinIsTerminal() {
+		window, err := offerReopen(ctx, client, os.Stdin, os.Stdout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "tracks: reopening the tracks:", err)
+		}
+		if window != "" {
+			_ = c.SelectWindow(window)
+		}
 	}
 	if action == startSelect {
 		return c.SelectWindow(sessionName + ":0")
