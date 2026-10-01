@@ -39,7 +39,7 @@ func title(k Kind, c control) string {
 		}
 		return "Prompt"
 	case ctlEngine, ctlModel:
-		return "Runs on"
+		return "Select engine"
 	}
 	return ""
 }

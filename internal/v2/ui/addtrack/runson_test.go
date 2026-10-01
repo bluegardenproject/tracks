@@ -3,6 +3,8 @@ package addtrack
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -161,6 +163,22 @@ func TestCursorsModelsLoadInTheBackground(t *testing.T) {
 	}
 }
 
+func TestTheEngineFollowsTheName(t *testing.T) {
+	for k := range kinds {
+		order := controls(Kind(k))
+		i := slices.Index(order, ctlName)
+		if i < 0 || i+2 >= len(order) || order[i+1] != ctlEngine || order[i+2] != ctlModel {
+			t.Errorf("%s: focus order %v, want the engine right after the name", kinds[k].label, order)
+		}
+	}
+	lines, _ := ready(t, nil).body(80)
+	view := escapes.ReplaceAllString(strings.Join(lines, "\n"), "")
+	name, engine := strings.Index(view, "Name (optional)"), strings.Index(view, "Select engine")
+	if name < 0 || engine < name || strings.Index(view, "Terminal") < engine {
+		t.Errorf("Select engine should sit between Name and Terminal:\n%s", view)
+	}
+}
+
 func TestTheRunsOnRowIsOneStop(t *testing.T) {
 	m := ready(t, nil).setFocus(ctlEngine)
 	for _, step := range []struct {
@@ -168,11 +186,11 @@ func TestTheRunsOnRowIsOneStop(t *testing.T) {
 		want control
 	}{
 		{tea.KeyPressMsg{Code: tea.KeyRight}, ctlModel},
-		{tea.KeyPressMsg{Code: tea.KeyUp}, ctlPrompt},
+		{tea.KeyPressMsg{Code: tea.KeyUp}, ctlName},
 		{tea.KeyPressMsg{Code: tea.KeyTab}, ctlEngine},
 		{tea.KeyPressMsg{Code: tea.KeyTab}, ctlModel},
 		{tea.KeyPressMsg{Code: tea.KeyLeft}, ctlEngine},
-		{tea.KeyPressMsg{Code: tea.KeyDown}, ctlCreate},
+		{tea.KeyPressMsg{Code: tea.KeyDown}, ctlTerminal},
 	} {
 		if m, _ = send(m, step.key); m.focus != step.want {
 			t.Fatalf("%s moved to %d, want %d", step.key, m.focus, step.want)
