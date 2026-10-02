@@ -54,5 +54,9 @@ tidy:
 DESTDIR ?= $(HOME)/.tracks
 install: build
 	@mkdir -p $(DESTDIR)
-	@cp -f $(BINARY_NAME) $(DESTDIR)/$(BINARY_NAME)
+	@# Copy to a new file and rename it over the old one. Overwriting in place
+	@# keeps the inode, and macOS then SIGKILLs the binary ("Code Signature
+	@# Invalid") because it still holds the old binary's cached signature.
+	@cp -f $(BINARY_NAME) $(DESTDIR)/$(BINARY_NAME).new
+	@mv -f $(DESTDIR)/$(BINARY_NAME).new $(DESTDIR)/$(BINARY_NAME)
 	@echo "Installed $(DESTDIR)/$(BINARY_NAME)"
