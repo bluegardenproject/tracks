@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.0.0](https://github.com/bluegardenproject/tracks/compare/v1.3.1...v2.0.0) (2026-10-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* v1 is gone. Finish v1's tracks and stop v1 before installing; its worktrees stay in ~/.local/state/tracks/worktrees but no binary resumes them. Dev servers and the proxy (`tracks up`, `down`, `services`, `url`) are not in 2.0.0.
+
+### Features
+
+* Tracks v2 replaces v1 ([a8a2602](https://github.com/bluegardenproject/tracks/commit/a8a2602f03b23b43aaa465a1a1d09f31140f5d65))
+
+
+### Miscellaneous
+
+* **v2:** AGENTS.md describes one app ([3228bfb](https://github.com/bluegardenproject/tracks/commit/3228bfbd84b2e5b8436647838079567e1e0dc511))
+* **v2:** build, CI and scripts for tracks without v1 ([ec229b3](https://github.com/bluegardenproject/tracks/commit/ec229b33c0200dc0af00d3f000e26052f6337486))
+* **v2:** CI and releases build with Go 1.27 ([3bd1c2c](https://github.com/bluegardenproject/tracks/commit/3bd1c2c230c532b44250715f3c47e8de725916d2))
+* **v2:** delete v1; tracks runs v2 ([88ea517](https://github.com/bluegardenproject/tracks/commit/88ea517af2098d902359b87d6aac7c004b62e2ac))
+* **v2:** golden files keep the prompts, texts and helpers ([d8ec973](https://github.com/bluegardenproject/tracks/commit/d8ec97380ed1aafa287a5cb979fbed95223f559a))
+* **v2:** install.sh --local installs a binary from a checkout ([dc8d9fe](https://github.com/bluegardenproject/tracks/commit/dc8d9fe913675a294205d2d65c87d83d417d7307))
+* **v2:** internal/v2 moves up to internal ([b760a4b](https://github.com/bluegardenproject/tracks/commit/b760a4b746da109db2085582a99cbba90d94c639))
+* **v2:** plain names and paths; no --new-app ([e3a5f49](https://github.com/bluegardenproject/tracks/commit/e3a5f4926bd4ced1ff94b87a4a8d789c062f01b5))
+* **v2:** the golden files replace the comparisons with v1 ([c59aebf](https://github.com/bluegardenproject/tracks/commit/c59aebf4fe5eb4b2efb9810fc24dc621fc66d86f))
+* **v2:** the README describes v2, with a glossary ([42ac566](https://github.com/bluegardenproject/tracks/commit/42ac5661117f4d18d6da27cc74f611cc81252fd4))
+* **v2:** the ROADMAP lists v2's open items ([1136117](https://github.com/bluegardenproject/tracks/commit/11361178e1aa235e674c29e84ecaef96dbf95c6e))
+* **v2:** tracks update ([2d810bb](https://github.com/bluegardenproject/tracks/commit/2d810bb94070e32e03d23ad15cb0d6d6671932b7))
+* **v2:** tracks version ([6edd470](https://github.com/bluegardenproject/tracks/commit/6edd470985524369faa58d69eeaf64a036e32ed5))
+* **v2:** usage owns its Usage type ([d1a7a16](https://github.com/bluegardenproject/tracks/commit/d1a7a16cf44e6ab7b013c79b84b517e5a6e0c8e7))
+
 ## [1.3.1](https://github.com/bluegardenproject/tracks/compare/v1.3.0...v1.3.1) (2026-10-01)
 
 
