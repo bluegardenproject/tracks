@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/bluegardenproject/tracks/compare/v2.0.0...v2.0.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **install:** replace the binary atomically in make install ([11b768c](https://github.com/bluegardenproject/tracks/commit/11b768cfb53f15e9a344bf52e02c34b340e6d284))
+
 ## [2.0.0](https://github.com/bluegardenproject/tracks/compare/v1.3.1...v2.0.0) (2026-10-02)
 
 
