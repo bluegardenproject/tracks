@@ -114,7 +114,9 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Interrupted: func(ctx context.Context, _ *rpc.Call) (any, error) {
 			return c.Tracks.Interrupted(ctx)
 		},
-		rpc.Reopen: c.reopen,
+		rpc.Reopen:    c.reopen,
+		rpc.Setup:     c.setup,
+		rpc.SetupDone: c.setupDone,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/store"
+	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/workspace"
@@ -44,6 +45,7 @@ type Store interface {
 	Rename(ctx context.Context, id, name string) error
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
+	SetSetupDone(ctx context.Context, id, name string, done bool) error
 	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
 	Promote(ctx context.Context, t track.Track) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
@@ -103,6 +105,11 @@ type Service struct {
 	// HooksDir holds each track's hooks, a folder per track; "" starts
 	// agents without them.
 	HooksDir string
+	// Setups runs the repos' setups; nil runs none.
+	Setups SetupPanes
+	// CopyEnv copies a primary checkout's .env files into a new
+	// worktree; nil is workspace.CopyEnv.
+	CopyEnv func(ctx context.Context, primary, worktree string) ([]string, error)
 	// GitHub is asked about the tracks' PRs; nil doesn't poll.
 	GitHub GitHub
 	// Changes hears when the track windows change, which Store doesn't
@@ -122,6 +129,9 @@ type Service struct {
 	claimed map[string]bool
 	// busy are the tracks being resumed, archived or ended.
 	busy map[string]bool
+	// setupMu keeps one StartSetup looking at and opening panes at a
+	// time, so a setup never starts twice.
+	setupMu sync.Mutex
 	// reporting keeps one Report reading and writing a state at a time.
 	reporting sync.Mutex
 	// gone counts, per waiting track, the checks in a row that found
@@ -230,6 +240,7 @@ type TmuxWindows struct {
 	Tmux interface {
 		trackwin.Tmux
 		KillWindow(window string) error
+		KillPane(pane string) error
 		CapturePane(pane string) (string, error)
 	}
 	Session string
@@ -242,6 +253,15 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 }
 
 func (w TmuxWindows) Close(window string) error { return w.Tmux.KillWindow(window) }
+
+func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }
+
+func (w TmuxWindows) AddSetup(window, dir string, p trackwin.Process) error {
+	_, err := trackwin.AddSetup(w.Tmux, window, dir, p)
+	return err
+}
+
+func (w TmuxWindows) ClosePane(pane string) error { return w.Tmux.KillPane(pane) }
 
 func (w TmuxWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Respawn(w.Tmux, window, s)

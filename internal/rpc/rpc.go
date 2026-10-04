@@ -36,6 +36,10 @@ const (
 	// Watch sends a progress line right away and one after each change
 	// to the tracks, until the daemon exits.
 	Watch = "watch"
+	// Setup starts a track's setups, or waits for them; SetupDone is
+	// what a setup pane reports when its setup succeeded.
+	Setup     = "setup"
+	SetupDone = "setup-done"
 )
 
 // Request is one call.
@@ -189,4 +193,24 @@ type DerailParams struct {
 // there's some.
 type LostResult struct {
 	Lost []string `json:"lost,omitempty"`
+}
+
+// SetupParams names the track whose setups start. Wait starts only the
+// ones never run, then waits until none is running; Retry runs failed
+// ones again.
+type SetupParams struct {
+	ID    string `json:"id"`
+	Wait  bool   `json:"wait,omitempty"`
+	Retry bool   `json:"retry,omitempty"`
+}
+
+// SetupResult is the state of each of the track's setups.
+type SetupResult struct {
+	Repos []tracks.SetupRepo `json:"repos"`
+}
+
+// SetupDoneParams names the track and repo whose setup succeeded.
+type SetupDoneParams struct {
+	ID   string `json:"id"`
+	Repo string `json:"repo"`
 }

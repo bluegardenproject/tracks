@@ -118,6 +118,12 @@ func (c *Client) KillWindow(window string) error {
 	return err
 }
 
+// KillPane closes pane and stops what runs in it.
+func (c *Client) KillPane(pane string) error {
+	_, err := c.run("kill-pane", "-t", pane)
+	return err
+}
+
 // KillServer stops the server and everything in it. Not running is
 // not an error.
 func (c *Client) KillServer() error {

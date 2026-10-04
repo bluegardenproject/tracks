@@ -19,7 +19,12 @@ const (
 	RoleAgent     = "agent"
 	RoleTerminal  = "terminal"
 	RoleDevServer = "dev-server"
+	RoleSetup     = "setup"
 )
+
+// StateOption is the pane option a pane's own script keeps its state
+// in, read back as tmux.Pane.State.
+const StateOption = "@tracks_state"
 
 // Window options of a track's window. dirOption holds its working
 // directory, so panes added later start there too.
@@ -163,6 +168,12 @@ func AddTerminal(t Tmux, window string) (string, error) {
 		return "", err
 	}
 	return pane, t.SelectPane(pane)
+}
+
+// AddSetup adds a pane running p, a repo's setup, to the bottom of
+// window's right column, in dir. The agent pane keeps focus.
+func AddSetup(t Tmux, window, dir string, p Process) (string, error) {
+	return add(t, window, dir, RoleSetup, p)
 }
 
 // add puts a pane at the bottom of the right column, creating the

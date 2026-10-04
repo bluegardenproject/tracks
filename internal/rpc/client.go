@@ -189,3 +189,15 @@ func (c Client) Derail(ctx context.Context, p DerailParams) ([]string, error) {
 	var r LostResult
 	return r.Lost, c.Call(ctx, Derail, p, &r, nil)
 }
+
+// Setup starts track p.ID's setups, or waits for them, and returns
+// their states.
+func (c Client) Setup(ctx context.Context, p SetupParams) ([]tracks.SetupRepo, error) {
+	var r SetupResult
+	return r.Repos, c.Call(ctx, Setup, p, &r, nil)
+}
+
+// SetupDone records that a repo's setup succeeded.
+func (c Client) SetupDone(ctx context.Context, p SetupDoneParams) error {
+	return c.Call(ctx, SetupDone, p, nil, nil)
+}

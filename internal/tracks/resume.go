@@ -66,6 +66,11 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 		return Created{}, err
 	}
 	undo := context.WithoutCancel(ctx)
+	s.prepare(ctx, made)
+	for _, r := range made {
+		// A re-created worktree has lost what its setup made.
+		_ = s.Store.SetSetupDone(undo, t.ID, r.Name, false)
+	}
 	removeWorktrees := func() { _ = s.Worktrees.RemoveWorktrees(undo, t.ID, made) }
 
 	hooks, err := s.installHooks(t)
@@ -94,5 +99,6 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 		return Created{}, fmt.Errorf("save the track: %w", err)
 	}
 	t.State = track.State{}
+	s.startEager(undo, t)
 	return Created{Track: t, Window: win}, nil
 }

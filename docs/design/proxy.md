@@ -62,7 +62,12 @@ fixed. The look gets revisited once it's in use.
   | Kind | Setup runs |
   |---|---|
   | Work | On track creation, in the background, while the agent starts |
-  | Review, Ask, Plan, Doc | Lazily, right before the first dev server starts, or on `tracks setup` |
+  | Review | Lazily, right before the first dev server starts, or on `tracks setup` |
+  | Ask, Plan, Doc | Never: they have no worktree and work in the main checkout |
+
+  A Work track also starts it when promoted from Ask or Plan, when a repo
+  is added to it, and when it's resumed; resuming forgets the setup of a
+  worktree it re-creates.
 
   Nothing blocks the agent: setup runs in a `setup` pane in the right column,
   and the pane closes on success. A failed setup keeps its pane open with the

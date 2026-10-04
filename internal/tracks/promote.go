@@ -72,6 +72,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	if work.Repos, err = s.Worktrees.Add(ctx, work, progress); err != nil {
 		return Created{}, err
 	}
+	s.prepare(ctx, work.Repos)
 	undo := context.WithoutCancel(ctx)
 	removeWorktrees := func() { _ = s.Worktrees.Remove(undo, work) }
 	if t.Engine == agents.Cursor.ID {
@@ -94,7 +95,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	}
 	start, err := engine.Command(agents.Spec{
 		Track: work, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, work.Repos),
 	})
 	if err != nil {
 		removeWorktrees()
@@ -123,6 +124,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 		return Created{}, fmt.Errorf("save the track: %w", err)
 	}
 	work.State = track.State{}
+	s.startEager(undo, work)
 	return Created{Track: work, Window: win}, nil
 }
 

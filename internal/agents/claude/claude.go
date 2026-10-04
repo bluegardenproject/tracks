@@ -50,6 +50,9 @@ func Command(s agents.Spec) (agents.Start, error) {
 		if len(s.DraftPRs) > 0 {
 			prompt += agents.DraftPRSuffix(s.DraftPRs, len(t.Repos))
 		}
+		if s.Setup {
+			prompt += "\n\n" + agents.SetupContract
+		}
 		if t.Kind == track.Review {
 			prompt += reviewCandorSuffix(track.CandorLevel(t.Candor))
 		}
