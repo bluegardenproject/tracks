@@ -63,7 +63,7 @@ func (s *Service) Restart(ctx context.Context, id string, progress func(string))
 	}
 	start, err := engine.Command(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), Resume: resume, DraftPRs: drafts,
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
 	})
 	if err != nil {
 		return Created{}, err

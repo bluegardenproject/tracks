@@ -11,8 +11,8 @@ the v2.0.0 release; git history keeps them.
   UX didn't work, so this is redesigned rather than ported: see
   [docs/design/proxy.md](design/proxy.md). The dev-server text comes back into
   the work and review prompts with it.
-- **Worktree setup:** installing dependencies in a new worktree, copying ignored
-  files such as `.env` into it, and submodules.
+- **Worktree setup:** submodules. (Setup commands and copying `.env` files
+  come with the proxy topic.)
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
   Tracks leaves updates to `brew upgrade`: `tracks update` and the update check

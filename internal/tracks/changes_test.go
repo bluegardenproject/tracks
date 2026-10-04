@@ -87,6 +87,8 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SetState", func() error { return w.SetState(ctx, "a", track.State{Waiting: true}) }, true},
 		{"Rename", func() error { return w.Rename(ctx, "a", "b") }, true},
 		{"SetBranch", func() error { return w.SetBranch(ctx, "a", 0, "fix") }, true},
+		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "web", true) }, true},
+		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "api", true) }, false},
 		{"SetCost", func() error { return w.SetCost(ctx, "a", 1.5) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "a", track.Repo{Name: "api", Path: "/src/api"}) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "gone", track.Repo{Name: "api"}) }, false},

@@ -22,6 +22,7 @@ type spawnCase struct {
 	auto      bool
 	model     string
 	noSession bool
+	setup     bool
 }
 
 var spawnCases = []spawnCase{
@@ -29,6 +30,7 @@ var spawnCases = []spawnCase{
 	{name: "work not auto", kind: track.Work, repos: 1},
 	{name: "work all drafts", kind: track.Work, repos: 1, draft: []bool{true}, auto: true},
 	{name: "work some drafts", kind: track.Work, repos: 2, draft: []bool{false, true}, auto: true},
+	{name: "work with setup", kind: track.Work, repos: 1, auto: true, setup: true},
 	{name: "review", kind: track.Review, repos: 1, auto: true},
 	{name: "review blunt", kind: track.Review, repos: 2, candor: 1, auto: true},
 	{name: "ask", kind: track.Ask, repos: 1, auto: true},
@@ -73,7 +75,7 @@ func (c spawnCase) track(t *testing.T) track.Track {
 }
 
 func (c spawnCase) spec(tr track.Track, program string) agents.Spec {
-	s := agents.Spec{Track: tr, Program: program, Auto: c.auto, SocketDir: "/data/tracks", BinDir: "/data/tracks/bin"}
+	s := agents.Spec{Track: tr, Program: program, Auto: c.auto, SocketDir: "/data/tracks", BinDir: "/data/tracks/bin", Setup: c.setup}
 	for i, r := range tr.Repos {
 		if i < len(c.draft) && c.draft[i] {
 			s.DraftPRs = append(s.DraftPRs, r.Name)

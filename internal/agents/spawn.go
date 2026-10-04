@@ -24,6 +24,9 @@ type Spec struct {
 	// DraftPRs names the track's repos that open pull requests as
 	// drafts.
 	DraftPRs []string
+	// Setup says the track's repos have a setup for the agent to wait
+	// for.
+	Setup bool
 	// SocketDir is where the daemon listens, and BinDir goes first on
 	// the pane's PATH.
 	SocketDir, BinDir string

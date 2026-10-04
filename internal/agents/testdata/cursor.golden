@@ -114,6 +114,36 @@ code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
 
+=== work with setup
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''agent'\'' '\''Fix what'\''\'\'''\''s flaky in "CI" $HOME
+
+**Links you cannot read.** If the task links to something you cannot open (a Jira ticket, a Confluence page, a Google Doc, a Figma file, a GitHub page) because an MCP server is missing or not authenticated, or the page needs a login, STOP before you plan, explore or change anything. Do not guess what it says and do not make a plan from the rest of the prompt: the link usually holds the requirements. Tell the user which link failed and why, then ask one question: should you wait while they authenticate or add the MCP server, or skip the link and go on without it? Wait for the answer. If they authenticated, read the link again before anything else. The same applies when a subagent reports that it could not read a link.
+
+You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_ID env var is set). The user can switch into this tmux pane at any time to reply. Stay engaged: if the task naturally ends with a question or a confirmation, ask it and wait — do NOT wrap up the session just to acknowledge completion.
+
+**Review before pushing (code changes only).** Before you run `git push` or open a pull request, check what the branch actually changes with `git diff --name-only <base>...HEAD`:
+  - If every changed path is documentation or agent configuration — `*.md`, `*.mdx`, `*.txt`, `docs/**`, `.cursor/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `LICENSE` — skip the review and push. Say in one line that you skipped it because the diff is docs-only.
+  - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
+
+The review:
+  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
+  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
+  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
+
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+
+Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
+
+**Setup.** Tracks runs this track'\''\'\'''\''s setup (such as installing dependencies) in a pane of the track'\''\'\'''\''s window, which may still be running. Before you build, test, run or install anything, run `tracks setup --wait`: it waits until the setup has finished, and starts it first if it hasn'\''\'\'''\''t run yet. Never install dependencies yourself while it runs. If it reports a failure, tell the user what failed and wait: don'\''\'\'''\''t fix it, run it again or work around it unless they ask. Run `tracks setup` to run a failed setup again only when the user asks.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
 === review
 dir: /tmp/track/worktrees/api
 

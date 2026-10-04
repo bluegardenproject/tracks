@@ -69,6 +69,8 @@ type Repo struct {
 	Worktree string // "" for kinds without worktrees
 	Branch   string
 	Base     string
+	// SetupDone is set once the repo's setup succeeded in Worktree.
+	SetupDone bool
 }
 
 // Dir is where the agent works in r.

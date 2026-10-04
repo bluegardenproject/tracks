@@ -64,6 +64,21 @@ const TerminalContract = "" +
 	"in the track window's right-hand pane column and returns immediately. " +
 	"`$TRACKS_ID` is already set, so do not pass `--track`."
 
+// SetupContract is in the prompt of a Work or Review track whose repos
+// have a setup. Tracks runs the setup in a pane while the agent works,
+// so the agent waits for it instead of installing on its own, and
+// leaves a failure to the user.
+const SetupContract = "" +
+	"**Setup.** Tracks runs this track's setup (such as installing " +
+	"dependencies) in a pane of the track's window, which may still be " +
+	"running. Before you build, test, run or install anything, run " +
+	"`tracks setup --wait`: it waits until the setup has finished, and " +
+	"starts it first if it hasn't run yet. Never install dependencies " +
+	"yourself while it runs. If it reports a failure, tell the user what " +
+	"failed and wait: don't fix it, run it again or work around it unless " +
+	"they ask. Run `tracks setup` to run a failed setup again only when " +
+	"the user asks."
+
 // LinksContract is in every start prompt, right after the task.
 //
 // It exists because an agent that can't read a linked ticket or page

@@ -87,6 +87,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	if t.Repos, err = s.Worktrees.Add(ctx, t, progress); err != nil {
 		return Created{}, err
 	}
+	s.prepare(ctx, t.Repos)
 	// Undoing runs to the end even when ctx is cancelled.
 	undo := context.WithoutCancel(ctx)
 	removeWorktrees := func() {
@@ -101,7 +102,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	}
 	start, err := engine.Command(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
 	})
 	if err != nil {
 		removeWorktrees()
@@ -119,6 +120,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		removeWorktrees()
 		return Created{}, fmt.Errorf("save the track: %w", err)
 	}
+	s.startEager(undo, t)
 	return Created{Track: t, Window: win}, nil
 }
 

@@ -94,6 +94,12 @@ func (s *Store) SetBranch(ctx context.Context, id string, position int, branch s
 	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
 }
 
+// SetSetupDone records whether the setup of track id's repo name
+// succeeded in its worktree.
+func (s *Store) SetSetupDone(ctx context.Context, id, name string, done bool) error {
+	return s.updateTrack(ctx, id, "UPDATE track_repos SET setup_done = ? WHERE track_id = ? AND name = ?", done, id, name)
+}
+
 // Promote saves t, an Ask or Plan track made a Work track: its kind,
 // session and prompt, its repos' worktrees and branches by position,
 // and that it's open again. ErrNotFound when there's no track t.ID.
@@ -203,7 +209,7 @@ func idList(tracks []track.Track) ([]any, string) {
 
 func (s *Store) addRepos(ctx context.Context, tracks []track.Track, index map[string]int) error {
 	ids, marks := idList(tracks)
-	rows, err := s.db.QueryContext(ctx, "SELECT track_id, repo_id, name, path, worktree, branch, base FROM track_repos "+
+	rows, err := s.db.QueryContext(ctx, "SELECT track_id, repo_id, name, path, worktree, branch, base, setup_done FROM track_repos "+
 		"WHERE track_id IN ("+marks+") ORDER BY track_id, position", ids...)
 	if err != nil {
 		return err
@@ -213,7 +219,7 @@ func (s *Store) addRepos(ctx context.Context, tracks []track.Track, index map[st
 		var id string
 		var repoID sql.NullInt64
 		var r track.Repo
-		if err := rows.Scan(&id, &repoID, &r.Name, &r.Path, &r.Worktree, &r.Branch, &r.Base); err != nil {
+		if err := rows.Scan(&id, &repoID, &r.Name, &r.Path, &r.Worktree, &r.Branch, &r.Base, &r.SetupDone); err != nil {
 			return err
 		}
 		r.RepoID = repoID.Int64

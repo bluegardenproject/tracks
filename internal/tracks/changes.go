@@ -114,6 +114,10 @@ func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
 	return w.notify(w.Store.SetCost(ctx, id, cost))
 }
 
+func (w watched) SetSetupDone(ctx context.Context, id, name string, done bool) error {
+	return w.notify(w.Store.SetSetupDone(ctx, id, name, done))
+}
+
 func (w watched) SetBranch(ctx context.Context, id string, position int, branch string) error {
 	return w.notify(w.Store.SetBranch(ctx, id, position, branch))
 }
