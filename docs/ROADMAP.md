@@ -8,9 +8,9 @@ the v2.0.0 release; git history keeps them.
 
 - **Proxy and dev servers, one topic of their own.** `tracks up`, `down`,
   `services` and `url`, a Proxy tab, and the repos' services. v1's proxy UI and
-  UX didn't work, so this is redesigned rather than ported; v1's design was
-  `docs/design/dev-servers.md`. The dev-server text comes back into the work
-  and review prompts with it.
+  UX didn't work, so this is redesigned rather than ported: see
+  [docs/design/proxy.md](design/proxy.md). The dev-server text comes back into
+  the work and review prompts with it.
 - **Worktree setup:** installing dependencies in a new worktree, copying ignored
   files such as `.env` into it, and submodules.
 - **Homebrew:** a formula built from the release binaries and checked against
