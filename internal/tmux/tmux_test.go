@@ -109,7 +109,7 @@ func TestThemeConfRender(t *testing.T) {
 }
 
 var testThemeConf = ThemeConf{
-	Colors: Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Background: "black"},
+	Colors: Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Foreground: "green", Background: "black"},
 	Footer: []string{"#[align=left] nav", "", "#(echo \"hi\")"},
 }
 
