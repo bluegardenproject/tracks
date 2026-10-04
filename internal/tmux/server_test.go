@@ -35,7 +35,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	themeConf := tmux.ThemeConf{
-		Colors: tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Background: "black"},
+		Colors: tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Foreground: "white", Background: "black"},
 		Footer: []string{"top", "", "", `#(echo "system")`},
 	}
 	if err := themeConf.Write(conf.ThemeFile); err != nil {

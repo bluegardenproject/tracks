@@ -45,8 +45,8 @@ func writeThemeConf(paths platform.Paths, t theme.Theme, version, command string
 	return nil
 }
 
-// tmuxColors picks the colours tmux draws pane borders, titles and the
-// backgrounds with.
+// tmuxColors picks the colours tmux draws pane text, backgrounds,
+// borders and titles with.
 func tmuxColors(t theme.Theme) tmux.Colors {
 	return tmux.Colors{
 		Border:       t.Value(theme.BorderDefault),
@@ -55,6 +55,7 @@ func tmuxColors(t theme.Theme) tmux.Colors {
 		TitleActive:  t.Value(theme.TextAccent),
 		FooterBg:     t.Value(theme.FooterBg),
 		FooterFg:     t.Value(theme.FooterText),
+		Foreground:   t.Value(theme.TextDefault),
 		Background:   t.Value(theme.BgBase),
 	}
 }
