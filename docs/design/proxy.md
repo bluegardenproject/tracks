@@ -229,8 +229,8 @@ A new tab, between Station and Repositories.
 
 New migrations, never edits:
 
-- `repo_setup (repo_id, command)`
-- `dev_servers (id, repo_id, name, command, dir, port_mode, port, type)`
+- `repos.setup`: the setup command, `''` for none
+- `dev_servers (repo_id, position, name, command, dir, port_mode, port, type)`
 - `track_ports (track_id, base)`, plus a done marker for setup per track and repo
 - `track_errors (track_id, kind, server, at)`: server and setup errors until
   cleared

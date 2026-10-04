@@ -159,7 +159,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.repos.form.setWidth(m.inputWidth())
 		m.settings.creator.SetSize(m.sectionWidth(), m.sectionHeight())
-		m = m.scrollStation().scrollRepos()
+		m = m.scrollStation().scrollRepos().scrollForm()
 	case tracksMsg:
 		return m.setTracks(msg), nil
 	case watchMsg:
@@ -181,7 +181,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case suggestMsg:
 		return m.suggested(msg), nil
 	case repoSavedMsg:
-		return m.saved(msg)
+		next, cmd := m.saved(msg)
+		return next.scrollForm(), cmd
 	case repoDeletedMsg:
 		return m.deleted(msg)
 	case themesMsg:
@@ -237,7 +238,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.tab == tabStation:
 			next, cmd, _ := m.stationKey(key)
 			return next, cmd
-		case m.tab == tabRepositories && !m.repos.editing:
+		case m.tab == tabRepositories && (m.repos.editing || m.onRepoForm(msg.Mouse().X)):
+			step := 3
+			if key == "up" {
+				step = -3
+			}
+			return m.scrollFormBy(step), nil
+		case m.tab == tabRepositories:
 			next, cmd, _ := m.repoListKey(key)
 			return next, cmd
 		case m.tab == tabEngines:
@@ -283,7 +290,8 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case tabRepositories:
 		m.repos.notice = notice{}
 		if m.repos.editing {
-			return m.repoFormKey(msg)
+			next, cmd := m.repoFormKey(msg)
+			return next.scrollForm(), cmd
 		}
 	case tabEngines:
 		m.engines.notice = notice{}
@@ -344,7 +352,8 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 	case tabStation:
 		return m.stationClick(mouse.X, mouse.Y)
 	case tabRepositories:
-		return m.repoClick(mouse.X, mouse.Y)
+		next, cmd := m.repoClick(mouse.X, mouse.Y)
+		return next.scrollForm(), cmd
 	case tabEngines:
 		return m.enginesClick(mouse.X, mouse.Y)
 	case tabSettings:

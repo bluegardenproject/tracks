@@ -150,7 +150,9 @@ func TestFieldErrorsStayInTheForm(t *testing.T) {
 	if m.repos.form.focus != fieldBase || !strings.Contains(plainView(m), "Use an absolute path.") {
 		t.Error("a bad path should explain itself under the field")
 	}
-	m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab})
+	for range 4 { // past Options, Add setup and Add servers
+		m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	}
 	if m.repos.form.focus != fieldSave {
 		t.Fatalf("focus %d, want Save", m.repos.form.focus)
 	}
