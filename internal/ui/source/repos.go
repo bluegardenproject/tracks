@@ -15,7 +15,19 @@ type (
 	RepositoryEntry = repos.Entry
 	// FieldError is a problem with one field of a repo.
 	FieldError = repos.FieldError
+	// DevServer is a repo's dev server.
+	DevServer = store.DevServer
 )
+
+// Port modes of a dev server.
+const (
+	PortAssigned = store.PortAssigned
+	PortFixed    = store.PortFixed
+	PortDetect   = store.PortDetect
+)
+
+// ServerField is the FieldError field of dev server i's field.
+func ServerField(i int, field string) string { return repos.ServerField(i, field) }
 
 // DefaultBase is the base branch of a repo saved without one.
 const DefaultBase = repos.DefaultBase

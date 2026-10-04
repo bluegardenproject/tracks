@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/bluegardenproject/tracks/internal/store"
 )
@@ -18,12 +17,7 @@ const maxName = 64
 // validName reports whether name, already trimmed, can be shown as a
 // repo's name. Folders get a simplified version when a track starts,
 // so any printable text goes.
-func validName(name string) bool {
-	if name == "" || utf8.RuneCountInString(name) > maxName || !utf8.ValidString(name) {
-		return false
-	}
-	return !strings.ContainsFunc(name, unicode.IsControl)
-}
+func validName(name string) bool { return printable(name, maxName) }
 
 // DefaultBase is the base branch of a repo saved without one.
 const DefaultBase = "main"
@@ -63,7 +57,7 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	} else if !ok {
 		return r, &FieldError{"base", "No branch " + r.BaseBranch + " here or on origin."}
 	}
-	return r, nil
+	return checkServers(r)
 }
 
 // checkout resolves path to the top folder of a primary git checkout.

@@ -88,7 +88,7 @@ func (m Model) reposView(width, height int) []string {
 			title = "New repository"
 		}
 		body, _ := m.repoForm(rp.formW-4, height-2)
-		right = m.frame(title, color, body, rp.formW, height)
+		right = m.frame(title, color, body[min(m.repos.formOffset, len(body)):], rp.formW, height)
 	}
 	margin := strings.Repeat(" ", stationLeft)
 	lines := make([]string, height)
@@ -150,21 +150,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		bracket := theme.BorderDefault
-		switch {
-		case f.errs[in.key] != "":
-			bracket = theme.StateDangerText
-		case focused(in.field):
-			bracket = theme.BorderFocus
-		}
-		lines = append(lines, m.fg(theme.TextDefault).Render(in.label))
-		lines = append(lines, strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(in.desc), "\n")...)
-		at(in.field, 0, width)
-		lines = append(lines, widget.Input(m.palette, f.inputs[in.field], m.inputWidth(), bracket))
-		if msg := f.errs[in.key]; msg != "" {
-			wrapped := m.fg(theme.StateDangerText).Width(max(1, width)).Render(msg)
-			lines = append(lines, strings.Split(wrapped, "\n")...)
-		}
+		lines, hits = m.formInput(lines, hits, in.field, in.label, in.desc, width)
 		if in.field == fieldPath && f.remote != "" {
 			lines = append(lines, " "+m.fg(theme.TextFaint).Render(shorten(f.remote, width-1)))
 		}
@@ -181,6 +167,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 	}
 	at(fieldDrafts, 0, width)
 	lines = append(lines, m.fg(boxColor).Render(box)+" "+m.fg(theme.TextDefault).Render("Open pull requests as drafts"), "")
+	lines, hits = m.setupAndServers(lines, hits, width)
 
 	if f.id != 0 {
 		lines = append(lines, m.fg(theme.TextDefault).Bold(true).Render("Active tracks"))
@@ -272,9 +259,12 @@ func (m Model) repoFieldAt(x, y int) (formField, bool) {
 	if !rp.form {
 		return 0, false
 	}
-	top := m.contentTop() + 1
+	top := m.contentTop() + 1 - m.repos.formOffset
 	_, hits := m.repoForm(rp.formW-4, m.contentHeight()-2)
 	for _, h := range hits {
+		if h.row < m.repos.formOffset || h.row-m.repos.formOffset >= m.contentHeight()-2 {
+			continue
+		}
 		if y == top+h.row && x >= rp.formX+2+h.col && x < rp.formX+2+h.col+h.w {
 			return h.field, true
 		}
@@ -294,17 +284,14 @@ func (m Model) repoClick(x, y int) (Model, tea.Cmd) {
 		return m.request(leave{kind: leaveRow, row: row})
 	}
 	if field, ok := m.repoFieldAt(x, y); ok {
-		prompt := field >= fieldPromptSave
+		prompt := field >= fieldPromptSave && field <= fieldPromptCancel
 		if (m.repos.leaving != nil) != prompt {
 			return m, nil
 		}
 		m.repos.editing = true
-		if field <= fieldBase {
-			return m, m.repos.form.setFocus(field)
-		}
-		m.repos.form.focus = field
-		for i := range m.repos.form.inputs {
-			m.repos.form.inputs[i].Blur()
+		cmd := m.repos.form.setFocus(field)
+		if m.repos.form.isInput(field) {
+			return m, cmd
 		}
 		return m.pressField(field)
 	}

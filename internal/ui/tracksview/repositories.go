@@ -2,7 +2,6 @@ package tracksview
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -19,6 +18,8 @@ type repoTab struct {
 	// want is the repo to select once the list reloads.
 	want    int64
 	editing bool // focus is in the form
+	// formOffset is how many of the form's lines are scrolled away.
+	formOffset int
 	// hoverNew and hoverField are the New button and the form field
 	// under the mouse; hoverField is -1 for none.
 	hoverNew   bool
@@ -106,6 +107,7 @@ func (m Model) showRepo(i int) Model {
 	}
 	m.repos.form = newForm(e)
 	m.repos.form.setWidth(m.inputWidth())
+	m.repos.formOffset = 0
 	return m.scrollRepos()
 }
 
@@ -173,7 +175,7 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		l := *m.repos.leaving
 		switch key {
 		case "s", "enter":
-			return m, m.saveRepo(&l)
+			return m.save(&l)
 		case "d":
 			return m.follow(l)
 		case "c", "esc":
@@ -189,9 +191,9 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 	switch key {
 	case "ctrl+c":
-		if int(f.focus) < len(f.inputs) {
+		if in := f.input(f.focus); in != nil {
 			m.repos.notice = notice{text: "Copied the value to the clipboard."}
-			return m, tea.SetClipboard(f.inputs[f.focus].Value())
+			return m, tea.SetClipboard(in.Value())
 		}
 		return m, nil
 	case "esc":
@@ -203,18 +205,19 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case "enter":
 		return m.pressField(f.focus)
 	case "space":
-		if f.focus > fieldBase {
+		if !f.isInput(f.focus) {
 			return m.pressField(f.focus)
 		}
 	}
-	if f.focus > fieldBase {
+	in := f.input(f.focus)
+	if in == nil {
 		return m, nil
 	}
-	before := f.inputs[f.focus].Value()
+	before := in.Value()
 	var cmd tea.Cmd
-	f.inputs[f.focus], cmd = f.inputs[f.focus].Update(msg)
-	if f.inputs[f.focus].Value() != before {
-		delete(f.errs, inputs[f.focus].key)
+	*in, cmd = in.Update(msg)
+	if in.Value() != before {
+		delete(f.errs, f.errKey(f.focus))
 	}
 	return m, cmd
 }
@@ -223,12 +226,13 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // for Ctrl+V.
 func (m Model) repoPaste(msg tea.Msg) (Model, tea.Cmd) {
 	f := &m.repos.form
-	if !m.repos.editing || f.focus > fieldBase || m.repos.leaving != nil {
+	in := f.input(f.focus)
+	if !m.repos.editing || in == nil || m.repos.leaving != nil {
 		return m, nil
 	}
 	var cmd tea.Cmd
-	f.inputs[f.focus], cmd = f.inputs[f.focus].Update(msg)
-	delete(f.errs, inputs[f.focus].key)
+	*in, cmd = in.Update(msg)
+	delete(f.errs, f.errKey(f.focus))
 	return m, cmd
 }
 
@@ -244,21 +248,38 @@ func (m Model) leaveField(delta int) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// pressField acts on field: inputs move on to the next field, the checkbox
-// toggles and buttons do what they say.
+// pressField acts on field: inputs move on to the next field, the
+// checkbox toggles, a port mode moves on and buttons do what they say.
 func (m Model) pressField(field formField) (Model, tea.Cmd) {
 	f := &m.repos.form
-	switch field {
-	case fieldPath, fieldName, fieldBase:
+	if f.isInput(field) {
 		return m.leaveField(1)
+	}
+	if i, k, ok := field.server(); ok && i < len(f.servers) {
+		switch k {
+		case serverMode:
+			f.servers[i].nextMode()
+			delete(f.errs, f.errKey(field))
+		case serverRemove:
+			return m, f.removeServer(i)
+		}
+		return m, nil
+	}
+	switch field {
+	case fieldAddSetup:
+		return m, f.addSetup()
+	case fieldRemoveSetup:
+		return m, f.removeSetup()
+	case fieldAddServer:
+		return m, f.addServer()
 	case fieldDrafts:
 		f.drafts = !f.drafts
 	case fieldSave, fieldPromptSave:
 		if m.repos.leaving != nil {
 			l := *m.repos.leaving
-			return m, m.saveRepo(&l)
+			return m.save(&l)
 		}
-		return m, m.saveRepo(nil)
+		return m.save(nil)
 	case fieldDelete:
 		f.confirming = true
 	case fieldConfirmDelete:
@@ -276,44 +297,13 @@ func (m Model) pressField(field formField) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// suggest asks what the path's checkout is, once per changed path.
-func (m Model) suggest() tea.Cmd {
-	f := m.repos.form
-	path := f.value(fieldPath)
-	if m.repoSource == nil || path == "" || path == f.suggested {
-		return nil
+// save saves the form once it's complete, leaving for then after.
+func (m Model) save(then *leave) (Model, tea.Cmd) {
+	if !m.repos.form.complete() {
+		m.repos.leaving = nil
+		return m, nil
 	}
-	src := m.repoSource
-	return func() tea.Msg {
-		r, err := src.Suggest(context.Background(), path)
-		return suggestMsg{path, r, err}
-	}
-}
-
-func (m Model) suggested(msg suggestMsg) Model {
-	f := &m.repos.form
-	if f.value(fieldPath) != msg.path {
-		return m
-	}
-	f.suggested = msg.path
-	if msg.err != nil {
-		f.remote = ""
-		var fe *source.FieldError
-		if errors.As(msg.err, &fe) {
-			f.errs[fe.Field] = fe.Message
-		}
-		return m
-	}
-	f.inputs[fieldPath].SetValue(msg.repo.Path)
-	f.suggested = msg.repo.Path
-	f.remote = msg.repo.Remote
-	if f.value(fieldName) == "" {
-		f.inputs[fieldName].SetValue(msg.repo.Name)
-	}
-	if f.value(fieldBase) == "" {
-		f.inputs[fieldBase].SetValue(msg.repo.BaseBranch)
-	}
-	return m
+	return m, m.saveRepo(then)
 }
 
 func (m Model) saveRepo(then *leave) tea.Cmd {

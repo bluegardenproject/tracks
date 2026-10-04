@@ -47,7 +47,7 @@ type Entry struct {
 
 // FieldError is a problem with one field of a repo.
 type FieldError struct {
-	Field   string // "name", "path" or "base"
+	Field   string // "name", "path", "base", "setup" or a ServerField
 	Message string
 }
 
