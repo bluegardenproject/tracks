@@ -6,6 +6,7 @@ package trackwin
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -171,10 +172,20 @@ func AddTerminal(t Tmux, window string) (string, error) {
 }
 
 // AddSetup adds a pane running p, a repo's setup, to the bottom of
-// window's right column, in dir. The agent pane keeps focus.
+// window's right column, in dir. The agent pane keeps focus. A setup
+// that finished before its pane was labelled closed its pane, which is
+// fine: it reported itself.
 func AddSetup(t Tmux, window, dir string, p Process) (string, error) {
-	return add(t, window, dir, RoleSetup, p)
+	pane, err := add(t, window, dir, RoleSetup, p)
+	if errors.Is(err, ErrPaneClosed) {
+		return pane, nil
+	}
+	return pane, err
 }
+
+// ErrPaneClosed means a new pane's command ended, and closed the pane,
+// before the pane was labelled.
+var ErrPaneClosed = errors.New("the pane closed before it was set up")
 
 // add puts a pane at the bottom of the right column, creating the
 // column when it doesn't exist, and evens out the column's heights.
@@ -198,9 +209,18 @@ func add(t Tmux, window, dir, role string, p Process) (string, error) {
 		return "", err
 	}
 	if err := label(t, pane, role, p.Title); err != nil {
+		if gone(t, window, pane) {
+			return pane, errors.Join(ErrPaneClosed, even(t, window))
+		}
 		return pane, err
 	}
 	return pane, even(t, window)
+}
+
+// gone reports whether window has no pane called pane any more.
+func gone(t Tmux, window, pane string) bool {
+	panes, err := t.ListPanes(window)
+	return err == nil && !slices.ContainsFunc(panes, func(p tmux.Pane) bool { return p.ID == pane })
 }
 
 func label(t Tmux, pane, role, title string) error {
