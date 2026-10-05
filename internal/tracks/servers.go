@@ -29,21 +29,30 @@ type ServerPanes interface {
 
 // Dev server states.
 const (
-	ServerStopped = "stopped" // no pane
+	ServerStopped  = "stopped"  // no pane
+	ServerStarting = "starting" // running, not listening yet
+	ServerReady    = "ready"    // listening
+	ServerExited   = "exited"   // it ended with code 0; its pane stays
+	ServerCrashed  = "crashed"  // it ended with another code; its pane shows why
+	// ServerRunning is a pane's own state while its server runs; a
+	// Server is then starting or ready.
 	ServerRunning = "running"
-	ServerExited  = "exited"  // it ended with code 0; its pane stays
-	ServerCrashed = "crashed" // it ended with another code; its pane shows why
 )
 
-// Server is one of a track's dev servers.
+// Server is one of a track's dev servers, or a server found listening
+// in one of its panes, which has no Repo or Name.
 type Server struct {
-	Repo  string `json:"repo"`
-	Name  string `json:"name"`
-	Type  string `json:"type,omitempty"`
-	Mode  string `json:"mode"`
-	Port  int    `json:"port,omitempty"` // the port it was started on, 0 for none
-	State string `json:"state"`
-	Code  int    `json:"code,omitempty"`
+	Track     string `json:"track"`
+	TrackName string `json:"track_name"`
+	Repo      string `json:"repo,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Type      string `json:"type,omitempty"`
+	// Inferred says Type was guessed from the listening process.
+	Inferred bool   `json:"inferred,omitempty"`
+	Mode     string `json:"mode"`
+	Port     int    `json:"port,omitempty"` // the port it was started on, 0 for none
+	State    string `json:"state"`
+	Code     int    `json:"code,omitempty"`
 	// Problem is why Up didn't start it.
 	Problem string `json:"problem,omitempty"`
 }
@@ -63,6 +72,8 @@ func (d devServer) key() string { return d.repo.Name + "/" + d.def.Name }
 // that can't start, such as for its port, has a Problem and the others
 // still start.
 func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
+	// Read before the lock: what Up starts is starting either way.
+	snap := s.snapshot(ctx)
 	s.serverMu.Lock()
 	defer s.serverMu.Unlock()
 	t, window, all, err := s.serversOf(ctx, id)
@@ -116,7 +127,7 @@ func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
 			return nil, fmt.Errorf("start %s: %w", d.def.Name, err)
 		}
 	}
-	states, err := s.serverStates(window, all)
+	states, err := s.serverStates(t, window, all, snap, false)
 	for i, sv := range states {
 		states[i].Problem = problems[sv.Repo+"/"+sv.Name]
 	}
@@ -126,9 +137,10 @@ func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
 // Down stops track id's dev server name, or all of them for "", and
 // closes their panes.
 func (s *Service) Down(ctx context.Context, id, name string) ([]Server, error) {
+	snap := s.snapshot(ctx)
 	s.serverMu.Lock()
 	defer s.serverMu.Unlock()
-	_, window, all, err := s.serversOf(ctx, id)
+	t, window, all, err := s.serversOf(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +159,7 @@ func (s *Service) Down(ctx context.Context, id, name string) ([]Server, error) {
 			}
 		}
 	}
-	return s.serverStates(window, all)
+	return s.serverStates(t, window, all, snap, false)
 }
 
 // Logs is the last lines lines dev server name of track id printed.
@@ -177,31 +189,6 @@ func (s *Service) Logs(ctx context.Context, id, name string, lines int) (string,
 	return s.Servers.Capture(p.ID, lines)
 }
 
-// ServerStates is the state of each of track id's dev servers.
-func (s *Service) ServerStates(ctx context.Context, id string) ([]Server, error) {
-	_, window, all, err := s.serversOf(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return s.serverStates(window, all)
-}
-
-func (s *Service) serverStates(window string, all []devServer) ([]Server, error) {
-	panes, err := s.Servers.Panes(window)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Server, len(all))
-	for i, d := range all {
-		out[i] = Server{Repo: d.repo.Name, Name: d.def.Name, Type: d.def.Type, Mode: d.def.PortMode, State: ServerStopped}
-		if p, ok := serverPane(panes, d.key()); ok {
-			out[i].State, out[i].Port = serverState(p), p.Port
-			out[i].Code = exitCode(p.State)
-		}
-	}
-	return out, nil
-}
-
 // serversOf reads track id, its window, and the dev servers of its
 // repos that have a worktree.
 func (s *Service) serversOf(ctx context.Context, id string) (track.Track, string, []devServer, error) {
@@ -218,9 +205,15 @@ func (s *Service) serversOf(ctx context.Context, id string) (track.Track, string
 	if err != nil {
 		return t, "", nil, err
 	}
+	all, err := s.devServers(ctx, t)
+	return t, window, all, err
+}
+
+// devServers are the dev servers of t's repos that have a worktree.
+func (s *Service) devServers(ctx context.Context, t track.Track) ([]devServer, error) {
 	configs, err := s.repoConfigs(ctx)
 	if err != nil {
-		return t, "", nil, err
+		return nil, err
 	}
 	var all []devServer
 	for _, r := range t.Repos {
@@ -232,7 +225,7 @@ func (s *Service) serversOf(ctx context.Context, id string) (track.Track, string
 			all = append(all, devServer{repo: r, def: def, setup: c.Setup != ""})
 		}
 	}
-	return t, window, all, nil
+	return all, nil
 }
 
 // pick is the servers name means: all for "", else the one called name

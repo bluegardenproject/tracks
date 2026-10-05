@@ -120,6 +120,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Up:        c.up,
 		rpc.Down:      c.down,
 		rpc.Logs:      c.logs,
+		rpc.Servers:   c.servers,
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {

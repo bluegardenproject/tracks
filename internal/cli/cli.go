@@ -44,6 +44,8 @@ func newRoot(version string) *cobra.Command {
 		newUpCmd(),
 		newDownCmd(),
 		newLogsCmd(),
+		newServersCmd(),
+		newURLCmd(),
 		newReviewCmd(),
 		newAddRepoCmd(),
 		newPromoteCmd(),
