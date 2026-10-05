@@ -52,6 +52,8 @@ type Config struct {
 	// Every is how often the windows are checked; 0 is 2 s. PollEvery is
 	// how often the PRs are; 0 is a minute.
 	Every, PollEvery time.Duration
+
+	proxies *proxies // set by Run
 }
 
 // Run serves until ctx ends, a client asks it to shut down or the tmux
@@ -85,6 +87,9 @@ func Run(ctx context.Context, c Config) error {
 		c.Log.Printf("their windows closed with Tracks: %s", strings.Join(names, ", "))
 	}
 
+	c.proxies = &proxies{}
+	defer c.proxies.p.Close()
+
 	stop := make(chan struct{})
 	var once sync.Once
 	shutdown := func() { once.Do(func() { close(stop) }) }
@@ -114,6 +119,12 @@ func Run(ctx context.Context, c Config) error {
 	defer costs.Stop()
 	coster := &poller{log: c.Log, what: "reading what the tracks cost"}
 	defer coster.wait()
+	proxier := &poller{log: c.Log, what: "updating the proxy"}
+	defer proxier.wait()
+	syncProxy := func(ctx context.Context) error {
+		_, err := c.syncProxy(ctx, false)
+		return err
+	}
 	defer cancelPoll()
 
 	server, _ := c.Tmux.ServerPID()
@@ -121,6 +132,7 @@ func Run(ctx context.Context, c Config) error {
 	prs.start(pollCtx, c.Tracks.PollPRs)
 	archiver.start(pollCtx, c.autoArchive)
 	coster.start(pollCtx, c.Tracks.Costs)
+	proxier.start(pollCtx, syncProxy)
 	reason := ""
 	for reason == "" {
 		select {
@@ -148,6 +160,7 @@ func Run(ctx context.Context, c Config) error {
 				c.Log.Printf("checking the agents' screens: %v", err)
 			} else {
 				c.checkExits(ctx)
+				proxier.start(pollCtx, syncProxy)
 			}
 		}
 	}

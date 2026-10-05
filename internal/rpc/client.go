@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 )
@@ -225,4 +226,29 @@ func (c Client) Logs(ctx context.Context, p LogsParams) (string, error) {
 func (c Client) Servers(ctx context.Context, id string) ([]tracks.Server, error) {
 	var r ServersResult
 	return r.Servers, c.Call(ctx, Servers, ListServersParams{ID: id}, &r, nil)
+}
+
+// Proxy returns the proxy's output ports and the servers they can
+// forward to.
+func (c Client) Proxy(ctx context.Context) (tracks.ProxyView, error) {
+	var v tracks.ProxyView
+	return v, c.Call(ctx, Proxy, nil, &v, nil)
+}
+
+// AddProxyPort adds an output port, without an input.
+func (c Client) AddProxyPort(ctx context.Context, port int) (tracks.ProxyView, error) {
+	var v tracks.ProxyView
+	return v, c.Call(ctx, ProxyAdd, ProxyPortParams{Port: port}, &v, nil)
+}
+
+// RemoveProxyPort removes an output port.
+func (c Client) RemoveProxyPort(ctx context.Context, port int) (tracks.ProxyView, error) {
+	var v tracks.ProxyView
+	return v, c.Call(ctx, ProxyRemove, ProxyPortParams{Port: port}, &v, nil)
+}
+
+// SetProxyInput makes an output port forward to in.
+func (c Client) SetProxyInput(ctx context.Context, port int, in store.ProxyInput) (tracks.ProxyView, error) {
+	var v tracks.ProxyView
+	return v, c.Call(ctx, ProxyInput, ProxyPortParams{Port: port, Input: in}, &v, nil)
 }

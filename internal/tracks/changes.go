@@ -114,6 +114,18 @@ func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
 	return w.notify(w.Store.SetCost(ctx, id, cost))
 }
 
+func (w watched) AddProxyPort(ctx context.Context, port int) error {
+	return w.notify(w.Store.AddProxyPort(ctx, port))
+}
+
+func (w watched) RemoveProxyPort(ctx context.Context, port int) error {
+	return w.notify(w.Store.RemoveProxyPort(ctx, port))
+}
+
+func (w watched) SetProxyInput(ctx context.Context, port int, in store.ProxyInput) error {
+	return w.notify(w.Store.SetProxyInput(ctx, port, in))
+}
+
 func (w watched) SetSetupDone(ctx context.Context, id, name string, done bool) error {
 	return w.notify(w.Store.SetSetupDone(ctx, id, name, done))
 }
