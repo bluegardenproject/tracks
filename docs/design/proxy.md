@@ -131,22 +131,31 @@ fixed. The look gets revisited once it's in use.
 
 ### Detection
 
-- The daemon's poll lists the TCP listeners of every pane process tree in every
-  track window, agent panes included, using `lsof -a -p <pids> -iTCP
-  -sTCP:LISTEN`.
-- A listener under a dev-server pane belongs to that server. Any other listener
-  becomes an unnamed running server (`track-x · :5173`), so servers Claude starts
-  on its own show up as proxy inputs too.
-- Type, when unset, is inferred from the listener's command line: an
-  `rspack`/`vite`/`webpack`/`next`/`electron` binary, `react-native start` or
-  `metro` for Metro, and otherwise the program name (`node`, `bun`, `python`).
-  The UI shows an inferred type dimmer than a configured one.
+- When servers are listed (`tracks servers`, the Proxy tab), one `ps` and one
+  `lsof -iTCP -sTCP:LISTEN` give every process and the ports it listens on,
+  and each track pane's process tree is walked. No poll loop: a list costs
+  one `ps` and one `lsof`, about 100 ms here, more on a busy machine.
+- A listener under a dev-server pane belongs to that server. Its own port
+  listening makes it ready; a detect-mode server takes the first port found.
+- Any other listener becomes an unnamed server (`:5173 (vite)`), so servers
+  an agent or a terminal starts show up as proxy inputs too.
+- In an agent pane, Tracks finds the agent process (`claude`, `agent`) and
+  leaves out its own port (Claude Code listens on one) and everything it
+  starts directly, such as MCP servers. What it runs through a shell (its
+  commands) counts. Once the agent exited, the pane's shell counts like a
+  terminal's.
+- Type, when unset, is guessed from the last part of each word of the
+  listener's command line: a `metro`, `rspack`, `rsbuild`, `vite`, `webpack`,
+  `next`, `storybook`, `electron`, `astro`, `nuxt` or `remix` word (`react-
+  native start` is Metro), else the program's name (`node`, `python3`). The UI
+  shows a guessed type dimmer.
 
 ### State of a running server
 
-`starting` (the pane is up, the port isn't listening yet) → `ready` (the port
-answers) → `stopped` or `crashed` (the pane exited with zero, or non-zero).
-Readiness is the port check alone; matching a log line can come later.
+`starting` (the pane runs, nothing in it listens yet) → `ready` (something
+in it listens) → `exited` or `crashed` when the server ends with zero or
+another code; `stopped` without a pane. Readiness is the listener alone;
+matching a log line can come later.
 
 ### Errors
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/bluegardenproject/tracks/internal/rpc"
+	"github.com/bluegardenproject/tracks/internal/tracks"
 )
 
 func (c Config) up(ctx context.Context, call *rpc.Call) (any, error) {
@@ -42,4 +43,22 @@ func (c Config) logs(ctx context.Context, call *rpc.Call) (any, error) {
 		return nil, err
 	}
 	return rpc.LogsResult{Text: text}, nil
+}
+
+func (c Config) servers(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.ListServersParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	var servers []tracks.Server
+	var err error
+	if p.ID == "" {
+		servers, err = c.Tracks.AllServers(ctx)
+	} else {
+		servers, err = c.Tracks.ServerStates(ctx, p.ID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rpc.ServersResult{Servers: servers}, nil
 }

@@ -28,7 +28,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
 - `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client
 - `ui/widget/` UI pieces more than one screen uses · `golden/` golden-file comparisons for tests
-- Shared leaf packages: `git`, `notify`, `shellx`, `update` (`tracks update`), `usage` (token use and cost)
+- Shared leaf packages: `git`, `notify`, `procs` (processes and the ports they listen on), `shellx`, `update` (`tracks update`), `usage` (token use and cost)
 - Imports point downwards. Add packages here when they land.
 
 ## Build and test

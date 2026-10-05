@@ -45,6 +45,9 @@ const (
 	Up   = "up"
 	Down = "down"
 	Logs = "logs"
+	// Servers lists a track's dev servers and what listens in its panes,
+	// or every track's.
+	Servers = "servers"
 )
 
 // Request is one call.
@@ -226,7 +229,8 @@ type ServersParams struct {
 	Server string `json:"server,omitempty"`
 }
 
-// ServersResult is the state of each of the track's dev servers.
+// ServersResult is the state of dev servers: a track's, or every open
+// track's, with the servers found listening in their panes.
 type ServersResult struct {
 	Servers []tracks.Server `json:"servers"`
 }
@@ -241,4 +245,10 @@ type LogsParams struct {
 // LogsResult is a dev server's output.
 type LogsResult struct {
 	Text string `json:"text"`
+}
+
+// ListServersParams names the track whose servers to list; "" is every
+// open track's.
+type ListServersParams struct {
+	ID string `json:"id,omitempty"`
 }

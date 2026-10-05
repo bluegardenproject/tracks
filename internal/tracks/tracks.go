@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/procs"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -110,6 +111,9 @@ type Service struct {
 	Setups SetupPanes
 	// Servers runs the repos' dev servers; nil runs none.
 	Servers ServerPanes
+	// Snapshot reads the processes and the ports they listen on; nil
+	// asks the system.
+	Snapshot func(ctx context.Context) (procs.Snapshot, error)
 	// PortFree reports whether nothing listens on a port; nil asks the
 	// system.
 	PortFree func(port int) bool

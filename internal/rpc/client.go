@@ -220,3 +220,9 @@ func (c Client) Logs(ctx context.Context, p LogsParams) (string, error) {
 	var r LogsResult
 	return r.Text, c.Call(ctx, Logs, p, &r, nil)
 }
+
+// Servers lists track id's servers, or every open track's for "".
+func (c Client) Servers(ctx context.Context, id string) ([]tracks.Server, error) {
+	var r ServersResult
+	return r.Servers, c.Call(ctx, Servers, ListServersParams{ID: id}, &r, nil)
+}

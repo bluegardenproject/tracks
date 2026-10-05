@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/procs"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -80,6 +81,7 @@ func withServers(t *testing.T, f *fixture, name string, defs []store.DevServer, 
 	f.svc.Servers = servers
 	f.svc.CopyEnv = func(context.Context, string, string) ([]string, error) { return nil, nil }
 	f.svc.PortFree = func(port int) bool { return !slices.Contains(busy, port) }
+	f.svc.Snapshot = func(context.Context) (procs.Snapshot, error) { return procs.New(nil, nil), nil }
 	return servers
 }
 
@@ -108,10 +110,10 @@ func TestUpAndDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Server{
-		{Repo: "api", Name: "web", Type: "rspack", Mode: store.PortAssigned, Port: 20001, State: ServerRunning},
-		{Repo: "api", Name: "storybook", Mode: store.PortAssigned, Port: 20002, State: ServerRunning},
-		{Repo: "api", Name: "metro", Mode: store.PortFixed, Port: 8081, State: ServerRunning},
-		{Repo: "api", Name: "app", Mode: store.PortDetect, State: ServerRunning},
+		{Track: tr.ID, TrackName: tr.Name, Repo: "api", Name: "web", Type: "rspack", Mode: store.PortAssigned, Port: 20001, State: ServerStarting},
+		{Track: tr.ID, TrackName: tr.Name, Repo: "api", Name: "storybook", Mode: store.PortAssigned, Port: 20002, State: ServerStarting},
+		{Track: tr.ID, TrackName: tr.Name, Repo: "api", Name: "metro", Mode: store.PortFixed, Port: 8081, State: ServerStarting},
+		{Track: tr.ID, TrackName: tr.Name, Repo: "api", Name: "app", Mode: store.PortDetect, State: ServerStarting},
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Up = %+v\nwant %+v (20000 is busy)", got, want)
@@ -125,7 +127,7 @@ func TestUpAndDown(t *testing.T) {
 	if got[0].State != ServerCrashed || got[0].Code != 1 {
 		t.Errorf("web after exit 1: %+v; want crashed", got[0])
 	}
-	if got, _ = f.svc.Up(ctx, tr.ID, "web"); got[0].State != ServerRunning || got[0].Port != 20001 ||
+	if got, _ = f.svc.Up(ctx, tr.ID, "web"); got[0].State != ServerStarting || got[0].Port != 20001 ||
 		!slices.Equal(servers.stopped, []string{"api/web"}) {
 		t.Errorf("Up web after its crash: %+v, stopped %v; want its old pane closed and it running on 20001", got[0], servers.stopped)
 	}
@@ -133,7 +135,7 @@ func TestUpAndDown(t *testing.T) {
 	if text, err := f.svc.Logs(ctx, tr.ID, "storybook", 50); err != nil || !strings.HasPrefix(text, "output of ") {
 		t.Errorf("Logs = %q, %v", text, err)
 	}
-	if got, _ = f.svc.Down(ctx, tr.ID, "api/storybook"); got[1].State != ServerStopped || got[0].State != ServerRunning {
+	if got, _ = f.svc.Down(ctx, tr.ID, "api/storybook"); got[1].State != ServerStopped || got[0].State != ServerStarting {
 		t.Errorf("Down storybook: %+v; want only it stopped", got)
 	}
 	if _, err := f.svc.Logs(ctx, tr.ID, "storybook", 50); !isProblem(err) {
