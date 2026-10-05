@@ -52,6 +52,9 @@ func TestProxyPorts(t *testing.T) {
 		t.Fatalf("a port whose input isn't running: %v, %v; want 503", res, err)
 	}
 	res.Body.Close()
+	if cached, err := client.Proxy(ctx, false); err != nil || len(cached.Ports) != 1 || cached.Ports[0].State != tracks.ProxyNoServer {
+		t.Errorf("the cached view: %+v, %v; want the last sync's port", cached, err)
+	}
 
 	if view, err = client.RemoveProxyPort(ctx, port); err != nil || len(view.Ports) != 0 {
 		t.Fatalf("RemoveProxyPort = %+v, %v", view, err)

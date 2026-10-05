@@ -59,6 +59,7 @@ const (
 	pickAgent     // a track type's agent
 	pickTypeModel // a track type's model
 	pickUnsaved   // what auto-archive does with unsaved work
+	pickProxy     // what a proxy port forwards to
 )
 
 type (
@@ -159,6 +160,8 @@ func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
 		return m.agentPicked(r)
 	case pickUnsaved:
 		return m.unsavedPicked(r)
+	case pickProxy:
+		return m.proxyPicked(r)
 	}
 	s := &m.settings
 	switch r {

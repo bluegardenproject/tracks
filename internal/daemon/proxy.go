@@ -16,6 +16,10 @@ import (
 type proxies struct {
 	mu sync.Mutex
 	p  proxy.Proxy
+	// last is the last sync's view, without inputs, under its own lock
+	// so reading it never waits for a sync reading the processes.
+	lastMu sync.Mutex
+	last   tracks.ProxyView
 }
 
 // syncProxy points the proxy at what each output port's input runs on
@@ -38,10 +42,31 @@ func (c Config) syncProxy(ctx context.Context, inputs bool) (tracks.ProxyView, e
 			view.Ports[i].State = tracks.ProxyBlocked
 		}
 	}
+	c.proxies.lastMu.Lock()
+	c.proxies.last = tracks.ProxyView{Ports: view.Ports}
+	c.proxies.lastMu.Unlock()
 	return view, nil
 }
 
-func (c Config) proxyView(ctx context.Context, _ *rpc.Call) (any, error) {
+// lastProxy is the last sync's view, without inputs: what a screen
+// that isn't showing the proxy needs, read without reading processes.
+func (c Config) lastProxy() (tracks.ProxyView, error) {
+	if c.proxies == nil {
+		return tracks.ProxyView{}, errors.New("the proxy isn't running")
+	}
+	c.proxies.lastMu.Lock()
+	defer c.proxies.lastMu.Unlock()
+	return c.proxies.last, nil
+}
+
+func (c Config) proxyView(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.ProxyParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	if p.Cached {
+		return c.lastProxy()
+	}
 	return c.syncProxy(ctx, true)
 }
 

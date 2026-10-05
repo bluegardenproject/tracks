@@ -1,8 +1,9 @@
 // Package tracksview is the Tracks window, window 0 of every Tracks
-// session: the banner, and the tabs Station, Repositories, Engines and
-// Settings, switched with Tab, Shift+Tab or a click. Station lists the
-// tracks, Repositories manages the repos, Engines sets up the agent
-// CLIs, Settings holds the preferences and the theme creator.
+// session: the banner, and the tabs Station, Proxy, Repositories,
+// Engines and Settings, switched with Tab, Shift+Tab or a click. Station
+// lists the tracks, Proxy the output ports and what they forward to,
+// Repositories manages the repos, Engines sets up the agent CLIs,
+// Settings holds the preferences and the theme creator.
 package tracksview
 
 import (
@@ -55,6 +56,8 @@ type Config struct {
 	NewTrack     func() error
 	StartDraft   func(id string) error
 	DiscardDraft func(id string) error
+	// Proxy reads and changes the proxy's output ports.
+	Proxy source.Proxy
 	// Repos manages the repositories; ReposErr is why there are none,
 	// such as a database that didn't open.
 	Repos    source.Repos
@@ -95,6 +98,8 @@ type Model struct {
 	newTrack      func() error
 	startDraft    func(id string) error
 	discardDraft  func(id string) error
+	proxySource   source.Proxy
+	proxy         proxyTab
 	repoSource    source.Repos
 	reposErr      error
 	themeSource   source.Themes
@@ -126,6 +131,7 @@ func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
 		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
+		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
@@ -138,7 +144,9 @@ func New(c Config) Model {
 // Init reads the tracks, repos and themes, and follows the tracks'
 // changes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify())
+	_, proxy := m.loadProxy(false)
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify(),
+		proxy, m.nextProxyTick())
 }
 
 // Update handles resizes, data and input. The Tracks window never quits
@@ -178,6 +186,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.derailed(msg)
 	case reposMsg:
 		return m.setRepos(msg), nil
+	case proxyMsg:
+		return m.setProxy(msg), nil
+	case proxyTickMsg:
+		return m.proxyTicked()
+	case proxyChangedMsg:
+		return m.proxyChanged(msg)
 	case suggestMsg:
 		return m.suggested(msg), nil
 	case repoSavedMsg:
@@ -238,6 +252,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.tab == tabStation:
 			next, cmd, _ := m.stationKey(key)
 			return next, cmd
+		case m.tab == tabProxy:
+			step := 3
+			if key == "up" {
+				step = -3
+			}
+			return m.scrollProxyBy(step), nil
 		case m.tab == tabRepositories && (m.repos.editing || m.onRepoForm(msg.Mouse().X)):
 			step := 3
 			if key == "up" {
@@ -258,6 +278,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.PasteMsg:
 		switch {
+		case m.tab == tabProxy:
+			return m.proxyPaste(msg)
 		case m.tab == tabRepositories:
 			return m.repoPaste(msg)
 		case m.tab == tabEngines:
@@ -271,6 +293,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case m.creatorFocused():
 			return m.creatorMsg(msg)
+		case m.tab == tabProxy && m.proxy.adding:
+			return m.proxyPaste(msg)
 		case m.tab == tabRepositories && m.repos.editing:
 			return m.repoPaste(msg)
 		case m.tab == tabEngines:
@@ -287,6 +311,15 @@ func (m Model) creatorFocused() bool {
 
 func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.tab {
+	case tabProxy:
+		m.proxy.notice = notice{}
+		if m.proxy.adding {
+			next, cmd, ok := m.proxyKey(msg)
+			if ok {
+				return next, cmd
+			}
+			m = next
+		}
 	case tabRepositories:
 		m.repos.notice = notice{}
 		if m.repos.editing {
@@ -315,6 +348,10 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if next, cmd, ok := m.stationKey(msg.String()); ok {
 			return next, cmd
 		}
+	case tabProxy:
+		if next, cmd, ok := m.proxyKey(msg); ok {
+			return next, cmd
+		}
 	case tabRepositories:
 		if next, cmd, ok := m.repoListKey(msg.String()); ok {
 			return next, cmd
@@ -341,6 +378,8 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 	}
 	if i, ok := m.tabAt(mouse.X, mouse.Y); ok {
 		switch m.tab {
+		case tabProxy:
+			m = m.stopAdding()
 		case tabRepositories:
 			return m.request(leave{kind: leaveTab, tab: i})
 		case tabSettings:
@@ -351,6 +390,8 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 	switch m.tab {
 	case tabStation:
 		return m.stationClick(mouse.X, mouse.Y)
+	case tabProxy:
+		return m.proxyClick(mouse.X, mouse.Y)
 	case tabRepositories:
 		next, cmd := m.repoClick(mouse.X, mouse.Y)
 		return next.scrollForm(), cmd
@@ -377,6 +418,8 @@ func (m Model) hover(mouse tea.Mouse) Model {
 		}
 		m.station.hoverAdd = m.onAddTrack(mouse.X, mouse.Y)
 		m.station.hoverClear = m.onClearFilter(mouse.X, mouse.Y)
+	case tabProxy:
+		return m.proxyHover(mouse.X, mouse.Y)
 	case tabRepositories:
 		if row, ok := m.repoRowAt(mouse.X, mouse.Y); ok {
 			m.repos.hover = row
@@ -399,6 +442,8 @@ func (m Model) hover(mouse tea.Mouse) Model {
 func (m Model) switchTab(i int) (Model, tea.Cmd) {
 	m.tab = i
 	switch i {
+	case tabProxy:
+		return m.loadProxy(true)
 	case tabRepositories:
 		return m, m.loadRepos()
 	case tabEngines:

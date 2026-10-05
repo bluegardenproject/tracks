@@ -25,6 +25,8 @@ var (
 	clearFilterKeys  = []keyHelp{{"x", "clear filter"}}
 	selectKeys       = []keyHelp{{"↑/↓", "select"}}
 	emptyStationKeys = []keyHelp{{"Enter", "add a new track"}}
+	proxyKeys        = []keyHelp{{"↑/↓", "select"}, {"Enter", "pick the input"}, {"n", "new port"}, {"Delete", "remove"}}
+	proxyAddKeys     = []keyHelp{{"Enter", "add the port"}, {"Esc", "cancel"}}
 	repoListKeys     = []keyHelp{{"↑/↓", "select"}, {"Enter", "edit"}, {"n", "new"}}
 	repoFormKeys     = []keyHelp{{"Tab", "next field"}, {"Shift+Tab", "previous field"}, {"Space", "toggle"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back to the list"}}
 	settingsListKeys = []keyHelp{{"↑/↓", "section"}, {"Enter", "open"}}
@@ -81,6 +83,7 @@ func keyGroups() []keyGroup {
 	return []keyGroup{
 		{"Tracks window", tabKeys},
 		{"Station", station},
+		{"Proxy", append(append([]keyHelp{}, proxyKeys...), proxyAddKeys...)},
 		{"Repositories", append(append([]keyHelp{}, repoListKeys...), repoFormKeys...)},
 		{"Engines", append(append([]keyHelp{}, engineListKeys...), engineKeys...)},
 		{"Model picker", modelPickerKeys},

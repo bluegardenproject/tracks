@@ -261,6 +261,13 @@ type ListServersParams struct {
 	ID string `json:"id,omitempty"`
 }
 
+// ProxyParams asks for the proxy's view: synced now, with the servers
+// it can forward to; Cached returns the last sync's ports instead,
+// without reading the processes.
+type ProxyParams struct {
+	Cached bool `json:"cached,omitempty"`
+}
+
 // ProxyPortParams names an output port and, for ProxyInput, what it
 // forwards to; the zero Input is none.
 type ProxyPortParams struct {

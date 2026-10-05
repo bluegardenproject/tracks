@@ -84,6 +84,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				DiscardDraft: func(id string) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.DiscardDraft(cmd.Context(), id) })
 				},
+				Proxy:         proxySource{daemon},
 				Repos:         repoSource,
 				ReposErr:      dbErr,
 				Themes:        themes{c: c, paths: paths, version: version, command: command},
