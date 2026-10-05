@@ -103,22 +103,28 @@ fixed. The look gets revisited once it's in use.
 
 - `tracks up` opens a `RoleDevServer` pane in the track window's right column
   (`trackwin` already has the role) and returns at once.
-- The pane waits for setup, then runs `cd <dir> && <command>` with `PORT` set,
-  its output teed to a log file.
-- The pane owns the process; the daemon records the pane's process group.
-- Teardown signals the whole group (SIGTERM, then SIGKILL). It runs on
-  `tracks down`, on track end, and when recovery finds a server whose track is
-  gone. Node servers fork workers and watchman, so killing the pane alone isn't
-  enough.
+- The pane waits for setup (`tracks setup --wait`), then runs the command in
+  `<worktree>/<dir>` with `PORT` set and `{{port}}` replaced. `tracks logs`
+  reads the pane's scrollback; there's no log file.
+- Dev servers run only in repos with a worktree (Work and Review tracks).
+- The pane owns the process; its first process leads the process group,
+  which tmux reports as `pane_pid` when it's time to stop.
+- Teardown signals the whole group (SIGTERM, then SIGKILL after 5 s). It runs
+  on `tracks down`, whenever Tracks closes a track window, and on `tracks
+  stop`. Node servers fork workers, so killing the pane alone isn't enough.
+- Later: a window closed outside Tracks leaves its servers only tmux's
+  SIGHUP, and nothing yet cleans up servers orphaned by a crash.
 - Restarting the daemon leaves panes, and their servers, running.
 - A crashed server isn't restarted. Its pane stays open on the exit, so the
   user sees why. See Errors.
 
 ### Ports
 
-- **Assigned (default):** each track gets a block of ports in 20000–29999,
-  stored on the track. A server gets the next port in the block, passed as
-  `$PORT` and `{{port}}`. The port is known before the server starts.
+- **Assigned (default):** each track claims a block of 10 ports in 20000–29999
+  when its first such server starts (`track_ports`); an ended track's block
+  goes to the next track that needs one. A server gets the next port in the
+  block, passed as `$PORT` and `{{port}}`. The port is known before the server
+  starts.
 - **Fixed:** for servers that ignore `$PORT`. Only one track can run it at a
   time; a second start is refused and names the track that holds the port.
 - **Detect:** the port is read from what the server's processes listen on.

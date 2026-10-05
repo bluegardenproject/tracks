@@ -3,10 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
-	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 	"github.com/spf13/cobra"
@@ -23,15 +21,10 @@ func newSetupCmd() *cobra.Command {
 			"Run inside a track: the track is $TRACKS_ID.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			id := os.Getenv("TRACKS_ID")
-			if id == "" {
-				return errNoTrack("setup")
-			}
-			paths, err := platform.Resolve()
+			client, id, err := trackClient("setup")
 			if err != nil {
 				return err
 			}
-			client := rpc.Client{Socket: paths.Socket}
 			states, err := client.Setup(c.Context(), rpc.SetupParams{ID: id, Wait: wait, Retry: !wait})
 			if err != nil {
 				return err
@@ -52,15 +45,10 @@ func newSetupDoneCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			id := os.Getenv("TRACKS_ID")
-			if id == "" {
-				return errNoTrack("setup done")
-			}
-			paths, err := platform.Resolve()
+			client, id, err := trackClient("setup done")
 			if err != nil {
 				return err
 			}
-			client := rpc.Client{Socket: paths.Socket}
 			return client.SetupDone(c.Context(), rpc.SetupDoneParams{ID: id, Repo: repo})
 		},
 	}

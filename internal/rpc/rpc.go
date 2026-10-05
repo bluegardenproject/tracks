@@ -40,6 +40,11 @@ const (
 	// what a setup pane reports when its setup succeeded.
 	Setup     = "setup"
 	SetupDone = "setup-done"
+	// Up and Down start and stop a track's dev servers; Logs reads one's
+	// output.
+	Up   = "up"
+	Down = "down"
+	Logs = "logs"
 )
 
 // Request is one call.
@@ -213,4 +218,27 @@ type SetupResult struct {
 type SetupDoneParams struct {
 	ID   string `json:"id"`
 	Repo string `json:"repo"`
+}
+
+// ServersParams names a track and one of its dev servers, "" for all.
+type ServersParams struct {
+	ID     string `json:"id"`
+	Server string `json:"server,omitempty"`
+}
+
+// ServersResult is the state of each of the track's dev servers.
+type ServersResult struct {
+	Servers []tracks.Server `json:"servers"`
+}
+
+// LogsParams names the dev server whose last Lines lines to read.
+type LogsParams struct {
+	ID     string `json:"id"`
+	Server string `json:"server"`
+	Lines  int    `json:"lines"`
+}
+
+// LogsResult is a dev server's output.
+type LogsResult struct {
+	Text string `json:"text"`
 }

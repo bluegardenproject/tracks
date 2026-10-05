@@ -61,6 +61,18 @@ type fakeWorktrees struct {
 	lost              []workspace.Unsaved
 	renamed           map[string]string // repo name to branch
 	gone              map[string]bool   // repos whose worktree is gone
+	// root, when set, is where worktrees go, made as real folders;
+	// else they're under /wt and don't exist.
+	root string
+}
+
+func (w *fakeWorktrees) path(id, name string) string {
+	if w.root == "" {
+		return "/wt/" + id + "/" + name
+	}
+	p := filepath.Join(w.root, id, name)
+	_ = os.MkdirAll(p, 0o700)
+	return p
 }
 
 func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(string)) ([]track.Repo, error) {
@@ -71,7 +83,7 @@ func (w *fakeWorktrees) Add(_ context.Context, t track.Track, progress func(stri
 	repos := slices.Clone(t.Repos)
 	if t.Kind.Worktrees() {
 		for i := range repos {
-			repos[i].Worktree, repos[i].Branch = "/wt/"+t.ID+"/"+repos[i].Name, track.Branch(t.ID)
+			repos[i].Worktree, repos[i].Branch = w.path(t.ID, repos[i].Name), track.Branch(t.ID)
 		}
 	}
 	return repos, nil
@@ -82,7 +94,7 @@ func (w *fakeWorktrees) AddRepo(_ context.Context, id string, r track.Repo, bran
 		return track.Repo{}, errStep
 	}
 	progress("Fetching…")
-	r.Worktree, r.Branch = "/wt/"+id+"/"+r.Name, branch
+	r.Worktree, r.Branch = w.path(id, r.Name), branch
 	return r, nil
 }
 
