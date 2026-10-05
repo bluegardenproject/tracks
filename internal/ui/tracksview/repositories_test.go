@@ -83,7 +83,7 @@ func settle(m Model, msgs ...tea.Msg) Model {
 func reposTab(t *testing.T, f *fakeRepos) Model {
 	t.Helper()
 	m := New(Config{Version: "test", Theme: theme.Default(), Repos: f})
-	return settle(m, tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: tea.KeyTab})
+	return settle(m, tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab})
 }
 
 func typeText(m Model, s string) Model {

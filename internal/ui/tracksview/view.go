@@ -83,6 +83,8 @@ func (m Model) content(width, height int) []string {
 	switch m.tab {
 	case tabStation:
 		return m.stationView(width, height)
+	case tabProxy:
+		return m.proxyView(width, height)
 	case tabRepositories:
 		return m.reposView(width, height)
 	case tabEngines:
@@ -137,6 +139,12 @@ func (m Model) hints() string {
 		keys = clearFilterKeys
 	case m.tab == tabStation && m.station.err == nil:
 		keys = emptyStationKeys
+	case m.picker != nil && m.pickerFor == pickProxy:
+		return "  " + joinKeys(key, text, pickerKeys)
+	case m.tab == tabProxy && m.proxy.adding:
+		return "  " + joinKeys(key, text, proxyAddKeys)
+	case m.tab == tabProxy:
+		keys = proxyKeys
 	case m.tab == tabRepositories && m.repos.editing:
 		return "  " + joinKeys(key, text, repoFormKeys)
 	case m.tab == tabRepositories:

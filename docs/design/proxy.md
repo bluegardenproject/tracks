@@ -133,8 +133,10 @@ fixed. The look gets revisited once it's in use.
 
 - When servers are listed (`tracks servers`, the Proxy tab), one `ps` and one
   `lsof -iTCP -sTCP:LISTEN` give every process and the ports it listens on,
-  and each track pane's process tree is walked. No poll loop: a list costs
-  one `ps` and one `lsof`, about 100 ms here, more on a busy machine.
+  and each track pane's process tree is walked: about 100 ms here, more on a
+  busy machine. The daemon's proxy sync does it every 2 s while a port has
+  an input, and the Proxy tab every 2 s while it shows; otherwise the tab
+  reads the daemon's last sync, which reads no processes.
 - A listener under a dev-server pane belongs to that server. Its own port
   listening makes it ready; a detect-mode server takes the first port found.
 - Any other listener becomes an unnamed server (`:5173 (vite)`), so servers

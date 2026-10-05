@@ -228,11 +228,11 @@ func (c Client) Servers(ctx context.Context, id string) ([]tracks.Server, error)
 	return r.Servers, c.Call(ctx, Servers, ListServersParams{ID: id}, &r, nil)
 }
 
-// Proxy returns the proxy's output ports and the servers they can
-// forward to.
-func (c Client) Proxy(ctx context.Context) (tracks.ProxyView, error) {
+// Proxy returns the proxy's output ports and, fresh, the servers they
+// can forward to; else the daemon's last view of the ports.
+func (c Client) Proxy(ctx context.Context, fresh bool) (tracks.ProxyView, error) {
 	var v tracks.ProxyView
-	return v, c.Call(ctx, Proxy, nil, &v, nil)
+	return v, c.Call(ctx, Proxy, ProxyParams{Cached: !fresh}, &v, nil)
 }
 
 // AddProxyPort adds an output port, without an input.

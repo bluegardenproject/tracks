@@ -29,12 +29,14 @@ func (n notice) closable() bool { return n.text != "" && !n.busy }
 type noticeExpiredMsg struct{ tab, seq int }
 
 // noticeTabs are the tabs with a notice.
-var noticeTabs = []int{tabStation, tabRepositories, tabEngines, tabSettings}
+var noticeTabs = []int{tabStation, tabProxy, tabRepositories, tabEngines, tabSettings}
 
 func (m *Model) noticeOf(tab int) *notice {
 	switch tab {
 	case tabStation:
 		return &m.station.notice
+	case tabProxy:
+		return &m.proxy.notice
 	case tabRepositories:
 		return &m.repos.notice
 	case tabEngines:

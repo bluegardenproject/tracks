@@ -16,6 +16,7 @@ type tab struct {
 // Tab indexes, in display order.
 const (
 	tabStation = iota
+	tabProxy
 	tabRepositories
 	tabEngines
 	tabSettings
@@ -23,6 +24,7 @@ const (
 
 var tabs = []tab{
 	tabStation:      {"Station", "Your tracks, with their status and actions."},
+	tabProxy:        {"Proxy", "Fixed ports that forward to a track's dev server."},
 	tabRepositories: {"Repositories", "The repositories tracks are created from."},
 	tabEngines:      {"Engines", "The agent CLIs that tracks run."},
 	tabSettings:     {"Settings", "The theme, keys and where Tracks keeps its files."},
@@ -36,8 +38,19 @@ const (
 	tabGap   = 1
 )
 
+// liveMark follows the Proxy tab's title while a port forwards.
+const liveMark = " ●"
+
 // tabWidth is a tab's box: its title, padding and border.
-func tabWidth(t tab) int { return lipgloss.Width(t.title) + 6 }
+func (m Model) tabWidth(i int) int { return lipgloss.Width(m.tabTitle(i)) + 6 }
+
+// tabTitle is tab i's title as drawn, the Proxy tab's mark included.
+func (m Model) tabTitle(i int) string {
+	if i == tabProxy && m.proxy.live() {
+		return tabs[i].title + liveMark
+	}
+	return tabs[i].title
+}
 
 // tabAt returns the tab drawn at cell x, y.
 func (m Model) tabAt(x, y int) (int, bool) {
@@ -46,11 +59,11 @@ func (m Model) tabAt(x, y int) (int, bool) {
 		return 0, false
 	}
 	left := tabsLeft
-	for i, t := range tabs {
-		if x >= left && x < left+tabWidth(t) {
+	for i := range tabs {
+		if x >= left && x < left+m.tabWidth(i) {
 			return i, true
 		}
-		left += tabWidth(t) + tabGap
+		left += m.tabWidth(i) + tabGap
 	}
 	return 0, false
 }
@@ -74,7 +87,16 @@ func (m Model) tabBar(width int) []string {
 				Foreground(m.palette.Color(theme.TabActiveText)).
 				Background(m.palette.Color(theme.TabActiveBg))
 		}
-		boxes = append(boxes, s.Render(t.title))
+		title := t.title
+		if m.tabTitle(i) != t.title {
+			// The mark keeps the tab's background, so the box stays whole.
+			mark := lipgloss.NewStyle().Foreground(m.palette.Color(theme.StateSuccessText))
+			if i == m.tab {
+				mark = mark.Background(m.palette.Color(theme.TabActiveBg))
+			}
+			title += mark.Render(liveMark)
+		}
+		boxes = append(boxes, s.Render(title))
 	}
 	lines := strings.Split(lipgloss.JoinHorizontal(lipgloss.Top, boxes...), "\n")
 	for i := range lines {
