@@ -182,16 +182,23 @@ first), so the user decides what happens next, never Tracks or the agent.
 
 ### The proxy
 
-- Runs in the daemon. Each output port has a `httputil.ReverseProxy` to its
-  input's `127.0.0.1:<port>`, with `FlushInterval: -1`, so WebSockets and HMR
-  work. That covers node, Metro, rspack, Electron's renderer and the rest; raw
-  TCP waits for a real need.
+- Runs in the daemon, which brings it in step every 2 s and right after a
+  change; it reads the processes only while a port has an input.
+- Each output port listens on 127.0.0.1 and ::1 only, never on the LAN, with
+  an `httputil.ReverseProxy` to `localhost:<port>`, which reaches a server on
+  either loopback (Vite on macOS often listens on ::1 alone).
+  `FlushInterval: -1`, and WebSocket upgrades pass, so HMR works. The
+  client's `Host` header is kept, so a dev server builds its URLs for the
+  output port. That covers node, Metro, rspack, Electron's renderer and the
+  rest; raw TCP waits for a real need.
 - Binds lazily: an output port is listened on only while it has an input. An
   output port with no input holds nothing, so defining `8081` doesn't squat
   Metro.
-- If the port is taken (say a server the user started by hand), the tab shows
-  it as blocked, with the holder's process when `lsof` finds one, and retries on
-  the next poll.
+- If another program holds the port (say a server the user started by hand),
+  the tab shows it as blocked, with the holder's process, and Tracks tries
+  again on the next sync. The holder comes from `lsof`: on macOS a loopback
+  bind succeeds next to a server on every address, so the bind alone can't
+  tell. A port whose input listens on the port itself is blocked too.
 - An input whose server stops leaves the output port selected but answering 503
   "no server". It isn't cleared, so restarting the server reconnects on its own.
 - Output ports and their selected inputs are stored in the database and

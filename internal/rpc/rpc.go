@@ -6,6 +6,7 @@ package rpc
 import (
 	"encoding/json"
 
+	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 )
@@ -48,6 +49,13 @@ const (
 	// Servers lists a track's dev servers and what listens in its panes,
 	// or every track's.
 	Servers = "servers"
+	// Proxy returns the proxy's output ports and the servers they can
+	// forward to; ProxyAdd, ProxyRemove and ProxyInput change a port and
+	// return the same.
+	Proxy       = "proxy"
+	ProxyAdd    = "proxy-add"
+	ProxyRemove = "proxy-remove"
+	ProxyInput  = "proxy-input"
 )
 
 // Request is one call.
@@ -251,4 +259,11 @@ type LogsResult struct {
 // open track's.
 type ListServersParams struct {
 	ID string `json:"id,omitempty"`
+}
+
+// ProxyPortParams names an output port and, for ProxyInput, what it
+// forwards to; the zero Input is none.
+type ProxyPortParams struct {
+	Port  int              `json:"port"`
+	Input store.ProxyInput `json:"input"`
 }

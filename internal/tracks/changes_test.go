@@ -88,6 +88,12 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"Rename", func() error { return w.Rename(ctx, "a", "b") }, true},
 		{"SetBranch", func() error { return w.SetBranch(ctx, "a", 0, "fix") }, true},
 		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "web", true) }, true},
+		{"AddProxyPort", func() error { return w.AddProxyPort(ctx, 3000) }, true},
+		{"AddProxyPort", func() error { return w.AddProxyPort(ctx, 3000) }, false},
+		{"SetProxyInput", func() error { return w.SetProxyInput(ctx, 3000, store.ProxyInput{Track: "a"}) }, true},
+		{"SetProxyInput", func() error { return w.SetProxyInput(ctx, 4000, store.ProxyInput{}) }, false},
+		{"RemoveProxyPort", func() error { return w.RemoveProxyPort(ctx, 3000) }, true},
+		{"RemoveProxyPort", func() error { return w.RemoveProxyPort(ctx, 3000) }, false},
 		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "api", true) }, false},
 		{"SetCost", func() error { return w.SetCost(ctx, "a", 1.5) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "a", track.Repo{Name: "api", Path: "/src/api"}) }, true},
@@ -119,7 +125,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 	}
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
-		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
+		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "ProxyPorts": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
 		// A write no screen shows, so it needn't notify.
 		"ClaimPorts": true}
 	methods := reflect.TypeFor[Store]()

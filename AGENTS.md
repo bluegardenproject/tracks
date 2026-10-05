@@ -26,7 +26,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `agents/` the agent CLIs (engines): finding one, its version, its models, its MCP servers, and the pane command a track runs · `agents/claude/`, `agents/cursor/` each engine's command line, prompts and session
 - `hooks/` the engines' hook events and what they mean for a track's status · `notifier/` the user's notification channels
 - `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
-- `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client
+- `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client · `proxy/` the output ports forwarding to dev servers
 - `ui/widget/` UI pieces more than one screen uses · `golden/` golden-file comparisons for tests
 - Shared leaf packages: `git`, `notify`, `procs` (processes and the ports they listen on), `shellx`, `update` (`tracks update`), `usage` (token use and cost)
 - Imports point downwards. Add packages here when they land.

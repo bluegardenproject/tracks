@@ -58,12 +58,15 @@ func (s *Service) statesIn(ctx context.Context, id, window string, snap procs.Sn
 
 // AllServers is ServerStates of every open track with a window.
 func (s *Service) AllServers(ctx context.Context) ([]Server, error) {
+	return s.allServers(ctx, s.snapshot(ctx))
+}
+
+func (s *Service) allServers(ctx context.Context, snap procs.Snapshot) ([]Server, error) {
 	infos, err := s.Windows.List()
 	if err != nil {
 		return nil, err
 	}
 	var out []Server
-	snap := s.snapshot(ctx)
 	for _, in := range infos {
 		if in.Track == "" {
 			continue
@@ -187,13 +190,16 @@ func throughShell(snap procs.Snapshot, pid, agent int) bool {
 // snapshot reads the processes and their ports. Without them no server
 // counts as listening, which only delays ready.
 func (s *Service) snapshot(ctx context.Context) procs.Snapshot {
-	take := s.Snapshot
-	if take == nil {
-		take = procs.Take
-	}
-	snap, err := take(ctx)
+	snap, err := s.takeSnapshot(ctx)
 	if err != nil {
 		return procs.New(nil, nil)
 	}
 	return snap
+}
+
+func (s *Service) takeSnapshot(ctx context.Context) (procs.Snapshot, error) {
+	if s.Snapshot != nil {
+		return s.Snapshot(ctx)
+	}
+	return procs.Take(ctx)
 }

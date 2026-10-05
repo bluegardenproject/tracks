@@ -48,6 +48,10 @@ type Store interface {
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error
 	ClaimPorts(ctx context.Context, id string, first, size, blocks int) (int, error)
+	ProxyPorts(ctx context.Context) ([]store.ProxyPort, error)
+	AddProxyPort(ctx context.Context, port int) error
+	RemoveProxyPort(ctx context.Context, port int) error
+	SetProxyInput(ctx context.Context, port int, in store.ProxyInput) error
 	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
 	Promote(ctx context.Context, t track.Track) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
