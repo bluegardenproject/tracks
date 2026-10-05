@@ -70,6 +70,10 @@ func (s *Service) End(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// No Up may add a server while the window closes. Stopping can take
+	// stopGrace, which Up and Down on other tracks wait out.
+	s.serverMu.Lock()
+	defer s.serverMu.Unlock()
 	for _, in := range infos {
 		if in.Track == id {
 			if err := s.Windows.Close(in.Window); err != nil {

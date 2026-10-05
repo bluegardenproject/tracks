@@ -46,6 +46,7 @@ type Store interface {
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error
+	ClaimPorts(ctx context.Context, id string, first, size, blocks int) (int, error)
 	AddTrackRepo(ctx context.Context, id string, r track.Repo) error
 	Promote(ctx context.Context, t track.Track) error
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
@@ -107,6 +108,11 @@ type Service struct {
 	HooksDir string
 	// Setups runs the repos' setups; nil runs none.
 	Setups SetupPanes
+	// Servers runs the repos' dev servers; nil runs none.
+	Servers ServerPanes
+	// PortFree reports whether nothing listens on a port; nil asks the
+	// system.
+	PortFree func(port int) bool
 	// CopyEnv copies a primary checkout's .env files into a new
 	// worktree; nil is workspace.CopyEnv.
 	CopyEnv func(ctx context.Context, primary, worktree string) ([]string, error)
@@ -132,6 +138,9 @@ type Service struct {
 	// setupMu keeps one StartSetup looking at and opening panes at a
 	// time, so a setup never starts twice.
 	setupMu sync.Mutex
+	// serverMu keeps one Up or Down looking at and changing panes at a
+	// time, so a server never starts twice.
+	serverMu sync.Mutex
 	// reporting keeps one Report reading and writing a state at a time.
 	reporting sync.Mutex
 	// gone counts, per waiting track, the checks in a row that found
@@ -242,6 +251,7 @@ type TmuxWindows struct {
 		KillWindow(window string) error
 		KillPane(pane string) error
 		CapturePane(pane string) (string, error)
+		CaptureHistory(pane string, lines int) (string, error)
 	}
 	Session string
 }
@@ -252,7 +262,12 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Open(w.Tmux, w.Session, s)
 }
 
-func (w TmuxWindows) Close(window string) error { return w.Tmux.KillWindow(window) }
+// Close stops window's dev servers, then closes it, even when a server
+// wouldn't stop.
+func (w TmuxWindows) Close(window string) error {
+	stopped := w.StopServers(window)
+	return errors.Join(stopped, w.Tmux.KillWindow(window))
+}
 
 func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }
 

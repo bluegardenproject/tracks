@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -186,6 +187,20 @@ func AddSetup(t Tmux, window, dir string, p Process) (string, error) {
 // ErrPaneClosed means a new pane's command ended, and closed the pane,
 // before the pane was labelled.
 var ErrPaneClosed = errors.New("the pane closed before it was set up")
+
+// AddDevServer adds a pane running p, a dev server, to the bottom of
+// window's right column, in dir, with its key and port. The agent pane
+// keeps focus.
+func AddDevServer(t Tmux, window, dir string, p Process, key string, port int) (string, error) {
+	pane, err := add(t, window, dir, RoleDevServer, p)
+	if err != nil {
+		return pane, err
+	}
+	if err := t.SetPaneOption(pane, "@tracks_key", key); err != nil {
+		return pane, err
+	}
+	return pane, t.SetPaneOption(pane, "@tracks_port", strconv.Itoa(port))
+}
 
 // add puts a pane at the bottom of the right column, creating the
 // column when it doesn't exist, and evens out the column's heights.

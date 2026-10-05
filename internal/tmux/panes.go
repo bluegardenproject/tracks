@@ -25,7 +25,12 @@ type Pane struct {
 	Title, Role string
 	// State is the @tracks_state pane option, which a pane's own
 	// script sets: a setup pane's "running" or "failed <code>".
-	State                    string
+	State string
+	// Key and Port are a dev-server pane's @tracks_key, which names its
+	// repo and server, and @tracks_port, 0 for none.
+	Key                      string
+	Port                     int
+	PID                      int // the pane's first process, which leads its process group
 	Left, Top, Width, Height int
 	TTY                      string // the terminal the pane's programs write to
 }
@@ -76,23 +81,30 @@ func (c *Client) SplitPane(target string, dir Split, percent int, cwd, command s
 // ListPanes returns the panes of window.
 func (c *Client) ListPanes(window string) ([]Pane, error) {
 	out, err := c.run("list-panes", "-t", window, "-F",
-		"#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_tty}\t#{@tracks_role}\t#{@tracks_state}\t#{@tracks_title}")
+		"#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_pid}\t#{@tracks_port}\t#{pane_tty}\t#{@tracks_role}\t#{@tracks_state}\t#{@tracks_key}\t#{@tracks_title}")
 	if err != nil {
 		return nil, err
 	}
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "\t", 9)
-		if len(f) != 9 {
+		f := strings.SplitN(line, "\t", 12)
+		if len(f) != 12 {
 			continue
 		}
-		n := make([]int, 4)
+		n := make([]int, 6)
 		for i := range n {
 			n[i], _ = strconv.Atoi(f[i+1])
 		}
-		panes = append(panes, Pane{ID: f[0], Left: n[0], Top: n[1], Width: n[2], Height: n[3], TTY: f[5], Role: f[6], State: f[7], Title: f[8]})
+		panes = append(panes, Pane{ID: f[0], Left: n[0], Top: n[1], Width: n[2], Height: n[3], PID: n[4], Port: n[5],
+			TTY: f[7], Role: f[8], State: f[9], Key: f[10], Title: f[11]})
 	}
 	return panes, nil
+}
+
+// CaptureHistory returns pane's visible rows and up to lines rows of
+// scrollback above them, with wrapped lines joined.
+func (c *Client) CaptureHistory(pane string, lines int) (string, error) {
+	return c.run("capture-pane", "-p", "-J", "-S", "-"+strconv.Itoa(lines), "-t", pane)
 }
 
 // CapturePane returns what pane shows, its visible rows only.
