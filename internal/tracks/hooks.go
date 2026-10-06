@@ -16,7 +16,7 @@ func (s *Service) installHooks(t track.Track) (string, error) {
 		return "", nil
 	}
 	command := hooks.Command(filepath.Join(s.BinDir, "tracks"), t.Engine, t.ID)
-	return hooks.Install(filepath.Join(s.HooksDir, t.ID), t.Engine, command)
+	return hooks.Install(filepath.Join(s.HooksDir, t.ID), t.Engine, command, s.Socket)
 }
 
 // removeHooks removes track id's hooks.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -31,6 +32,11 @@ const dialTimeout = time.Second
 func (c Client) Call(ctx context.Context, method string, params, result any, progress func(string)) error {
 	d := net.Dialer{Timeout: dialTimeout}
 	conn, err := d.DialContext(ctx, "unix", c.Socket)
+	if errors.Is(err, os.ErrPermission) {
+		// Not ErrNotRunning: starting a daemon wouldn't help, and the
+		// usual cause is an agent's sandbox, not a missing daemon.
+		return fmt.Errorf("can't reach the daemon on %s, a sandbox may be blocking it: %v", c.Socket, err)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNotRunning, err)
 	}

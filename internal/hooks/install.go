@@ -43,12 +43,12 @@ func Command(program, engine, id string) string {
 // Install writes the files that give engine's agent on a track its
 // hooks into dir, and returns what the agent is started with: Claude's
 // settings file, or Cursor's plugin folder. command is the hook
-// command.
-func Install(dir, engine, command string) (string, error) {
+// command; socket is the daemon's, "" for none.
+func Install(dir, engine, command, socket string) (string, error) {
 	switch engine {
 	case "claude":
 		path := filepath.Join(dir, "claude-settings.json")
-		return path, writeJSON(path, claudeSettings(command))
+		return path, writeJSON(path, claudeSettings(command, socket))
 	case "cursor":
 		plugin := filepath.Join(dir, "cursor-plugin")
 		if err := writeJSON(filepath.Join(plugin, ".cursor-plugin", "plugin.json"), map[string]string{"name": "tracks-hooks"}); err != nil {
@@ -70,13 +70,20 @@ type claudeMatcher struct {
 	Hooks   []claudeHandler `json:"hooks"`
 }
 
-func claudeSettings(command string) any {
+// claudeSettings are the hooks and, with a socket, a sandbox exception
+// for it: Claude's sandbox blocks Unix sockets, so the agent's tracks
+// commands couldn't reach the daemon.
+func claudeSettings(command, socket string) any {
 	hooks := map[string][]claudeMatcher{}
 	for _, h := range claudeHooks {
 		hooks[h.event] = append(hooks[h.event], claudeMatcher{Matcher: h.matcher,
 			Hooks: []claudeHandler{{Type: "command", Command: command, Timeout: Timeout}}})
 	}
-	return map[string]any{"hooks": hooks}
+	settings := map[string]any{"hooks": hooks}
+	if socket != "" {
+		settings["sandbox"] = map[string]any{"network": map[string]any{"allowUnixSockets": []string{socket}}}
+	}
+	return settings
 }
 
 type cursorHandler struct {
