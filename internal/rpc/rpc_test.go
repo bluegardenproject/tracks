@@ -83,6 +83,24 @@ func TestErrors(t *testing.T) {
 	}
 }
 
+// A socket the client may not open, as in an agent's sandbox, isn't a
+// daemon that's gone: taking it for one would start a second daemon.
+func TestRefusedSocketIsNotADaemonGone(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root opens any socket")
+	}
+	c := serve(t, map[string]Handler{Ping: func(context.Context, *Call) (any, error) { return PingResult{}, nil }})
+	dir := filepath.Dir(c.Socket)
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	_, err := c.Ping(context.Background())
+	if err == nil || errors.Is(err, ErrNotRunning) {
+		t.Errorf("Ping on a refused socket = %v, want an error other than ErrNotRunning", err)
+	}
+}
+
 func TestHangingUpLeavesTheWorkRunning(t *testing.T) {
 	hungUp, finished := make(chan bool, 1), make(chan struct{})
 	c := serve(t, map[string]Handler{

@@ -74,23 +74,31 @@ func TestInstall(t *testing.T) {
 		t.Errorf("command %q", command)
 	}
 
-	path, err := Install(dir, "claude", command)
+	path, err := Install(dir, "claude", command, "/state/tracks/daemon.sock")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var settings struct {
-		Hooks map[string][]claudeMatcher `json:"hooks"`
+		Hooks   map[string][]claudeMatcher `json:"hooks"`
+		Sandbox struct {
+			Network struct {
+				AllowUnixSockets []string `json:"allowUnixSockets"`
+			} `json:"network"`
+		} `json:"sandbox"`
 	}
 	readJSON(t, path, &settings)
 	if len(settings.Hooks) != len(claudeHooks) {
 		t.Errorf("Claude gets %d hooks, want %d", len(settings.Hooks), len(claudeHooks))
+	}
+	if got := settings.Sandbox.Network.AllowUnixSockets; len(got) != 1 || got[0] != "/state/tracks/daemon.sock" {
+		t.Errorf("Claude's sandbox lets through the sockets %v, want the daemon's", got)
 	}
 	pre := settings.Hooks["PreToolUse"]
 	if len(pre) != 1 || pre[0].Matcher != "AskUserQuestion|ExitPlanMode" || pre[0].Hooks[0].Command != command || pre[0].Hooks[0].Timeout != Timeout {
 		t.Errorf("PreToolUse = %+v", pre)
 	}
 
-	plugin, err := Install(dir, "cursor", command)
+	plugin, err := Install(dir, "cursor", command, "/state/tracks/daemon.sock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +121,7 @@ func TestInstall(t *testing.T) {
 		}
 	}
 
-	if _, err := Install(dir, "codex", command); err == nil {
+	if _, err := Install(dir, "codex", command, ""); err == nil {
 		t.Error("an engine without hooks should be an error")
 	}
 }

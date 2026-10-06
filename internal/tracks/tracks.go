@@ -110,6 +110,9 @@ type Service struct {
 	Engines map[string]Engine
 	// SocketDir and BinDir go into every agent pane's environment.
 	SocketDir, BinDir string
+	// Socket is the daemon's socket, which an agent's sandbox has to
+	// let its tracks commands reach.
+	Socket string
 	// HooksDir holds each track's hooks, a folder per track; "" starts
 	// agents without them.
 	HooksDir string

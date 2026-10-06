@@ -73,6 +73,7 @@ func newDaemonCmd(version string) *cobra.Command {
 					Settings:  load,
 					SocketDir: paths.DataDir,
 					BinDir:    paths.BinDir,
+					Socket:    paths.Socket,
 					HooksDir:  filepath.Join(paths.DataDir, "hooks"),
 					GitHub:    tracks.GH{},
 					// Sending may wait on osascript and tmux; the daemon doesn't.
