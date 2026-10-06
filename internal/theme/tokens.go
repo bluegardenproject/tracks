@@ -7,11 +7,12 @@ type Token string
 // Tokens. Adding one means adding it here, to All, and a value to every
 // built-in theme; the tests fail otherwise.
 const (
-	TextDefault Token = "text.default"
-	TextMuted   Token = "text.muted"
-	TextFaint   Token = "text.faint"
-	TextInverse Token = "text.inverse"
-	TextAccent  Token = "text.accent"
+	TextDefault      Token = "text.default"
+	TextMuted        Token = "text.muted"
+	TextFaint        Token = "text.faint"
+	TextInverse      Token = "text.inverse"
+	TextAccent       Token = "text.accent"
+	TextTrackDefault Token = "text.track.default"
 
 	BgBase     Token = "bg.base"
 	BgSurface  Token = "bg.surface"
@@ -106,7 +107,7 @@ const (
 
 // All lists every token in display order.
 var All = []Token{
-	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent,
+	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent, TextTrackDefault,
 	BgBase, BgSurface, BgSelected, BgHover,
 	BorderDefault, BorderFocus, BorderAccent,
 	StateSuccessText, StateSuccessTextAccent, StateSuccessBg, StateSuccessBgAccent,

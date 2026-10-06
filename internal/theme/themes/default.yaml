@@ -6,6 +6,7 @@ tokens:
   text.faint:         "#71717a"
   text.inverse:       "#18181b"
   text.accent:        "#1ccde8"
+  text.track.default: "#a1d2e3"
 
   bg.base:            "#041228"
   bg.surface:         "#27272a"

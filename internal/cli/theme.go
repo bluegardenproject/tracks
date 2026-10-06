@@ -55,7 +55,7 @@ func tmuxColors(t theme.Theme) tmux.Colors {
 		TitleActive:  t.Value(theme.TextAccent),
 		FooterBg:     t.Value(theme.FooterBg),
 		FooterFg:     t.Value(theme.FooterText),
-		Foreground:   t.Value(theme.TextDefault),
+		Foreground:   t.Value(theme.TextTrackDefault),
 		Background:   t.Value(theme.BgBase),
 	}
 }
