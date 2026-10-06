@@ -1,9 +1,9 @@
 package tracks
 
 import (
-	"errors"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -70,8 +70,15 @@ func TestServerPanes(t *testing.T) {
 	if err := win.StopPane(web); err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.Kill(-web.PID, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("web's process group still has processes after StopPane: %v", err)
+	if groupAlive(web.PID) {
+		out, _ := exec.Command("ps", "-A", "-o", "pid=,pgid=,stat=,command=").Output()
+		var group []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if f := strings.Fields(line); len(f) > 1 && f[1] == strconv.Itoa(web.PID) {
+				group = append(group, line)
+			}
+		}
+		t.Errorf("web's process group still has processes after StopPane:\n%s", strings.Join(group, "\n"))
 	}
 	if err := win.Close(w.ID); err != nil {
 		t.Fatal(err)
@@ -95,7 +102,7 @@ func TestStopGroupKillsWhatIgnoresTERM(t *testing.T) {
 		t.Errorf("took %v; the group ignores TERM, so it should wait the grace", took)
 	}
 	time.Sleep(100 * time.Millisecond)
-	if err := syscall.Kill(-cmd.Process.Pid, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("the group survived: %v", err)
+	if groupAlive(cmd.Process.Pid) {
+		t.Error("the group survived")
 	}
 }
