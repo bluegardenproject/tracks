@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1](https://github.com/bluegardenproject/tracks/compare/v2.1.0...v2.1.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **agents:** start dev servers only when the user asks ([9174ff6](https://github.com/bluegardenproject/tracks/commit/9174ff686567822487538889a184b963ff3eb49c))
+* **hooks:** let Claude's sandbox reach the daemon socket ([1c0fd88](https://github.com/bluegardenproject/tracks/commit/1c0fd889e87351eaf325b8bcd12b3142f620e01c))
+
 ## [2.1.0](https://github.com/bluegardenproject/tracks/compare/v2.0.1...v2.1.0) (2026-10-06)
 
 
