@@ -2,6 +2,9 @@ package tracks
 
 import (
 	"errors"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -25,7 +28,7 @@ func stopGroup(pgid int, grace time.Duration) error {
 	}
 	deadline := time.Now().Add(grace)
 	for time.Now().Before(deadline) {
-		if err := syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) {
+		if !groupAlive(pgid) {
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -34,6 +37,30 @@ func stopGroup(pgid int, grace time.Duration) error {
 		return err
 	}
 	return nil
+}
+
+// groupAlive reports whether process group pgid has a process that
+// isn't a zombie. kill(-pgid, 0) counts zombies too, which stay while
+// nothing reaps them, as under a CI runner that adopts orphans.
+func groupAlive(pgid int) bool {
+	out, err := exec.Command("ps", "-A", "-o", "pgid=,stat=").Output()
+	if err != nil {
+		return !errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
+	}
+	return groupLiving(string(out), pgid)
+}
+
+// groupLiving reports whether ps output of pgid and stat lines lists a
+// process of pgid that isn't a zombie.
+func groupLiving(ps string, pgid int) bool {
+	id := strconv.Itoa(pgid)
+	for _, line := range strings.Split(ps, "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && f[0] == id && !strings.HasPrefix(f[1], "Z") {
+			return true
+		}
+	}
+	return false
 }
 
 // StopPane stops p's dev server, its whole process group, and closes
