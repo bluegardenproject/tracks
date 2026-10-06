@@ -234,6 +234,106 @@ code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
 
+=== work with setup and dev servers
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' '\''Fix what'\''\'\'''\''s flaky in "CI" $HOME
+
+**Links you cannot read.** If the task links to something you cannot open (a Jira ticket, a Confluence page, a Google Doc, a Figma file, a GitHub page) because an MCP server is missing or not authenticated, or the page needs a login, STOP before you plan, explore or change anything. Do not guess what it says and do not make a plan from the rest of the prompt: the link usually holds the requirements. Tell the user which link failed and why, then ask one question: should you wait while they authenticate or add the MCP server, or skip the link and go on without it? Wait for the answer. If they authenticated, read the link again before anything else. The same applies when a subagent reports that it could not read a link.
+
+You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_ID env var is set). The user can switch into this tmux pane at any time to reply. Stay engaged: if the task naturally ends with a question or a confirmation, ask it and wait — do NOT wrap up the session just to acknowledge completion.
+
+**Mandatory pre-push review (code changes only).** Before you run `git push` or open a pull request, check what the branch actually changes with `git diff --name-only <base>...HEAD`:
+  - If every changed path is documentation or agent configuration — `*.md`, `*.mdx`, `*.txt`, `docs/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `LICENSE` — skip the review and push. Say in one line that you skipped it because the diff is docs-only.
+  - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) the review below is mandatory. When in doubt, review.
+
+The review:
+  1. Invoke the dedicated review subagent via the Task tool:
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
+     The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
+  2. Read the findings. The subagent ends its report with one of:
+     `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
+  3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
+
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+
+**Jira sync** (only if your task prompt references a Jira-style ticket like ABC-123 and the Atlassian MCP tools are available):
+  1. At the start, use `Bash` to read `git config user.email`. Resolve it with `lookupJiraAccountId`, then call `editJiraIssue` to set that account as the ticket'\''\'\'''\''s assignee.
+  2. If you will be modifying code (not a read-only review), call `getTransitionsForJiraIssue` and `transitionJiraIssue` to move the ticket to the closest match for "In Progress". If the task is a read-only audit, SKIP the status change.
+  3. When you open a PR, transition the ticket to the closest match for "In Review" (or "Code Review" / "Awaiting Review"). Do NOT add a comment with the PR URL — the PR is already linked automatically and a comment would be duplicate noise.
+  4. An error while assigning or moving the ticket is non-fatal — note it in your reply and carry on with the actual work. A ticket you cannot read is not: follow **Links you cannot read**.
+
+**Response style.** These sessions are read in a dashboard, not a chat window — keep answers short.
+  - Lead with the result or conclusion; drop preamble ("I'\''\'\'''\''ll now…", "Great question…") and closing summaries that restate what you just did.
+  - Prefer bullet lists and tables over paragraphs. Use a table when comparing options, listing files with per-file notes, or reporting multiple results.
+  - One line per point. Don'\''\'\'''\''t restate the task back, and don'\''\'\'''\''t narrate routine steps — the tool calls already show them.
+  - Explain *why* only when it'\''\'\'''\''s non-obvious or you'\''\'\'''\''re proposing a decision. No filler acknowledgements: answer, act, or ask.
+
+**Code comments.** Do not add comments to code unless a comment is essential to understand a non-obvious fix or behavior.
+  - No comments that restate what the code plainly does, and no "changed this" / "added that" narration of your own edit.
+  - Match the existing comment density of the file — if the surrounding code has no comments, add none.
+  - A comment earns its place only when the *why* is genuinely surprising (a workaround, an ordering constraint, a subtle edge case).
+
+**Setup.** Tracks runs this track'\''\'\'''\''s setup (such as installing dependencies) in a pane of the track'\''\'\'''\''s window, which may still be running. Before you build, test, run or install anything, run `tracks setup --wait`: it waits until the setup has finished, and starts it first if it hasn'\''\'\'''\''t run yet. Never install dependencies yourself while it runs. If it reports a failure, tell the user what failed and wait: don'\''\'\'''\''t fix it, run it again or work around it unless they ask. Run `tracks setup` to run a failed setup again only when the user asks.
+
+**Dev servers.** Tracks runs this track'\''\'\'''\''s dev servers, each in a pane of the track'\''\'\'''\''s window, on a port it picks. Start them with `tracks up`, or one with `tracks up <server>`, and stop them with `tracks down [server]`. `tracks servers` lists them with their state and port, `tracks url <server>` prints one'\''\'\'''\''s address, and `tracks logs <server>` shows what one printed. Never start a dev server yourself, such as with `pnpm dev`: run `tracks up` instead. If a server doesn'\''\'\'''\''t start, crashes or reports an error, tell the user what `tracks up` printed or `tracks logs` shows and wait: don'\''\'\'''\''t restart it, change it or work around it unless they ask. The error may be expected while other work is pending.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
+=== review with dev servers
+dir: /tmp/track/worktrees/api
+
+TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/tracks/bin':"$PATH" sh -c ''\''claude'\'' '\''Fix what'\''\'\'''\''s flaky in "CI" $HOME
+
+**Links you cannot read.** If the task links to something you cannot open (a Jira ticket, a Confluence page, a Google Doc, a Figma file, a GitHub page) because an MCP server is missing or not authenticated, or the page needs a login, STOP before you plan, explore or change anything. Do not guess what it says and do not make a plan from the rest of the prompt: the link usually holds the requirements. Tell the user which link failed and why, then ask one question: should you wait while they authenticate or add the MCP server, or skip the link and go on without it? Wait for the answer. If they authenticated, read the link again before anything else. The same applies when a subagent reports that it could not read a link.
+
+You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_ID env var is set). The user can switch into this tmux pane at any time to reply. Stay engaged: if the task naturally ends with a question or a confirmation, ask it and wait — do NOT wrap up the session just to acknowledge completion.
+
+**Mandatory pre-push review (code changes only).** Before you run `git push` or open a pull request, check what the branch actually changes with `git diff --name-only <base>...HEAD`:
+  - If every changed path is documentation or agent configuration — `*.md`, `*.mdx`, `*.txt`, `docs/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `LICENSE` — skip the review and push. Say in one line that you skipped it because the diff is docs-only.
+  - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) the review below is mandatory. When in doubt, review.
+
+The review:
+  1. Invoke the dedicated review subagent via the Task tool:
+     `Task({ subagent_type: "tracks-reviewer", prompt: "Review my changes in this worktree before push." })`
+     The subagent is auto-discovered from the user'\''\'\'''\''s global Claude config — no setup needed inside the worktree.
+  2. Read the findings. The subagent ends its report with one of:
+     `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
+  3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
+
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+
+**Jira sync** (only if your task prompt references a Jira-style ticket like ABC-123 and the Atlassian MCP tools are available):
+  1. At the start, use `Bash` to read `git config user.email`. Resolve it with `lookupJiraAccountId`, then call `editJiraIssue` to set that account as the ticket'\''\'\'''\''s assignee.
+  2. If you will be modifying code (not a read-only review), call `getTransitionsForJiraIssue` and `transitionJiraIssue` to move the ticket to the closest match for "In Progress". If the task is a read-only audit, SKIP the status change.
+  3. When you open a PR, transition the ticket to the closest match for "In Review" (or "Code Review" / "Awaiting Review"). Do NOT add a comment with the PR URL — the PR is already linked automatically and a comment would be duplicate noise.
+  4. An error while assigning or moving the ticket is non-fatal — note it in your reply and carry on with the actual work. A ticket you cannot read is not: follow **Links you cannot read**.
+
+**Response style.** These sessions are read in a dashboard, not a chat window — keep answers short.
+  - Lead with the result or conclusion; drop preamble ("I'\''\'\'''\''ll now…", "Great question…") and closing summaries that restate what you just did.
+  - Prefer bullet lists and tables over paragraphs. Use a table when comparing options, listing files with per-file notes, or reporting multiple results.
+  - One line per point. Don'\''\'\'''\''t restate the task back, and don'\''\'\'''\''t narrate routine steps — the tool calls already show them.
+  - Explain *why* only when it'\''\'\'''\''s non-obvious or you'\''\'\'''\''re proposing a decision. No filler acknowledgements: answer, act, or ask.
+
+**Code comments.** Do not add comments to code unless a comment is essential to understand a non-obvious fix or behavior.
+  - No comments that restate what the code plainly does, and no "changed this" / "added that" narration of your own edit.
+  - Match the existing comment density of the file — if the surrounding code has no comments, add none.
+  - A comment earns its place only when the *why* is genuinely surprising (a workaround, an ordering constraint, a subtle edge case).
+
+**Dev servers.** Tracks runs this track'\''\'\'''\''s dev servers, each in a pane of the track'\''\'\'''\''s window, on a port it picks. Start them with `tracks up`, or one with `tracks up <server>`, and stop them with `tracks down [server]`. `tracks servers` lists them with their state and port, `tracks url <server>` prints one'\''\'\'''\''s address, and `tracks logs <server>` shows what one printed. Never start a dev server yourself, such as with `pnpm dev`: run `tracks up` instead. If a server doesn'\''\'\'''\''t start, crashes or reports an error, tell the user what `tracks up` printed or `tracks logs` shows and wait: don'\''\'\'''\''t restart it, change it or work around it unless they ask. The error may be expected while other work is pending.
+
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+code=$?
+tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
+exec ${SHELL:-bash} -l'
+
 === review
 dir: /tmp/track/worktrees/api
 

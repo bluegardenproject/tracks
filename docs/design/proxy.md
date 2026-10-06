@@ -1,8 +1,8 @@
 # Proxy and dev servers
 
-**Status:** planning. The UI comes separately; this doc covers how it works
-underneath. v1's design (`docs/design/dev-servers.md`, in git history before
-`a8a2602`) is the starting point, not the template.
+**Status:** built. What's still open is under Follow-ups in
+[docs/ROADMAP.md](../ROADMAP.md). v1's design (`docs/design/dev-servers.md`,
+in git history before `a8a2602`) was the starting point, not the template.
 
 ## Problem
 
@@ -283,9 +283,12 @@ each poll.
   running one). The CLI honours `TRACKS_SOCKET_DIR` (v1's bug).
 - Proxy tab: output ports, each with its input selector. Rows read
   `web · rspack · track-x · :20013`. The design comes separately.
-- Prompts: the work and review prompts learn about `tracks setup --wait`,
-  `up`, `down` and `logs`, and that errors are reported to the user, not acted
-  on. Changing their golden files is agreed (2026-10-04).
+- Prompts: a Work or Review track's prompt gets a Setup paragraph when its
+  repos have a setup (`tracks setup --wait` before building, testing or
+  installing) and a Dev servers paragraph when they have dev servers (`up`,
+  `down`, `servers`, `url`, `logs`; never `pnpm dev` itself). Both say errors
+  are reported to the user, not acted on. Tracks without either keep their
+  prompts as they were. Changing the golden files was agreed (2026-10-04).
 
 ## Order
 
