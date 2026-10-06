@@ -88,6 +88,11 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"Rename", func() error { return w.Rename(ctx, "a", "b") }, true},
 		{"SetBranch", func() error { return w.SetBranch(ctx, "a", 0, "fix") }, true},
 		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "web", true) }, true},
+		{"AddTrackError", func() error {
+			return w.AddTrackError(ctx, "a", track.Failure{Kind: track.ServerError, Subject: "web/web", Code: 1})
+		}, true},
+		{"ClearTrackErrors", func() error { _, err := w.ClearTrackErrors(ctx, "a", "", ""); return err }, true},
+		{"ClearTrackErrors", func() error { _, err := w.ClearTrackErrors(ctx, "a", "", ""); return err }, false},
 		{"AddProxyPort", func() error { return w.AddProxyPort(ctx, 3000) }, true},
 		{"AddProxyPort", func() error { return w.AddProxyPort(ctx, 3000) }, false},
 		{"SetProxyInput", func() error { return w.SetProxyInput(ctx, 3000, store.ProxyInput{Track: "a"}) }, true},

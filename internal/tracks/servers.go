@@ -122,6 +122,7 @@ func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
 		if port != 0 {
 			title += " · :" + strconv.Itoa(port)
 		}
+		s.clearFailure(ctx, t.ID, track.ServerError, d.key())
 		p := trackwin.Process{Title: title, Command: s.serverCommand(t.ID, d, port)}
 		if err := s.Servers.AddDevServer(window, dir, p, d.key(), port); err != nil {
 			return nil, fmt.Errorf("start %s: %w", d.def.Name, err)
@@ -158,6 +159,7 @@ func (s *Service) Down(ctx context.Context, id, name string) ([]Server, error) {
 				return nil, fmt.Errorf("stop %s: %w", d.def.Name, err)
 			}
 		}
+		s.clearFailure(ctx, t.ID, track.ServerError, d.key())
 	}
 	return s.serverStates(t, window, all, snap, false)
 }
@@ -302,15 +304,22 @@ func (s *Service) serverCommand(id string, d devServer, port int) string {
 	if port != 0 {
 		command = strings.ReplaceAll(command, "{{port}}", strconv.Itoa(port))
 	}
-	run := "sh -c " + shellx.Quote(command)
+	// ran is 0 when the setup failed and the server never started: that
+	// is the setup's error, not a crash of the server.
+	run := "sh -c " + shellx.Quote(command) + "\ncode=$?\nran=1\n"
 	if d.setup {
-		run = "tracks setup --wait && " + run
+		run = "if tracks setup --wait; then\n  sh -c " + shellx.Quote(command) + "\n  code=$?\n  ran=1\n" +
+			"else\n  code=$?\n  ran=0\nfi\n"
 	}
 	inner := `tmux set-option -p -t "$TMUX_PANE" ` + trackwin.StateOption + " " + ServerRunning + " 2>/dev/null\n" +
-		run + "\n" +
-		"code=$?\n" +
+		run +
 		`tmux set-option -p -t "$TMUX_PANE" ` + trackwin.StateOption + ` "` + ServerExited + ` $code" 2>/dev/null` + "\n" +
-		"printf '\\n%s stopped (exit %s).\\n' " + shellx.Quote(d.def.Name) + ` "$code"` + "\n" +
+		`if [ "$ran" -eq 0 ]; then` + "\n" +
+		"  printf '\\n%s didn\\047t start: the setup didn\\047t finish.\\n' " + shellx.Quote(d.def.Name) + "\n" +
+		"else\n" +
+		`  [ "$code" -eq 0 ] || tracks report-exit --kind ` + track.ServerError + " --subject " + shellx.Quote(d.key()) + ` --code "$code" 2>/dev/null` + "\n" +
+		"  printf '\\n%s stopped (exit %s).\\n' " + shellx.Quote(d.def.Name) + ` "$code"` + "\n" +
+		"fi\n" +
 		"exec ${SHELL:-bash} -l"
 	env := "TRACKS_ID=" + shellx.Quote(id) + " TRACKS_SOCKET_DIR=" + shellx.Quote(s.SocketDir)
 	if s.BinDir != "" {

@@ -36,6 +36,10 @@ type Track struct {
 	PRs                    []PR // in the order they were found
 	// PRStatus is where the PRs are; track.NoPRs without any.
 	PRStatus track.Status
+	// Failures are its server and setup errors, until dismissed;
+	// FailureStatus their badge, track.NoErrors without any.
+	Failures      []track.Failure
+	FailureStatus track.Status
 	// Draft is set on a creation that failed, kept to start again; the
 	// rest is what was asked for.
 	Draft *Draft
@@ -131,7 +135,8 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
-			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs)}
+			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs),
+			Failures: l.Failures, FailureStatus: track.FailureStatus(l.Failures)}
 		if l.Draft != nil {
 			out[i].Draft = &Draft{Error: l.Draft.Error, Prompt: l.Draft.Request.Prompt}
 		}

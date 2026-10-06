@@ -164,10 +164,15 @@ matching a log line can come later.
 A crashed server or a failed setup may be expected (it might need other work
 first), so the user decides what happens next, never Tracks or the agent.
 
-- The daemon detects both from the pane's exit, and sets an error on the track:
-  **Server error** (naming the server) or **Setup error**.
+- The pane reports its own exit with a code other than 0 (`tracks
+  report-exit`), and the daemon sets an error on the track: **Server error**
+  (naming the server) or **Setup error**. A server stopped with `tracks down`
+  reports nothing, and neither does a server whose setup failed: it never
+  ran. A server stopped with Ctrl+C in its pane usually exits non-zero (130),
+  which counts as a crash. An exit while the daemon is down is missed.
 - The error is a badge of its own on the Station, next to the track status and
-  the PR status, the way the PR status already is. The agent may be working
+  the PR status, the way the PR status already is (`server & setup error` for
+  both). The details list each error. The agent may be working
   fine while its server is down, so it doesn't replace the track status.
   It's also not the track status `error` (the agent failed), which stays as it
   is.
@@ -176,7 +181,7 @@ first), so the user decides what happens next, never Tracks or the agent.
   runs `tracks up` or `tracks setup` only when the user asks. The prompt says so.
 - The error clears when:
   - the server or setup is started again (by the user, or the agent at the
-    user's request) and doesn't fail;
+    user's request): starting clears it, and failing again sets it again;
   - the server is stopped with `tracks down`;
   - the user dismisses it with **Dismiss track errors** in the track's details
     on the Station. The button shows only while the track has an error, on a row
@@ -261,7 +266,7 @@ New migrations, never edits:
 - `repos.setup`: the setup command, `''` for none
 - `dev_servers (repo_id, position, name, command, dir, port_mode, port, type)`
 - `track_ports (track_id, base)`, plus a done marker for setup per track and repo
-- `track_errors (track_id, kind, server, at)`: server and setup errors until
+- `track_errors (track_id, kind, subject, code, at)`: server and setup errors until
   cleared
 - `proxy_ports (port, input_track, input_repo, input_server, input_port)`
 

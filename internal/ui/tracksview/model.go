@@ -47,6 +47,8 @@ type Config struct {
 	// Restart starts an open track's agent again once it exited, telling
 	// progress each slow step.
 	Restart func(id string, progress func(string)) error
+	// DismissFailures clears a track's server and setup errors.
+	DismissFailures func(id string) error
 	// Unarchive puts an archived track back in Station; SetFilter puts
 	// Station under a filter, the zero Filter clearing it.
 	Unarchive func(id string) error
@@ -81,40 +83,41 @@ type Config struct {
 
 // Model is the Tracks window.
 type Model struct {
-	version       string
-	palette       style.Palette
-	source        source.Source
-	watchFn       func(ctx context.Context, changed func()) error
-	changes       chan watchMsg // from watchFn, nil without it
-	open, end     TrackFunc
-	resume        ResumeFunc
-	promote       func(id string, progress func(string)) error
-	restart       func(id string, progress func(string)) error
-	archiveFn     DiscardFunc
-	derailFn      DiscardFunc
-	lostFn        func(id string) ([]string, error)
-	unarchive     func(id string) error
-	setFilter     func(track.Filter) error
-	newTrack      func() error
-	startDraft    func(id string) error
-	discardDraft  func(id string) error
-	proxySource   source.Proxy
-	proxy         proxyTab
-	repoSource    source.Repos
-	reposErr      error
-	themeSource   source.Themes
-	themesDir     string
-	engineSource  source.Engines
-	typeSource    source.TrackTypes
-	historySource source.History
-	notifySource  source.Notifications
-	aboutFacts    [][2]string
-	width, height int
-	tab           int
-	station       station
-	repos         repoTab
-	settings      settingsTab
-	engines       enginesTab
+	version         string
+	palette         style.Palette
+	source          source.Source
+	watchFn         func(ctx context.Context, changed func()) error
+	changes         chan watchMsg // from watchFn, nil without it
+	open, end       TrackFunc
+	resume          ResumeFunc
+	promote         func(id string, progress func(string)) error
+	restart         func(id string, progress func(string)) error
+	archiveFn       DiscardFunc
+	derailFn        DiscardFunc
+	lostFn          func(id string) ([]string, error)
+	unarchive       func(id string) error
+	dismissFailures func(id string) error
+	setFilter       func(track.Filter) error
+	newTrack        func() error
+	startDraft      func(id string) error
+	discardDraft    func(id string) error
+	proxySource     source.Proxy
+	proxy           proxyTab
+	repoSource      source.Repos
+	reposErr        error
+	themeSource     source.Themes
+	themesDir       string
+	engineSource    source.Engines
+	typeSource      source.TrackTypes
+	historySource   source.History
+	notifySource    source.Notifications
+	aboutFacts      [][2]string
+	width, height   int
+	tab             int
+	station         station
+	repos           repoTab
+	settings        settingsTab
+	engines         enginesTab
 	// picker, when set, is open over the window; pickerFor is what it
 	// chooses, and pickerEngine the engine for pickModel and
 	// pickTypeModel.
@@ -130,7 +133,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
-		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, setFilter: c.SetFilter,
+		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, dismissFailures: c.DismissFailures, setFilter: c.SetFilter,
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),

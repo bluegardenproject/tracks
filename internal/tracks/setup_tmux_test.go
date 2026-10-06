@@ -3,6 +3,7 @@ package tracks
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,8 +69,12 @@ func TestSetupPaneScript(t *testing.T) {
 	if web, ok := setupPane(panes, "web's"); !ok || web.State != "failed 3" {
 		t.Errorf("the failed setup's pane: %+v, %v; want it open with failed 3; panes %+v", web, ok, panes)
 	}
-	if got, _ := os.ReadFile(called); strings.TrimSpace(string(got)) != "t1 setup done --repo api" {
-		t.Errorf("tracks was called with %q; want only the success reported", got)
+	got, _ := os.ReadFile(called)
+	calls := strings.Split(strings.TrimSpace(string(got)), "\n")
+	slices.Sort(calls)
+	want := []string{"t1 report-exit --kind setup --subject web's --code 3", "t1 setup done --repo api"}
+	if !slices.Equal(calls, want) {
+		t.Errorf("tracks was called with %q; want the success and the failure reported", calls)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "made")); err != nil {
 		t.Error("the setup didn't run in the worktree")

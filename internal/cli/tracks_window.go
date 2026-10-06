@@ -73,6 +73,9 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Derail: func(id string, force bool) ([]string, error) {
 					return derailTrack(cmd.Context(), daemon, rpc.DerailParams{ID: id, Force: force})
 				},
+				DismissFailures: func(id string) error {
+					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.DismissFailures(cmd.Context(), id) })
+				},
 				Unarchive: func(id string) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.Unarchive(cmd.Context(), id) })
 				},

@@ -56,6 +56,10 @@ const (
 	ProxyAdd    = "proxy-add"
 	ProxyRemove = "proxy-remove"
 	ProxyInput  = "proxy-input"
+	// ReportExit is what a setup or dev-server pane reports when its
+	// command ends; DismissFailures clears a track's errors.
+	ReportExit      = "report-exit"
+	DismissFailures = "dismiss-failures"
 )
 
 // Request is one call.
@@ -273,4 +277,18 @@ type ProxyParams struct {
 type ProxyPortParams struct {
 	Port  int              `json:"port"`
 	Input store.ProxyInput `json:"input"`
+}
+
+// ReportExitParams says how track ID's setup of repo Subject, or its
+// dev server repo/server Subject, ended: Kind is "setup" or "server".
+type ReportExitParams struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Subject string `json:"subject"`
+	Code    int    `json:"code"`
+}
+
+// DismissParams names the track whose errors to clear.
+type DismissParams struct {
+	ID string `json:"id"`
 }

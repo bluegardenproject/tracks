@@ -21,19 +21,26 @@ func (m Model) badge(s track.Status) string {
 	return lipgloss.NewStyle().Background(m.palette.Color(bg)).Foreground(m.palette.Color(text)).Render(" " + s.Label + " ")
 }
 
-// statusBadges are t's track status and, when it has PRs, its PR
-// status, as badges with a gap in fill between them.
+// statusBadges are t's track status and, when it has them, its PR
+// status and its errors' status, as badges with a gap in fill between
+// them.
 func (m Model) statusBadges(t source.Track, fill lipgloss.Style) string {
-	if t.PRStatus.Label == "" {
-		return m.badge(t.Status)
+	out := m.badge(t.Status)
+	for _, s := range []track.Status{t.PRStatus, t.FailureStatus} {
+		if s.Label != "" {
+			out += fill.Render(" ") + m.badge(s)
+		}
 	}
-	return m.badge(t.Status) + fill.Render(" ") + m.badge(t.PRStatus)
+	return out
 }
 
 // statusText is statusBadges as plain text, as wide.
 func statusText(t source.Track) string {
-	if t.PRStatus.Label == "" {
-		return " " + t.Status.Label + " "
+	out := " " + t.Status.Label + " "
+	for _, s := range []track.Status{t.PRStatus, t.FailureStatus} {
+		if s.Label != "" {
+			out += "  " + s.Label + " "
+		}
 	}
-	return " " + t.Status.Label + "   " + t.PRStatus.Label + " "
+	return out
 }

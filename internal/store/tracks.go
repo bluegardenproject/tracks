@@ -189,6 +189,9 @@ func (s *Store) tracks(ctx context.Context, where string, args ...any) ([]track.
 	if err := s.addRepos(ctx, out, index); err != nil {
 		return nil, err
 	}
+	if err := s.addErrors(ctx, out, index); err != nil {
+		return nil, err
+	}
 	return out, s.addPRs(ctx, out, index)
 }
 

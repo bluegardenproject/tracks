@@ -192,6 +192,9 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 				return m.press(a.id)
 			}
 		}
+		if key == dismissAction.key && len(t.Failures) > 0 && m.station.asking == nil {
+			return m.press(dismissAction.id)
+		}
 		return m, nil, false
 	}
 	return m.scrollStation(), nil, true

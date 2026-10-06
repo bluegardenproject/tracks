@@ -47,6 +47,8 @@ type Store interface {
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error
+	AddTrackError(ctx context.Context, id string, e track.Failure) error
+	ClearTrackErrors(ctx context.Context, id, kind, subject string) (bool, error)
 	ClaimPorts(ctx context.Context, id string, first, size, blocks int) (int, error)
 	ProxyPorts(ctx context.Context) ([]store.ProxyPort, error)
 	AddProxyPort(ctx context.Context, port int) error
