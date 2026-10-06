@@ -244,3 +244,25 @@ func TestPortFreeSeesLoopbackListeners(t *testing.T) {
 		}
 	}
 }
+
+func TestThePromptKnowsTheDevServers(t *testing.T) {
+	f := newFixture(t)
+	withServers(t, f, "api", []store.DevServer{{Name: "web", Command: "pnpm dev", PortMode: store.PortAssigned}})
+	work(t, f, "web")
+	if f.engine.spec.DevServers {
+		t.Error("a track whose repos have no dev servers was told about them")
+	}
+	work(t, f, "api")
+	if !f.engine.spec.DevServers {
+		t.Error("a track whose repo has dev servers wasn't told about them")
+	}
+
+	ctx := context.Background()
+	plan, err := f.svc.Create(ctx, Request{Kind: track.Plan, Repos: []string{"api"}, Prompt: "Plan it"}, func(string) {})
+	if err != nil || f.engine.spec.DevServers {
+		t.Fatalf("a Plan track, without worktrees: %v, told about dev servers %v", err, f.engine.spec.DevServers)
+	}
+	if _, err := f.svc.Promote(ctx, plan.Track.ID, func(string) {}); err != nil || !f.engine.spec.DevServers {
+		t.Errorf("promoted to Work: %v, told about dev servers %v; want told", err, f.engine.spec.DevServers)
+	}
+}

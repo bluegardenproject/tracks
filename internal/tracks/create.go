@@ -103,6 +103,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	start, err := engine.Command(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
 		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
+		DevServers: s.hasDevServers(ctx, t.Repos),
 	})
 	if err != nil {
 		removeWorktrees()

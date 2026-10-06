@@ -6,13 +6,7 @@ the v2.0.0 release; git history keeps them.
 
 ## Next
 
-- **Proxy and dev servers, one topic of their own.** `tracks up`, `down`,
-  `services` and `url`, a Proxy tab, and the repos' services. v1's proxy UI and
-  UX didn't work, so this is redesigned rather than ported: see
-  [docs/design/proxy.md](design/proxy.md). The dev-server text comes back into
-  the work and review prompts with it.
-- **Worktree setup:** submodules. (Setup commands and copying `.env` files
-  come with the proxy topic.)
+- **Worktree setup:** submodules.
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
   Tracks leaves updates to `brew upgrade`: `tracks update` and the update check
@@ -28,6 +22,15 @@ the v2.0.0 release; git history keeps them.
 - Cursor `create-chat` hangs with an unused `XDG_CONFIG_HOME`.
 - Agents asking questions in plain text instead of their question tool.
 - `NOCASE` folds only A–Z.
+- Proxy and dev servers ([docs/design/proxy.md](design/proxy.md)):
+  - A track window closed outside Tracks leaves its dev servers only tmux's
+    SIGHUP; nothing cleans up servers orphaned by a crash.
+  - Adding a repo with a setup or dev servers to a running track doesn't
+    tell its agent, whose prompt has no Setup or Dev servers paragraph.
+  - A server whose setup failed shows as crashed in `tracks servers` and the
+    Proxy tab.
+  - The Proxy tab doesn't dim a guessed server type yet.
+  - `ui/tracksview/model.go` and `details.go` are over 400 lines.
 
 ## Features
 

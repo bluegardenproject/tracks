@@ -79,6 +79,24 @@ const SetupContract = "" +
 	"they ask. Run `tracks setup` to run a failed setup again only when " +
 	"the user asks."
 
+// DevServersContract is in the prompt of a Work or Review track whose
+// repos have dev servers. Tracks runs them, on ports it picks, behind
+// the user's proxy, so the agent goes through tracks instead of starting
+// one itself; and a server's error may be expected, so the agent leaves
+// what happens next to the user.
+const DevServersContract = "" +
+	"**Dev servers.** Tracks runs this track's dev servers, each in a " +
+	"pane of the track's window, on a port it picks. Start them with " +
+	"`tracks up`, or one with `tracks up <server>`, and stop them with " +
+	"`tracks down [server]`. `tracks servers` lists them with their state " +
+	"and port, `tracks url <server>` prints one's address, and " +
+	"`tracks logs <server>` shows what one printed. Never start a dev " +
+	"server yourself, such as with `pnpm dev`: run `tracks up` instead. " +
+	"If a server doesn't start, crashes or reports an error, tell the " +
+	"user what `tracks up` printed or `tracks logs` shows and wait: don't " +
+	"restart it, change it or work around it unless they ask. The error " +
+	"may be expected while other work is pending."
+
 // LinksContract is in every start prompt, right after the task.
 //
 // It exists because an agent that can't read a linked ticket or page

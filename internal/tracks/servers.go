@@ -211,6 +211,13 @@ func (s *Service) serversOf(ctx context.Context, id string) (track.Track, string
 	return t, window, all, err
 }
 
+// hasDevServers reports whether any of repos has a worktree and dev
+// servers.
+func (s *Service) hasDevServers(ctx context.Context, repos []track.Repo) bool {
+	all, err := s.devServers(ctx, track.Track{Repos: repos})
+	return err == nil && len(all) > 0
+}
+
 // devServers are the dev servers of t's repos that have a worktree.
 func (s *Service) devServers(ctx context.Context, t track.Track) ([]devServer, error) {
 	configs, err := s.repoConfigs(ctx)

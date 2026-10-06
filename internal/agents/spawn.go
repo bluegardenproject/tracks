@@ -27,6 +27,9 @@ type Spec struct {
 	// Setup says the track's repos have a setup for the agent to wait
 	// for.
 	Setup bool
+	// DevServers says the track's repos have dev servers, which the
+	// agent runs through tracks.
+	DevServers bool
 	// SocketDir is where the daemon listens, and BinDir goes first on
 	// the pane's PATH.
 	SocketDir, BinDir string

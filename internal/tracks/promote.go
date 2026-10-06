@@ -96,6 +96,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	start, err := engine.Command(agents.Spec{
 		Track: work, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
 		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, work.Repos),
+		DevServers: s.hasDevServers(ctx, work.Repos),
 	})
 	if err != nil {
 		removeWorktrees()
