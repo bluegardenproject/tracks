@@ -42,6 +42,7 @@ const (
 	actionConfirmArchive
 	actionConfirmDerail
 	actionCancel
+	actionDismissFailures
 )
 
 // action is a details button; its key is underlined at hot.
@@ -191,7 +192,8 @@ func (m Model) details(width int) ([]string, []hit) {
 	if len(t.PRs) > 0 {
 		pr = prList(t.PRs, value, muted)
 	}
-	lines = append(lines, label("Engine")+engine, label("Session")+session, label("PR")+pr, "")
+	lines = append(lines, label("Engine")+engine, label("Session")+session, label("PR")+pr)
+	lines = append(m.failureLines(lines, t, label, width), "")
 
 	buttons := actionsFor(t)
 	if q := m.station.asking; q != nil {
@@ -220,7 +222,7 @@ func (m Model) details(width int) ([]string, []hit) {
 		lines = append(lines, "")
 	}
 	row, hits := m.buttonRows(buttons, t, width, len(lines))
-	return append(lines, row...), hits
+	return m.dismissRow(append(lines, row...), hits, t, width)
 }
 
 // fastTrackHeight is the Fast Track frame's height: 0 when the details'
@@ -374,6 +376,8 @@ func (m Model) act(id actionID) tea.Cmd {
 		return run(func() error { return m.end(t.Number) }, "Ended "+t.Name+".", "Couldn't end "+t.Name, true)
 	case id == actionUnarchive && m.unarchive != nil:
 		return run(func() error { return m.unarchive(t.ID) }, "Unarchived "+t.Name+".", "Couldn't unarchive "+t.Name, true)
+	case id == actionDismissFailures && m.dismissFailures != nil:
+		return run(func() error { return m.dismissFailures(t.ID) }, "Dismissed "+t.Name+"'s errors.", "Couldn't dismiss the errors", true)
 	}
 	return nil
 }

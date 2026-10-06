@@ -252,3 +252,13 @@ func (c Client) SetProxyInput(ctx context.Context, port int, in store.ProxyInput
 	var v tracks.ProxyView
 	return v, c.Call(ctx, ProxyInput, ProxyPortParams{Port: port, Input: in}, &v, nil)
 }
+
+// ReportExit tells the daemon how a setup or dev server ended.
+func (c Client) ReportExit(ctx context.Context, p ReportExitParams) error {
+	return c.Call(ctx, ReportExit, p, nil, nil)
+}
+
+// DismissFailures clears track id's server and setup errors.
+func (c Client) DismissFailures(ctx context.Context, id string) error {
+	return c.Call(ctx, DismissFailures, DismissParams{ID: id}, nil, nil)
+}

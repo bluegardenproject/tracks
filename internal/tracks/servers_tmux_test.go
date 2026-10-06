@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -33,19 +34,31 @@ func TestServerPanes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Service{SocketDir: dir}
+	// A fake tracks on the pane's PATH records how it was called.
+	bin := filepath.Join(dir, "bin")
+	called := filepath.Join(dir, "called")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Its setup --wait fails, as a failed setup would.
+	fake := "#!/bin/sh\necho \"$TRACKS_ID $*\" >> '" + called + "'\n[ \"$1 $2\" = \"setup --wait\" ] && exit 3\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(bin, "tracks"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := &Service{SocketDir: dir, BinDir: bin}
 	win := TmuxWindows{Tmux: c, Session: "tracks"}
-	start := func(name, command string, port int) {
+	start := func(name, command string, port int, setup bool) {
 		t.Helper()
-		d := devServer{repo: track.Repo{Name: "api"}, def: store.DevServer{Name: name, Command: command}}
+		d := devServer{repo: track.Repo{Name: "api"}, def: store.DevServer{Name: name, Command: command}, setup: setup}
 		if err := win.AddDevServer(w.ID, dir, trackwin.Process{Title: name, Command: s.serverCommand("t1", d, port)}, d.key(), port); err != nil {
 			t.Fatal(err)
 		}
 	}
-	start("web", "echo port=$PORT tpl={{port}}; sleep 300 & sleep 300", 20005)
-	start("bad", "exit 4", 0)
+	start("web", "echo port=$PORT tpl={{port}}; sleep 300 & sleep 300", 20005, false)
+	start("bad", "exit 4", 0, false)
+	start("late", "touch never-ran", 0, true)
 
-	var web, bad tmux.Pane
+	var web, bad, late tmux.Pane
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		panes, err := win.Panes(w.ID)
@@ -54,8 +67,11 @@ func TestServerPanes(t *testing.T) {
 		}
 		web, _ = serverPane(panes, "api/web")
 		bad, _ = serverPane(panes, "api/bad")
+		late, _ = serverPane(panes, "api/late")
 		out, _ := win.Capture(web.ID, 50)
-		if bad.State == "exited 4" && strings.Contains(out, "port=20005 tpl=20005") {
+		reported, _ := os.ReadFile(called)
+		if bad.State == "exited 4" && late.State == "exited 3" && strings.Contains(out, "port=20005 tpl=20005") &&
+			strings.Contains(string(reported), "report-exit") {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -65,6 +81,16 @@ func TestServerPanes(t *testing.T) {
 	}
 	if serverState(bad) != ServerCrashed || exitCode(bad.State) != 4 {
 		t.Errorf("bad's state %q; want crashed with 4", bad.State)
+	}
+	got, _ := os.ReadFile(called)
+	if !strings.Contains(string(got), "t1 report-exit --kind server --subject api/bad --code 4") || strings.Contains(string(got), "api/late") {
+		t.Errorf("tracks was called with %q; want bad's crash reported, and nothing for late, whose setup failed", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "never-ran")); err == nil {
+		t.Error("late started although its setup failed")
+	}
+	if out, _ := win.Capture(late.ID, 20); !strings.Contains(out, "late didn't start: the setup didn't finish.") {
+		t.Errorf("late's pane shows %q", out)
 	}
 
 	if err := win.StopPane(web); err != nil {

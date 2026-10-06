@@ -114,6 +114,19 @@ func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
 	return w.notify(w.Store.SetCost(ctx, id, cost))
 }
 
+func (w watched) AddTrackError(ctx context.Context, id string, e track.Failure) error {
+	return w.notify(w.Store.AddTrackError(ctx, id, e))
+}
+
+// ClearTrackErrors tells only when it cleared some.
+func (w watched) ClearTrackErrors(ctx context.Context, id, kind, subject string) (bool, error) {
+	found, err := w.Store.ClearTrackErrors(ctx, id, kind, subject)
+	if found {
+		w.changes.Notify()
+	}
+	return found, err
+}
+
 func (w watched) AddProxyPort(ctx context.Context, port int) error {
 	return w.notify(w.Store.AddProxyPort(ctx, port))
 }

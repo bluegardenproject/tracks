@@ -125,6 +125,26 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.ProxyAdd:    c.proxyAdd,
 		rpc.ProxyRemove: c.proxyRemove,
 		rpc.ProxyInput:  c.proxyInput,
+		rpc.ReportExit: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.ReportExitParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			if err := c.Tracks.ReportExit(ctx, p.ID, p.Kind, p.Subject, p.Code); err != nil {
+				return nil, err
+			}
+			if p.Code != 0 {
+				c.Log.Printf("%s %s of %s exited with code %d", p.Kind, p.Subject, p.ID, p.Code)
+			}
+			return nil, nil
+		},
+		rpc.DismissFailures: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.DismissParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return nil, c.Tracks.DismissFailures(ctx, p.ID)
+		},
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {

@@ -55,7 +55,8 @@ type Track struct {
 	Opinion, ClaimCheck bool   // Doc's optional sections
 	Terminal            bool
 	Repos               []Repo
-	PRs                 []PR // in the order they were found
+	PRs                 []PR      // in the order they were found
+	Failures            []Failure // its server and setup errors, until cleared
 	CreatedAt           time.Time
 	State
 }

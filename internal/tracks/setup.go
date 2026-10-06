@@ -74,6 +74,7 @@ func (s *Service) StartSetup(ctx context.Context, id string, retry bool) ([]Setu
 			continue
 		}
 		r := repoNamed(t.Repos, st.Repo)
+		s.clearFailure(ctx, t.ID, track.SetupError, r.Name)
 		p := trackwin.Process{Title: setupTitle(r.Name), Command: s.setupCommand(t.ID, r.Name, commands[r.Name])}
 		if err := s.Setups.AddSetup(window, r.Worktree, p); err != nil {
 			return states, fmt.Errorf("start the setup of %s: %w", r.Name, err)
@@ -116,6 +117,9 @@ func (s *Service) FinishSetup(ctx context.Context, id, repo string) error {
 	err := s.Store.SetSetupDone(ctx, id, repo, true)
 	if errors.Is(err, store.ErrNotFound) {
 		return Problem(fmt.Sprintf("Track %s has no repo %s.", id, repo))
+	}
+	if err == nil {
+		s.clearFailure(ctx, id, track.SetupError, repo)
 	}
 	return err
 }
@@ -254,6 +258,7 @@ func (s *Service) setupCommand(id, repo, command string) string {
 		"  msg=\"Setup finished, but Tracks couldn't record it.\"\n" +
 		"else\n" +
 		"  msg=\"Setup failed (exit $code).\"\n" +
+		"  tracks report-exit --kind " + track.SetupError + " --subject " + shellx.Quote(repo) + " --code \"$code\" 2>/dev/null\n" +
 		"fi\n" +
 		state(`"`+SetupFailed+` $code"`) +
 		"printf '\\n%s\\n' \"$msg\"\n" +
