@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.1.0](https://github.com/bluegardenproject/tracks/compare/v2.0.1...v2.1.0) (2026-10-06)
+
+
+### Features
+
+* **agents:** the work and review prompts know the dev servers ([6d8d4bd](https://github.com/bluegardenproject/tracks/commit/6d8d4bdc373e896427f180b0f85a65b030688337))
+* **proxy:** the daemon forwards output ports to dev servers ([988d5e9](https://github.com/bluegardenproject/tracks/commit/988d5e990a910a45f7d7d3a67b662c8f3ea354be))
+* **repos:** setup command and dev servers per repo ([8cf6bdf](https://github.com/bluegardenproject/tracks/commit/8cf6bdf146241a375653310153ba7230a0de56cc))
+* **tracks:** find what listens in a track's panes ([d441f5b](https://github.com/bluegardenproject/tracks/commit/d441f5bc9e96291a8d351d958bc1b8092e48055c))
+* **tracks:** run each repo's setup in a pane, and copy .env files ([1cc7c20](https://github.com/bluegardenproject/tracks/commit/1cc7c20a9687e7a8dca835765870c95576e7fa4e))
+* **tracks:** server and setup errors on Station ([8c1b824](https://github.com/bluegardenproject/tracks/commit/8c1b824fa180c6771069a37572cf02671e35ce66))
+* **tracks:** tracks up, down and logs run dev servers in panes ([140a338](https://github.com/bluegardenproject/tracks/commit/140a338b08bb1147f71a5f3c58ff5b44cea7ab51))
+* **tracksview:** the Proxy tab ([0c0cdee](https://github.com/bluegardenproject/tracks/commit/0c0cdee5586e29b70be7084fcbaca0d4312edc01))
+
+
+### Bug Fixes
+
+* **tracks:** stopping a dev server doesn't wait on zombies ([3fc9515](https://github.com/bluegardenproject/tracks/commit/3fc9515437e5f8cbc475179d6254fdc43f4561b9))
+* **trackwin:** a setup that finishes before its pane is labelled isn't an error ([fbadd27](https://github.com/bluegardenproject/tracks/commit/fbadd279e1193b11a25b066eacac3b890e863117))
+
 ## [2.0.1](https://github.com/bluegardenproject/tracks/compare/v2.0.0...v2.0.1) (2026-10-02)
 
 
