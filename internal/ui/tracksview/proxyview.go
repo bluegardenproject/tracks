@@ -58,7 +58,7 @@ func (m Model) proxyView(width, height int) []string {
 		// What shows is the last view that could be read.
 		title += " · couldn't read the proxy: " + m.proxy.err.Error()
 	}
-	framed := m.frame(title, theme.BorderAccent, body, fw, height)
+	framed := m.frame(title, theme.BorderDefault, body, fw, height)
 	margin := strings.Repeat(" ", stationLeft)
 	lines := make([]string, height)
 	for i := range lines {
