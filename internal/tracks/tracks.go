@@ -45,6 +45,7 @@ type Store interface {
 	SetState(ctx context.Context, id string, st track.State) error
 	DeleteTrack(ctx context.Context, id string) error
 	Rename(ctx context.Context, id, name string) error
+	SetTitle(ctx context.Context, id, title string) error
 	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error

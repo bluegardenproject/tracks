@@ -51,8 +51,9 @@ type station struct {
 	selected  int
 	offset    int // first row shown
 	lastClick time.Time
-	hover     int       // the track under the mouse, -1 for none
-	asking    *question // about the selected track, nil for nothing
+	hover     int        // the track under the mouse, -1 for none
+	asking    *question  // about the selected track, nil for nothing
+	rename    *renameBox // open over Station, nil when closed
 	// hoverButton is the details button under the mouse, -1 for none.
 	hoverButton actionID
 	hoverAdd    bool // the mouse is on Add new Track

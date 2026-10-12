@@ -101,6 +101,8 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"RemoveProxyPort", func() error { return w.RemoveProxyPort(ctx, 3000) }, false},
 		{"SetSetupDone", func() error { return w.SetSetupDone(ctx, "a", "api", true) }, false},
 		{"SetCost", func() error { return w.SetCost(ctx, "a", 1.5) }, true},
+		{"SetTitle", func() error { return w.SetTitle(ctx, "a", "Rate bug") }, true},
+		{"SetTitle", func() error { return w.SetTitle(ctx, "gone", "Rate bug") }, false},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "a", track.Repo{Name: "api", Path: "/src/api"}) }, true},
 		{"AddTrackRepo", func() error { return w.AddTrackRepo(ctx, "gone", track.Repo{Name: "api"}) }, false},
 		{"Promote", func() error { return w.Promote(ctx, track.Track{ID: "a", Kind: track.Work, Session: "s2"}) }, true},
