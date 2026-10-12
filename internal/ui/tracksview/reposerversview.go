@@ -27,7 +27,7 @@ func (m Model) formInput(lines []string, hits []formHit, field formField, label,
 	lines = append(lines, m.fg(theme.TextDefault).Render(label))
 	lines = append(lines, m.wrap(theme.TextMuted, desc, width)...)
 	hits = append(hits, formHit{field, len(lines), 0, width})
-	lines = append(lines, widget.Input(m.palette, *f.input(field), m.inputWidth(), bracket))
+	lines = append(lines, widget.Input(m.palette, *f.input(field), max(4, width-2), bracket))
 	return m.formError(lines, key, width), hits
 }
 
@@ -43,48 +43,65 @@ func (m Model) wrap(color theme.Token, text string, width int) []string {
 	return strings.Split(m.fg(color).Width(max(1, width)).Render(text), "\n")
 }
 
-// setupAndServers appends the Setup and Dev servers sections that are
-// shown, then the buttons that add the others.
+// setupAndServers appends the Setup section and each dev server in a
+// frame of its own. Add setup sits in the Setup frame until the setup is
+// added; Add dev server in a frame until the first server is, then below
+// the last one.
 func (m Model) setupAndServers(lines []string, hits []formHit, width int) ([]string, []formHit) {
 	f := m.repos.form
-	heading := func(title string) { lines = append(lines, m.fg(theme.TextDefault).Bold(true).Render(title)) }
-	if f.setupOn {
-		heading("Setup")
-		lines, hits = m.formInput(lines, hits, fieldSetup, "Command", setupDesc, width)
-		lines, hits = m.formButtons(lines, hits, []formButton{{fieldRemoveSetup, "Remove setup", widget.ButtonDefault}})
-		lines = append(lines, "")
-	}
-	if len(f.servers) > 0 {
-		heading("Dev servers")
-		for i := range f.servers {
-			lines, hits = m.serverSection(lines, hits, i, width)
-			lines = append(lines, "")
+	lines, hits = m.section(lines, hits, "Setup", width, func(lines []string, hits []formHit, width int) ([]string, []formHit) {
+		if !f.setupOn {
+			return m.formButtons(lines, hits, []formButton{{fieldAddSetup, "Add setup", widget.ButtonDefault}})
 		}
-		lines, hits = m.formButtons(lines, hits, []formButton{{fieldAddServer, "Add server", widget.ButtonDefault}})
-		lines = append(lines, "")
-	}
-	var add []formButton
-	if !f.setupOn {
-		add = append(add, formButton{fieldAddSetup, "Add setup", widget.ButtonDefault})
-	}
+		lines, hits = m.formInput(lines, hits, fieldSetup, "Command", setupDesc, width)
+		return m.formButtons(append(lines, ""), hits, []formButton{{fieldRemoveSetup, "Remove setup", widget.ButtonDefault}})
+	})
+	lines = append(lines, "")
+	add := []formButton{{fieldAddServer, "Add dev server", widget.ButtonDefault}}
 	if len(f.servers) == 0 {
-		add = append(add, formButton{fieldAddServer, "Add servers", widget.ButtonDefault})
+		lines, hits = m.section(lines, hits, "Dev servers", width, func(lines []string, hits []formHit, _ int) ([]string, []formHit) {
+			return m.formButtons(lines, hits, add)
+		})
+		return append(lines, ""), hits
 	}
-	if len(add) > 0 {
-		lines, hits = m.formButtons(lines, hits, add)
+	for i := range f.servers {
+		lines, hits = m.section(lines, hits, m.serverTitle(i), width, func(lines []string, hits []formHit, width int) ([]string, []formHit) {
+			return m.serverSection(lines, hits, i, width)
+		})
 		lines = append(lines, "")
 	}
-	return lines, hits
+	lines, hits = m.formButtons(lines, hits, add)
+	return append(lines, ""), hits
+}
+
+// section frames what fill appends, width cells wide with title in the
+// border; fill gets the width inside. Its hits move with it.
+func (m Model) section(lines []string, hits []formHit, title string, width int,
+	fill func([]string, []formHit, int) ([]string, []formHit)) ([]string, []formHit) {
+	body, inner := fill(nil, nil, width-sectionInset)
+	top := len(lines) + 1
+	for _, h := range inner {
+		h.row += top
+		h.col += sectionInset / 2
+		hits = append(hits, h)
+	}
+	return append(lines, m.frame(title, theme.BorderDefault, body, width, len(body)+2)...), hits
+}
+
+// sectionInset is how much narrower a section's frame makes what's in it.
+const sectionInset = 4
+
+func (m Model) serverTitle(i int) string {
+	title := fmt.Sprintf("Dev server %d", i+1)
+	if name := m.repos.form.servers[i].value(serverName); name != "" {
+		title += " · " + name
+	}
+	return title
 }
 
 // serverSection appends dev server i's fields and its Remove button.
 func (m Model) serverSection(lines []string, hits []formHit, i, width int) ([]string, []formHit) {
 	s := m.repos.form.servers[i]
-	title := fmt.Sprintf("Server %d", i+1)
-	if name := s.value(serverName); name != "" {
-		title += " · " + name
-	}
-	lines = append(lines, m.fg(theme.TextMuted).Render(cut(title, width)))
 	for _, k := range s.fields() {
 		field := serverField(i, k)
 		switch k {

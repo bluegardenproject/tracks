@@ -38,16 +38,18 @@ the user starts by hand on default ports.
 ## Repo settings
 
 The repo form keeps Name, Path, Base branch and Draft PRs. Below them are two
-buttons, **Add setup** and **Add servers**. A repo that needs neither never sees
-more. Clicking one opens that section's inputs. Removing a section's last entry
-collapses it back to its button.
+framed sections, Setup and Dev servers, each holding only its button, **Add
+setup** and **Add dev server**. A repo that needs neither never sees more.
+Clicking one opens that section's inputs in its frame. Removing a section's
+last entry collapses it back to its button.
 
 The sections use the form's existing fields and buttons: a labelled input with
-a hint under it, as Name, Path and Base branch have. Each dev server is a group
-of those fields with a **Remove server** button. **Add server** sits under the
-last group, the way **Add new proxy port** does on the Proxy tab. Port mode is a
-choice that cycles like Draft PRs' toggle; the number input shows only for
-fixed. The look gets revisited once it's in use.
+a hint under it, as Name, Path and Base branch have. Each dev server is a frame
+of its own, titled with its number and name, holding those fields and a
+**Remove server** button. Once a server exists, **Add dev server** sits under the
+last frame after a blank line, the way **Add new proxy port** does on the Proxy
+tab. Port mode is a choice that cycles like Draft PRs' toggle; the number input
+shows only for fixed. The look gets revisited once it's in use.
 
 ### Setup
 

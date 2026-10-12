@@ -14,10 +14,10 @@ func TestSetupAndServersStartAsButtons(t *testing.T) {
 	m := reposTab(t, &fakeRepos{})
 	m = settle(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
 	view := plainView(m)
-	if !strings.Contains(view, " Add setup ") || !strings.Contains(view, " Add servers ") {
-		t.Fatal("a new repo should offer Add setup and Add servers")
+	if !strings.Contains(view, " Add setup ") || !strings.Contains(view, " Add dev server ") {
+		t.Fatal("a new repo should offer Add setup and Add dev server")
 	}
-	if strings.Contains(view, "Dev servers") || strings.Contains(view, "Remove setup") {
+	if strings.Contains(view, "Dev server 1") || strings.Contains(view, "Remove setup") {
 		t.Error("the sections should stay hidden until added")
 	}
 }
@@ -34,8 +34,8 @@ func TestAddingSetupAndServers(t *testing.T) {
 	}
 	m = typeText(m, "pnpm install")
 
-	m = press(t, m, "Add servers")
-	if m.repos.form.focus != serverField(0, serverName) || strings.Contains(plainView(m), " Add servers ") {
+	m = press(t, m, "Add dev server")
+	if m.repos.form.focus != serverField(0, serverName) || strings.Contains(plainView(m), " Add dev server ") {
 		t.Fatalf("Add servers: focus %d; want the first server's name", m.repos.form.focus)
 	}
 	m = typeText(m, "web")
@@ -81,7 +81,7 @@ func TestRemovingTheSetupBringsTheButtonBack(t *testing.T) {
 	m := reposTab(t, f)
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyDown})
 	view := plainView(m)
-	if !strings.Contains(view, "Remove setup") || !strings.Contains(view, "Server 1 · web") || strings.Contains(view, " Add setup ") {
+	if !strings.Contains(view, "Remove setup") || !strings.Contains(view, "Dev server 1 · web") || strings.Contains(view, " Add setup ") {
 		t.Fatal("a repo with a setup and a server should show both sections")
 	}
 	if strings.Contains(view, " Save ") {
@@ -123,10 +123,10 @@ func TestTheFormScrollsToTheFocus(t *testing.T) {
 	for m.repos.form.focus != fieldAddServer {
 		m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	}
-	if m.repos.formOffset == 0 || !strings.Contains(plainView(m), " Add server ") {
+	if m.repos.formOffset == 0 || !strings.Contains(plainView(m), " Add dev server ") {
 		t.Errorf("offset %d; the form should scroll to Add server", m.repos.formOffset)
 	}
-	m = press(t, m, "Add server")
+	m = press(t, m, "Add dev server")
 	if m.repos.form.focus != serverField(4, serverName) {
 		t.Errorf("clicking the scrolled Add server: focus %d", m.repos.form.focus)
 	}
