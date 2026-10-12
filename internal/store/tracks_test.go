@@ -126,17 +126,17 @@ func TestStateAndName(t *testing.T) {
 	if err := s.SetState(ctx, "d", track.State{Waiting: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2"), s.SetCost(ctx, "b", 3.45)); err != nil {
+	if err := errors.Join(s.SetState(ctx, "b", track.State{}), s.Rename(ctx, "b", "b-2"), s.SetTitle(ctx, "b", "Rate bug"), s.SetCost(ctx, "b", 3.45)); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" || b.Cost != 3.45 {
-		t.Errorf("reopened b = %+v; want open, not cleaned, named b-2, $3.45", b)
+	if b, _ := s.Track(ctx, "b"); !b.Open() || b.Cleaned() || b.Name != "b-2" || b.Title != "Rate bug" || b.Cost != 3.45 {
+		t.Errorf("reopened b = %+v; want open, not cleaned, named b-2, titled Rate bug, $3.45", b)
 	}
 	if open, _ := s.OpenTracks(ctx); len(open) != 2 || open[0].ID != "b" || open[1].ID != "d" {
 		t.Errorf("OpenTracks after reopening b = %+v", open)
 	}
 	for name, err := range map[string]error{
-		"rename": s.Rename(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
+		"rename": s.Rename(ctx, "nope", "x"), "set the title of": s.SetTitle(ctx, "nope", "x"), "set the state of": s.SetState(ctx, "nope", track.State{}),
 		"set the cost of": s.SetCost(ctx, "nope", 1), "add a repo to": s.AddTrackRepo(ctx, "nope", track.Repo{Name: "web"}),
 		"promote": s.Promote(ctx, track.Track{ID: "nope", Kind: track.Work}),
 	} {

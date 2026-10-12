@@ -264,6 +264,11 @@ func (c Client) ReportExit(ctx context.Context, p ReportExitParams) error {
 	return c.Call(ctx, ReportExit, p, nil, nil)
 }
 
+// SetTitle renames track id to title.
+func (c Client) SetTitle(ctx context.Context, id, title string) error {
+	return c.Call(ctx, SetTitle, SetTitleParams{ID: id, Title: title}, nil, nil)
+}
+
 // DismissFailures clears track id's server and setup errors.
 func (c Client) DismissFailures(ctx context.Context, id string) error {
 	return c.Call(ctx, DismissFailures, DismissParams{ID: id}, nil, nil)

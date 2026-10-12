@@ -60,6 +60,8 @@ const (
 	// command ends; DismissFailures clears a track's errors.
 	ReportExit      = "report-exit"
 	DismissFailures = "dismiss-failures"
+	// SetTitle renames a track: the name it's shown under.
+	SetTitle = "set-title"
 )
 
 // Request is one call.
@@ -286,6 +288,13 @@ type ReportExitParams struct {
 	Kind    string `json:"kind"`
 	Subject string `json:"subject"`
 	Code    int    `json:"code"`
+}
+
+// SetTitleParams names the track to rename and its new name; "" shows
+// its slug again.
+type SetTitleParams struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // DismissParams names the track whose errors to clear.

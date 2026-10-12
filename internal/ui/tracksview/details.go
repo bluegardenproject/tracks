@@ -43,6 +43,7 @@ const (
 	actionConfirmDerail
 	actionCancel
 	actionDismissFailures
+	actionRename
 )
 
 // action is a details button; its key is underlined at hot.
@@ -59,6 +60,7 @@ var (
 	openActions = []action{
 		{actionOpen, "Open", "o", 0},
 		{actionEnd, "End", "e", 0},
+		{actionRename, "Rename", "n", 2},
 		{actionCopyPath, "Copy path", "c", 0},
 		{actionCopySession, "Copy session", "s", 5},
 	}
@@ -280,6 +282,8 @@ func (m Model) enabled(id actionID, t source.Track) bool {
 		return !t.Open() && !t.Archived
 	case actionDerail:
 		return !t.Open()
+	case actionRename:
+		return m.setTitle != nil
 	case actionPromote:
 		return len(t.Repos) > 0
 	}
@@ -319,6 +323,9 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	case actionCancel:
 		m.station.asking = nil
 		return m, nil, true
+	case actionRename:
+		next, cmd := m.startRename(t)
+		return next, cmd, true
 	case actionResume:
 		next, cmd := m.startResume(t.ID, t.Name, false)
 		return next, cmd, true

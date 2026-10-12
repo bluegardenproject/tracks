@@ -49,6 +49,9 @@ type Config struct {
 	Restart func(id string, progress func(string)) error
 	// DismissFailures clears a track's server and setup errors.
 	DismissFailures func(id string) error
+	// SetTitle renames a track: the name it's shown under, "" for its
+	// slug.
+	SetTitle func(id, title string) error
 	// Unarchive puts an archived track back in Station; SetFilter puts
 	// Station under a filter, the zero Filter clearing it.
 	Unarchive func(id string) error
@@ -97,6 +100,7 @@ type Model struct {
 	lostFn          func(id string) ([]string, error)
 	unarchive       func(id string) error
 	dismissFailures func(id string) error
+	setTitle        func(id, title string) error
 	setFilter       func(track.Filter) error
 	newTrack        func() error
 	startDraft      func(id string) error
@@ -133,7 +137,7 @@ type Model struct {
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
 		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
-		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, dismissFailures: c.DismissFailures, setFilter: c.SetFilter,
+		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, dismissFailures: c.DismissFailures, setTitle: c.SetTitle, setFilter: c.SetFilter,
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
@@ -230,6 +234,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.typesSaved(msg)
 	case themecreator.SaveMsg, themecreator.CreateMsg, themecreator.SavedMsg, themecreator.DoneMsg, themecreator.StayMsg, themecreator.LoadMsg:
 		return m.creatorMsg(msg)
+	}
+	if m.station.rename != nil {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseMsg:
+			return m.renameMsg(msg)
+		}
 	}
 	if m.picker != nil {
 		switch msg := msg.(type) {
@@ -461,7 +471,7 @@ func (m Model) switchTab(i int) (Model, tea.Cmd) {
 
 // View renders the window full screen.
 func (m Model) View() tea.View {
-	v := tea.NewView(m.withPicker(m.render()))
+	v := tea.NewView(m.withRename(m.withPicker(m.render())))
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	v.WindowTitle = "Tracks"

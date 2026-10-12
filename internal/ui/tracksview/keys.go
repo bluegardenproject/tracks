@@ -76,7 +76,7 @@ type keyGroup struct {
 func keyGroups() []keyGroup {
 	station := append([]keyHelp{}, stationKeys...)
 	station = append(station, keyHelp{"Enter", "resume an ended track"})
-	for _, a := range slices.Concat(openActions, endedActions[:4], archivedActions[:1]) {
+	for _, a := range slices.Concat(openActions, endedActions[:3], archivedActions[:1]) {
 		station = append(station, keyHelp{a.key, strings.ToLower(a.label[:1]) + a.label[1:]})
 	}
 	station = append(station, keyHelp{"x", "clear the filter"})
@@ -94,6 +94,7 @@ func keyGroups() []keyGroup {
 		{"Quick Access", fromWidget(quickaccess.Keys)},
 		{"New track", fromWidget(addtrack.Keys)},
 		{"Tracks filter", fromWidget(tracksfilter.Keys)},
+		{"Rename track", renameKeys},
 	}
 }
 

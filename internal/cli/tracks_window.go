@@ -76,6 +76,9 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				DismissFailures: func(id string) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.DismissFailures(cmd.Context(), id) })
 				},
+				SetTitle: func(id, title string) error {
+					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.SetTitle(cmd.Context(), id, title) })
+				},
 				Unarchive: func(id string) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.Unarchive(cmd.Context(), id) })
 				},

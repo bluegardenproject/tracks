@@ -145,6 +145,13 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.DismissFailures(ctx, p.ID)
 		},
+		rpc.SetTitle: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.SetTitleParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			return nil, c.Tracks.SetTitle(ctx, p.ID, p.Title)
+		},
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {

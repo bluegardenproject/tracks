@@ -84,6 +84,12 @@ func (s *Store) Rename(ctx context.Context, id, name string) error {
 	return s.updateTrack(ctx, id, "UPDATE tracks SET name = ? WHERE id = ?", name, id)
 }
 
+// SetTitle records title as id's name as the user typed it; "" shows
+// the slug.
+func (s *Store) SetTitle(ctx context.Context, id, title string) error {
+	return s.updateTrack(ctx, id, "UPDATE tracks SET title = ? WHERE id = ?", title, id)
+}
+
 // SetCost records what id has cost so far.
 func (s *Store) SetCost(ctx context.Context, id string, cost float64) error {
 	return s.updateTrack(ctx, id, "UPDATE tracks SET cost = ? WHERE id = ?", cost, id)

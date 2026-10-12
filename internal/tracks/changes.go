@@ -110,6 +110,10 @@ func (w watched) Rename(ctx context.Context, id, name string) error {
 	return w.notify(w.Store.Rename(ctx, id, name))
 }
 
+func (w watched) SetTitle(ctx context.Context, id, title string) error {
+	return w.notify(w.Store.SetTitle(ctx, id, title))
+}
+
 func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
 	return w.notify(w.Store.SetCost(ctx, id, cost))
 }
