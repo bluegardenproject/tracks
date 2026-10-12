@@ -507,7 +507,7 @@ func TestCreateKinds(t *testing.T) {
 	}
 
 	got, err = f.svc.Create(context.Background(), Request{
-		Kind: track.Review, Repos: []string{"api"}, ReviewRef: " https://github.com/acme/api/pull/7 ", Prompt: "Review", Candor: 1,
+		Kind: track.Review, Repos: []string{"api"}, ReviewRef: " https://github.com/acme/api/pull/7 ", Candor: 1,
 	}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
@@ -532,6 +532,10 @@ func TestWindowNames(t *testing.T) {
 	release()
 	if third, _, _ := f.svc.claimName(tr); third != "fix-login-2" {
 		t.Errorf("after release = %q; want the -2 again", third)
+	}
+	review := track.Track{ID: tr.ID, Kind: track.Review, ReviewRef: "https://github.com/acme/api/pull/7", Prompt: "Check the cache"}
+	if name, _, _ := f.svc.claimName(review); name != "review-pr-7" {
+		t.Errorf("review = %q; want it named after the PR", name)
 	}
 }
 

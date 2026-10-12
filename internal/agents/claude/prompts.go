@@ -106,6 +106,32 @@ const taskSuffix = "" +
 	"surprising (a workaround, an ordering constraint, a subtle edge " +
 	"case)."
 
+// reviewTemplate is a review track's task. The user's prompt, which
+// is optional, follows it.
+const reviewTemplate = `Run a code review of the checked-out PR / branch against its base.
+
+The worktree is already on the target you picked (detached at the PR
+head or branch tip), so "the current branch against its base" is the
+diff you want to review.
+
+Invoke the dedicated review subagent rather than reviewing yourself:
+
+  Task({
+    subagent_type: "tracks-reviewer",
+    prompt: "Review the current branch against its base and report findings."
+  })
+
+The subagent is auto-discovered from the user's global Claude config —
+no setup needed inside the worktree. It's read-only by design and ends
+its report with one of ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
+
+Present the subagent's findings verbatim and wait for follow-up.
+
+This is a **read-only audit**:
+- Do NOT push, commit, or open a PR.
+- Do NOT change any Jira ticket status or assignee (skip the
+  Jira-sync workflow described in the global tracks suffix).`
+
 // docReviewTemplate is appended for KindDoc tracks. It owns the two
 // invariants of a doc review that must survive the user editing the
 // task prompt: the write contract (exactly one file may be written,

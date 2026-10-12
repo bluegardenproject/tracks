@@ -122,6 +122,23 @@ func docReviewBrief(t track.Track) string {
 	return b.String()
 }
 
+// reviewTemplate is a review track's task, the Cursor counterpart to
+// claude.reviewTemplate: the reviewer runs through `tracks review`, as
+// taskSuffix explains. The user's prompt, which is optional, follows it.
+const reviewTemplate = "" +
+	"Run a code review of the checked-out PR / branch against its base.\n\n" +
+	"The worktree is already on the target you picked (detached at the " +
+	"PR head or branch tip), so \"the current branch against its base\" " +
+	"is the diff you want to review.\n\n" +
+	"Run `tracks review` rather than reviewing it yourself. It ends its " +
+	"report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If " +
+	"`tracks review` itself fails, say so plainly and review the diff " +
+	"yourself, ending with the same `REVIEW OUTCOME:` line.\n\n" +
+	"Present the findings verbatim and wait for follow-up.\n\n" +
+	"This is a **read-only audit**:\n" +
+	"- Do NOT push, commit, or open a PR.\n" +
+	"- Do NOT change any Jira ticket status or assignee."
+
 // reviewCandorSuffix carries the candor level onto a code-review track.
 //
 // Claude's equivalent tells the model to pass the level to the review

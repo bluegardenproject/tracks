@@ -129,3 +129,14 @@ func DraftPRSuffix(draftRepos []string, totalRepos int) string {
 		"as a **draft** (`gh pr create --draft`) unless the user asks " +
 		"otherwise: " + strings.Join(draftRepos, ", ") + "."
 }
+
+// ReviewTask is a review track's task: the engine's review
+// instructions, then the user's prompt when they wrote one.
+func ReviewTask(instructions, prompt string) string {
+	if p := strings.TrimSpace(prompt); p != "" {
+		return instructions + "\n\n**From the user, for this review.** Pass it " +
+			"on to the reviewer with its prompt where you can, and keep it " +
+			"in mind when you present the findings:\n\n" + p
+	}
+	return instructions
+}

@@ -98,6 +98,9 @@ func TestCreateChecksTheFieldsAsV1(t *testing.T) {
 	if m.errs[ctlTarget] == "" || m.errs[ctlRepo] != "" || m.errs[ctlPrompt] != "" {
 		t.Errorf("Review: problems %v, want the PR or branch only", m.errs)
 	}
+	if m.prompt.Value() != "" || title(Review, ctlPrompt) != "Prompt (optional)" {
+		t.Errorf("Review starts with prompt %q under %q, want it empty and optional", m.prompt.Value(), title(Review, ctlPrompt))
+	}
 
 	m = form()
 	m = m.setFocus(ctlType)
