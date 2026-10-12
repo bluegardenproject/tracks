@@ -58,7 +58,7 @@ type repoForm struct {
 	setupOn  bool // the Setup section is shown
 	setup    textinput.Model
 	servers  []serverForm
-	width    int // of the inputs, for ones added later
+	width    int // of the inputs in sections, for ones added later
 	focus    formField
 	errs     map[string]string
 	// suggested is the path last suggested for, so leaving the path
@@ -118,21 +118,15 @@ func (f repoForm) order() []formField {
 	order := []formField{fieldName, fieldPath, fieldBase, fieldDrafts}
 	if f.setupOn {
 		order = append(order, fieldSetup, fieldRemoveSetup)
+	} else {
+		order = append(order, fieldAddSetup)
 	}
 	for i, s := range f.servers {
 		for _, k := range s.fields() {
 			order = append(order, serverField(i, k))
 		}
 	}
-	if len(f.servers) > 0 {
-		order = append(order, fieldAddServer)
-	}
-	if !f.setupOn {
-		order = append(order, fieldAddSetup)
-	}
-	if len(f.servers) == 0 {
-		order = append(order, fieldAddServer)
-	}
+	order = append(order, fieldAddServer)
 	if f.dirty() {
 		order = append(order, fieldSave)
 	}
@@ -223,9 +217,19 @@ func (f *repoForm) move(delta int) tea.Cmd {
 	return f.setFocus(order[(i+delta+len(order))%len(order)])
 }
 
+// setWidth sizes the inputs to width, the ones in a section's frame to
+// what's left inside it.
 func (f *repoForm) setWidth(width int) {
-	f.width = max(1, width-1)
-	f.eachInput(func(in *textinput.Model) { in.SetWidth(f.width) })
+	for i := range f.inputs {
+		f.inputs[i].SetWidth(max(1, width-1))
+	}
+	f.width = max(1, width-1-sectionInset)
+	f.setup.SetWidth(f.width)
+	for i := range f.servers {
+		for k := range f.servers[i].inputs {
+			f.servers[i].inputs[k].SetWidth(f.width)
+		}
+	}
 }
 
 // fieldError shows err next to its field, or returns false for errors

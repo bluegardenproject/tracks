@@ -83,7 +83,7 @@ func settle(m Model, msgs ...tea.Msg) Model {
 func reposTab(t *testing.T, f *fakeRepos) Model {
 	t.Helper()
 	m := New(Config{Version: "test", Theme: theme.Default(), Repos: f})
-	return settle(m, tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab})
+	return settle(m, tea.WindowSizeMsg{Width: 120, Height: 46}, tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab})
 }
 
 func typeText(m Model, s string) Model {
@@ -150,7 +150,7 @@ func TestFieldErrorsStayInTheForm(t *testing.T) {
 	if m.repos.form.focus != fieldBase || !strings.Contains(plainView(m), "Use an absolute path.") {
 		t.Error("a bad path should explain itself under the field")
 	}
-	for range 4 { // past Options, Add setup and Add servers
+	for range 4 { // past Options, Add setup and Add dev server
 		m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	}
 	if m.repos.form.focus != fieldSave {
