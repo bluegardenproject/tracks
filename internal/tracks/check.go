@@ -46,7 +46,7 @@ func (s *Service) check(ctx context.Context, req Request) (track.Track, []string
 	if !t.Kind.Valid() {
 		return t, nil, Problem(fmt.Sprintf("There's no track type %q.", req.Kind))
 	}
-	if strings.TrimSpace(req.Prompt) == "" {
+	if t.Kind != track.Review && strings.TrimSpace(req.Prompt) == "" {
 		return t, nil, Problem("Enter a prompt.")
 	}
 

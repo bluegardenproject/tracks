@@ -22,6 +22,7 @@ type spawnCase struct {
 	auto      bool
 	model     string
 	noSession bool
+	noPrompt  bool
 	setup     bool
 	servers   bool
 }
@@ -35,6 +36,7 @@ var spawnCases = []spawnCase{
 	{name: "work with setup and dev servers", kind: track.Work, repos: 1, auto: true, setup: true, servers: true},
 	{name: "review with dev servers", kind: track.Review, repos: 1, auto: true, servers: true},
 	{name: "review", kind: track.Review, repos: 1, auto: true},
+	{name: "review without prompt", kind: track.Review, repos: 1, auto: true, noPrompt: true},
 	{name: "review blunt", kind: track.Review, repos: 2, candor: 1, auto: true},
 	{name: "ask", kind: track.Ask, repos: 1, auto: true},
 	{name: "ask alone", kind: track.Ask, auto: true},
@@ -62,6 +64,9 @@ func (c spawnCase) track(t *testing.T) track.Track {
 	}
 	if c.noSession {
 		tr.Session = ""
+	}
+	if c.noPrompt {
+		tr.Prompt = ""
 	}
 	for i := range c.repos {
 		name := []string{"api", "web"}[i]

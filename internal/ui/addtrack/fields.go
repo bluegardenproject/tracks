@@ -34,8 +34,11 @@ func title(k Kind, c control) string {
 	case ctlCandor:
 		return "Candor"
 	case ctlPrompt:
-		if k == Ask {
+		switch k {
+		case Ask:
 			return "Question"
+		case Review:
+			return "Prompt (optional)"
 		}
 		return "Prompt"
 	case ctlEngine, ctlModel:
@@ -62,7 +65,10 @@ func about(k Kind, c control) string {
 	case ctlDocument:
 		return "A file the agent can read (.md, .pdf, images, .csv, source) or a folder of them. ~ works."
 	case ctlName:
-		if k == Doc {
+		switch k {
+		case Review:
+			return "Shown in Tracks and on the track's tab. Empty uses the PR or branch."
+		case Doc:
 			return "Shown in Tracks and on the track's tab. Empty uses the document's file name."
 		}
 		return "Shown in Tracks and on the track's tab. Empty derives one from the prompt."
@@ -76,6 +82,8 @@ func about(k Kind, c control) string {
 			return "What should the agent do? Mention a ticket (ABC-123) and it's used in the branch name."
 		case Ask:
 			return "Sent to the agent as it is, without extra framing."
+		case Review:
+			return "Added to the review's instructions: a focus, a known problem, context the diff lacks."
 		}
 		return "Prefilled: sharpen it or leave it as it is."
 	case ctlEngine:
@@ -126,7 +134,7 @@ func (m Model) problems() map[control]string {
 			out[ctlDocument] = problem
 		}
 	}
-	if strings.TrimSpace(m.prompt.Value()) == "" {
+	if k != Review && strings.TrimSpace(m.prompt.Value()) == "" {
 		out[ctlPrompt] = "Enter a prompt."
 		if k == Ask {
 			out[ctlPrompt] = "Enter a question."

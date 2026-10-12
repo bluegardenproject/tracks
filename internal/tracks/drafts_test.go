@@ -58,6 +58,17 @@ func TestDrafts(t *testing.T) {
 	}
 }
 
+func TestReviewDraftTitle(t *testing.T) {
+	f := newFixture(t)
+	req := Request{Kind: track.Review, Repos: []string{"nope"}, ReviewRef: "https://github.com/acme/api/pull/7"}
+	if _, err := f.svc.Create(context.Background(), req, func(string) {}); err == nil {
+		t.Fatal("creating from a repo that doesn't exist should fail")
+	}
+	if drafts := stationDrafts(t, f); len(drafts) != 1 || drafts[0].Title != "Review pr/7" {
+		t.Errorf("drafts %+v; want the one, named after the PR", drafts)
+	}
+}
+
 func TestDraftsUnderAFilter(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)

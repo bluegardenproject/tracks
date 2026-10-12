@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -103,9 +104,9 @@ func draftsPicked(f track.Filter) bool {
 }
 
 // draftListed is how Station shows draft d of req: under the name
-// typed, or else the prompt's first line.
+// typed, else a review's PR or branch, else the prompt's first line.
 func draftListed(d store.Draft, req Request) Listed {
-	title := req.Name
+	title := cmp.Or(req.Name, reviewLabel(req.ReviewRef))
 	if title == "" {
 		title, _, _ = strings.Cut(strings.TrimSpace(req.Prompt), "\n")
 	}

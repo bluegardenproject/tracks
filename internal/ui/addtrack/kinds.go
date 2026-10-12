@@ -68,31 +68,8 @@ the track can be promoted to a worktree.
 		fields: []control{ctlRepos, ctlName, ctlPrompt},
 	},
 	Review: {
-		label: "Review",
-		about: "Checks out a PR/branch detached so the reviewer agent can diff it.",
-		prompt: `Run a code review of the checked-out PR / branch against its base.
-
-The worktree is already on the target you picked (detached at the PR
-head or branch tip), so "the current branch against its base" is the
-diff you want to review.
-
-Invoke the dedicated review subagent rather than reviewing yourself:
-
-  Task({
-    subagent_type: "tracks-reviewer",
-    prompt: "Review the current branch against its base and report findings."
-  })
-
-The subagent is auto-discovered from the user's global Claude config —
-no setup needed inside the worktree. It's read-only by design and ends
-its report with one of ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
-
-Present the subagent's findings verbatim and wait for follow-up.
-
-This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
-- Do NOT change any Jira ticket status or assignee (skip the
-  Jira-sync workflow described in the global tracks suffix).`,
+		label:  "Review",
+		about:  "Checks out a PR/branch detached so the reviewer agent can diff it.",
 		fields: []control{ctlRepo, ctlTarget, ctlName, ctlCandor, ctlPrompt},
 	},
 	Doc: {

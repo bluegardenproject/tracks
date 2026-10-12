@@ -4,6 +4,7 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -247,7 +248,7 @@ func (s *Service) claimName(t track.Track) (name string, release func(), err err
 	if s.claimed == nil {
 		s.claimed = map[string]bool{}
 	}
-	label := track.WindowLabel(t.Name, t.Document, t.Prompt)
+	label := track.WindowLabel(t.Name, t.Document, cmp.Or(reviewLabel(t.ReviewRef), t.Prompt))
 	name = track.WindowName(label, t.ID, func(n string) bool { return names[n] || s.claimed[n] })
 	s.claimed[name] = true
 	return name, func() {
@@ -255,6 +256,16 @@ func (s *Service) claimName(t track.Track) (name string, release func(), err err
 		defer s.mu.Unlock()
 		delete(s.claimed, name)
 	}, nil
+}
+
+// reviewLabel is what a review track is named after when it has no
+// name: the PR or branch ref points at, "" when ref doesn't parse.
+func reviewLabel(ref string) string {
+	r, err := workspace.ParseReview(ref)
+	if err != nil {
+		return ""
+	}
+	return "Review " + r.Label
 }
 
 // TmuxWindows are the track windows of a tmux session.
