@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/bluegardenproject/tracks/compare/v2.2.0...v2.2.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **agents:** ask which dev servers to start when a track has several ([8fb8382](https://github.com/bluegardenproject/tracks/commit/8fb838231c47dca8252e39edb6e99d810698c4ab))
+
 ## [2.2.0](https://github.com/bluegardenproject/tracks/compare/v2.1.1...v2.2.0) (2026-10-13)
 
 
