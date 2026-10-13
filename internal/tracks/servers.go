@@ -66,12 +66,12 @@ type devServer struct {
 
 func (d devServer) key() string { return d.repo.Name + "/" + d.def.Name }
 
-// Up starts track id's dev server name, or all of them for "", each in
-// a pane once its repo's setup is done. Running ones are left alone;
+// Up starts track id's dev servers named in names, or all of them for none, each
+// in a pane once its repo's setup is done. Running ones are left alone;
 // one that exited starts again. It returns every server's state; one
 // that can't start, such as for its port, has a Problem and the others
 // still start.
-func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
+func (s *Service) Up(ctx context.Context, id string, names ...string) ([]Server, error) {
 	// Read before the lock: what Up starts is starting either way.
 	snap := s.snapshot(ctx)
 	s.serverMu.Lock()
@@ -80,7 +80,7 @@ func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	targets, err := pick(all, name)
+	targets, err := pickAll(all, names)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +135,9 @@ func (s *Service) Up(ctx context.Context, id, name string) ([]Server, error) {
 	return states, err
 }
 
-// Down stops track id's dev server name, or all of them for "", and
-// closes their panes.
-func (s *Service) Down(ctx context.Context, id, name string) ([]Server, error) {
+// Down stops track id's dev servers named in names, or all of them for none,
+// and closes their panes.
+func (s *Service) Down(ctx context.Context, id string, names ...string) ([]Server, error) {
 	snap := s.snapshot(ctx)
 	s.serverMu.Lock()
 	defer s.serverMu.Unlock()
@@ -145,7 +145,7 @@ func (s *Service) Down(ctx context.Context, id, name string) ([]Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	targets, err := pick(all, name)
+	targets, err := pickAll(all, names)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +235,34 @@ func (s *Service) devServers(ctx context.Context, t track.Track) ([]devServer, e
 		}
 	}
 	return all, nil
+}
+
+// pickAll is the servers names mean: all for none, else each one pick
+// finds, once, in all's order.
+func pickAll(all []devServer, names []string) ([]devServer, error) {
+	if len(names) == 0 {
+		return pick(all, "")
+	}
+	chosen := map[string]bool{}
+	for _, name := range names {
+		if name == "" {
+			return nil, Problem("A server's name can't be empty.")
+		}
+		found, err := pick(all, name)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range found {
+			chosen[d.key()] = true
+		}
+	}
+	var out []devServer
+	for _, d := range all {
+		if chosen[d.key()] {
+			out = append(out, d)
+		}
+	}
+	return out, nil
 }
 
 // pick is the servers name means: all for "", else the one called name

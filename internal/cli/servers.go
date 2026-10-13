@@ -30,18 +30,17 @@ func trackClient(command string) (rpc.Client, string, error) {
 
 func newUpCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "up [server]",
-		Short: "start this track's dev servers, or one of them",
+		Use:   "up [server...]",
+		Short: "start this track's dev servers, or some of them",
 		Long: "Starts each dev server of the track's repos, from the Repositories tab, in a pane of the track's " +
-			"window, once its repo's setup is done. Name a server, or repo/server, to start only it. " +
+			"window, once its repo's setup is done. Name servers, or repo/server, to start only them. " +
 			"Run inside a track: the track is $TRACKS_ID.",
-		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			client, id, err := trackClient("up")
 			if err != nil {
 				return err
 			}
-			servers, err := client.Up(c.Context(), rpc.ServersParams{ID: id, Server: firstArg(args)})
+			servers, err := client.Up(c.Context(), rpc.ServersOf(id, args))
 			if err != nil {
 				return err
 			}
@@ -58,15 +57,14 @@ func newUpCmd() *cobra.Command {
 
 func newDownCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "down [server]",
-		Short: "stop this track's dev servers, or one of them",
-		Args:  cobra.MaximumNArgs(1),
+		Use:   "down [server...]",
+		Short: "stop this track's dev servers, or some of them",
 		RunE: func(c *cobra.Command, args []string) error {
 			client, id, err := trackClient("down")
 			if err != nil {
 				return err
 			}
-			servers, err := client.Down(c.Context(), rpc.ServersParams{ID: id, Server: firstArg(args)})
+			servers, err := client.Down(c.Context(), rpc.ServersOf(id, args))
 			if err != nil {
 				return err
 			}
@@ -198,13 +196,6 @@ func printAllServers(out io.Writer, servers []tracks.Server) error {
 		}
 	}
 	return nil
-}
-
-func firstArg(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	return args[0]
 }
 
 // printServers prints a line per dev server.

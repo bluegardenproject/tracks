@@ -12,7 +12,7 @@ func (c Config) up(ctx context.Context, call *rpc.Call) (any, error) {
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	servers, err := c.Tracks.Up(ctx, p.ID, p.Server)
+	servers, err := c.Tracks.Up(ctx, p.ID, p.Names()...)
 	if err != nil {
 		c.Log.Printf("starting dev servers of %s: %v", p.ID, err)
 		return nil, err
@@ -25,7 +25,7 @@ func (c Config) down(ctx context.Context, call *rpc.Call) (any, error) {
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	servers, err := c.Tracks.Down(ctx, p.ID, p.Server)
+	servers, err := c.Tracks.Down(ctx, p.ID, p.Names()...)
 	if err != nil {
 		c.Log.Printf("stopping dev servers of %s: %v", p.ID, err)
 		return nil, err

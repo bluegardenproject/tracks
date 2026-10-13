@@ -82,13 +82,20 @@ const SetupContract = "" +
 // DevServersContract is in the prompt of a Work or Review track whose
 // repos have dev servers. Tracks runs them, on ports it picks, behind
 // the user's proxy, so the agent goes through tracks, and only when the
-// user asks, instead of starting one itself; and a server's error may be
-// expected, so the agent leaves what happens next to the user.
+// user asks, instead of starting one itself; it asks which when there
+// are several, since a repo's servers may be alternatives that can't
+// run together; and a server's error may be expected, so the agent
+// leaves what happens next to the user.
 const DevServersContract = "" +
 	"**Dev servers.** Tracks runs this track's dev servers, each in a " +
 	"pane of the track's window, on a port it picks. Start them only " +
-	"when the user asks: `tracks up`, or one with `tracks up <server>`, " +
-	"and stop them with `tracks down [server]`. `tracks servers` lists " +
+	"when the user asks, and only the ones they ask for. When the track " +
+	"has more than one and the user didn't say which, run `tracks " +
+	"servers` and ask which to start, as a question with one option per " +
+	"server that lets them pick several, then start those with `tracks " +
+	"up <server>...`. Plain `tracks up` starts all of them: run it only " +
+	"when the user asks for all. Stop servers with `tracks down " +
+	"[server...]`. `tracks servers` lists " +
 	"them with their state and port, `tracks url <server>` prints one's " +
 	"address, and `tracks logs <server>` shows what one printed. Never " +
 	"start a dev server any other way, such as with `pnpm dev`. " +
