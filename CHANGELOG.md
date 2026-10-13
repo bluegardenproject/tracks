@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.2.0](https://github.com/bluegardenproject/tracks/compare/v2.1.1...v2.2.0) (2026-10-13)
+
+
+### Features
+
+* **addtrack:** make the review prompt optional ([692bd5d](https://github.com/bluegardenproject/tracks/commit/692bd5d6a3fe6a21092ae1106fa6ea2e95586a8c))
+* **tracksview:** frame the setup and each dev server in the repo form ([b657f3b](https://github.com/bluegardenproject/tracks/commit/b657f3bf1985f03877081bae82a6630330ccace8))
+* **tracksview:** rename a track from its details ([5e5e5b0](https://github.com/bluegardenproject/tracks/commit/5e5e5b08ce5b765630876c601e5d14bb3cd1bc96))
+
 ## [2.1.1](https://github.com/bluegardenproject/tracks/compare/v2.1.0...v2.1.1) (2026-10-06)
 
 
