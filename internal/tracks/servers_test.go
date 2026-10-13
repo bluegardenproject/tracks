@@ -105,7 +105,7 @@ func TestUpAndDown(t *testing.T) {
 	ctx := context.Background()
 	tr := work(t, f, "api")
 
-	got, err := f.svc.Up(ctx, tr.ID, "")
+	got, err := f.svc.Up(ctx, tr.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestUpAndDown(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("Up = %+v\nwant %+v (20000 is busy)", got, want)
 	}
-	if _, err := f.svc.Up(ctx, tr.ID, ""); err != nil || len(servers.added) != 4 {
+	if _, err := f.svc.Up(ctx, tr.ID); err != nil || len(servers.added) != 4 {
 		t.Fatalf("Up again: %v, %d panes; want the running ones left alone", err, len(servers.added))
 	}
 
@@ -141,8 +141,21 @@ func TestUpAndDown(t *testing.T) {
 	if _, err := f.svc.Logs(ctx, tr.ID, "storybook", 50); !isProblem(err) {
 		t.Errorf("Logs of a stopped server: %v; want a problem", err)
 	}
-	if got, _ = f.svc.Down(ctx, tr.ID, ""); slices.ContainsFunc(got, func(sv Server) bool { return sv.State != ServerStopped }) {
+	if got, _ = f.svc.Down(ctx, tr.ID); slices.ContainsFunc(got, func(sv Server) bool { return sv.State != ServerStopped }) {
 		t.Errorf("Down all: %+v", got)
+	}
+
+	got, err = f.svc.Up(ctx, tr.ID, "app", "api/web", "web")
+	if err != nil || len(got) != 4 || got[0].State != ServerStarting || got[1].State != ServerStopped ||
+		got[2].State != ServerStopped || got[3].State != ServerStarting {
+		t.Errorf("Up app and web: %+v, %v; want only those two started", got, err)
+	}
+	added := len(servers.added)
+	if _, err := f.svc.Up(ctx, tr.ID, "storybook", "nope"); !isProblem(err) || len(servers.added) != added {
+		t.Errorf("Up with an unknown name: %v; want a problem and nothing started", err)
+	}
+	if _, err := f.svc.Up(ctx, tr.ID, "storybook", ""); !isProblem(err) {
+		t.Errorf("Up with an empty name: %v; want a problem", err)
 	}
 }
 
@@ -160,14 +173,14 @@ func TestUpChecksNamesAndPorts(t *testing.T) {
 	if _, err := f.svc.Up(ctx, second.ID, "nope"); !isProblem(err) || !strings.Contains(err.Error(), "api/metro, web/metro") {
 		t.Errorf("an unknown name: %v; want the servers listed", err)
 	}
-	if _, err := f.svc.Up(ctx, first.ID, ""); err != nil {
+	if _, err := f.svc.Up(ctx, first.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := f.svc.Up(ctx, second.ID, "api/metro"); err != nil || !strings.Contains(got[0].Problem, "api/metro in "+first.Name) {
 		t.Errorf("a fixed port another track holds: %+v, %v; want that track named", got, err)
 	}
 	f.svc.PortFree = func(int) bool { return false }
-	if _, err := f.svc.Up(ctx, first.ID, ""); err != nil {
+	if _, err := f.svc.Up(ctx, first.ID); err != nil {
 		t.Errorf("Up on a running server needs no port: %v", err)
 	}
 	if len(servers.added) != 1 {
@@ -191,7 +204,7 @@ func TestUpStartsWhatItCan(t *testing.T) {
 	withServersAlso(t, f, "web", []store.DevServer{{Name: "e", Command: "v", PortMode: store.PortFixed, Port: 8081}})
 	ctx := context.Background()
 	tr := work(t, f, "api", "web")
-	got, err := f.svc.Up(ctx, tr.ID, "")
+	got, err := f.svc.Up(ctx, tr.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

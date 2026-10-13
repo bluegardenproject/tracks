@@ -180,7 +180,10 @@ first), so the user decides what happens next, never Tracks or the agent.
   is.
 - The agent can read the output with `tracks logs <server>` and tell the user
   what it sees. It doesn't restart, reinstall or fix anything on its own, and
-  runs `tracks up` or `tracks setup` only when the user asks. The prompt says so.
+  runs `tracks up` or `tracks setup` only when the user asks. When the track
+  has several servers and the user didn't name them, it asks which to start,
+  one option per server, several allowed: a repo's servers may be
+  alternatives that can't run together. The prompt says so.
 - The error clears when:
   - the server or setup is started again (by the user, or the agent at the
     user's request): starting clears it, and failing again sets it again;
@@ -279,8 +282,8 @@ each poll.
 
 - RPC: `up`, `down`, `servers` (running servers, defined and detected),
   `proxies`, `proxy.add`, `proxy.remove`, `proxy.select`.
-- CLI: `tracks up [server]` (no argument starts all the track's servers),
-  `tracks down [server]`, `tracks servers`, `tracks url <server>`,
+- CLI: `tracks up [server...]` (no argument starts all the track's servers),
+  `tracks down [server...]`, `tracks servers`, `tracks url <server>`,
   `tracks logs <server>`, `tracks setup [--wait]` (runs setup, or waits for the
   running one). The CLI honours `TRACKS_SOCKET_DIR` (v1's bug).
 - Proxy tab: output ports, each with its input selector. Rows read

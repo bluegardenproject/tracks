@@ -237,10 +237,30 @@ type SetupDoneParams struct {
 	Repo string `json:"repo"`
 }
 
-// ServersParams names a track and one of its dev servers, "" for all.
+// ServersParams names a track and some of its dev servers, none for
+// all. Server repeats the first of Servers for a daemon from before
+// Servers, which would otherwise read no names and start them all.
 type ServersParams struct {
-	ID     string `json:"id"`
-	Server string `json:"server,omitempty"`
+	ID      string   `json:"id"`
+	Server  string   `json:"server,omitempty"`
+	Servers []string `json:"servers,omitempty"`
+}
+
+// ServersOf names track id's dev servers names, none for all.
+func ServersOf(id string, names []string) ServersParams {
+	p := ServersParams{ID: id, Servers: names}
+	if len(names) > 0 {
+		p.Server = names[0]
+	}
+	return p
+}
+
+// Names are the servers p names, none for all.
+func (p ServersParams) Names() []string {
+	if len(p.Servers) == 0 && p.Server != "" {
+		return []string{p.Server}
+	}
+	return p.Servers
 }
 
 // ServersResult is the state of dev servers: a track's, or every open

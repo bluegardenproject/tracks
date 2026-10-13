@@ -19,7 +19,7 @@ func TestServerStatesFindWhatListens(t *testing.T) {
 	})
 	ctx := context.Background()
 	tr := work(t, f, "api")
-	if _, err := f.svc.Up(ctx, tr.ID, ""); err != nil {
+	if _, err := f.svc.Up(ctx, tr.ID); err != nil {
 		t.Fatal(err)
 	}
 	window := "@" + tr.Name
