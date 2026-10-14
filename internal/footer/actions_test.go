@@ -19,31 +19,39 @@ func TestActionsRow(t *testing.T) {
 	if err := c.NewSession("/dev/null", "tracks", "api", "sleep 60"); err != nil {
 		t.Fatal(err)
 	}
-	row := actionsRow(palette{theme.Default()})
-	draw := func(open, sent string) string {
+	th := theme.Default()
+	for name, value := range Options(th) {
+		if out, err := exec.Command("tmux", "-L", socket, "set", "-g", name, value).CombinedOutput(); err != nil {
+			t.Fatalf("set %s: %v %s", name, err, out)
+		}
+	}
+	row := actionsRow(palette{th})
+	draw := func(buttons string) string {
 		t.Helper()
-		for name, value := range map[string]string{actions.CommentsOption: open, actions.SentOption: sent, trackwin.InfoOption: "api · active · Claude Code opus"} {
-			if err := c.SetWindowOption("tracks:api", name, value); err != nil {
-				t.Fatal(err)
-			}
+		if err := trackwin.SetButtons(c, "tracks:api", buttons); err != nil {
+			t.Fatal(err)
+		}
+		if err := trackwin.SetInfo(c, "tracks:api", "api · active · Claude Code opus"); err != nil {
+			t.Fatal(err)
 		}
 		out, err := exec.Command("tmux", "-L", socket, "display-message", "-p", "-t", "tracks:api", row).Output()
 		if err != nil {
 			t.Fatal(err)
 		}
-		return strings.TrimSpace(styles.ReplaceAllString(string(out), ""))
+		return string(out)
 	}
-	for _, tc := range []struct{ open, sent, want string }{
-		{"", "", "api · active · Claude Code opus"},
-		{"1", "", "1 open comment · solve now"},
-		{"3", "", "3 open comments · solve now"},
-		{"3", "1", "3 open comments · sent to the agent"},
-	} {
-		if got := draw(tc.open, tc.sent); got != tc.want {
-			t.Errorf("with %q open, sent %q: %q, want %q", tc.open, tc.sent, got, tc.want)
-		}
+
+	if got := strings.TrimSpace(styles.ReplaceAllString(draw(""), "")); got != "api · active · Claude Code opus" {
+		t.Errorf("without buttons: %q, want the track's info", got)
 	}
-	if !strings.Contains(row, "#[range=user|"+actions.PRComments+"]") {
-		t.Error("the button isn't a range named after its action")
+	got := draw(actions.Render([]actions.Button{
+		{Index: 0, Repo: "a/b", Number: 3, Comments: actions.Comments{Open: 2}},
+		{Index: 1, Repo: "a/b", Number: 7, Comments: actions.Comments{Open: 1}},
+	}, false))
+	if text := strings.TrimSpace(styles.ReplaceAllString(got, "")); text != "PR #3 · solve 2 comments   PR #7 · solve 1 comment" {
+		t.Errorf("with buttons: %q", text)
+	}
+	if !strings.Contains(got, "#[bg="+th.Value(theme.ButtonVariant2Bg)+"]") {
+		t.Errorf("the buttons' colour didn't come from the theme's options: %s", got)
 	}
 }

@@ -38,7 +38,7 @@ func selfCommand() (string, error) {
 
 // writeThemeConf renders t for tmux: colours and the footer rows.
 func writeThemeConf(paths platform.Paths, t theme.Theme, version, command string) error {
-	conf := tmux.ThemeConf{Colors: tmuxColors(t), Footer: footer.Rows(t, version, command+" footer system")}
+	conf := tmux.ThemeConf{Colors: tmuxColors(t), Footer: footer.Rows(t, version, command+" footer system"), Options: footer.Options(t)}
 	if err := conf.Write(themeConfPath(paths)); err != nil {
 		return fmt.Errorf("write tmux theme: %w", err)
 	}

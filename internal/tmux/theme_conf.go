@@ -13,6 +13,9 @@ type ThemeConf struct {
 	// Footer holds tmux's status rows, top to bottom, as tmux formats.
 	// No rows turns the footer off.
 	Footer []string
+	// Options are global user options the footer's formats read, such
+	// as the colours of text the daemon writes into window options.
+	Options map[string]string
 }
 
 // Colors are what tmux draws pane text, backgrounds, borders, titles
@@ -35,6 +38,9 @@ set -g window-active-style "fg={{.Colors.Foreground}},bg={{.Colors.Background}}"
 set -g pane-border-style "fg={{.Colors.Border}},bg={{.Colors.Background}}"
 set -g pane-active-border-style "fg={{.Colors.BorderActive}},bg={{.Colors.Background}}"
 set -g status-style "bg={{.Colors.FooterBg}},fg={{.Colors.FooterFg}}"
+{{- range $name, $value := .Options}}
+set -g {{$name}} "{{quoted $value}}"
+{{- end}}
 {{- if .Footer}}
 set -g status {{len .Footer}}
 {{- range $i, $row := .Footer}}
