@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,17 +93,34 @@ func TestCommentsNext(t *testing.T) {
 }
 
 func TestRenderTakesVariantsInTurn(t *testing.T) {
-	var buttons []Button
-	for i := range 5 {
-		buttons = append(buttons, Button{Index: i, Repo: "a/b", Number: i + 1, Comments: Comments{Open: 1}})
-	}
-	got := Render(buttons, false)
-	for v := 1; v <= Variants; v++ {
-		if !strings.Contains(got, VariantBg(v)) {
-			t.Errorf("variant %d unused: %s", v, got)
+	variants := func(buttons []Button) []int {
+		var got []int
+		out := Render(buttons, false)
+		for _, part := range strings.Split(out, "#[range=user|")[1:] {
+			for v := 1; v <= Variants; v++ {
+				if strings.Contains(part, "#{"+VariantBg(v)+"}") {
+					got = append(got, v)
+				}
+			}
 		}
+		return got
 	}
-	if strings.Count(got, "#{"+VariantBg(1)+"}") != 2 {
-		t.Errorf("the fifth PR should start over at variant 1: %s", got)
+	button := func(index int, sent bool) Button {
+		return Button{Index: index, Repo: "a/b", Number: index + 1, Comments: Comments{Open: 1, Sent: sent}}
+	}
+
+	// The track's 7th and 15th PRs, which once both took variant 3.
+	if got := variants([]Button{button(6, false), button(14, false)}); !slices.Equal(got, []int{1, 2}) {
+		t.Errorf("two buttons took variants %v, want [1 2]", got)
+	}
+	var six []Button
+	for i := range 6 {
+		six = append(six, button(i*3, false))
+	}
+	if got := variants(six); !slices.Equal(got, []int{1, 2, 3, 4, 1, 2}) {
+		t.Errorf("six buttons took variants %v, want them in turn, starting over after four", got)
+	}
+	if got := variants([]Button{button(0, false), button(1, true), button(2, false)}); !slices.Equal(got, []int{1, 2}) {
+		t.Errorf("around a sent one, buttons took variants %v; want [1 2], the sent one taking none", got)
 	}
 }
