@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.0](https://github.com/bluegardenproject/tracks/compare/v3.0.0...v3.1.0) (2026-10-14)
+
+
+### Features
+
+* **footer:** a button per PR with open comments, in four colour variants ([761e905](https://github.com/bluegardenproject/tracks/commit/761e905f39d18b97bbf4fd2c39c11a80b4a40670))
+* **footer:** show the track's name, status and agent in the empty top row ([976686a](https://github.com/bluegardenproject/tracks/commit/976686acffe1fd08ea6e577b7b8079ecb0e03636))
+
 ## [3.0.0](https://github.com/bluegardenproject/tracks/compare/v2.2.1...v3.0.0) (2026-10-14)
 
 
