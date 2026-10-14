@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.1](https://github.com/bluegardenproject/tracks/compare/v3.1.0...v3.1.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **footer:** colour PR buttons in turn so neighbours never match ([6895920](https://github.com/bluegardenproject/tracks/commit/68959204eaa1fcea488ee3bdf447129501685865))
+
 ## [3.1.0](https://github.com/bluegardenproject/tracks/compare/v3.0.0...v3.1.0) (2026-10-14)
 
 
