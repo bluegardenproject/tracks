@@ -1,5 +1,7 @@
 package claude
 
+import "github.com/bluegardenproject/tracks/internal/agents"
+
 // addRepoSkill is v1's tracks-add-repo skill (internal/daemon/skill.go),
 // renamed. v1's lists the configured repos; this one doesn't, since the
 // Repositories tab changes them without the daemon hearing of it:
@@ -40,3 +42,18 @@ Only repos on the Tracks Repositories tab can be added. When the name is
 not one of them, the command lists the ones that are; if the repo you
 need is not among them, ask the user.
 `
+
+// prCommentsSkill is how Claude works through a track's open review
+// comments; the footer's button sends a prompt naming it.
+const prCommentsSkill = `---
+x-tracks-managed: "1"
+name: tracks-pr-comments
+description: |
+  Work through the open review comments on this track's pull requests:
+  fix or answer each one, push before replying, reply in one or two
+  sentences, and ask the user before replying to a person. TRIGGER when
+  the user, or the Tracks footer's button, asks to solve, address or
+  answer PR comments or review feedback.
+---
+
+` + agents.PRCommentsSteps

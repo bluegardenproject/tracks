@@ -62,6 +62,9 @@ const (
 	DismissFailures = "dismiss-failures"
 	// SetTitle renames a track: the name it's shown under.
 	SetTitle = "set-title"
+	// Action sends a track's agent the prompt of one of its footer
+	// buttons.
+	Action = "action"
 )
 
 // Request is one call.
@@ -315,6 +318,17 @@ type ReportExitParams struct {
 type SetTitleParams struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// ActionParams names the track and its action, an actions ID.
+type ActionParams struct {
+	ID     string `json:"id"`
+	Action string `json:"action"`
+}
+
+// ActionResult names the track the action ran in.
+type ActionResult struct {
+	Name string `json:"name"`
 }
 
 // DismissParams names the track whose errors to clear.

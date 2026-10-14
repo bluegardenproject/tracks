@@ -53,3 +53,21 @@ echo '[{"url":"https://github.com/a/b/pull/3","state":"CLOSED","isDraft":false},
 		t.Errorf("without gh: %v, want ErrNoGH", err)
 	}
 }
+
+func TestGHOpenThreads(t *testing.T) {
+	answer := `{"data":{"viewer":{"login":"me"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[
+{"isResolved":false,"comments":{"nodes":[{"author":{"login":"copilot-pull-request-reviewer"}}]}},
+{"isResolved":false,"comments":{"nodes":[{"author":{"login":"me"}}]}},
+{"isResolved":true,"comments":{"nodes":[{"author":{"login":"alice"}}]}},
+{"isResolved":false,"comments":{"nodes":[{"author":null}]}},
+{"isResolved":false,"comments":{"nodes":[]}}
+]}}}}}`
+	gh := fakeGH(t, `case "$*" in
+"api graphql -f query="*" -f owner=acme -f name=api -F number=7") echo '`+answer+`' ;;
+*) echo "unknown command: $*" >&2; exit 1 ;;
+esac`)
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/7")
+	if n, err := gh.OpenThreads(context.Background(), pr); err != nil || n != 2 {
+		t.Errorf("OpenThreads = %d, %v; want 2: the bot's, and the deleted user's", n, err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"text/template"
 )
 
@@ -31,6 +32,9 @@ type Conf struct {
 	// Command runs this Tracks from key bindings: the quoted binary
 	// and its profile flags.
 	Command string
+	// Actions name the footer's buttons: a click on a user range named
+	// after one runs it in the window shown. Only from UserRanges on.
+	Actions []string
 }
 
 var confTemplate = template.Must(template.New("tmux.conf").Funcs(template.FuncMap{
@@ -58,7 +62,7 @@ set-environment -gu TRACKS_SOCKET_DIR
 {{- range .Binds}}
 {{.}}
 {{- end}}
-bind-key -n MouseDown1Status select-window -t = \; run-shell -b "{{.Command}} trackwin nav '#{window_index}' '#{window_index}'"
+{{.StatusClick}}
 {{- if .Version.AtLeast (v 3 4)}}
 set -as terminal-features ",*:hyperlinks"
 {{- end}}
@@ -67,6 +71,21 @@ source-file "{{.ThemeFile}}"
 {{- end}}
 source-file -q "{{.OverrideFile}}"
 `))
+
+// StatusClick binds a click on the footer: on a track's slot it switches
+// there, on an action's button it runs the action.
+func (c Conf) StatusClick() string {
+	nav := `run-shell -b "` + c.Command + ` trackwin nav '#{window_index}' '#{window_index}'"`
+	if len(c.Actions) == 0 || !c.Version.AtLeast(UserRanges) {
+		return `bind-key -n MouseDown1Status select-window -t = \; ` + nav
+	}
+	cmd := "select-window -t = ; " + nav
+	for _, id := range slices.Backward(c.Actions) {
+		run := `run-shell -b "` + c.Command + ` trackwin action ` + id + ` '#{window_id}'"`
+		cmd = `if-shell -F "#{==:#{mouse_status_range},` + id + `}" { ` + run + ` } { ` + cmd + ` }`
+	}
+	return "bind-key -n MouseDown1Status " + cmd
+}
 
 // Render returns the config file content.
 func (c Conf) Render() (string, error) {

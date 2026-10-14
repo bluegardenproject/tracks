@@ -129,7 +129,7 @@ func Run(ctx context.Context, c Config) error {
 
 	server, _ := c.Tmux.ServerPID()
 	c.Log.Printf("started, pid %d", os.Getpid())
-	prs.start(pollCtx, c.Tracks.PollPRs)
+	prs.start(pollCtx, c.pollGitHub)
 	archiver.start(pollCtx, c.autoArchive)
 	coster.start(pollCtx, c.Tracks.Costs)
 	proxier.start(pollCtx, syncProxy)
@@ -143,7 +143,7 @@ func Run(ctx context.Context, c Config) error {
 		case err := <-served:
 			return err
 		case <-polls.C:
-			prs.start(pollCtx, c.Tracks.PollPRs)
+			prs.start(pollCtx, c.pollGitHub)
 		case <-archives.C:
 			archiver.start(pollCtx, c.autoArchive)
 		case <-costs.C:
@@ -168,6 +168,16 @@ func Run(ctx context.Context, c Config) error {
 	c.Tracks.Changes.Close()
 	ln.Close()
 	return <-served
+}
+
+// pollGitHub asks about the tracks' PRs, then counts the review threads
+// waiting on their agents.
+func (c Config) pollGitHub(ctx context.Context) error {
+	err := c.Tracks.PollPRs(ctx)
+	if errors.Is(err, tracks.ErrNoGH) || ctx.Err() != nil {
+		return err
+	}
+	return errors.Join(err, c.Tracks.CountComments(ctx))
 }
 
 // restarted reports whether the tmux server isn't the one with pid

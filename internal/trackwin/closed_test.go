@@ -26,6 +26,8 @@ func (vanishing) SetPaneOption(pane, _, _ string) error {
 }
 
 func (vanishing) ResizePaneHeight(string, int) error { return nil }
+func (vanishing) SendText(string, string) error      { return nil }
+func (vanishing) SendKey(string, string) error       { return nil }
 
 func (vanishing) WindowOption(string, string) (string, error) { return "/tmp", nil }
 

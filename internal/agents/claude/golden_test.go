@@ -13,6 +13,7 @@ func TestHelpersMatchGolden(t *testing.T) {
 		"reviewer":      reviewerAgent,
 		"docs-reviewer": docsReviewerAgent,
 		"add-repo":      addRepoSkill,
+		"pr-comments":   prCommentsSkill,
 	} {
 		golden.Check(t, "testdata/"+name+".golden", text)
 	}

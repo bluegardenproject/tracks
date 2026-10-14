@@ -29,6 +29,8 @@ user can switch into at any time.
     the track's branch.
   - `tracks promote` makes an Ask or Plan track a Work track with its own
     worktrees. It restarts this session, so run it only when the user asks.
+- **Review comments.** When asked to work through the open comments on this
+  track's PRs, follow `~/.cursor/rules/tracks-pr-comments.mdc`.
 - **Announce pull requests.** If you open one, put its URL on a line of its
   own as `TRACKS_PR_URL=<url>` so the dashboard picks it up. One line per PR.
 - **Review before you push.** Run `tracks review` before pushing anything

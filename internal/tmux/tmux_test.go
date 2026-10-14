@@ -83,7 +83,7 @@ func TestRealSocketPanicsInTests(t *testing.T) {
 func TestConfRender(t *testing.T) {
 	confs := map[string]Conf{
 		"tmux-3.2":           {Version: Version{3, 2}, OuterTerm: "xterm-256color"},
-		"tmux-3.4-truecolor": {Version: Version{3, 4}, OuterTerm: "xterm-ghostty", TrueColor: true},
+		"tmux-3.4-truecolor": {Version: Version{3, 4}, OuterTerm: "xterm-ghostty", TrueColor: true, Actions: []string{"pr-comments"}},
 	}
 	for name, conf := range confs {
 		t.Run(name, func(t *testing.T) {

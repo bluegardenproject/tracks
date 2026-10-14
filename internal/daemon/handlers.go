@@ -152,6 +152,17 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.SetTitle(ctx, p.ID, p.Title)
 		},
+		rpc.Action: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.ActionParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			name, err := c.Tracks.RunAction(ctx, p.ID, p.Action)
+			if err == nil {
+				c.Log.Printf("ran %s in %s", p.Action, name)
+			}
+			return rpc.ActionResult{Name: name}, err
+		},
 		rpc.Report: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ReportParams
 			if err := call.Decode(&p); err != nil {
@@ -341,8 +352,8 @@ func (c Config) outcome(created tracks.Created, err error) string {
 }
 
 // helpers installs what the prompts rely on: the reviewer subagents,
-// the add-repo skill, the Cursor rule once Cursor is added, and a
-// `tracks` on the tracks' PATH that runs this build.
+// the add-repo and PR comments skills, the Cursor rules once Cursor is
+// added, and a `tracks` on the tracks' PATH that runs this build.
 func (c Config) helpers() {
 	skipped, err := claude.InstallHelpers(c.Home)
 	if err != nil {
@@ -351,12 +362,11 @@ func (c Config) helpers() {
 	if s, err := settings.Load(c.Paths.Settings); err != nil {
 		c.Log.Printf("reading the settings for the Cursor rule: %v", err)
 	} else if s.Engines.Cursor != nil {
-		path, ok, err := cursor.InstallRule(c.Home)
+		paths, err := cursor.InstallRules(c.Home)
 		if err != nil {
-			c.Log.Printf("installing the Cursor rule: %v", err)
-		} else if !ok {
-			skipped = append(skipped, path)
+			c.Log.Printf("installing the Cursor rules: %v", err)
 		}
+		skipped = append(skipped, paths...)
 	}
 	for _, path := range skipped {
 		c.Log.Printf("not overwriting %s: it lacks the x-tracks-managed marker, so it isn't Tracks'", path)

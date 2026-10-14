@@ -269,6 +269,13 @@ func (c Client) SetTitle(ctx context.Context, id, title string) error {
 	return c.Call(ctx, SetTitle, SetTitleParams{ID: id, Title: title}, nil, nil)
 }
 
+// Action runs action in track id and returns the track's name.
+func (c Client) Action(ctx context.Context, id, action string) (string, error) {
+	var r ActionResult
+	err := c.Call(ctx, Action, ActionParams{ID: id, Action: action}, &r, nil)
+	return r.Name, err
+}
+
 // DismissFailures clears track id's server and setup errors.
 func (c Client) DismissFailures(ctx context.Context, id string) error {
 	return c.Call(ctx, DismissFailures, DismissParams{ID: id}, nil, nil)

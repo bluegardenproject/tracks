@@ -7,7 +7,7 @@ import (
 )
 
 // InstallHelpers writes what the prompts rely on into home's .claude:
-// the reviewer subagents, and the add-repo skill. A file there without
+// the reviewer subagents, and the add-repo and PR comments skills. A file there without
 // the marker is the user's and stays untouched; its path is returned
 // in skipped.
 func InstallHelpers(home string) (skipped []string, err error) {
@@ -16,6 +16,7 @@ func InstallHelpers(home string) (skipped []string, err error) {
 		{"agents/tracks-reviewer.md", reviewerAgent},
 		{"agents/tracks-docs-reviewer.md", docsReviewerAgent},
 		{"skills/tracks-add-repo/SKILL.md", addRepoSkill},
+		{"skills/tracks-pr-comments/SKILL.md", prCommentsSkill},
 	} {
 		path := filepath.Join(dir, filepath.FromSlash(f.name))
 		ok, err := agents.WriteManaged(path, []byte(f.content))

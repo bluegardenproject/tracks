@@ -16,6 +16,10 @@ type Version struct{ Major, Minor int }
 // extended keys and terminal-features.
 var MinVersion = Version{3, 2}
 
+// UserRanges is the first tmux whose footer has clickable ranges of
+// our own, which the action buttons are.
+var UserRanges = Version{3, 4}
+
 // AtLeast reports whether v is want or newer. An unknown version
 // counts as new enough.
 func (v Version) AtLeast(want Version) bool {

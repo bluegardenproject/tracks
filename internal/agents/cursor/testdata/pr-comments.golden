@@ -1,0 +1,94 @@
+---
+x-tracks-managed: "1"
+description: Work through the open review comments on a Tracks track's pull requests (only when TRACKS_ID is set)
+alwaysApply: false
+---
+
+# tracks-pr-comments
+
+You are running inside a `tracks` track. Work through the open review
+comments on its pull requests: fix what should be fixed, then answer each
+comment briefly.
+
+## 1. Find the pull requests
+
+In each of the track's worktrees:
+
+```bash
+gh pr list --head "$(git branch --show-current)" --state open --json number,url
+```
+
+## 2. Collect the open comments
+
+For each PR, read its review threads (OWNER, NAME and NUMBER come from its
+URL):
+
+```bash
+gh api graphql -f owner=OWNER -f name=NAME -F number=NUMBER -f query='
+query($owner: String!, $name: String!, $number: Int!) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes {
+          id isResolved isOutdated path line
+          comments(first: 50) { nodes { author { __typename login } body url } }
+        }
+      }
+    }
+  }
+}'
+```
+
+A thread is open when it isn't resolved and its last comment isn't the
+viewer's. Also read the PR's top-level comments
+(`gh pr view <url> --comments`) and keep those that ask for a change and
+have no answer from the viewer yet.
+
+Sort the authors: a **bot** has `__typename` `Bot` or a login ending in
+`[bot]` (Copilot, CodeRabbit, …); everyone else is a **person**.
+
+## 3. Decide, then fix
+
+For each open comment, decide: fix it, or leave the code as it is and say
+why. Don't take a suggestion only because a bot made it, and don't refuse
+one only because it's a bot's.
+
+Make the fixes, run the tests, and commit them following the repo's
+conventions.
+
+## 4. Push before answering
+
+Run the pre-push review your track's instructions ask for, then push.
+**Answer nothing until the push succeeded.** A reply that promises a fix the
+branch doesn't have gets flagged again by the next review. If the push
+fails, stop and tell the user why.
+
+## 5. Answer
+
+Write one reply per comment, one or two sentences: what changed (with the
+commit's short hash), or why nothing did.
+
+- **Bots:** post the reply, then resolve the thread.
+- **People:** don't post yet. Show the user every draft in a table (author,
+  comment, your reply) and post only those they approve, as they worded
+  them. Leave people's threads for them to resolve.
+
+Reply to a review thread, then resolve it:
+
+```bash
+gh api graphql -f thread=THREAD_ID -f body='…' -f query='
+mutation($thread: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $thread, body: $body}) { comment { url } }
+}'
+gh api graphql -f thread=THREAD_ID -f query='
+mutation($thread: ID!) { resolveReviewThread(input: {threadId: $thread}) { thread { isResolved } } }'
+```
+
+Answer a top-level comment with `gh pr comment <url> --body '…'`, quoting
+the line you answer.
+
+## 6. Report
+
+End with a table: comment (author, file:line), what you did (fixed /
+answered / left open), and whether the reply is posted.
