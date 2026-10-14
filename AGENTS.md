@@ -24,6 +24,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `ui/source/` the data screens read (tracks, repos, themes, engines); tracks come from the daemon
 - `store/` SQLite: schema, migrations (`migrations/*.sql`, one per change), queries · `repos/` rules for adding, changing and removing repos
 - `agents/` the agent CLIs (engines): finding one, its version, its models, its MCP servers, and the pane command a track runs · `agents/claude/`, `agents/cursor/` each engine's command line, prompts and session
+- `commentstyle/` learning the user's PR comment style: their recent comments from GitHub, the guide an engine writes from them
 - `hooks/` the engines' hook events and what they mean for a track's status · `notifier/` the user's notification channels
 - `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
 - `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client · `proxy/` the output ports forwarding to dev servers

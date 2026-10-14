@@ -115,7 +115,7 @@ func TestInvalidThemesCantBeChosen(t *testing.T) {
 
 func TestCreatorLoadsThroughThePicker(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey, enterKey, themecreator.LoadMsg{})
+	m = settle(m, downKey, downKey, downKey, downKey, enterKey, themecreator.LoadMsg{})
 	if m.picker == nil || m.pickerFor != pickLoad {
 		t.Fatal("the creator's Load should open the picker")
 	}
@@ -146,7 +146,7 @@ func TestCreatorSavesThroughTheHost(t *testing.T) {
 
 func TestUnsavedEditsAskBeforeLeaving(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey, enterKey)
+	m = settle(m, downKey, downKey, downKey, downKey, enterKey)
 	if !m.creatorFocused() {
 		t.Fatal("Enter on Theme Creator should focus it")
 	}
@@ -205,7 +205,7 @@ func TestFastTracksEmptyState(t *testing.T) {
 
 func TestFirstClickInTheScrolledCreator(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey)
+	m = settle(m, downKey, downKey, downKey, downKey)
 	for range 10 {
 		m = settle(m, tea.MouseWheelMsg{X: 60, Y: 20, Button: tea.MouseWheelDown})
 	}
