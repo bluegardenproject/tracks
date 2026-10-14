@@ -58,7 +58,8 @@ right. The footer on every window lists the tracks; click one, or use the keys
 below. Above the list, the track you're in gets its buttons: when review
 threads on its PRs wait on the agent, "3 open comments · solve now" sends the
 agent to fix and answer them. It replies to bots on its own and asks you before
-replying to a person.
+replying to a person. Without a button, the row quietly shows the track's name,
+status, and agent and model.
 
 | Keys | |
 |---|---|

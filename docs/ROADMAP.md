@@ -55,4 +55,5 @@ the v2.0.0 release; git history keeps them.
 - **Track actions** (the footer's top row): more buttons beside "open
   comments", such as failing CI; the prompts they send editable in Settings,
   and a setting for whether review fixes are amended (force-pushed) or added
-  as new commits; a key to run them without the mouse.
+  as new commits; a key to run them without the mouse. Now and then an
+  uplifting message in the row instead of the track's info, behind a setting.
