@@ -42,7 +42,8 @@ func backgroundOf(token theme.Token) theme.Token {
 		return theme.FooterActiveBg
 	case token == theme.TabActiveText:
 		return theme.TabActiveBg
-	case strings.HasPrefix(string(token), "state."), strings.HasPrefix(string(token), "listItem."):
+	case strings.HasPrefix(string(token), "state."), strings.HasPrefix(string(token), "listItem."),
+		strings.HasPrefix(string(token), "button.variant"):
 		return theme.Token(strings.Replace(string(token), ".text", ".bg", 1))
 	case token == theme.ButtonTextDefault:
 		return theme.ButtonBgDefault

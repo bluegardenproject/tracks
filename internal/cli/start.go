@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 )
@@ -102,7 +101,6 @@ func createSession(c *tmux.Client, paths platform.Paths, version string) error {
 		ThemeFile:       themeConfPath(paths),
 		OverrideFile:    filepath.Join(paths.ConfigDir, "tmux.conf"),
 		Command:         command,
-		Actions:         actions.IDs,
 	}
 	confPath := filepath.Join(paths.DataDir, "tmux.conf")
 	if err := conf.Write(confPath); err != nil {

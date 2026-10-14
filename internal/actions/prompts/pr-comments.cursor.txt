@@ -1,1 +1,1 @@
-Work through the open review comments on this track's pull requests: follow the rule in ~/.cursor/rules/tracks-pr-comments.mdc.
+Work through the open review comments on {pr}: follow the rule in ~/.cursor/rules/tracks-pr-comments.mdc.

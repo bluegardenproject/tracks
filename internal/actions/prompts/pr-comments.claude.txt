@@ -1,1 +1,1 @@
-Work through the open review comments on this track's pull requests with the tracks-pr-comments skill (~/.claude/skills/tracks-pr-comments/SKILL.md).
+Work through the open review comments on {pr} with the tracks-pr-comments skill (~/.claude/skills/tracks-pr-comments/SKILL.md).

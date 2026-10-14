@@ -100,8 +100,8 @@ type Windows interface {
 	Screen(window string) (string, error)
 	// Respawn restarts window's agent on s, keeping the window.
 	Respawn(window string, s trackwin.Spec) (trackwin.Window, error)
-	// Comments shows c on window, for the footer's button.
-	Comments(window string, c actions.Comments) error
+	// Buttons shows buttons, a tmux format, on window for the footer.
+	Buttons(window, buttons string) error
 	// Prompt types text into window's agent pane and submits it.
 	Prompt(window, text string) error
 	// Info shows text on window, for the footer's top row.
@@ -173,7 +173,7 @@ type Service struct {
 	windows []trackwin.Info
 	// comments are the open tracks' review threads, as CountComments
 	// last counted them and RunAction sent them.
-	comments map[string]actions.Comments
+	comments map[string]map[string]actions.Comments // by track, then PR URL
 	// info is what SyncInfo last showed, by window.
 	info map[string]string
 	// transcripts are the signatures of the open Claude tracks'
@@ -323,8 +323,8 @@ func (w TmuxWindows) Attention(window string, on bool) error {
 	return trackwin.SetAttention(w.Tmux, window, on)
 }
 
-func (w TmuxWindows) Comments(window string, c actions.Comments) error {
-	return trackwin.SetComments(w.Tmux, window, c)
+func (w TmuxWindows) Buttons(window, buttons string) error {
+	return trackwin.SetButtons(w.Tmux, window, buttons)
 }
 
 func (w TmuxWindows) Info(window, text string) error {

@@ -84,6 +84,16 @@ const (
 	ButtonTextDefault   Token = "button.text.default"
 	ButtonTextDanger    Token = "button.text.danger"
 	ButtonTextAccent    Token = "button.text.accent"
+	// The footer's track buttons: a variant per button, in turn, so
+	// buttons side by side are told apart. ButtonVariants lists them.
+	ButtonVariant1Bg   Token = "button.variant1.bg"
+	ButtonVariant1Text Token = "button.variant1.text"
+	ButtonVariant2Bg   Token = "button.variant2.bg"
+	ButtonVariant2Text Token = "button.variant2.text"
+	ButtonVariant3Bg   Token = "button.variant3.bg"
+	ButtonVariant3Text Token = "button.variant3.text"
+	ButtonVariant4Bg   Token = "button.variant4.bg"
+	ButtonVariant4Text Token = "button.variant4.text"
 
 	// List items, such as the Settings sidebar's sections: the one
 	// under the mouse (hover) and the chosen one (active).
@@ -121,7 +131,18 @@ var All = []Token{
 	InputBg,
 	ButtonBgDefault, ButtonBgHover, ButtonBgDanger, ButtonBgDangerHover, ButtonBgAccent, ButtonBgAccentHover,
 	ButtonTextDefault, ButtonTextDanger, ButtonTextAccent,
+	ButtonVariant1Bg, ButtonVariant1Text, ButtonVariant2Bg, ButtonVariant2Text,
+	ButtonVariant3Bg, ButtonVariant3Text, ButtonVariant4Bg, ButtonVariant4Text,
 	ListItemBgDefault, ListItemTextDefault, ListItemBgHover, ListItemTextHover, ListItemBgActive, ListItemTextActive,
 	OverlayBg, OverlayBgSelected, OverlayBgHover, OverlayBorder, OverlayBorderFocus,
 	OverlayTextDefault, OverlayTextMuted, OverlayTextFaint,
+}
+
+// ButtonVariants are the footer buttons' colours, background and text,
+// in the order buttons take them.
+var ButtonVariants = [][2]Token{
+	{ButtonVariant1Bg, ButtonVariant1Text},
+	{ButtonVariant2Bg, ButtonVariant2Text},
+	{ButtonVariant3Bg, ButtonVariant3Text},
+	{ButtonVariant4Bg, ButtonVariant4Text},
 }

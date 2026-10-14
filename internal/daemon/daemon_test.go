@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/settings"
@@ -42,11 +41,11 @@ func (noWindows) Close(string) error { return nil }
 func (noWindows) Respawn(string, trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no tmux in this test")
 }
-func (noWindows) Attention(string, bool) error            { return nil }
-func (noWindows) Screen(string) (string, error)           { return "", nil }
-func (noWindows) Comments(string, actions.Comments) error { return nil }
-func (noWindows) Prompt(string, string) error             { return nil }
-func (noWindows) Info(string, string) error               { return nil }
+func (noWindows) Attention(string, bool) error  { return nil }
+func (noWindows) Screen(string) (string, error) { return "", nil }
+func (noWindows) Buttons(string, string) error  { return nil }
+func (noWindows) Prompt(string, string) error   { return nil }
+func (noWindows) Info(string, string) error     { return nil }
 
 // config puts the daemon's files in a short folder: a Unix socket path
 // has to stay under about 100 bytes.

@@ -2,27 +2,16 @@ package trackwin
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 )
 
-// SetComments shows c on window for the footer's button: the count, ""
-// for none, and whether the prompt was sent.
-func SetComments(t Tmux, window string, c actions.Comments) error {
-	open, sent := "", ""
-	if c.Open > 0 {
-		open = strconv.Itoa(c.Open)
-	}
-	if c.Sent {
-		sent = "1"
-	}
-	if err := t.SetWindowOption(window, actions.CommentsOption, open); err != nil {
-		return err
-	}
-	return t.SetWindowOption(window, actions.SentOption, sent)
+// SetButtons shows buttons, a tmux format, on window for the footer;
+// "" shows none.
+func SetButtons(t Tmux, window, buttons string) error {
+	return t.SetWindowOption(window, actions.ButtonsOption, buttons)
 }
 
 // InfoOption holds what the footer's top row shows of the track while

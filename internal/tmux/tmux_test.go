@@ -83,7 +83,7 @@ func TestRealSocketPanicsInTests(t *testing.T) {
 func TestConfRender(t *testing.T) {
 	confs := map[string]Conf{
 		"tmux":           {OuterTerm: "xterm-256color"},
-		"tmux-truecolor": {OuterTerm: "xterm-ghostty", TrueColor: true, Actions: []string{"pr-comments"}},
+		"tmux-truecolor": {OuterTerm: "xterm-ghostty", TrueColor: true},
 	}
 	for name, conf := range confs {
 		t.Run(name, func(t *testing.T) {
@@ -109,8 +109,9 @@ func TestThemeConfRender(t *testing.T) {
 }
 
 var testThemeConf = ThemeConf{
-	Colors: Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Foreground: "green", Background: "black"},
-	Footer: []string{"#[align=left] nav", "", "#(echo \"hi\")"},
+	Colors:  Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Foreground: "green", Background: "black"},
+	Footer:  []string{"#[align=left] nav", "", "#(echo \"hi\")"},
+	Options: map[string]string{"@tracks_muted": "grey"},
 }
 
 func checkGolden(t *testing.T, name, got string) {

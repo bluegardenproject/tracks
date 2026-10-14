@@ -22,7 +22,6 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	dir := t.TempDir()
 	confPath := filepath.Join(dir, "tmux.conf")
 	conf := tmux.Conf{
-		Actions:         []string{"pr-comments"},
 		DefaultTerminal: "screen-256color",
 		OuterTerm:       "xterm-test",
 		TrueColor:       true,

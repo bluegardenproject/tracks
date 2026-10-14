@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -55,7 +56,7 @@ func newTrackwinCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:  "action <action> <window-id>",
+		Use:  "action <button> <window-id>",
 		Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			paths, err := platform.Resolve()
@@ -73,11 +74,15 @@ func newTrackwinCmd() *cobra.Command {
 	return cmd
 }
 
-// runAction runs a footer button's action in the track of window and
-// words how it went; "" when the window isn't a track's.
+// runAction runs the footer button named button in the track of window
+// and words how it went; "" when the click missed every button or the
+// window isn't a track's.
 func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 	Action(ctx context.Context, id, action string) (string, error)
-}, action, window string) string {
+}, button, window string) string {
+	if _, ok := actions.ParseRange(button); !ok {
+		return ""
+	}
 	windows, err := trackwin.List(t, sessionName)
 	if err != nil {
 		return "Couldn't run the action: " + err.Error()
@@ -86,7 +91,7 @@ func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 		if w.Window != window {
 			continue
 		}
-		name, err := daemon.Action(ctx, w.Track, action)
+		name, err := daemon.Action(ctx, w.Track, button)
 		if err != nil {
 			return err.Error()
 		}

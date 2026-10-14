@@ -18,6 +18,9 @@ In each of the track's worktrees:
 gh pr list --head "$(git branch --show-current)" --state open --json number,url,baseRefName
 ```
 
+When you were given a pull request's link, keep only that one: work in the
+worktree it was found in, and leave the other PRs alone.
+
 ## 2. Collect the open comments
 
 For each PR, read its review threads (OWNER, NAME and NUMBER come from its
