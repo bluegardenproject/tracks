@@ -15,7 +15,7 @@ comment briefly.
 In each of the track's worktrees:
 
 ```bash
-gh pr list --head "$(git branch --show-current)" --state open --json number,url
+gh pr list --head "$(git branch --show-current)" --state open --json number,url,baseRefName
 ```
 
 ## 2. Collect the open comments
@@ -54,20 +54,33 @@ For each open comment, decide: fix it, or leave the code as it is and say
 why. Don't take a suggestion only because a bot made it, and don't refuse
 one only because it's a bot's.
 
-Make the fixes, run the tests, and commit them following the repo's
-conventions.
+Make the fixes and run the tests. Fold each fix into the commit it belongs
+to instead of adding a new one. After `git fetch origin`, the branch's own
+commits are those in `git log origin/<baseRefName>..HEAD`, with the PR's
+`baseRefName` from step 1: on a stacked PR that's the branch below, not
+`main`.
+
+- One commit of its own: `git commit --amend --no-edit`.
+- Several: `git commit --fixup=<commit>` for each fix, then
+  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --keep-base origin/<baseRefName>`.
+  If the rebase stops on a conflict, resolve it and `git rebase --continue`,
+  or `git rebase --abort` and tell the user.
 
 ## 4. Push before answering
 
-Run the pre-push review your track's instructions ask for, then push.
+Run the pre-push review your track's instructions ask for, then
+`git push --force-with-lease --force-if-includes`. Never use plain `--force`.
 **Answer nothing until the push succeeded.** A reply that promises a fix the
-branch doesn't have gets flagged again by the next review. If the push
-fails, stop and tell the user why.
+branch doesn't have gets flagged again by the next review. If the push is
+refused (a permission, a hook, branch protection), show the user the exact
+command, wait until they have run it, and check that the remote branch has your
+commits before you answer. If it fails for another reason, stop and tell
+the user why.
 
 ## 5. Answer
 
-Write one reply per comment, one or two sentences: what changed (with the
-commit's short hash), or why nothing did.
+Write one reply per comment, one or two sentences: what changed, or why
+nothing did. Don't cite commit hashes: amending and rebasing change them.
 
 - **Bots:** post the reply, then resolve the thread.
 - **People:** don't post yet. Show the user every draft in a table (author,

@@ -53,6 +53,8 @@ the v2.0.0 release; git history keeps them.
 - **An event timeline** per track.
 - **History:** search, filters and paging.
 - **Track actions** (the footer's top row): more buttons beside "open
-  comments", such as failing CI; the prompts they send editable in Settings;
+  comments", such as failing CI; the prompts they send editable in Settings,
+  and a setting for whether review fixes are amended (force-pushed) or added
+  as new commits;
   a key for them on tmux older than 3.4, where the row stays empty since it
   can't be clicked.
