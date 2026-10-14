@@ -47,10 +47,6 @@ const Variants = 4
 func VariantBg(v int) string   { return "@tracks_button" + strconv.Itoa(v) + "_bg" }
 func VariantText(v int) string { return "@tracks_button" + strconv.Itoa(v) + "_text" }
 
-// variant is the colour variant of the button for the track's i-th PR,
-// so a PR keeps its colour while its button shows.
-func variant(i int) int { return i%Variants + 1 }
-
 //go:embed prompts/*.txt
 var prompts embed.FS
 
@@ -115,18 +111,21 @@ func (b Button) Label(multiRepo bool) string {
 // style sets attr to the colour in the global option named option.
 func style(attr, option string) string { return "#[" + attr + "=#{" + option + "}]" }
 
-// Render is the tmux format of buttons, side by side. A sent one is
-// muted text, not a range: there's nothing to click until new comments
-// come in.
+// Render is the tmux format of buttons, side by side. They take the
+// colour variants in turn, from the first, so no two neighbours share
+// one. A sent one is muted text, not a range: there's nothing to click
+// until new comments come in, and it takes no variant.
 func Render(buttons []Button, multiRepo bool) string {
 	var parts []string
+	coloured := 0
 	for _, b := range buttons {
 		label := " " + strings.ReplaceAll(b.Label(multiRepo), "#", "##") + " "
 		if b.Sent {
 			parts = append(parts, style("fg", Muted)+label+"#[default]")
 			continue
 		}
-		v := variant(b.Index)
+		v := coloured%Variants + 1
+		coloured++
 		parts = append(parts, "#[range=user|"+Range(b.Index)+"]"+style("bg", VariantBg(v))+style("fg", VariantText(v))+
 			label+"#[norange default]")
 	}
