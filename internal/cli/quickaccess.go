@@ -57,8 +57,7 @@ func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
 }
 
 // askInPopup runs "popup <args> <answer-file>" in a popup over client,
-// at most w by h cells inside its border, and returns what it wrote to
-// the file.
+// at most w by h cells, and returns what it wrote to the file.
 func askInPopup(c *tmux.Client, paths platform.Paths, client, args string, w, h int) (string, error) {
 	command, err := selfCommand()
 	if err != nil {
@@ -68,8 +67,6 @@ func askInPopup(c *tmux.Client, paths platform.Paths, client, args string, w, h 
 	if err != nil {
 		return "", err
 	}
-	version, _ := tmux.InstalledVersion()
-	border := tmux.PopupBorder(version)
 	t, _ := loadTheme(paths)
 	answer, err := os.CreateTemp("", "tracks-popup-*")
 	if err != nil {
@@ -80,12 +77,12 @@ func askInPopup(c *tmux.Client, paths platform.Paths, client, args string, w, h 
 
 	popup := tmux.Popup{
 		Client:     client,
-		Width:      strconv.Itoa(min(width, w+border)),
-		Height:     strconv.Itoa(min(height, h+border)),
+		Width:      strconv.Itoa(min(width, w)),
+		Height:     strconv.Itoa(min(height, h)),
 		Command:    command + " popup " + args + " " + shellx.Quote(answer.Name()),
 		Background: t.Value(theme.OverlayBg),
 	}
-	if err := c.Popup(popup, version); err != nil {
+	if err := c.Popup(popup); err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(answer.Name())

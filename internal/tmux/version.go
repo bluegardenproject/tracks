@@ -12,13 +12,9 @@ import (
 // (for example a build from master), which is treated as recent.
 type Version struct{ Major, Minor int }
 
-// MinVersion is the oldest supported tmux: it's the first with
-// extended keys and terminal-features.
-var MinVersion = Version{3, 2}
-
-// UserRanges is the first tmux whose footer has clickable ranges of
-// our own, which the action buttons are.
-var UserRanges = Version{3, 4}
+// MinVersion is the oldest supported tmux: it's the first whose footer
+// has clickable ranges of our own, which the action buttons are.
+var MinVersion = Version{3, 4}
 
 // AtLeast reports whether v is want or newer. An unknown version
 // counts as new enough.

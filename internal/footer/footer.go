@@ -9,16 +9,11 @@ import (
 )
 
 // Rows returns the footer rows, top to bottom. systemCommand prints the
-// system data; tmux reruns it every status-interval. Without buttons, as
-// on a tmux that can't click them, the top row stays empty.
-func Rows(t theme.Theme, version, systemCommand string, buttons bool) []string {
+// system data; tmux reruns it every status-interval.
+func Rows(t theme.Theme, version, systemCommand string) []string {
 	p := palette{t}
-	top := ""
-	if buttons {
-		top = actionsRow(p)
-	}
 	return []string{
-		top,
+		actionsRow(p),
 		nav(p),
 		"",
 		"#[align=left]" + p.fg(theme.FooterMuted) + " Tracks " + escape(version) + "#[default]" +

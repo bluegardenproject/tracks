@@ -30,8 +30,6 @@ func openTracksFilter(c *tmux.Client, paths platform.Paths, client string) error
 	if err != nil {
 		return err
 	}
-	version, _ := tmux.InstalledVersion()
-	border := tmux.PopupBorder(version)
 	t, _ := loadTheme(paths)
 	result, err := os.CreateTemp("", "tracks-filter-*")
 	if err != nil {
@@ -42,11 +40,11 @@ func openTracksFilter(c *tmux.Client, paths platform.Paths, client string) error
 
 	if err := c.Popup(tmux.Popup{
 		Client:     client,
-		Width:      strconv.Itoa(min(width, tracksfilter.Width+border)),
-		Height:     strconv.Itoa(min(height, tracksfilter.Height()+border)),
+		Width:      strconv.Itoa(min(width, tracksfilter.Width)),
+		Height:     strconv.Itoa(min(height, tracksfilter.Height())),
 		Command:    command + " popup tracks-filter " + shellx.Quote(result.Name()),
 		Background: t.Value(theme.OverlayBg),
-	}, version); err != nil {
+	}); err != nil {
 		return err
 	}
 	if done, err := os.ReadFile(result.Name()); err != nil || string(done) != filterSet {

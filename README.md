@@ -21,7 +21,7 @@ nothing and exits non-zero. Uninstall with
 (`tracks update --check` only reports). The daemon restarts on the next
 `tracks`, and tracks still running are interrupted; Resume brings them back.
 
-Requires `git`, tmux 3.2 or newer, and the `claude` or Cursor `agent` CLI on
+Requires `git`, tmux 3.4 or newer, and the `claude` or Cursor `agent` CLI on
 your `PATH`. Linux and macOS only.
 
 ### From source

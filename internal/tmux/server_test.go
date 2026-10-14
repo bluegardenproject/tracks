@@ -16,14 +16,13 @@ import (
 // the session lifecycle must work on a server of our own.
 func TestServerWithGeneratedConfig(t *testing.T) {
 	socket := tmuxtest.Socket(t)
-	v, err := tmux.InstalledVersion()
-	if err != nil {
+	if _, err := tmux.InstalledVersion(); err != nil {
 		t.Skip(err)
 	}
 	dir := t.TempDir()
 	confPath := filepath.Join(dir, "tmux.conf")
 	conf := tmux.Conf{
-		Version:         v,
+		Actions:         []string{"pr-comments"},
 		DefaultTerminal: "screen-256color",
 		OuterTerm:       "xterm-test",
 		TrueColor:       true,

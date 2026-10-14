@@ -186,29 +186,17 @@ type Popup struct {
 	Background string
 }
 
-// PopupBorder is how many cells tmux v's popup border takes each way,
-// size included. From 3.3 popups have none, as their programs draw
-// their own, and take p's background; older ones keep the terminal's.
-func PopupBorder(v Version) int {
-	if v.AtLeast(Version{3, 3}) {
-		return 0
-	}
-	return 2
-}
-
-// Popup opens p on tmux v and returns once it closes.
-func (c *Client) Popup(p Popup, v Version) error {
-	_, err := c.run(popupArgs(p, v)...)
+// Popup opens p and returns once it closes. It has no border, as its
+// program draws its own.
+func (c *Client) Popup(p Popup) error {
+	_, err := c.run(popupArgs(p)...)
 	return err
 }
 
-func popupArgs(p Popup, v Version) []string {
-	args := []string{"display-popup", "-E", "-c", p.Client, "-w", p.Width, "-h", p.Height}
-	if PopupBorder(v) == 0 {
-		args = append(args, "-B")
-		if p.Background != "" {
-			args = append(args, "-s", "bg="+p.Background)
-		}
+func popupArgs(p Popup) []string {
+	args := []string{"display-popup", "-E", "-c", p.Client, "-w", p.Width, "-h", p.Height, "-B"}
+	if p.Background != "" {
+		args = append(args, "-s", "bg="+p.Background)
 	}
 	return append(args, p.Command)
 }
