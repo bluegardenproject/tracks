@@ -37,7 +37,6 @@ func openNewTrack(c *tmux.Client, paths platform.Paths, client, draft string) er
 	if err != nil {
 		return err
 	}
-	version, _ := tmux.InstalledVersion()
 	t, _ := loadTheme(paths)
 	return c.Popup(tmux.Popup{
 		Client:     client,
@@ -45,7 +44,7 @@ func openNewTrack(c *tmux.Client, paths platform.Paths, client, draft string) er
 		Height:     strconv.Itoa(min(height, max(formMinHeight, height*formShare/100))),
 		Command:    command + " popup add-track " + shellx.Quote(client) + draftFlag(draft),
 		Background: t.Value(theme.OverlayBg),
-	}, version)
+	})
 }
 
 // formHere opens the New track form over the client showing this pane,

@@ -29,8 +29,8 @@ func TestVersionAtLeast(t *testing.T) {
 		v, want Version
 		ok      bool
 	}{
-		{Version{3, 2}, MinVersion, true},
-		{Version{3, 1}, MinVersion, false},
+		{Version{3, 4}, MinVersion, true},
+		{Version{3, 3}, MinVersion, false},
 		{Version{2, 9}, MinVersion, false},
 		{Version{4, 0}, MinVersion, true},
 		{Version{}, MinVersion, true},
@@ -82,8 +82,8 @@ func TestRealSocketPanicsInTests(t *testing.T) {
 
 func TestConfRender(t *testing.T) {
 	confs := map[string]Conf{
-		"tmux-3.2":           {Version: Version{3, 2}, OuterTerm: "xterm-256color"},
-		"tmux-3.4-truecolor": {Version: Version{3, 4}, OuterTerm: "xterm-ghostty", TrueColor: true, Actions: []string{"pr-comments"}},
+		"tmux":           {OuterTerm: "xterm-256color"},
+		"tmux-truecolor": {OuterTerm: "xterm-ghostty", TrueColor: true, Actions: []string{"pr-comments"}},
 	}
 	for name, conf := range confs {
 		t.Run(name, func(t *testing.T) {
@@ -120,12 +120,7 @@ func checkGolden(t *testing.T, name, got string) {
 
 func TestPopupArgs(t *testing.T) {
 	p := Popup{Client: "/dev/ttys001", Width: "36", Height: "7", Command: "tracks popup", Background: "#101010"}
-	old := popupArgs(p, Version{3, 2})
-	if want := []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "tracks popup"}; !slices.Equal(old, want) {
-		t.Errorf("tmux 3.2: %q, want %q", old, want)
-	}
-	styled := popupArgs(p, Version{3, 3})
-	if want := []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "-B", "-s", "bg=#101010", "tracks popup"}; !slices.Equal(styled, want) {
-		t.Errorf("tmux 3.3: %q, want %q", styled, want)
+	if got, want := popupArgs(p), []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "-B", "-s", "bg=#101010", "tracks popup"}; !slices.Equal(got, want) {
+		t.Errorf("popupArgs = %q, want %q", got, want)
 	}
 }

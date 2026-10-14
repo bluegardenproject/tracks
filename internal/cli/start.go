@@ -46,8 +46,7 @@ var errInsideTmux = errors.New("you're inside another tmux session.\n" +
 // start opens Tracks: it starts the tmux server when needed and attaches
 // this terminal to it.
 func start(version string) error {
-	tmuxVersion, err := tmux.InstalledVersion()
-	if err != nil {
+	if _, err := tmux.InstalledVersion(); err != nil {
 		return err
 	}
 	paths, err := platform.Resolve()
@@ -61,7 +60,7 @@ func start(version string) error {
 	case startRefuse:
 		return errInsideTmux
 	case startCreate:
-		if err := createSession(c, paths, tmuxVersion, version); err != nil {
+		if err := createSession(c, paths, version); err != nil {
 			return err
 		}
 	}
@@ -85,7 +84,7 @@ func start(version string) error {
 	return c.Attach(sessionName)
 }
 
-func createSession(c *tmux.Client, paths platform.Paths, tmuxVersion tmux.Version, version string) error {
+func createSession(c *tmux.Client, paths platform.Paths, version string) error {
 	command, err := selfCommand()
 	if err != nil {
 		return err
@@ -97,7 +96,6 @@ func createSession(c *tmux.Client, paths platform.Paths, tmuxVersion tmux.Versio
 	}
 	colorterm := os.Getenv("COLORTERM")
 	conf := tmux.Conf{
-		Version:         tmuxVersion,
 		DefaultTerminal: defaultTerminal(),
 		OuterTerm:       os.Getenv("TERM"),
 		TrueColor:       colorterm == "truecolor" || colorterm == "24bit",
