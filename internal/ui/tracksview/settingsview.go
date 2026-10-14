@@ -123,6 +123,8 @@ func (m Model) sectionBody(width, height int) []string {
 		return m.typesView(width)
 	case sectionFastTracks:
 		return m.fastTracks(width)
+	case sectionPersonal:
+		return m.personal(width, height)
 	}
 	return m.about(width)
 }
@@ -265,6 +267,11 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 	case sectionTracks:
 		s.editing = true
 		return m.typesClick(bx, by)
+	case sectionPersonal:
+		s.editing = true
+		if m.onStyleButton(bx, by) {
+			return m.startLearning()
+		}
 	}
 	return m, nil
 }
@@ -309,6 +316,12 @@ func (m Model) settingsHover(x, y int) Model {
 		}
 	}
 	s.fastHover = m.fastButtonAt(x, y)
+	s.personal.hover = false
+	if s.section == sectionPersonal {
+		if bx, by, ok := m.inSection(x, y); ok {
+			s.personal.hover = m.onStyleButton(bx, by)
+		}
+	}
 	if s.section == sectionCreator {
 		bx, by, ok := m.inSection(x, y)
 		if !ok {

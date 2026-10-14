@@ -269,6 +269,13 @@ func (c Client) SetTitle(ctx context.Context, id, title string) error {
 	return c.Call(ctx, SetTitle, SetTitleParams{ID: id, Title: title}, nil, nil)
 }
 
+// LearnStyle learns the user's PR comment style, telling progress each
+// line of its log.
+func (c Client) LearnStyle(ctx context.Context, progress func(string)) (StyleResult, error) {
+	var r StyleResult
+	return r, c.Call(ctx, LearnStyle, nil, &r, progress)
+}
+
 // Action runs action in track id and returns the track's name.
 func (c Client) Action(ctx context.Context, id, action string) (string, error) {
 	var r ActionResult
