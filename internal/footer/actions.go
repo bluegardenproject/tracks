@@ -6,11 +6,11 @@ import (
 )
 
 // actionsRow holds the shown track's actions, read from its window's
-// options, so it changes with the track. A button is a user range named
-// after its action: clicking it runs the action. A track without any
-// leaves the row empty.
+// options, so it changes with the track. It sits centred above the track
+// list. A button is a user range named after its action: clicking it runs
+// the action. A track without any leaves the row empty.
 func actionsRow(p palette) string {
-	return "#[align=left]" + commentsButton(p)
+	return "#[align=centre]" + commentsButton(p)
 }
 
 // commentsButton offers to send the open review comments to the agent,
