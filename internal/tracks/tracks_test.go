@@ -167,6 +167,9 @@ type fakeWindows struct {
 	// the lines typed into the agents, as "<window> <text>".
 	comments map[string]actions.Comments
 	prompts  []string
+	// info is each window's footer info; infoWrites counts the writes.
+	info       map[string]string
+	infoWrites int
 }
 
 func (w *fakeWindows) Comments(window string, c actions.Comments) error {
@@ -174,6 +177,15 @@ func (w *fakeWindows) Comments(window string, c actions.Comments) error {
 		w.comments = map[string]actions.Comments{}
 	}
 	w.comments[window] = c
+	return nil
+}
+
+func (w *fakeWindows) Info(window, text string) error {
+	if w.info == nil {
+		w.info = map[string]string{}
+	}
+	w.info[window] = text
+	w.infoWrites++
 	return nil
 }
 

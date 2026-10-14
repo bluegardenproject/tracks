@@ -3,6 +3,7 @@ package trackwin
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
@@ -22,6 +23,16 @@ func SetComments(t Tmux, window string, c actions.Comments) error {
 		return err
 	}
 	return t.SetWindowOption(window, actions.SentOption, sent)
+}
+
+// InfoOption holds what the footer's top row shows of the track while
+// it has no buttons.
+const InfoOption = "@tracks_info"
+
+// SetInfo shows text on window for the footer, escaped so tmux draws it
+// as it is.
+func SetInfo(t Tmux, window, text string) error {
+	return t.SetWindowOption(window, InfoOption, strings.ReplaceAll(text, "#", "##"))
 }
 
 // submitDelay parts the typed prompt from its Enter: the agent CLIs

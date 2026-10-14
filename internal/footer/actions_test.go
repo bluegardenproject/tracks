@@ -9,6 +9,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tmux/tmuxtest"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 )
 
 // TestActionsRow has tmux draw the row for a window with its options.
@@ -21,7 +22,7 @@ func TestActionsRow(t *testing.T) {
 	row := actionsRow(palette{theme.Default()})
 	draw := func(open, sent string) string {
 		t.Helper()
-		for name, value := range map[string]string{actions.CommentsOption: open, actions.SentOption: sent} {
+		for name, value := range map[string]string{actions.CommentsOption: open, actions.SentOption: sent, trackwin.InfoOption: "api · active · Claude Code opus"} {
 			if err := c.SetWindowOption("tracks:api", name, value); err != nil {
 				t.Fatal(err)
 			}
@@ -33,7 +34,7 @@ func TestActionsRow(t *testing.T) {
 		return strings.TrimSpace(styles.ReplaceAllString(string(out), ""))
 	}
 	for _, tc := range []struct{ open, sent, want string }{
-		{"", "", ""},
+		{"", "", "api · active · Claude Code opus"},
 		{"1", "", "1 open comment · solve now"},
 		{"3", "", "3 open comments · solve now"},
 		{"3", "1", "3 open comments · sent to the agent"},

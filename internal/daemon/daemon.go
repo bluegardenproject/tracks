@@ -159,6 +159,9 @@ func Run(ctx context.Context, c Config) error {
 			} else if err := c.Tracks.CheckScreens(ctx); err != nil {
 				c.Log.Printf("checking the agents' screens: %v", err)
 			} else {
+				if err := c.Tracks.SyncInfo(ctx); err != nil {
+					c.Log.Printf("showing the tracks' info: %v", err)
+				}
 				c.checkExits(ctx)
 				proxier.start(pollCtx, syncProxy)
 			}

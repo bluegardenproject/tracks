@@ -46,6 +46,7 @@ func (noWindows) Attention(string, bool) error            { return nil }
 func (noWindows) Screen(string) (string, error)           { return "", nil }
 func (noWindows) Comments(string, actions.Comments) error { return nil }
 func (noWindows) Prompt(string, string) error             { return nil }
+func (noWindows) Info(string, string) error               { return nil }
 
 // config puts the daemon's files in a short folder: a Unix socket path
 // has to stay under about 100 bytes.

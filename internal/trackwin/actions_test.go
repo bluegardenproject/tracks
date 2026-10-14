@@ -51,6 +51,13 @@ func TestPromptAndComments(t *testing.T) {
 		t.Errorf("the agent pane shows %q; want the line typed, then cat's copy after Enter", screen)
 	}
 
+	if err := trackwin.SetInfo(c, w.ID, "fix #12"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.WindowOption(w.ID, trackwin.InfoOption); got != "fix ##12" {
+		t.Errorf("SetInfo stored %q; want the # escaped, so tmux draws it and reads no style from it", got)
+	}
+
 	for _, tc := range []struct {
 		c          actions.Comments
 		open, sent string

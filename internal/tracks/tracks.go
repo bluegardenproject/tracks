@@ -104,6 +104,8 @@ type Windows interface {
 	Comments(window string, c actions.Comments) error
 	// Prompt types text into window's agent pane and submits it.
 	Prompt(window, text string) error
+	// Info shows text on window, for the footer's top row.
+	Info(window, text string) error
 }
 
 // Service creates, lists and ends tracks.
@@ -172,6 +174,8 @@ type Service struct {
 	// comments are the open tracks' review threads, as CountComments
 	// last counted them and RunAction sent them.
 	comments map[string]actions.Comments
+	// info is what SyncInfo last showed, by window.
+	info map[string]string
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string
@@ -321,6 +325,10 @@ func (w TmuxWindows) Attention(window string, on bool) error {
 
 func (w TmuxWindows) Comments(window string, c actions.Comments) error {
 	return trackwin.SetComments(w.Tmux, window, c)
+}
+
+func (w TmuxWindows) Info(window, text string) error {
+	return trackwin.SetInfo(w.Tmux, window, text)
 }
 
 func (w TmuxWindows) Prompt(window, text string) error {
