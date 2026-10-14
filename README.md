@@ -55,7 +55,10 @@ The **Tracks window** has four tabs:
 
 Every track has a window of its own: the agent on the left, terminals on the
 right. The footer on every window lists the tracks; click one, or use the keys
-below.
+below. Above the list, the track you're in gets its buttons: when review
+threads on its PRs wait on the agent, "3 open comments · solve now" sends the
+agent to fix and answer them. It replies to bots on its own and asks you before
+replying to a person.
 
 | Keys | |
 |---|---|

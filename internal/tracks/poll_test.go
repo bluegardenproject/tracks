@@ -14,6 +14,15 @@ type fakeGitHub struct {
 	branches map[string][]track.PR // by branch
 	fail     error
 	asked    []string
+	threads  map[string]int // by PR URL
+}
+
+func (g *fakeGitHub) OpenThreads(_ context.Context, pr track.PR) (int, error) {
+	g.asked = append(g.asked, "threads "+pr.URL)
+	if g.fail != nil {
+		return 0, g.fail
+	}
+	return g.threads[pr.URL], nil
 }
 
 func (g *fakeGitHub) PR(_ context.Context, url string) (track.PRState, error) {

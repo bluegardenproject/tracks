@@ -52,4 +52,7 @@ the v2.0.0 release; git history keeps them.
 - **Resuming an archived track,** behind a setting.
 - **An event timeline** per track.
 - **History:** search, filters and paging.
-- **PR actions** in the track details.
+- **Track actions** (the footer's top row): more buttons beside "open
+  comments", such as failing CI; the prompts they send editable in Settings;
+  a key for them on tmux older than 3.4, where the row stays empty since it
+  can't be clicked.

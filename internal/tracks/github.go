@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,9 @@ type GitHub interface {
 	// BranchPRs are the pull requests from branch in the repo checked
 	// out at dir, in any state.
 	BranchPRs(ctx context.Context, dir, branch string) ([]track.PR, error)
+	// OpenThreads is how many review threads on pr wait on the gh user:
+	// unresolved, with someone else having the last word.
+	OpenThreads(ctx context.Context, pr track.PR) (int, error)
 }
 
 // ErrNoGH means gh isn't installed, so no PR is checked.
@@ -80,6 +84,71 @@ func (g GH) BranchPRs(ctx context.Context, dir, branch string) ([]track.PR, erro
 		}
 	}
 	return prs, nil
+}
+
+// threadsQuery reads the last comment of the first 100 review threads,
+// and who asks.
+const threadsQuery = `query($owner: String!, $name: String!, $number: Int!) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes { isResolved comments(last: 1) { nodes { author { login } } } }
+      }
+    }
+  }
+}`
+
+func (g GH) OpenThreads(ctx context.Context, pr track.PR) (int, error) {
+	owner, name, _ := strings.Cut(pr.Repo, "/")
+	out, err := g.run(ctx, "", "api", "graphql", "-f", "query="+threadsQuery,
+		"-f", "owner="+owner, "-f", "name="+name, "-F", "number="+strconv.Itoa(pr.Number))
+	if err != nil {
+		return 0, err
+	}
+	n, err := openThreads(out)
+	if err != nil {
+		return 0, fmt.Errorf("gh api graphql for %s: %w", pr.URL, err)
+	}
+	return n, nil
+}
+
+// openThreads counts the threads in a threadsQuery answer that are
+// unresolved and whose last comment isn't the viewer's.
+func openThreads(answer []byte) (int, error) {
+	var a struct {
+		Data struct {
+			Viewer     struct{ Login string }
+			Repository struct {
+				PullRequest struct {
+					ReviewThreads struct {
+						Nodes []struct {
+							IsResolved bool
+							Comments   struct {
+								Nodes []struct {
+									Author *struct{ Login string }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(answer, &a); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, t := range a.Data.Repository.PullRequest.ReviewThreads.Nodes {
+		if t.IsResolved || len(t.Comments.Nodes) == 0 {
+			continue
+		}
+		last := t.Comments.Nodes[len(t.Comments.Nodes)-1].Author
+		if last == nil || last.Login != a.Data.Viewer.Login {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (g GH) run(ctx context.Context, dir string, args ...string) ([]byte, error) {

@@ -40,6 +40,8 @@ user can switch into at any time.
     the track's branch.
   - ` + "`tracks promote`" + ` makes an Ask or Plan track a Work track with its own
     worktrees. It restarts this session, so run it only when the user asks.
+- **Review comments.** When asked to work through the open comments on this
+  track's PRs, follow ` + "`~/.cursor/rules/tracks-pr-comments.mdc`" + `.
 - **Announce pull requests.** If you open one, put its URL on a line of its
   own as ` + "`TRACKS_PR_URL=<url>`" + ` so the dashboard picks it up. One line per PR.
 - **Review before you push.** Run ` + "`tracks review`" + ` before pushing anything
@@ -54,10 +56,34 @@ These sessions are read in a dashboard: keep responses terse and skip the
 preamble.
 `
 
-// InstallRule writes the rule into home's .cursor/rules. A file there
-// without the marker is the user's and stays untouched: ok is false.
-func InstallRule(home string) (path string, ok bool, err error) {
-	path = filepath.Join(home, ".cursor", "rules", "tracks.mdc")
-	ok, err = agents.WriteManaged(path, []byte(rule))
-	return path, ok, err
+// prCommentsRule is how Cursor works through a track's open review
+// comments. It loads only when asked for: the footer's button sends a
+// prompt naming it.
+const prCommentsRule = `---
+x-tracks-managed: "1"
+description: Work through the open review comments on a Tracks track's pull requests (only when TRACKS_ID is set)
+alwaysApply: false
+---
+
+` + agents.PRCommentsSteps
+
+// InstallRules writes the rules into home's .cursor/rules. A file there
+// without the marker is the user's and stays untouched; its path is
+// returned in skipped.
+func InstallRules(home string) (skipped []string, err error) {
+	dir := filepath.Join(home, ".cursor", "rules")
+	for _, f := range []struct{ name, content string }{
+		{"tracks.mdc", rule},
+		{"tracks-pr-comments.mdc", prCommentsRule},
+	} {
+		path := filepath.Join(dir, f.name)
+		ok, err := agents.WriteManaged(path, []byte(f.content))
+		if err != nil {
+			return skipped, err
+		}
+		if !ok {
+			skipped = append(skipped, path)
+		}
+	}
+	return skipped, nil
 }

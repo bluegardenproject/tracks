@@ -143,6 +143,18 @@ func (c *Client) SelectPane(pane string) error {
 	return err
 }
 
+// SendText types text into pane, as keys and not as a paste.
+func (c *Client) SendText(pane, text string) error {
+	_, err := c.run("send-keys", "-l", "-t", pane, "--", text)
+	return err
+}
+
+// SendKey presses key, such as Enter, in pane.
+func (c *Client) SendKey(pane, key string) error {
+	_, err := c.run("send-keys", "-t", pane, key)
+	return err
+}
+
 // ResizePaneHeight sets pane's height in rows.
 func (c *Client) ResizePaneHeight(pane string, rows int) error {
 	_, err := c.run("resize-pane", "-t", pane, "-y", strconv.Itoa(rows))

@@ -6,7 +6,8 @@ import (
 	"github.com/bluegardenproject/tracks/internal/golden"
 )
 
-// TestRuleMatchesGolden keeps the global Cursor rule in testdata.
+// TestRuleMatchesGolden keeps the Cursor rules in testdata.
 func TestRuleMatchesGolden(t *testing.T) {
 	golden.Check(t, "testdata/rule.golden", rule)
+	golden.Check(t, "testdata/pr-comments.golden", prCommentsRule)
 }

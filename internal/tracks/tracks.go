@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/procs"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -99,6 +100,10 @@ type Windows interface {
 	Screen(window string) (string, error)
 	// Respawn restarts window's agent on s, keeping the window.
 	Respawn(window string, s trackwin.Spec) (trackwin.Window, error)
+	// Comments shows c on window, for the footer's button.
+	Comments(window string, c actions.Comments) error
+	// Prompt types text into window's agent pane and submits it.
+	Prompt(window, text string) error
 }
 
 // Service creates, lists and ends tracks.
@@ -164,6 +169,9 @@ type Service struct {
 	// windows are the track windows the last Sweep saw; only Sweep
 	// uses them.
 	windows []trackwin.Info
+	// comments are the open tracks' review threads, as CountComments
+	// last counted them and RunAction sent them.
+	comments map[string]actions.Comments
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string
@@ -309,6 +317,14 @@ func (w TmuxWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, e
 
 func (w TmuxWindows) Attention(window string, on bool) error {
 	return trackwin.SetAttention(w.Tmux, window, on)
+}
+
+func (w TmuxWindows) Comments(window string, c actions.Comments) error {
+	return trackwin.SetComments(w.Tmux, window, c)
+}
+
+func (w TmuxWindows) Prompt(window, text string) error {
+	return trackwin.Prompt(w.Tmux, window, text)
 }
 
 func (w TmuxWindows) Screen(window string) (string, error) {

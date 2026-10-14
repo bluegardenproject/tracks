@@ -24,7 +24,13 @@ func TestHelpersInstallTheCursorRuleOnceCursorIsAdded(t *testing.T) {
 	if _, err := os.Stat(rule); err != nil {
 		t.Errorf("the rule isn't written with Cursor added: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(c.Home, ".claude", "skills", "tracks-add-repo", "SKILL.md")); err != nil {
-		t.Errorf("the add-repo skill isn't written: %v", err)
+	for _, path := range []string{
+		filepath.Join(c.Home, ".cursor", "rules", "tracks-pr-comments.mdc"),
+		filepath.Join(c.Home, ".claude", "skills", "tracks-add-repo", "SKILL.md"),
+		filepath.Join(c.Home, ".claude", "skills", "tracks-pr-comments", "SKILL.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s isn't written: %v", filepath.Base(filepath.Dir(path))+"/"+filepath.Base(path), err)
+		}
 	}
 }

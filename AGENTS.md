@@ -18,7 +18,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `tmux/` tmux on Tracks' own socket, generated config, the prefix keys (`keys.go`) · `tmux/tmuxtest/` throwaway servers for tests
 - `trackwin/` a track's window and its panes
 - `theme/` design tokens, built-in themes (`themes/*.yaml`) and user theme files · `settings/` `settings.yaml` (the chosen theme, the engines) · `ui/style/` tokens to Lip Gloss colours
-- `footer/` the footer's tmux status rows · `sysinfo/` LAN, WAN, CPU and memory for the footer
+- `footer/` the footer's tmux status rows · `actions/` the track actions: the footer's buttons and the prompts they send · `sysinfo/` LAN, WAN, CPU and memory for the footer
 - `ui/tracksview/` the Tracks window (window 0) · `ui/themecreator/` theme editor, a pane of the Settings tab
 - `ui/quickaccess/` the Quick Access popup (`Ctrl+b q`) · `ui/addtrack/` the New track form popup · `ui/tracksfilter/` the Tracks filter popup · `ui/confirm/` the confirm popup
 - `ui/source/` the data screens read (tracks, repos, themes, engines); tracks come from the daemon

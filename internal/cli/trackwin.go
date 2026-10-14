@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/platform"
+	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/spf13/cobra"
@@ -52,5 +54,43 @@ func newTrackwinCmd() *cobra.Command {
 			return nil
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:  "action <action> <window-id>",
+		Args: cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			paths, err := platform.Resolve()
+			if err != nil {
+				return err
+			}
+			t := tmux.New(paths.TmuxSocket)
+			msg := runAction(c.Context(), t, rpc.Client{Socket: paths.Socket}, args[0], args[1])
+			if msg == "" {
+				return nil
+			}
+			return t.DisplayMessage(msg)
+		},
+	})
 	return cmd
+}
+
+// runAction runs a footer button's action in the track of window and
+// words how it went; "" when the window isn't a track's.
+func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
+	Action(ctx context.Context, id, action string) (string, error)
+}, action, window string) string {
+	windows, err := trackwin.List(t, sessionName)
+	if err != nil {
+		return "Couldn't run the action: " + err.Error()
+	}
+	for _, w := range windows {
+		if w.Window != window {
+			continue
+		}
+		name, err := daemon.Action(ctx, w.Track, action)
+		if err != nil {
+			return err.Error()
+		}
+		return "Sent " + name + "'s open comments to its agent."
+	}
+	return ""
 }

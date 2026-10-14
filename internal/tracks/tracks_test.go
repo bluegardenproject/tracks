@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -162,6 +163,23 @@ type fakeWindows struct {
 	// window's agent pane shows.
 	attention map[string]bool
 	screens   map[string]string
+	// comments is what each window shows of its open comments; prompts
+	// the lines typed into the agents, as "<window> <text>".
+	comments map[string]actions.Comments
+	prompts  []string
+}
+
+func (w *fakeWindows) Comments(window string, c actions.Comments) error {
+	if w.comments == nil {
+		w.comments = map[string]actions.Comments{}
+	}
+	w.comments[window] = c
+	return nil
+}
+
+func (w *fakeWindows) Prompt(window, text string) error {
+	w.prompts = append(w.prompts, window+" "+text)
+	return nil
 }
 
 func (w *fakeWindows) Screen(window string) (string, error) { return w.screens[window], nil }
