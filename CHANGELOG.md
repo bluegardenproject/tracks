@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.0.0](https://github.com/bluegardenproject/tracks/compare/v2.2.1...v3.0.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tmux:** Tracks needs tmux 3.4 or newer and refuses to start on older versions. Ubuntu 22.04 (3.2a) and Debian 12 (3.3a) need a newer tmux.
+
+### Features
+
+* **agents:** amend review fixes and force-push with lease, without citing hashes ([081bfdd](https://github.com/bluegardenproject/tracks/commit/081bfdd327e9ba76703bd5e3e92791564a19d99c))
+* **footer:** add track actions, starting with solving open PR comments ([723208c](https://github.com/bluegardenproject/tracks/commit/723208c30d7267d13bc3d03616a0ab6b0c93e05f))
+* **footer:** centre the track actions above the track list ([421ac3a](https://github.com/bluegardenproject/tracks/commit/421ac3a2822786d01631549beacfe6aff3be19c7))
+* **tmux:** require tmux 3.4 or newer ([ac0cad3](https://github.com/bluegardenproject/tracks/commit/ac0cad3d3fab7729b64acaf264a9699c95b73b07))
+
 ## [2.2.1](https://github.com/bluegardenproject/tracks/compare/v2.2.0...v2.2.1) (2026-10-13)
 
 
