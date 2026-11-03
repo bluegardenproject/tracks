@@ -207,21 +207,7 @@ func AddDevServer(t Tmux, window, dir string, p Process, key string, port int) (
 // add puts a pane at the bottom of the right column, creating the
 // column when it doesn't exist, and evens out the column's heights.
 func add(t Tmux, window, dir, role string, p Process) (string, error) {
-	panes, err := t.ListPanes(window)
-	if err != nil {
-		return "", err
-	}
-	agent, column := layout(panes)
-	if agent == nil {
-		return "", fmt.Errorf("window %s has no agent pane", window)
-	}
-
-	var pane string
-	if len(column) == 0 {
-		pane, err = t.SplitPane(agent.ID, tmux.Right, ColumnPercent, dir, p.Command)
-	} else {
-		pane, err = t.SplitPane(column[len(column)-1].ID, tmux.Below, 0, dir, p.Command)
-	}
+	pane, err := split(t, window, dir, p.Command)
 	if err != nil {
 		return "", err
 	}
@@ -232,6 +218,32 @@ func add(t Tmux, window, dir, role string, p Process) (string, error) {
 		return pane, err
 	}
 	return pane, even(t, window)
+}
+
+// split opens a pane running command below the right column's last
+// pane, or opens the column beside the agent pane. The last pane can
+// close between listing and splitting, as a setup that finished does;
+// split then lists again.
+func split(t Tmux, window, dir, command string) (string, error) {
+	for range 3 {
+		panes, err := t.ListPanes(window)
+		if err != nil {
+			return "", err
+		}
+		agent, column := layout(panes)
+		if agent == nil {
+			return "", fmt.Errorf("window %s has no agent pane", window)
+		}
+		if len(column) == 0 {
+			return t.SplitPane(agent.ID, tmux.Right, ColumnPercent, dir, command)
+		}
+		last := column[len(column)-1].ID
+		pane, err := t.SplitPane(last, tmux.Below, 0, dir, command)
+		if err == nil || !gone(t, window, last) {
+			return pane, err
+		}
+	}
+	return "", fmt.Errorf("window %s: the right column's panes keep closing", window)
 }
 
 // gone reports whether window has no pane called pane any more.
