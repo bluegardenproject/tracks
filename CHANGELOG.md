@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.1.2](https://github.com/bluegardenproject/tracks/compare/v3.1.1...v3.1.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **trackwin:** even out the column when one of its panes closed ([811ca1d](https://github.com/bluegardenproject/tracks/commit/811ca1d620761515eddceb87e262c6e2c6257c45))
+* **trackwin:** split again when the column's last pane closed ([55cba7b](https://github.com/bluegardenproject/tracks/commit/55cba7bd09490a2625e8bc7b8c89b6477f1217cb))
+
+
+### Documentation
+
+* plan backends, repo config and services ([75644ff](https://github.com/bluegardenproject/tracks/commit/75644ff2737cdac62afb2efa4916cee573bc5202))
+
 ## [3.1.1](https://github.com/bluegardenproject/tracks/compare/v3.1.0...v3.1.1) (2026-10-14)
 
 
