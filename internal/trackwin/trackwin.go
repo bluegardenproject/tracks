@@ -220,12 +220,17 @@ func add(t Tmux, window, dir, role string, p Process) (string, error) {
 	return pane, even(t, window)
 }
 
+// tries is how many times split and even list the panes, again each
+// time a pane closed under them, as a setup that finished does. Each
+// try needs another pane to close within milliseconds, so a few are
+// plenty.
+const tries = 3
+
 // split opens a pane running command below the right column's last
-// pane, or opens the column beside the agent pane. The last pane can
-// close between listing and splitting, as a setup that finished does;
-// split then lists again.
+// pane, or opens the column beside the agent pane. When the last pane
+// closed between listing and splitting, split lists again.
 func split(t Tmux, window, dir, command string) (string, error) {
-	for range 3 {
+	for range tries {
 		panes, err := t.ListPanes(window)
 		if err != nil {
 			return "", err
@@ -259,17 +264,36 @@ func label(t Tmux, pane, role, title string) error {
 	return t.SetPaneOption(pane, "@tracks_title", title)
 }
 
-// even gives every pane in the right column the same height.
+// even gives every pane in the right column the same height. When a
+// pane closed between listing and resizing, even lists again; once the
+// tries are used up it stops without an error, since even heights are
+// only cosmetic.
 func even(t Tmux, window string) error {
-	panes, err := t.ListPanes(window)
-	if err != nil {
-		return err
+	for range tries {
+		panes, err := t.ListPanes(window)
+		if err != nil {
+			return err
+		}
+		_, column := layout(panes)
+		if err := resize(t, window, column); !errors.Is(err, errClosed) {
+			return err
+		}
 	}
-	_, column := layout(panes)
+	return nil
+}
+
+// errClosed means a pane of the column closed while it was resized.
+var errClosed = errors.New("a pane of the column closed")
+
+// resize sets column's heights. The last pane takes whatever is left,
+// so it's never resized.
+func resize(t Tmux, window string, column []tmux.Pane) error {
 	heights := columnHeights(column)
-	// The last pane takes whatever is left, so it's never resized.
 	for i, p := range column[:max(0, len(column)-1)] {
 		if err := t.ResizePaneHeight(p.ID, heights[i]); err != nil {
+			if gone(t, window, p.ID) {
+				return errClosed
+			}
 			return err
 		}
 	}
