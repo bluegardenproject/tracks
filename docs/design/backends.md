@@ -39,7 +39,7 @@ poetry, TypeScript with Nest or Express) fit only partly:
 - Every new worktree builds cold: sbt compiles for minutes, `node_modules` is
   installed again.
 - Parallel tracks load the machine: several sbt JVMs, Metals and Docker can
-  run out of memory. Koda's config sets cpu and memory for the same reason.
+  run out of memory.
 - Everything about a repo is typed into the repo form, per person. A backend
   with several servers, ports and a Compose stack is a lot to type, and a team
   can't share it.
@@ -86,8 +86,9 @@ The Problem section above speaks of today's dev servers.
 
 ## Repo config file
 
-`.tracks/config.yaml` at the repo's root. A folder, like `.koda/`, so prompts
-or skills for the repo can join it later.
+`.tracks/config.yaml` at the repo's root, and nowhere else: no `tracks.yaml`
+or `.tracks.yaml` next to it, so there is one place to look. A folder, so
+prompts or skills for the repo can join it later.
 
 ```yaml
 version: 1
@@ -220,9 +221,8 @@ in a track is either reviewed in git or typed by the user, never a hidden mix.
   accepting.
 - **Unknown keys** are an error shown on the repo, not ignored, so a typo
   doesn't silently drop a service. `version` lets the format change later.
-- **Koda.** With no `.tracks/config.yaml`, Tracks reads `setup`, `lint` and
-  `test` from `.koda/config.yaml` as a fallback, so repos set up for Koda need
-  nothing more for their checks. Koda's `sandbox` key doesn't apply.
+- **No fallback.** Without `.tracks/config.yaml` a repo has no config file:
+  Tracks reads no other tool's config in its place.
 - **Personal only, never in the file:** engines, models, theme, Draft PRs.
 
 ## Proxy
@@ -262,7 +262,7 @@ Simple ports and groups share one list, in the order they were added:
 │ ╭─ storybook ────────────────────────────────────────────── no service ⚠ ─╮  │
 │ │ [ 6006 ]  [ storybook ]  ‹ HTTP ›  →  [ storybook · track-y   ▾ ]     × │  │
 │ ╰─────────────────────────────────────────────────────────────────────────╯  │
-│ ╭─ payments · group ───────────────── track [ track-x · LIVE-123 ▾ ]  × ──╮  │
+│ ╭─ payments · group ───────────────── track [ track-x · SHOP-123 ▾ ]  × ──╮  │
 │ │  Port      Name       Mode      Binds to          State                 │  │
 │ │  [ 8080 ]  [ http   ]  ‹ HTTP ›  [ api        ▾ ]  ready  :20021      × │  │
 │ │  [ 9090 ]  [ grpc   ]  ‹ TCP  ›  [ api · grpc ▾ ]  ready  :20022      × │  │
@@ -295,8 +295,8 @@ services, with how many of its bindings are ready. The first entry is **none**:
 ```
             ╭─ Track for payments ─────────────────╮
             │   none                               │
-            │ ▸ track-x   LIVE-123    3 of 4 ready │
-            │   track-y   SWAP-99     not running  │
+            │ ▸ track-x   SHOP-123    3 of 4 ready │
+            │   track-y   SHOP-99     not running  │
             ╰──────────────────────────────────────╯
 ```
 
@@ -307,8 +307,8 @@ is shown under the port as today, and the port number is a personal field.
 
 ```
             ╭─ Add from repo ──────────────────────────────╮
-            │ ▸ swap-live-app   web        3000            │
-            │   swap-live-app   storybook  6006   added    │
+            │ ▸ web-shop        web        3000            │
+            │   web-shop        storybook  6006   added    │
             │   payments-api    payments   8080 9090 5432  │
             ╰──────────────────────────────────────────────╯
 ```
@@ -496,7 +496,7 @@ The roadmap is done when these hold, on a clean machine, end to end:
 
 | Change | Where |
 |---|---|
-| `COMPOSE_PROJECT_NAME=<repo>-<track id>` for setup, services and the agent | `tracks/servers.go`, setup, agent pane env |
+| `COMPOSE_PROJECT_NAME=<repo>-<track id>` for setup, services and the agent, when the repo opts in (`compose_project: track`) | `tracks/servers.go`, setup, agent pane env |
 | A listener on the command line's `jdwp=…address=<port>` is never the service's port | `tracks/detect.go` `listening` |
 | Service types `sbt`, `uvicorn`, `gunicorn`, `hypercorn`, `django`, `flask`, `nest`, `tsx` | `procs.Kind` |
 | Examples from several stacks in placeholders and hints | repo form, `cli/setup.go` |
@@ -541,7 +541,6 @@ step 1's change.
   file**, **Switch to repo file** and the upstream-change notice.
 - Personal fields: fixed ports, default services and extra environment
   variables.
-- The Koda fallback for `setup`.
 - Migration: `repos.source`, the personal fields, and the accepted file hashes.
 
 ### 4. Worktree parity
@@ -590,9 +589,8 @@ step 1's change.
 
 ### 8. Checks and review
 
-- `checks` and `docs` in the file, with the Koda fallback for `lint` and
-  `test`. The agent prompt names the repo's checks; the review rule uses
-  `docs`. Golden change.
+- `checks` and `docs` in the file. The agent prompt names the repo's checks;
+  the review rule uses `docs`. Golden change.
 - Reviewer convention discovery also reads `CLAUDE.md`, `README*`, `build.sbt`,
   `.scalafmt.conf`, `.scalafix.conf`, `pyproject.toml`, `setup.cfg`,
   `tox.ini`, `tsconfig.json`, `eslint.config.*`. Golden change.
@@ -636,9 +634,6 @@ wanted.
 
 ## Open
 
-- `COMPOSE_PROJECT_NAME`: always, or only when a repo opts in, so a compose
-  file's own `name:` keeps winning?
-- `.tracks/config.yaml` or a single `.tracks.yaml`?
 - Should a repo's accepted file be trusted for every branch, or per content
   hash as above?
 - One shared Postgres for all tracks, or one per track? Both work; which does
@@ -649,4 +644,26 @@ wanted.
 
 ## Findings
 
-Filled in by step 0.
+### A Scala service, read only (2026-11-03)
+
+An sbt 2 service with two services on their own ports, Postgres and an
+OpenTelemetry stack from Compose.
+
+| Finding | Effect on the plan |
+|---|---|
+| Java, sbt, JVM options and secrets come from `mise.toml` | Confirms `toolchain` (step 4). mise asks for `mise trust` per folder, so every new worktree needs it: `toolchain: auto` has to trust the worktree when the primary checkout is trusted |
+| The port comes from an environment variable of the service's own | Fits today: `<VAR>=$PORT sbt reader/run` on an assigned port |
+| The Compose file sets `container_name:` and fixed host ports | `COMPOSE_PROJECT_NAME` alone doesn't separate tracks: a second track's `docker compose up` fails on the container names. On by default it would break such repos, so it's opt-in (step 1). Per-track containers need the repo's own change (no `container_name`, `${PORT:-5432}`); until then the recipe shows one shared stack |
+| Compose takes host port 3000 | Clashes with a proxy output port 3000, the usual frontend one: Tracks shows "blocked by" as today. The recipe says so |
+| A 1.5 GB heap per service, plus sbt | Two services and sbt in one track take about 4–5 GB; two tracks about twice that. Confirms the machine-load question |
+| sbt 2's launcher may connect a second `sbt` in the same build to the first one's server instead of starting its own JVM | To verify live: if so, the second service's JVM runs below the first one's pane, and stopping or detecting either goes wrong. Workaround to test: no sbt server for `run`, or one sbt running both services |
+
+### Still to run live
+
+- Both services in one track, then two tracks side by side; an output port per
+  service.
+- Which JDK and sbt the panes get without mise activated.
+- `docker compose up` as a service: ready or not.
+- Time to first ready, memory with one and two tracks, and the daemon's poll
+  time with the JVMs running.
+- A Python service.
