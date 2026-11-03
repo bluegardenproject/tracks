@@ -6,7 +6,10 @@ the v2.0.0 release; git history keeps them.
 
 ## Next
 
-- **Worktree setup:** submodules.
+- **Backends and repo config** ([docs/design/backends.md](design/backends.md)):
+  a checked-in `.tracks/config.yaml`, named ports, proxy groups, Scala, Python
+  and TypeScript services next to frontends. Steps 0–9, one PR each.
+- **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
   Tracks leaves updates to `brew upgrade`: `tracks update` and the update check
