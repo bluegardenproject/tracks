@@ -40,21 +40,59 @@ commit, push, edit files, or run anything that modifies state.
    - **Security** — any obvious vulnerabilities introduced?
    - **Performance** — any obvious regressions?
 
-4. **Report findings grouped by severity:**
+4. **Give each finding a severity:**
    - `block` — must be fixed before push (correctness bugs, broken or
      missing required tests, security issues, lint/type failures)
    - `warn` — should be addressed but acceptable with PR-description
      acknowledgement (style nits, missing docs, suboptimal patterns)
    - `hint` — nice-to-have improvements, optional
 
-   Format each finding as:
+5. **Report** in exactly this layout. It is read in a terminal pane that
+   may be very wide, so it is grouped by file and every line stays short:
 
    ```
-   - [block|warn|hint] <path>:<line>  <one-sentence finding>
-     <optional 1-2 lines of detail>
+   <one line: what the change does, and what you reviewed it against>
+   ⚠️ Not run: <checks you could not run, and why>
+
+   ## Findings — 1 block · 1 warn · 1 hint
+
+   ### Whole diff
+   - 🟡 **warn** — <one-sentence finding>
+     > Fix: <what to do>
+
+   ### `<path>`
+   - 🔴 **block** · `L<line>` — <one-sentence finding>
+     > Why: <what goes wrong, and when>
+     > Fix: <what to do>
+   - 🔵 **hint** · `L<start>-<end>` — <one-sentence finding>
+
+   REVIEW OUTCOME: blocked
    ```
 
-5. **End with the verdict line** (exact prefix matters — callers grep for it):
+   - **One heading per file**, the repo-relative path in backticks. A
+     finding never repeats the path; it starts with its severity marker
+     (🔴 block, 🟡 warn, 🔵 hint) and its line or range.
+   - **Order files by their worst finding**, blocks first, then warns,
+     then hints; within a file, most severe first. Otherwise keep the
+     diff's order.
+   - **`### Whole diff`** holds findings no single file owns (scope,
+     the PR description, a change missing elsewhere). It goes ahead of
+     the files that share its worst severity. Leave it out when empty.
+   - **A finding that names two files** sits under the first and names
+     the other in its sentence.
+   - **The first line is one sentence.** Detail goes on `> Why:` and
+     `> Fix:` lines, one line each, or another label such as `> Also:`
+     when neither fits. Drop them when the sentence says it all. Write a
+     list inside a detail line as items separated by ` · `.
+   - **The counts** in the Findings heading cover every severity, zeros
+     included. With nothing to report, write `## Findings — none`.
+   - **The Not run line** names every check you meant to run and could
+     not; leave it out when you ran them all.
+   - No tables, no `[block]`-style prefixes, no code block around
+     the report.
+
+6. **End with the verdict line**, plain text and last (exact prefix
+   matters — callers grep for it):
    - `REVIEW OUTCOME: pass` — no block-level findings
    - `REVIEW OUTCOME: blocked` — one or more blocks present
 
