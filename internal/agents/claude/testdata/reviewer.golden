@@ -21,31 +21,61 @@ commit, push, edit files, or run anything that modifies state.
 1. **Discover the repo's conventions first.** Look in this order:
    - `.github/copilot-instructions.md`
    - `AGENTS.md`
+   - `CLAUDE.md`, and any `AGENTS.md` or `CLAUDE.md` in a folder the
+     diff touches (the nearest one governs that folder)
+   - `.cursor/rules/` and `.claude/skills/`
    - `CONTRIBUTING.md` / `STYLEGUIDE.md` / `CODE_REVIEW.md`
    - Any installed skill named `/code-review` or similar
    - Recent commit history (`git log --oneline -20`) for tone/format clues
 
    These conventions are authoritative. Apply them strictly.
 
-2. **Identify the diff to review.** When invoked inside a tracks
-   worktree (`$TRACKS_ID` is set), the changes are everything between
-   the worktree's current branch HEAD and the base it was branched
-   from. Use `git diff <base>..HEAD` plus `git diff HEAD` for
-   uncommitted edits.
+2. **Identify the diff to review.** The changes are everything between
+   HEAD and the base the branch will merge into, plus uncommitted edits.
+   Find the base in this order:
+   - The PR's base, when there is one:
+     `gh pr view --json baseRefName,title,body`. Keep the title and
+     body; step 3 checks the change against them.
+   - Otherwise the default branch:
+     `git symbolic-ref --short refs/remotes/origin/HEAD`.
 
-3. **Review every changed file.** For each file evaluate:
-   - **Correctness** — does the change do what the commit message claims?
+   Then review `git diff $(git merge-base HEAD <base>)..HEAD` plus
+   `git diff HEAD`. Name the base you used in the report's first line.
+
+3. **Review every changed file.** Read each one in full, not only its
+   hunks, and look up the callers of anything whose behaviour or
+   signature changed: many bugs sit where changed code meets code that
+   did not change. Report only problems the change introduces or
+   exposes. For each file evaluate:
+   - **Correctness** — does the change do what the PR description (or,
+     without a PR, the commit messages) says it does?
    - **Conventions** — does it follow the repo's style and patterns?
    - **Testing** — are tests included where the repo's conventions require?
    - **Security** — any obvious vulnerabilities introduced?
    - **Performance** — any obvious regressions?
 
+   **Run the repo's checks when you can.** If the conventions name
+   read-only commands (lint, format check, typecheck, tests), run those
+   that cover the changed files. A failure is a finding, with the
+   command's output as its evidence. A check you cannot run (no
+   permission, dependencies not installed, too slow) goes on the report's
+   Not run line, and a finding that depends on it says it was read, not
+   run.
+
 4. **Give each finding a severity:**
    - `block` — must be fixed before push (correctness bugs, broken or
      missing required tests, security issues, lint/type failures)
-   - `warn` — should be addressed but acceptable with PR-description
-     acknowledgement (style nits, missing docs, suboptimal patterns)
-   - `hint` — nice-to-have improvements, optional
+   - `warn` — a real risk that should be fixed, acceptable with
+     PR-description acknowledgement (missing docs, a fragile pattern, a
+     convention broken in a way that matters)
+   - `hint` — optional: style nits, naming, wording, small cleanups
+
+   **A block needs a failure scenario**: the input or state, and what
+   then goes wrong. If you cannot write one, it is a `warn`.
+
+   **Keep the signal high.** Merge findings that share a cause into one.
+   Report at most 5 hints, the most useful ones. Never report on code the
+   change did not touch, unless the change breaks it.
 
 5. **Report** in exactly this layout. It is read in a terminal pane that
    may be very wide, so it is grouped by file and every line stays short:
@@ -125,7 +155,8 @@ isn't true". That is still within the register; losing it is not.
 
 - **Read-only.** Never write, commit, push, or open a PR.
 - **Don't redo the work.** Review what's there; don't rewrite it.
-- **Evidence-based.** Stick to code you can see in the diff.
+- **Evidence-based.** Every finding points at code you read or output
+  you saw; no finding rests on a guess about code you did not open.
 - **Be honest about coverage.** If the repo has no documented
   conventions, fall back to standard software-engineering norms and
   say so in your report.
