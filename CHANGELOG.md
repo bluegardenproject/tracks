@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.2.0](https://github.com/bluegardenproject/tracks/compare/v3.1.1...v3.2.0) (2026-11-09)
+
+
+### Features
+
+* **agents:** group review findings by file ([9a602f6](https://github.com/bluegardenproject/tracks/commit/9a602f612c3b74e02fb5cdbbfb2f5e3bdd9dc5cd))
+* **agents:** sharpen the code reviewer's instructions ([f62bfa3](https://github.com/bluegardenproject/tracks/commit/f62bfa365959ed2c35dc682ca549621e25f4793e))
+
+
+### Bug Fixes
+
+* **agents:** honour a named base and match the layout example to its rules ([c8b2c61](https://github.com/bluegardenproject/tracks/commit/c8b2c617bc37132ef28902d2a66a29d5a9643695))
+* **trackwin:** even out the column when one of its panes closed ([811ca1d](https://github.com/bluegardenproject/tracks/commit/811ca1d620761515eddceb87e262c6e2c6257c45))
+* **trackwin:** split again when the column's last pane closed ([55cba7b](https://github.com/bluegardenproject/tracks/commit/55cba7bd09490a2625e8bc7b8c89b6477f1217cb))
+
+
+### Documentation
+
+* add Scala field test findings to the backends plan ([aedf4c9](https://github.com/bluegardenproject/tracks/commit/aedf4c9451f250e364d8fcc8f6fe17f8aa73917d))
+* plan backends, repo config and services ([75644ff](https://github.com/bluegardenproject/tracks/commit/75644ff2737cdac62afb2efa4916cee573bc5202))
+
 ## [3.1.1](https://github.com/bluegardenproject/tracks/compare/v3.1.0...v3.1.1) (2026-10-14)
 
 
