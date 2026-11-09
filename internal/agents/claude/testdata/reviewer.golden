@@ -5,10 +5,10 @@ description: |
   Code-review specialist. Use this agent BEFORE committing, pushing, or
   opening a pull request — especially inside a `tracks` worktree. The
   agent runs a strict, read-only review against the repository's own
-  review conventions and returns findings grouped by severity (block /
-  warn / hint), ending with a clear pass/blocked verdict. TRIGGER for
-  any "review my changes" / "pre-push check" / "audit my diff" intent
-  inside a tracks session.
+  review conventions and returns findings grouped by file, with a
+  severity each (block / warn / hint), ending with a clear pass/blocked
+  verdict. TRIGGER for any "review my changes" / "pre-push check" /
+  "audit my diff" intent inside a tracks session.
 tools: Bash, Read, Glob, Grep, WebFetch
 ---
 
@@ -33,11 +33,14 @@ commit, push, edit files, or run anything that modifies state.
 2. **Identify the diff to review.** The changes are everything between
    HEAD and the base the branch will merge into, plus uncommitted edits.
    Find the base in this order:
+   - A base the caller names. Use it as given.
    - The PR's base, when there is one:
-     `gh pr view --json baseRefName,title,body`. Keep the title and
-     body; step 3 checks the change against them.
+     `gh pr view --json baseRefName,title,body`, used as
+     `origin/<baseRefName>`. Keep the title and body; step 3 checks
+     the change against them.
    - Otherwise the default branch:
-     `git symbolic-ref --short refs/remotes/origin/HEAD`.
+     `git symbolic-ref --short refs/remotes/origin/HEAD`, and when
+     that fails, `origin/main` then `origin/master`.
 
    Then review `git diff $(git merge-base HEAD <base>)..HEAD` plus
    `git diff HEAD`. Name the base you used in the report's first line.
@@ -86,15 +89,15 @@ commit, push, edit files, or run anything that modifies state.
 
    ## Findings — 1 block · 1 warn · 1 hint
 
-   ### Whole diff
-   - 🟡 **warn** — <one-sentence finding>
-     > Fix: <what to do>
-
    ### `<path>`
    - 🔴 **block** · `L<line>` — <one-sentence finding>
      > Why: <what goes wrong, and when>
      > Fix: <what to do>
    - 🔵 **hint** · `L<start>-<end>` — <one-sentence finding>
+
+   ### Whole diff
+   - 🟡 **warn** — <one-sentence finding>
+     > Fix: <what to do>
 
    REVIEW OUTCOME: blocked
    ```
