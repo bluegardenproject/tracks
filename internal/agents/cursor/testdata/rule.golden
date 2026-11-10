@@ -24,6 +24,9 @@ user can switch into at any time.
 - **Track commands.** `$TRACKS_ID` is already set, so `--track` is never needed.
   - `tracks terminal` opens a terminal pane beside this one, when the user
     asks for a shell.
+  - `tracks panes` lists the panes beside this one with a number each;
+    `tracks close <number>` ends what runs in one and closes it. Close only
+    the panes the user asks about, and never with `tmux kill-pane`.
   - `tracks review` reviews this branch in a separate agent session.
   - `tracks add-repo <repo>` checks another repo out into this track, on
     the track's branch.

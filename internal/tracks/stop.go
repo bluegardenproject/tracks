@@ -3,6 +3,7 @@ package tracks
 import (
 	"errors"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,6 +105,51 @@ func (w TmuxWindows) AddDevServer(window, dir string, p trackwin.Process, key st
 		_ = w.Tmux.KillPane(pane)
 	}
 	return err
+}
+
+// EndPane ends every process group on p's terminal, then closes p.
+// A shell runs each job it starts in a group of its own, so ending the
+// pane's first process's group, as StopPane does, would leave a server
+// started from a terminal running.
+func (w TmuxWindows) EndPane(p tmux.Pane) error {
+	if tty := strings.TrimPrefix(p.TTY, "/dev/"); tty != "" {
+		out, err := exec.Command("ps", "-t", tty, "-o", "pgid=").Output()
+		if err == nil {
+			groups := ttyGroups(string(out))
+			errs := make([]error, len(groups))
+			var wg sync.WaitGroup
+			for i, g := range groups {
+				wg.Go(func() { errs[i] = stopGroup(g, stopGrace) })
+			}
+			wg.Wait()
+			if err := errors.Join(errs...); err != nil {
+				return err
+			}
+		}
+	}
+	// The pane may have closed with its processes.
+	if err := w.Tmux.KillPane(p.ID); err != nil && !paneGone(w.Tmux, p) {
+		return err
+	}
+	return nil
+}
+
+// ttyGroups are the process groups in `ps -o pgid=` output, each once.
+func ttyGroups(ps string) []int {
+	var groups []int
+	for _, f := range strings.Fields(ps) {
+		g, err := strconv.Atoi(f)
+		if err == nil && g > 0 && !slices.Contains(groups, g) {
+			groups = append(groups, g)
+		}
+	}
+	return groups
+}
+
+// paneGone reports whether p's window no longer has p, or is gone.
+func paneGone(t trackwin.Tmux, p tmux.Pane) bool {
+	panes, err := t.ListPanes(p.ID)
+	return err != nil || !slices.ContainsFunc(panes, func(q tmux.Pane) bool { return q.ID == p.ID })
 }
 
 func (w TmuxWindows) Capture(pane string, lines int) (string, error) {

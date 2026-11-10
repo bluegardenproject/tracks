@@ -57,12 +57,19 @@ const DocResponseStyle = "" +
 	"report itself."
 
 // TerminalContract tells agents how to open a user-facing shell without
-// launching a nested or background terminal process in their own pane.
+// launching a nested or background terminal process in their own pane,
+// and how to close the panes beside theirs without reaching for tmux.
 const TerminalContract = "" +
 	"**Track terminal.** When the user asks for a terminal or shell in the " +
 	"track's worktree, run `tracks terminal`. It opens an interactive shell " +
 	"in the track window's right-hand pane column and returns immediately. " +
-	"`$TRACKS_ID` is already set, so do not pass `--track`."
+	"`$TRACKS_ID` is already set, so do not pass `--track`. " +
+	"`tracks panes` lists the panes beside yours (terminals, dev servers, " +
+	"setup) with a number each, what runs in them and their ports. When the " +
+	"user asks you to close one, or to stop something running in one, run " +
+	"`tracks close <number>`: it ends what runs there and closes the pane. " +
+	"Never close panes the user didn't ask about, and never use `tmux " +
+	"kill-pane` or `kill` for this."
 
 // SetupContract is in the prompt of a Work or Review track whose repos
 // have a setup. Tracks runs the setup in a pane while the agent works,
