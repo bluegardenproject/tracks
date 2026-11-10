@@ -153,13 +153,23 @@ func setupRunning(p tmux.Pane) bool {
 func closePanes(ctx context.Context, out io.Writer, t *tmux.Client, w trackwin.Info, targets []tmux.Pane) error {
 	windows := tracks.TmuxWindows{Tmux: t, Session: sessionName}
 	var failed []string
-	for _, p := range targets {
+	for _, p := range ownPaneLast(targets, os.Getenv("TMUX_PANE")) {
+		if p.ID == os.Getenv("TMUX_PANE") {
+			// Closing it ends this command too, so say so first.
+			if _, err := fmt.Fprintf(out, "Closing %s (%s), where this runs.\n", paneNumber(p), paneLabel(p)); err != nil {
+				return err
+			}
+		}
 		var err error
 		switch {
 		case setupRunning(p):
 			err = fmt.Errorf("its setup still runs; tracks setup --wait waits for it")
 		case p.Role == trackwin.RoleDevServer && p.Key != "":
-			err = stopServer(ctx, w.Track, p.Key)
+			// A server removed from the repo's settings while it ran is
+			// unknown to tracks down, but its pane still closes.
+			if err = stopServer(ctx, w.Track, p.Key); err != nil {
+				err = windows.StopPane(p)
+			}
 		default:
 			err = windows.EndPane(p)
 		}
@@ -176,6 +186,15 @@ func closePanes(ctx context.Context, out io.Writer, t *tmux.Client, w trackwin.I
 		return fmt.Errorf("couldn't close %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// ownPaneLast is targets with the pane called own moved to the end.
+func ownPaneLast(targets []tmux.Pane, own string) []tmux.Pane {
+	i := slices.IndexFunc(targets, func(p tmux.Pane) bool { return p.ID == own })
+	if i < 0 {
+		return targets
+	}
+	return append(slices.Delete(slices.Clone(targets), i, i+1), targets[i])
 }
 
 // stopServer stops dev server key of track id through the daemon, as

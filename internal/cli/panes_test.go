@@ -32,6 +32,20 @@ func TestPickPanes(t *testing.T) {
 	}
 }
 
+func TestOwnPaneLast(t *testing.T) {
+	targets := []tmux.Pane{{ID: "%3"}, {ID: "%7"}, {ID: "%12"}}
+	got := ownPaneLast(targets, "%7")
+	if ids := []string{got[0].ID, got[1].ID, got[2].ID}; !slices.Equal(ids, []string{"%3", "%12", "%7"}) {
+		t.Errorf("ownPaneLast = %v, want %%7 last", ids)
+	}
+	if targets[1].ID != "%7" {
+		t.Errorf("ownPaneLast changed its input: %v", targets)
+	}
+	if got := ownPaneLast(targets, ""); len(got) != 3 || got[2].ID != "%12" {
+		t.Errorf("without an own pane: %v", got)
+	}
+}
+
 func TestPaneActivity(t *testing.T) {
 	snap := procs.New(map[int]procs.Proc{
 		10: {PID: 10, PPID: 1, Command: "-zsh"},

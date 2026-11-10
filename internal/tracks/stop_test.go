@@ -20,3 +20,10 @@ func TestTTYGroups(t *testing.T) {
 		t.Errorf("ttyGroups = %v, want [501 733]", got)
 	}
 }
+
+func TestGroupsToEnd(t *testing.T) {
+	got := groupsToEnd([]int{100, 200, 300, 400}, 100, 300)
+	if !slices.Equal(got, []int{200, 400}) {
+		t.Errorf("groupsToEnd = %v, want [200 400]: the pane's shell and the caller are spared", got)
+	}
+}

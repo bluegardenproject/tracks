@@ -110,12 +110,14 @@ func (w TmuxWindows) AddDevServer(window, dir string, p trackwin.Process, key st
 // EndPane ends every process group on p's terminal, then closes p.
 // A shell runs each job it starts in a group of its own, so ending the
 // pane's first process's group, as StopPane does, would leave a server
-// started from a terminal running.
+// started from a terminal running. The pane's first process, an
+// interactive shell that ignores SIGTERM, ends with the pane, and the
+// caller's own group is spared so that closing its own pane finishes.
 func (w TmuxWindows) EndPane(p tmux.Pane) error {
 	if tty := strings.TrimPrefix(p.TTY, "/dev/"); tty != "" {
 		out, err := exec.Command("ps", "-t", tty, "-o", "pgid=").Output()
 		if err == nil {
-			groups := ttyGroups(string(out))
+			groups := groupsToEnd(ttyGroups(string(out)), p.PID, syscall.Getpgrp())
 			errs := make([]error, len(groups))
 			var wg sync.WaitGroup
 			for i, g := range groups {
@@ -144,6 +146,12 @@ func ttyGroups(ps string) []int {
 		}
 	}
 	return groups
+}
+
+// groupsToEnd are groups without the pane's first process's, which
+// ends with the pane, and the caller's own.
+func groupsToEnd(groups []int, first, own int) []int {
+	return slices.DeleteFunc(groups, func(g int) bool { return g == first || g == own })
 }
 
 // paneGone reports whether p's window no longer has p, or is gone.
