@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -33,11 +34,16 @@ func newTerminalCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, err := openTerminal(tmux.New(paths.TmuxSocket), sessionName, id)
+			name, pane, err := openTerminal(tmux.New(paths.TmuxSocket), sessionName, id)
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Opened a terminal in %s.\n", name)
+			number := strings.TrimPrefix(pane, "%")
+			msg := fmt.Sprintf("Opened terminal %s in %s", number, name)
+			if os.Getenv("TRACKS_ID") == id {
+				msg += "; tracks close " + number + " closes it"
+			}
+			_, err = fmt.Fprintln(c.OutOrStdout(), msg+".")
 			return err
 		},
 	}
@@ -46,23 +52,17 @@ func newTerminalCmd() *cobra.Command {
 }
 
 // openTerminal adds a terminal to the window of the track with id and
-// returns the track's name.
-func openTerminal(t trackwin.Tmux, session, id string) (string, error) {
-	windows, err := trackwin.List(t, session)
+// returns the track's name and the terminal's pane.
+func openTerminal(t trackwin.Tmux, session, id string) (name, pane string, err error) {
+	w, err := trackWindow(t, session, id)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	for _, w := range windows {
-		if w.Track != id {
-			continue
-		}
-		if _, err := trackwin.AddTerminal(t, w.Window); err != nil {
-			if errors.Is(err, trackwin.ErrNotTrackWindow) {
-				return "", fmt.Errorf("%s's window has no working directory to open a terminal in", w.Name)
-			}
-			return "", fmt.Errorf("couldn't open a terminal in %s: %w", w.Name, err)
-		}
-		return w.Name, nil
+	pane, err = trackwin.AddTerminal(t, w.Window)
+	if errors.Is(err, trackwin.ErrNotTrackWindow) {
+		return "", "", fmt.Errorf("%s's window has no working directory to open a terminal in", w.Name)
+	} else if err != nil {
+		return "", "", fmt.Errorf("couldn't open a terminal in %s: %w", w.Name, err)
 	}
-	return "", fmt.Errorf("track %s has no open window", id)
+	return w.Name, pane, nil
 }
