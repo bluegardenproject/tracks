@@ -19,7 +19,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\'' --model '\''opus'\''
 code=$?
@@ -47,7 +47,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
@@ -75,7 +75,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -105,7 +105,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -135,7 +135,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -165,7 +165,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -211,7 +211,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -257,7 +257,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -297,7 +297,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
@@ -341,7 +341,7 @@ The review:
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
-**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`.
+**Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 

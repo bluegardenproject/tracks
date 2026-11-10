@@ -40,6 +40,8 @@ func newRoot(version string) *cobra.Command {
 		newFooterCmd(),
 		newHookCmd(),
 		newTerminalCmd(),
+		newPanesCmd(),
+		newCloseCmd(),
 		newSetupCmd(),
 		newUpCmd(),
 		newDownCmd(),

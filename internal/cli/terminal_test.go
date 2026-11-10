@@ -27,9 +27,9 @@ func TestOpenTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	name, err := openTerminal(c, "tracks", "t1")
-	if err != nil || name != "rate-bug" {
-		t.Fatalf("opened in %q: %v", name, err)
+	name, pane, err := openTerminal(c, "tracks", "t1")
+	if err != nil || name != "rate-bug" || pane == "" {
+		t.Fatalf("opened %q in %q: %v", pane, name, err)
 	}
 	panes, err := c.ListPanes(w.ID)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestOpenTerminal(t *testing.T) {
 		t.Errorf("panes %+v, want one terminal", panes)
 	}
 
-	if _, err := openTerminal(c, "tracks", "t2"); err == nil || err.Error() != "track t2 has no open window" {
+	if _, _, err := openTerminal(c, "tracks", "t2"); err == nil || err.Error() != "track t2 has no open window" {
 		t.Errorf("a track without a window: %v", err)
 	}
 }

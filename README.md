@@ -87,6 +87,7 @@ The agent can run these, and so can you in a track's terminal:
 
 - `tracks review` reviews the branch with a separate agent session.
 - `tracks terminal` opens a terminal pane beside the agent.
+- `tracks panes` lists the panes beside the agent; `tracks close <pane>` ends what runs in one and closes it.
 - `tracks add-repo <repo>` adds a worktree of another repo to the track.
 - `tracks promote` turns an Ask or Plan track into a Work track.
 

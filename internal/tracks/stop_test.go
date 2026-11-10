@@ -1,6 +1,9 @@
 package tracks
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestGroupLiving(t *testing.T) {
 	ps := " 100 Ss\n 200 Z\n 200 Z+\n 300 S+\n"
@@ -8,5 +11,12 @@ func TestGroupLiving(t *testing.T) {
 		if got := groupLiving(ps, pgid); got != want {
 			t.Errorf("groupLiving(%d) = %v, want %v (zombies don't count)", pgid, got, want)
 		}
+	}
+}
+
+func TestTTYGroups(t *testing.T) {
+	got := ttyGroups("  501\n  501\n  733\n\n 0\n")
+	if !slices.Equal(got, []int{501, 733}) {
+		t.Errorf("ttyGroups = %v, want [501 733]", got)
 	}
 }
