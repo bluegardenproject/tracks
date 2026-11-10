@@ -38,8 +38,12 @@ func newTerminalCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Opened terminal %s in %s; tracks close %s closes it.\n",
-				strings.TrimPrefix(pane, "%"), name, strings.TrimPrefix(pane, "%"))
+			number := strings.TrimPrefix(pane, "%")
+			msg := fmt.Sprintf("Opened terminal %s in %s", number, name)
+			if os.Getenv("TRACKS_ID") == id {
+				msg += "; tracks close " + number + " closes it"
+			}
+			_, err = fmt.Fprintln(c.OutOrStdout(), msg+".")
 			return err
 		},
 	}
