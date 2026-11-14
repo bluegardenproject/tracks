@@ -152,6 +152,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			}
 			return nil, c.Tracks.SetTitle(ctx, p.ID, p.Title)
 		},
+		rpc.LearnStyle: c.learnStyle,
 		rpc.Action: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.ActionParams
 			if err := call.Decode(&p); err != nil {

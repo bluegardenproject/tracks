@@ -84,6 +84,12 @@ the user why.
 
 Write one reply per comment, one or two sentences: what changed, or why
 nothing did. Don't cite commit hashes: amending and rebasing change them.
+If ` + "`${XDG_CONFIG_HOME:-~/.config}/tracks/comment-style.md`" + ` exists, read it first
+and write every reply in the style it describes: it's how the user writes.
+
+End every comment you post with a blank line and ` + "`" + `<!-- tracks -->` + "`" + `. GitHub hides
+it; it tells Tracks you wrote the comment, not the user, so learning their
+style leaves it out.
 
 - **Bots:** post the reply, then resolve the thread.
 - **People:** don't post yet. Show the user every draft in a table (author,

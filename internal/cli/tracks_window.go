@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/commentstyle"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/repos"
 	"github.com/bluegardenproject/tracks/internal/rpc"
@@ -100,6 +101,13 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				History:       history{path: paths.Settings},
 				Notifications: notifications{path: paths.Settings},
 				About:         about(paths),
+				StylePath:     commentstyle.Path(paths.ConfigDir),
+				StyleStatus: func() (commentstyle.Status, error) {
+					return commentstyle.ReadStatus(commentstyle.Path(paths.ConfigDir))
+				},
+				LearnStyle: func(progress func(string)) (commentstyle.Status, error) {
+					return daemon.learnStyle(cmd.Context(), progress)
+				},
 			})
 			_, err = tea.NewProgram(window,
 				tea.WithContext(cmd.Context()),

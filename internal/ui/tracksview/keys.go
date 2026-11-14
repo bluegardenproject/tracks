@@ -34,6 +34,7 @@ var (
 	pickerKeys       = []keyHelp{{"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 	creatorKeys      = []keyHelp{{"Tab", "next"}, {"↑/↓", "token"}, {"Enter", "next or press"}, {"Ctrl+C/V", "copy, paste"}, {"Esc", "back"}}
 	scrollKeys       = []keyHelp{{"↑/↓", "scroll"}, {"Esc", "back"}}
+	personalKeys     = []keyHelp{{"Enter", "learn"}, {"Esc", "back"}}
 	engineListKeys   = []keyHelp{{"↑/↓", "scroll"}, {"Enter", "to the controls"}}
 	engineKeys       = []keyHelp{{"Tab", "next"}, {"Shift+Tab", "previous"}, {"Enter", "press"}, {"Esc", "back"}}
 	typeKeys         = []keyHelp{{"←/→", "track type"}, {"↑/↓", "field"}, {"Enter", "choose"}, {"Esc", "back"}}

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/commentstyle"
 	"github.com/bluegardenproject/tracks/internal/daemon"
 	"github.com/bluegardenproject/tracks/internal/notifier"
 	"github.com/bluegardenproject/tracks/internal/platform"
@@ -213,4 +214,17 @@ func samePath(a, b string) bool {
 	ra, errA := filepath.EvalSymlinks(a)
 	rb, errB := filepath.EvalSymlinks(b)
 	return errA == nil && errB == nil && ra == rb
+}
+
+// learnStyle has the daemon learn the user's PR comment style.
+func (d daemonCalls) learnStyle(ctx context.Context, progress func(string)) (commentstyle.Status, error) {
+	var r rpc.StyleResult
+	err := d.do(ctx, func(c rpc.Client) (err error) {
+		r, err = c.LearnStyle(ctx, progress)
+		return err
+	})
+	if err != nil {
+		return commentstyle.Status{}, err
+	}
+	return commentstyle.Status{Learned: true, At: r.At, Comments: r.Comments}, nil
 }

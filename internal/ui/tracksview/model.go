@@ -10,6 +10,7 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/commentstyle"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
@@ -82,6 +83,12 @@ type Config struct {
 	// About is what the Settings tab's About section lists, label and
 	// value.
 	About [][2]string
+	// StyleStatus reads whether the PR comment style is learned;
+	// LearnStyle learns it, telling progress each line of its log.
+	// StylePath is where its guide is kept.
+	StyleStatus func() (commentstyle.Status, error)
+	LearnStyle  func(progress func(string)) (commentstyle.Status, error)
+	StylePath   string
 }
 
 // Model is the Tracks window.
@@ -116,6 +123,9 @@ type Model struct {
 	historySource   source.History
 	notifySource    source.Notifications
 	aboutFacts      [][2]string
+	styleStatus     func() (commentstyle.Status, error)
+	learnStyle      func(progress func(string)) (commentstyle.Status, error)
+	stylePath       string
 	width, height   int
 	tab             int
 	station         station
@@ -141,6 +151,7 @@ func New(c Config) Model {
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
+		styleStatus: c.StyleStatus, learnStyle: c.LearnStyle, stylePath: c.StylePath,
 		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
 	if c.Watch != nil {
 		m.watchFn, m.changes = c.Watch, make(chan watchMsg, 1)
@@ -152,7 +163,7 @@ func New(c Config) Model {
 // changes.
 func (m Model) Init() tea.Cmd {
 	_, proxy := m.loadProxy(false)
-	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify(),
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify(), m.loadStyleStatus(),
 		proxy, m.nextProxyTick())
 }
 
@@ -185,6 +196,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.resumed(msg)
 	case progressEvent:
 		return m.progressed(msg)
+	case styleStatusMsg:
+		m.settings.personal.status, m.settings.personal.statusErr = msg.status, msg.err
+		return m, nil
+	case styleEvent:
+		return m.styleEvent(msg)
+	case styleTickMsg:
+		return m.styleTicked()
 	case checkedMsg:
 		return m.checked(msg), nil
 	case archivedMsg:

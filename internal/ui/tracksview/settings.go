@@ -16,12 +16,13 @@ const (
 	sectionGeneral    = iota
 	sectionTracks     // each track type's defaults
 	sectionFastTracks // empty until Fast Tracks are built
+	sectionPersonal   // learning the user's PR comment style
 	sectionCreator
 	sectionKeys
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Tracks", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Tracks", "Fast Tracks", "Personalisation", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
@@ -39,6 +40,7 @@ type settingsTab struct {
 	generalFocus, generalHover int
 	keysOffset                 int
 	creator                    themecreator.Model
+	personal                   personalState
 	// leaving is where to go once the creator has let go.
 	leaving *settingsLeave
 	notice  notice
@@ -301,6 +303,10 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch s.section {
 	case sectionGeneral:
 		return m.generalKey(key)
+	case sectionPersonal:
+		if key == "enter" {
+			return m.startLearning()
+		}
 	case sectionTracks:
 		return m.typesKey(key)
 	case sectionKeys:

@@ -5,6 +5,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -65,6 +66,9 @@ const (
 	// Action sends a track's agent the prompt of one of its footer
 	// buttons.
 	Action = "action"
+	// LearnStyle learns the user's PR comment style, sending each line
+	// of its log as progress.
+	LearnStyle = "learn-style"
 )
 
 // Request is one call.
@@ -318,6 +322,13 @@ type ReportExitParams struct {
 type SetTitleParams struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// StyleResult is when the comment style was learned, and from how many
+// comments.
+type StyleResult struct {
+	At       time.Time `json:"at"`
+	Comments int       `json:"comments"`
 }
 
 // ActionParams names the track and its action, an actions ID.
