@@ -148,6 +148,7 @@ commit, push, edit files, or run anything that modifies state.
    - 🔴 **block** · ` + "`L<line>`" + ` — <one-sentence finding>
      > Why: <what goes wrong, and when>
      > Fix: <what to do>
+
    - 🔵 **hint** · ` + "`L<start>-<end>`" + ` — <one-sentence finding>
 
    ### Whole diff
@@ -160,6 +161,8 @@ commit, push, edit files, or run anything that modifies state.
    - **One heading per file**, the repo-relative path in backticks. A
      finding never repeats the path; it starts with its severity marker
      (🔴 block, 🟡 warn, 🔵 hint) and its line or range.
+   - **An empty line after every finding**, its detail lines included,
+     so findings never run together.
    - **Order files by their worst finding**, blocks first, then warns,
      then hints; within a file, most severe first. Otherwise keep the
      diff's order.
