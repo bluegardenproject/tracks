@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/workspace"
 )
@@ -33,6 +34,9 @@ type Request struct {
 	// Draft is the draft a failure keeps the request as, and a success
 	// deletes; "" is a new one.
 	Draft string `json:"draft,omitempty"`
+	// NoDraft keeps no draft when the track can't be made: the caller,
+	// such as an agent running tracks new, reports the error itself.
+	NoDraft bool `json:"no_draft,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:
@@ -64,7 +68,7 @@ func (s *Service) check(ctx context.Context, req Request) (track.Track, []string
 			}
 		}
 		if i < 0 {
-			return t, nil, Problem(fmt.Sprintf("There's no repo %s on the Repositories tab.", name))
+			return t, nil, Problem(fmt.Sprintf("There's no repo %s on the Repositories tab. Repos: %s.", name, knownRepos(all)))
 		}
 		r := all[i]
 		if seen[r.ID] {
@@ -115,4 +119,16 @@ func (s *Service) check(ctx context.Context, req Request) (track.Track, []string
 	}
 	t.Terminal = req.Terminal && t.Kind.Worktrees()
 	return t, drafts, nil
+}
+
+// knownRepos lists the Repositories tab's repos, for a message.
+func knownRepos(repos []store.Repo) string {
+	names := make([]string, len(repos))
+	for i, r := range repos {
+		names[i] = r.Name
+	}
+	if len(names) == 0 {
+		return "none yet"
+	}
+	return strings.Join(names, ", ")
 }

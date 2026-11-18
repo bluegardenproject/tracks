@@ -35,7 +35,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 	if t.Kind == track.Review {
 		task = agents.ReviewTask(reviewTemplate, t.Prompt)
 	}
-	prompt := strings.TrimRight(task, " \t\n\r") + "\n\n" + agents.LinksContract
+	prompt := strings.TrimRight(task, " \t\n\r") + "\n\n" + agents.LinksContract + "\n\n" + agents.NewTrackContract
 	mode := "default"
 	if s.Auto {
 		mode = "auto"

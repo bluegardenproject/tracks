@@ -29,6 +29,9 @@ func (s *Service) Create(ctx context.Context, req Request, progress func(string)
 	created, err := s.create(ctx, req, progress)
 	// The draft is kept or dropped even when ctx is cancelled.
 	undo := context.WithoutCancel(ctx)
+	if err != nil && req.NoDraft {
+		return created, err
+	}
 	if err != nil {
 		if kerr := s.keepDraft(undo, req, err); kerr != nil {
 			err = errors.Join(err, kerr)

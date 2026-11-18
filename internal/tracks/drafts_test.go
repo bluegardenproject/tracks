@@ -58,6 +58,18 @@ func TestDrafts(t *testing.T) {
 	}
 }
 
+func TestNoDraftKeepsNone(t *testing.T) {
+	f := newFixture(t)
+	req := Request{Kind: track.Work, Repos: []string{"nope"}, Prompt: "Fix it", NoDraft: true}
+	_, err := f.svc.Create(context.Background(), req, func(string) {})
+	if err == nil || !strings.Contains(err.Error(), "Repos: ") {
+		t.Fatalf("Create = %v; want it to fail and name the repos there are", err)
+	}
+	if drafts := stationDrafts(t, f); len(drafts) != 0 {
+		t.Errorf("drafts %+v; a request without drafts left one", drafts)
+	}
+}
+
 func TestReviewDraftTitle(t *testing.T) {
 	f := newFixture(t)
 	req := Request{Kind: track.Review, Repos: []string{"nope"}, ReviewRef: "https://github.com/acme/api/pull/7"}

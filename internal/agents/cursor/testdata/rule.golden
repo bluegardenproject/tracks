@@ -27,6 +27,8 @@ user can switch into at any time.
   - `tracks panes` lists the panes beside this one with a number each;
     `tracks close <number>` ends what runs in one and closes it. Close only
     the panes the user asks about, and never with `tmux kill-pane`.
+  - `tracks new <type>` opens a new track, when the user asks to take a
+    topic into one: its prompt must carry everything the new agent needs.
   - `tracks review` reviews this branch in a separate agent session.
   - `tracks add-repo <repo>` checks another repo out into this track, on
     the track's branch.

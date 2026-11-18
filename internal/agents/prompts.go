@@ -126,6 +126,27 @@ const ReviewOnlyContract = "" +
 	"wants a finding fixed, describe the fix, with a snippet if it " +
 	"helps, and say it belongs in a Work track on that branch."
 
+// NewTrackContract is in every start prompt, after LinksContract. It
+// lets the user carry a topic from one track into a new one: the
+// agent writes the new track's prompt, since the new agent starts from
+// that alone, and opens the track only once the user agreed to its
+// type, name and repos.
+const NewTrackContract = "" +
+	"**New tracks.** When the user asks to take a topic into a new " +
+	"track, propose its type (`work`, `plan` or `ask`), a short name " +
+	"and its repos (a Work track needs at least one; Plan and Ask " +
+	"tracks may have none), and wait for their OK. Then run `tracks new " +
+	"<type> --name <name> --repo <repo> --prompt-file - <<'TRACK_PROMPT'`, " +
+	"with `--repo` once per repo, the prompt on the lines after it and " +
+	"`TRACK_PROMPT` last. The new agent starts from that prompt alone: " +
+	"write in it the goal, what was decided here and why, the open " +
+	"questions, and the files and links that matter. `tracks new` " +
+	"doesn't touch this checkout, so it is allowed in read-only tracks " +
+	"too; where your mode doesn't let you run commands, show the user " +
+	"the whole command to run themselves (in Claude Code, with `!` in " +
+	"front). The track opens in the background; tell the user its " +
+	"name, or what failed. Never open a track the user didn't ask for."
+
 // LinksContract is in every start prompt, right after the task.
 //
 // It exists because an agent that can't read a linked ticket or page
