@@ -60,12 +60,12 @@ pre-push review.
 | Orchestrator, Review track | never | never | never | yes, as a suggestion |
 | Orchestrator, Work track | yes | yes | after the pre-push review; a PR only once the user agreed, as a draft where the repo's Draft PRs setting says so | yes |
 
-- **The reviewer can't change anything.** The Claude reviewer gets read-only
-  tools only (below), with `Edit`, `Write`, `Bash(git commit:*)` and
-  `Bash(git push:*)` denied as well. The Cursor reviewer runs without
-  permission flags, so it can't run commands at all.
-- **Tracks checks it.** `tracks review` notes the worktree's HEAD and its
-  `git status` before the reviewer starts and compares them after. A change is
+- **The reviewer can't change anything.** The Claude reviewer has only Read,
+  Grep and Glob (below). The Cursor reviewer runs without permission flags,
+  so it can't run commands at all.
+- **Tracks checks it.** `tracks review` notes the worktree's HEAD, `git
+  status`, the changes to tracked files and the untracked files' contents
+  before the reviewer starts, and compares them after. A change is
   reported above the findings, as an error, never quietly kept.
 - **The orchestrator follows its track's kind.** The prompts carry the rules
   above: a Review track's ends with its read-only contract; a Work track's
@@ -84,11 +84,21 @@ pre-push review.
 
 ### The Claude reviewer
 
-`claude -p` with the reviewer instructions as its system prompt, the packet on
-stdin, `--model` from the setting and tools limited to reading: `Read`,
-`Grep`, `Glob`, and `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(git show:*)`.
-The marker and the lock move from `cursor.Review` into the shared
-`tracks review`, so both engines have them.
+`claude -p --restricted --tools Read,Grep,Glob --strict-mcp-config`, with the
+packet on stdin and `--model` from the setting. It reads files and nothing
+else:
+
+- **No shell, not even `git diff`.** A live check let a shell redirect write a
+  file, though only git commands were allowed: on a setup that runs sandboxed
+  commands without asking, any shell is a write. The packet carries what git
+  would have told it.
+- **`--restricted`** ignores the user's and project's settings, whose
+  permission rules would add to the reviewer's.
+- **`--strict-mcp-config`** drops MCP servers, which can post to chats or
+  change tickets.
+
+The marker and the lock moved from `cursor.Review` into `internal/review`, so
+both engines have them.
 
 ## The review packet
 
