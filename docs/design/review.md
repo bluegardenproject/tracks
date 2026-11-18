@@ -1,7 +1,6 @@
 # Reviews
 
-**Status:** proposed. Nothing here is built yet; the steps under Order are one
-PR each.
+**Status:** being built, one PR per step under Order. Step 1 is built.
 
 ## Problem
 
