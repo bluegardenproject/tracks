@@ -1,6 +1,7 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Step 1 is built.
+**Status:** being built, one PR per step under Order. Step 1 is built; the
+reviewer moves into a pane of its own (see The reviewer pane).
 
 ## Problem
 
@@ -45,7 +46,7 @@ track's repo, the candor level, the guards.
 | Role | Model | Does |
 |---|---|---|
 | Orchestrator | The track's own, can be a smaller one | Takes the user's brief, resolves links it can open (a ticket, a doc), writes the brief, runs `tracks review`, presents the report, answers questions the report already answers |
-| Reviewer | The review setting's engine and model | Reads the packet and the code around it, writes the report |
+| Reviewer | The Reviewer agent's (Settings → Agents) | Reviews in a session of its own, in the reviewer pane; answers questions about its review |
 
 The orchestrator never reviews itself; when `tracks review` fails it says so
 and stops. On a Work track the working agent is the orchestrator for its
@@ -59,9 +60,8 @@ pre-push review.
 | Orchestrator, Review track | never | never | never | yes, as a suggestion |
 | Orchestrator, Work track | yes | yes | after the pre-push review; a PR only once the user agreed, as a draft where the repo's Draft PRs setting says so | yes |
 
-- **The reviewer can't change anything.** The Claude reviewer has only Read,
-  Grep and Glob (below). The Cursor reviewer runs without permission flags,
-  so it can't run commands at all.
+- **The reviewer can't change anything.** It runs in its engine's read-only
+  mode (see The reviewer pane).
 - **Tracks checks it.** `tracks review` notes the worktree's HEAD, `git
   status`, the changes to tracked files and the untracked files' contents
   before the reviewer starts, and compares them after. A change is
@@ -81,23 +81,65 @@ pre-push review.
 - A per-track override in the New track form comes later, if a global setting
   turns out not to be enough. It needs a migration.
 
-### The Claude reviewer
+## The reviewer pane
 
-`claude -p --restricted --tools Read,Grep,Glob --strict-mcp-config`, with the
-packet on stdin and `--model` from the setting. It reads files and nothing
-else:
+The reviewer is an interactive session of the Reviewer agent and model, in a
+pane of its own, hidden until the user opens it.
 
-- **No shell, not even `git diff`.** A live check let a shell redirect write a
-  file, though only git commands were allowed: on a setup that runs sandboxed
-  commands without asking, any shell is a write. The packet carries what git
-  would have told it.
-- **`--restricted`** ignores the user's and project's settings, whose
-  permission rules would add to the reviewer's.
-- **`--strict-mcp-config`** drops MCP servers, which can post to chats or
-  change tickets.
+- **Started by Tracks, not the orchestrator.** `tracks review` asks the daemon,
+  which opens the pane through tmux. Its process is tmux's, not the
+  orchestrator's: the orchestrator's sandbox doesn't apply, and no new way
+  around it opens either. The reviewer runs as any track's agent does, with
+  its engine's own permissions and sandbox for its commands.
+- **Hidden.** Hidden panes live in a background tmux session of Tracks', a
+  window per track, so they never show among the tracks.
+- **Read-only.** Claude starts in plan mode with `Edit`, `Write` and
+  `NotebookEdit` denied; Cursor with `--mode ask`. `tracks review` also
+  checks the worktree before and after, in the orchestrator's own sandbox.
+- **The report comes back through the engine's hooks**, which Tracks already
+  installs: when Claude stops, its last reply is read from the transcript;
+  for Cursor, the hook event that carries the reply's text. `tracks review`
+  waits for it and prints it to the orchestrator. The reviewer never has to
+  run a command.
+- **In Work tracks too.** The pane opens in the Work track's window and
+  worktree, so a pre-push review sees what isn't committed yet. The pane
+  route replaces the in-session `tracks-reviewer` subagent once it's built.
 
-The marker and the lock moved from `cursor.Review` into `internal/review`, so
-both engines have them.
+### The button
+
+While a track has a reviewer, the footer's top row shows a green
+**Open reviewer** button. It moves the hidden pane into the track's right
+column, as a dev-server pane sits, running on as it was (`join-pane`); the
+button becomes **Hide reviewer**, which moves it back. There's no button to
+end it.
+
+Two button variants are added. They aren't part of the rotation the footer's
+other buttons take (variants 1 to 4); each belongs to one button:
+
+| Variant | Use | Default (dark) | Default light |
+|---|---|---|---|
+| `button.variant5` | Reserved: an End reviewer option, or the Station | bg `#700c50`, text `#ffb5e7` | bg `#ffd9f1`, text `#700c50` |
+| `button.variant6` | Open reviewer / Hide reviewer | bg `#00916f`, text `#c9fff0` | bg `#c9fff0`, text `#00664f` |
+
+### Lifetime
+
+- **One reviewer per track.** It stays, hidden or shown, until the track ends.
+- **A new review starts fresh.** `tracks review` ends a reviewer that's there
+  and starts a new session, after the branch changed or for another scope.
+- **Closing its pane ends it**, such as the orchestrator running
+  `tracks close` when the user asks.
+- **Interaction is limited.** The reviewer answers questions about its review
+  and the code it reviewed. It takes no new tasks, doesn't plan or build, and
+  points anything else back to the orchestrator: it is not a second track.
+
+### Why not the earlier routes
+
+- **Headless from the orchestrator's shell** (built in step 1): a Claude
+  track's sandbox keeps the reviewer's CLI from its network.
+- **Headless from the daemon:** the daemon runs outside any sandbox, so the
+  reviewer did too. Claude's could be locked down with flags; Cursor's needed
+  an OS sandbox and still loaded hooks and config from the worktree, which the
+  agent can write. Dropped.
 
 ## The review packet
 
@@ -200,12 +242,12 @@ The orchestrator answers what the report already holds: "summarise the
 blocks", "which findings touch the cache?", "explain finding 3". It doesn't
 add findings or change their severity, likelihood or confidence.
 
-Everything that needs the code read again goes back to a reviewer:
+Everything that needs the code read again goes back to the reviewer:
 
 - **A question about a finding** ("is finding 3 a false positive?", "look
-  deeper at the cache"): `tracks review --follow-up "<question>"` resumes the
-  last reviewer session (`claude --resume`, Cursor's `--resume`), so the
-  reviewer answers with its context.
+  deeper at the cache"): the user asks in the reviewer pane, or the
+  orchestrator runs `tracks review --ask "<question>"`, which types it into
+  the reviewer's session and returns its answer.
 - **A new review**, after the branch changed, or **another scope** (another
   `--owner`, the whole diff): a new `tracks review`, a new session.
 
@@ -213,10 +255,10 @@ Everything that needs the code read again goes back to a reviewer:
 
 | Command | Does |
 |---|---|
-| `tracks review` | Reviews the track's branch with the review setting's engine and model |
+| `tracks review` | Starts a reviewer session on the track's branch, ending one that's there, and prints its report |
 | `--brief <file>` | Adds the orchestrator's brief to the packet |
 | `--owner <handle>` | Reviews only the files `<handle>` owns |
-| `--follow-up <question>` | Asks the last reviewer session again |
+| `--ask <question>` | Asks the reviewer that's there, and prints its answer |
 | `--base <ref>` | As now |
 
 ## Order
@@ -225,21 +267,25 @@ Each step is a PR of its own, branched from `main` where it can be, so they
 can be reviewed and merged while the next is built.
 
 
-1. `tracks review` engine-independent: the Claude backend, guards in the shared
-   path, the review setting in `settings.yaml`.
-2. The Review section on the Settings tab.
-3. The packet: changed files, PR intent, threads, checks, the moved-PR check,
+1. `tracks review` engine-independent, and the Claude reviewer's flags.
+   Built.
+2. Settings → Agents → Reviewer: the reviewer's agent and model.
+3. The reviewer pane: the hidden pane, read-only modes, the report through
+   the hooks, `tracks review` waiting for it, a new review ending the old
+   session.
+4. The footer button, Open and Hide reviewer, with `button.variant6`;
+   `button.variant5` added and reserved.
+5. Orchestrators use the pane: Work and Review tracks, both engines; the
+   `tracks-reviewer` subagent goes.
+6. `tracks review --ask`.
+7. The packet: changed files, PR intent, threads, checks, the moved-PR check,
    per-file limits.
-4. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
-5. Likelihood and confidence in the report (experiment 1).
-6. Review tracks as orchestrator and reviewer; Claude tracks always use
-   `tracks review`.
-7. Follow-ups.
-8. The verify pass (experiment 2).
-9. Structured findings and calibration (experiments 3 and 4).
+8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
+9. Likelihood and confidence in the report (experiment 1).
+10. The verify pass (experiment 2).
+11. Structured findings and calibration (experiments 3 and 4).
 
 ## Open
 
-- The reviewer's live view: a headless reviewer shows only its report. A pane
-  that streams its progress, like a setup pane, may be worth it.
+- Which of Cursor's hook events carries the reply's text, for the report.
 - Where calibration data is shown: per engine and model, to compare reviewers.
