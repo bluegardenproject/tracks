@@ -86,6 +86,7 @@ Review and Doc review take a **candor** level from 1 (radical candor) to 10
 The agent can run these, and so can you in a track's terminal:
 
 - `tracks review` reviews the branch with a separate agent session.
+- `tracks new <type>` opens a new track, with the prompt the agent wrote for it.
 - `tracks terminal` opens a terminal pane beside the agent.
 - `tracks panes` lists the panes beside the agent; `tracks close <pane>` ends what runs in one and closes it.
 - `tracks add-repo <repo>` adds a worktree of another repo to the track.
