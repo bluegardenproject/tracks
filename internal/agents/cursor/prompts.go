@@ -62,6 +62,10 @@ const taskSuffix = "" +
 	"diff yourself as a fallback, ending with the same " +
 	"`REVIEW OUTCOME:` line — a degraded review beats a skipped " +
 	"one, but say which you did.\n\n" +
+	"**Ask before you open a pull request.** Commit and push as the work " +
+	"needs, but open a pull request only after the user agreed to it in " +
+	"this session, or the task asked for one; otherwise ask them when " +
+	"the work is ready.\n\n" +
 	"If you open a pull request at any point, include the URL on its " +
 	"own line as `TRACKS_PR_URL=<url>` so the tracks dashboard " +
 	"surfaces it. If you open several, emit one such line per PR.\n\n" +
