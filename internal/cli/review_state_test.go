@@ -9,6 +9,8 @@ import (
 )
 
 func TestWorktreeStateSeesContentChanges(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
 	dir := t.TempDir()
 	for _, args := range [][]string{
@@ -32,6 +34,11 @@ func TestWorktreeStateSeesContentChanges(t *testing.T) {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
 	write("b c.txt", "new")
+	for link, target := range map[string]string{"node_modules": t.TempDir(), "dangling": filepath.Join(dir, "nowhere")} {
+		if err := os.Symlink(target, filepath.Join(dir, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	before, err := worktreeState(ctx, dir)
 	if err != nil {
@@ -50,5 +57,19 @@ func TestWorktreeStateSeesContentChanges(t *testing.T) {
 	}
 	if again, _ := worktreeState(ctx, dir); again != before {
 		t.Error("the state changed with nothing changed")
+	}
+}
+
+func TestTrackEngine(t *testing.T) {
+	t.Setenv("CLAUDECODE", "")
+	if got := trackEngine("claude"); got != "claude" {
+		t.Errorf("a known engine became %s", got)
+	}
+	if got := trackEngine(""); got != "cursor" {
+		t.Errorf("outside Claude Code the fallback is %s, want cursor", got)
+	}
+	t.Setenv("CLAUDECODE", "1")
+	if got := trackEngine(""); got != "claude" {
+		t.Errorf("inside Claude Code the fallback is %s, want claude", got)
 	}
 }

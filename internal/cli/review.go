@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -60,7 +61,10 @@ func newReviewCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("the reviewer setting can't be read: %w", err)
 			}
-			engineID, model := set.ReviewerOn(t.Engine)
+			engineID, model := set.ReviewerOn(trackEngine(t.Engine))
+			if engineID == "" {
+				return errors.New("no engine to review with: add one on the Engines tab")
+			}
 			command, err := reviewCommand(c.Context(), engineID, model, dir)
 			if err != nil {
 				return err
@@ -81,12 +85,20 @@ func newReviewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			after, stateErr := worktreeState(c.Context(), dir)
+			changed := stateErr == nil && after != before
+			if changed {
+				report = "⛔ The worktree changed while the reviewer ran. A reviewer never changes anything: " +
+					"check what changed before you go on.\n\n" + report
+			}
 			if _, err := fmt.Fprintln(c.OutOrStdout(), report); err != nil {
 				return err
 			}
-			if after, err := worktreeState(c.Context(), dir); err == nil && after != before {
-				return errors.New("the worktree changed while the reviewer ran: HEAD or git status differ " +
-					"from before. A reviewer never changes anything, so check what changed before you go on")
+			switch {
+			case stateErr != nil:
+				return fmt.Errorf("couldn't check the worktree is as it was before the review: %w", stateErr)
+			case changed:
+				return errors.New("the worktree changed while the reviewer ran")
 			}
 			return nil
 		},
@@ -149,14 +161,45 @@ func worktreeState(ctx context.Context, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if files := strings.FieldsFunc(untracked, func(r rune) bool { return r == 0 }); len(files) > 0 {
-		hashes, err := git(ctx, dir, append([]string{"hash-object", "--"}, files...)...)
-		if err != nil {
-			return "", err
-		}
-		state.WriteString(hashes)
+	for _, name := range strings.FieldsFunc(untracked, func(r rune) bool { return r == 0 }) {
+		state.WriteString(name + " " + fileState(filepath.Join(dir, name)) + "\n")
 	}
 	return state.String(), nil
+}
+
+// fileState stands for an untracked file's contents: a link's target,
+// a file's hash. git hash-object refuses links, and an untracked
+// symlink, such as a linked node_modules, must not stop a review.
+func fileState(path string) string {
+	info, err := os.Lstat(path)
+	switch {
+	case err != nil:
+		return "gone"
+	case info.Mode()&os.ModeSymlink != 0:
+		target, _ := os.Readlink(path)
+		return "link " + target
+	case !info.Mode().IsRegular():
+		return info.Mode().String()
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "unreadable"
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+// trackEngine is the engine of the track under review: as the daemon
+// has it, else the agent running this command, told by its
+// environment. Claude Code sets CLAUDECODE in its shells; Cursor, the
+// other engine, sets nothing to tell it by.
+func trackEngine(known string) string {
+	switch {
+	case known != "":
+		return known
+	case os.Getenv("CLAUDECODE") != "":
+		return agents.Claude.ID
+	}
+	return agents.Cursor.ID
 }
 
 // askTrack is the track with id as the daemon has it, or an empty one
