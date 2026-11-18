@@ -62,7 +62,7 @@ func (m Model) engineModels(msg engineModelsMsg) Model {
 		m.engines.models = maps.Clone(m.engines.models)
 		m.engines.models[msg.id] = msg.models
 	}
-	if m.picker == nil || (m.pickerFor != pickModel && m.pickerFor != pickTypeModel) || m.pickerEngine != msg.id {
+	if m.picker == nil || (m.pickerFor != pickModel && m.pickerFor != pickTypeModel && m.pickerFor != pickReviewerModel) || m.pickerEngine != msg.id {
 		return m
 	}
 	if msg.err != nil {
@@ -84,8 +84,11 @@ func (m Model) setModelItems(models []agents.Model) Model {
 	if conf != nil {
 		current = conf.Model
 	}
-	if m.pickerFor == pickTypeModel {
+	switch m.pickerFor {
+	case pickTypeModel:
 		def, current = m.defaultModel(id), m.typeModel()
+	case pickReviewerModel:
+		def, current = m.defaultModel(id), m.reviewerModel()
 	}
 	items := []widget.PickerItem{{Label: "Default", Detail: def}}
 	for _, model := range models {
@@ -102,7 +105,7 @@ func (m Model) setModelItems(models []agents.Model) Model {
 			marked = i + 1
 		}
 	}
-	if marked == 0 && current != "" && m.pickerFor == pickTypeModel {
+	if marked == 0 && current != "" && (m.pickerFor == pickTypeModel || m.pickerFor == pickReviewerModel) {
 		items = append(items, widget.PickerItem{Label: current, Detail: notListed})
 		marked = len(items) - 1
 	}
@@ -124,8 +127,11 @@ func (m Model) modelPicked(r widget.PickerResult) (Model, tea.Cmd) {
 			model = ""
 		}
 		m.picker = nil
-		if m.pickerFor == pickTypeModel {
+		switch m.pickerFor {
+		case pickTypeModel:
 			return m.setType(&settings.TrackType{Engine: m.pickerEngine, Model: model})
+		case pickReviewerModel:
+			return m.setReviewer(&settings.TrackType{Engine: m.pickerEngine, Model: model})
 		}
 		return m.editEngine(m.pickerEngine, func(s *settings.Engine) { s.Model = model })
 	}

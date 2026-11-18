@@ -14,9 +14,9 @@ func TestReviewerOn(t *testing.T) {
 		{"another engine, its default model", &TrackType{Engine: "cursor"}, "claude", "cursor", "gpt-5"},
 		{"another engine and model", &TrackType{Engine: "cursor", Model: "gpt-5.6"}, "claude", "cursor", "gpt-5.6"},
 		{"no track engine, the default", nil, "", "claude", "opus"},
-		{"only a model, on the track's engine", &TrackType{Model: "sonnet"}, "claude", "claude", "sonnet"},
+		{"a model without an engine is ignored", &TrackType{Model: "sonnet"}, "claude", "claude", "opus"},
 	} {
-		s := Settings{Engines: engines, Reviewer: tc.reviewer}
+		s := Settings{Engines: engines, Agents: Agents{Reviewer: tc.reviewer}}
 		if engine, model := s.ReviewerOn(tc.track); engine != tc.engine || model != tc.wantModel {
 			t.Errorf("%s: ReviewerOn(%q) = %s, %s; want %s, %s", tc.name, tc.track, engine, model, tc.engine, tc.wantModel)
 		}

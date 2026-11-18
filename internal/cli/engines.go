@@ -46,6 +46,25 @@ func (t trackTypes) Save(tracks settings.Tracks) error {
 	return settings.Save(t.path, s)
 }
 
+// agentSettings keeps the agents section of settings.yaml for Settings.
+type agentSettings struct{ path string }
+
+var _ source.Agents = agentSettings{}
+
+func (a agentSettings) Load() (settings.Agents, error) {
+	s, err := settings.Load(a.path)
+	return s.Agents, err
+}
+
+func (a agentSettings) Save(agents settings.Agents) error {
+	s, err := settings.Load(a.path)
+	if err != nil {
+		return err
+	}
+	s.Agents = agents
+	return settings.Save(a.path, s)
+}
+
 type history struct{ path string }
 
 var _ source.History = history{}

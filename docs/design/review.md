@@ -1,7 +1,7 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Step 1 is built; the
-reviewer moves into a pane of its own (see The reviewer pane).
+**Status:** being built, one PR per step under Order. Steps 1 and 2 are
+built; the reviewer moves into a pane of its own (see The reviewer pane).
 
 ## Problem
 
@@ -72,12 +72,14 @@ pre-push review.
 
 ## Reviewer setting
 
-- Settings tab, a **Review** section: engine (Claude, Cursor, or *same as the
-  track*) and model, picked from what `agents/` reports for that engine.
-- *Same as the track* is the default. With it, a Claude track keeps its
-  subagent as today; any other choice makes it use `tracks review`. Once the
-  headless Claude reviewer has proven itself, Claude tracks use `tracks review`
-  always, and the subagent goes.
+- Settings has an **Agents** section, after Tracks, for the agents Tracks
+  starts beside a track's own. Each has a frame of its own; **Reviewer** is
+  the first, with Agent and Model fields, stored as `agents.reviewer` in
+  `settings.yaml`. Its agent can be *Same as the track*, the default; a model
+  counts only with an agent.
+- It picks the agent of the reviewer pane (below). Until orchestrators use
+  the pane (step 5), the setting applies where `tracks review` runs: Cursor
+  tracks; Claude tracks keep their subagent.
 - A per-track override in the New track form comes later, if a global setting
   turns out not to be enough. It needs a migration.
 
@@ -269,7 +271,7 @@ can be reviewed and merged while the next is built.
 
 1. `tracks review` engine-independent, and the Claude reviewer's flags.
    Built.
-2. Settings → Agents → Reviewer: the reviewer's agent and model.
+2. Settings → Agents → Reviewer: the reviewer's agent and model. Built.
 3. The reviewer pane: the hidden pane, read-only modes, the report through
    the hooks, `tracks review` waiting for it, a new review ending the old
    session.

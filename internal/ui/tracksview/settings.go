@@ -15,13 +15,14 @@ import (
 const (
 	sectionGeneral    = iota
 	sectionTracks     // each track type's defaults
+	sectionAgents     // the agents beside a track's own: the reviewer
 	sectionFastTracks // empty until Fast Tracks are built
 	sectionCreator
 	sectionKeys
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Tracks", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Tracks", "Agents", "Fast Tracks", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
@@ -32,6 +33,7 @@ type settingsTab struct {
 	fieldHover     bool // the mouse is on General's theme field
 	fastHover      int  // the Fast Tracks button under the mouse
 	types          typesState
+	agents         agentsState
 	history        historyState
 	notify         notifyState
 	// generalFocus is General's field with focus, generalHover the one
@@ -60,6 +62,8 @@ const (
 	pickTypeModel // a track type's model
 	pickUnsaved   // what auto-archive does with unsaved work
 	pickProxy     // what a proxy port forwards to
+	pickReviewerAgent
+	pickReviewerModel
 )
 
 type (
@@ -74,7 +78,7 @@ type (
 )
 
 func newSettingsTab(applied theme.Theme) settingsTab {
-	return settingsTab{hover: -1, generalHover: -1, types: typesState{hover: typeHit{-1, -1}}, creator: themecreator.New(applied, applied)}
+	return settingsTab{hover: -1, generalHover: -1, types: typesState{hover: typeHit{-1, -1}}, agents: agentsState{hover: -1}, creator: themecreator.New(applied, applied)}
 }
 
 func (m Model) loadThemes() tea.Cmd {
@@ -154,8 +158,10 @@ func (m Model) openPicker(purpose int) (Model, tea.Cmd) {
 // picked acts on what the picker did.
 func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
 	switch m.pickerFor {
-	case pickModel, pickTypeModel:
+	case pickModel, pickTypeModel, pickReviewerModel:
 		return m.modelPicked(r)
+	case pickReviewerAgent:
+		return m.reviewerAgentPicked(r)
 	case pickAgent:
 		return m.agentPicked(r)
 	case pickUnsaved:
@@ -303,6 +309,8 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.generalKey(key)
 	case sectionTracks:
 		return m.typesKey(key)
+	case sectionAgents:
+		return m.agentsKey(key)
 	case sectionKeys:
 		switch key {
 		case "up", "k":

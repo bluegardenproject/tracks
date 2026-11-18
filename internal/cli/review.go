@@ -33,8 +33,8 @@ func newReviewCmd() *cobra.Command {
 		Use:   "review",
 		Short: "review this track's branch with a separate agent session",
 		Long: "Runs the tracks-reviewer in a fresh agent session, so it reads the diff without the working " +
-			"agent's history. It runs on the engine and model of the reviewer setting in settings.yaml, by " +
-			"default the track's own engine. The reviewer only reads: Cursor's runs without permission " +
+			"agent's history. It runs on the agent and model picked under Settings → Agents → Reviewer, by " +
+			"default the track's own agent. The reviewer only reads: Cursor's runs without permission " +
 			"flags, Claude's with read-only tools, and the worktree is checked for changes afterwards.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {

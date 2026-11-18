@@ -13,6 +13,13 @@ type TrackTypes interface {
 	Save(settings.Tracks) error
 }
 
+// Agents keeps Settings → Agents: the agents Tracks starts beside a
+// track's own, such as the reviewer.
+type Agents interface {
+	Load() (settings.Agents, error)
+	Save(settings.Agents) error
+}
+
 // History keeps Tracks History, the auto-archive settings.
 type History interface {
 	Load() (settings.History, error)

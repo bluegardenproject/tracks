@@ -151,7 +151,7 @@ func (m Model) hints() string {
 		return "  " + joinKeys(key, text, repoFormKeys)
 	case m.tab == tabRepositories:
 		keys = repoListKeys
-	case m.picker != nil && (m.pickerFor == pickModel || m.pickerFor == pickTypeModel):
+	case m.picker != nil && (m.pickerFor == pickModel || m.pickerFor == pickTypeModel || m.pickerFor == pickReviewerModel):
 		return "  " + joinKeys(key, text, modelPickerKeys)
 	case m.picker != nil:
 		return "  " + joinKeys(key, text, pickerKeys)
@@ -167,6 +167,8 @@ func (m Model) hints() string {
 			return "  " + joinKeys(key, text, creatorKeys)
 		case sectionTracks:
 			return "  " + joinKeys(key, text, typeKeys)
+		case sectionAgents:
+			return "  " + joinKeys(key, text, agentKeys)
 		}
 		return "  " + joinKeys(key, text, scrollKeys)
 	case m.tab == tabSettings && s.section != sectionFastTracks && s.section != sectionAbout:
