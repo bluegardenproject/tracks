@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.3.0](https://github.com/bluegardenproject/tracks/compare/v3.2.0...v3.3.0) (2026-11-18)
+
+
+### Features
+
+* **cli:** let agents list and close the panes beside them ([87c5e52](https://github.com/bluegardenproject/tracks/commit/87c5e529cf60a05c9799d0e1e4b68a1190d3a5f1))
+
+
+### Bug Fixes
+
+* **agents:** keep Review tracks from changing, committing or pushing ([b4f7b8b](https://github.com/bluegardenproject/tracks/commit/b4f7b8b3604932a4f8388275fc872c24831e6c3e))
+* **agents:** put an empty line between the code reviewer's findings ([f9adb64](https://github.com/bluegardenproject/tracks/commit/f9adb648e2410a8f6e0d86b50302a3f6441db08e))
+* **cli:** spare the caller and the pane's shell when closing panes ([ce2f3d7](https://github.com/bluegardenproject/tracks/commit/ce2f3d749412f08c7d00bba5d703656f9bb3f483))
+
 ## [3.2.0](https://github.com/bluegardenproject/tracks/compare/v3.1.1...v3.2.0) (2026-11-09)
 
 
