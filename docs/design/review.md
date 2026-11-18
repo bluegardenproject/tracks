@@ -52,6 +52,25 @@ The orchestrator never reviews itself; when `tracks review` fails it says so
 and stops. On a Work track the working agent is the orchestrator for its
 pre-push review.
 
+### What each may do
+
+| | Edit files | Commit | Push, open a PR | Show a fix in the console |
+|---|---|---|---|---|
+| Reviewer, any track | never | never | never | in the report |
+| Orchestrator, Review track | never | never | never | yes, as a suggestion |
+| Orchestrator, Work track | yes | yes | after the pre-push review; a PR only once the user agreed, as a draft where the repo's Draft PRs setting says so | yes |
+
+- **The reviewer can't change anything.** The Claude reviewer gets read-only
+  tools only (below), with `Edit`, `Write`, `Bash(git commit:*)` and
+  `Bash(git push:*)` denied as well. The Cursor reviewer runs without
+  permission flags, so it can't run commands at all.
+- **Tracks checks it.** `tracks review` notes the worktree's HEAD and its
+  `git status` before the reviewer starts and compares them after. A change is
+  reported above the findings, as an error, never quietly kept.
+- **The orchestrator follows its track's kind.** The prompts carry the rules
+  above: a Review track's ends with its read-only contract; a Work track's
+  asks the user before opening a PR.
+
 ## Reviewer setting
 
 - Settings tab, a **Review** section: engine (Claude, Cursor, or *same as the
@@ -192,6 +211,10 @@ Everything that needs the code read again goes back to a reviewer:
 | `--base <ref>` | As now |
 
 ## Order
+
+Each step is a PR of its own, branched from `main` where it can be, so they
+can be reviewed and merged while the next is built.
+
 
 1. `tracks review` engine-independent: the Claude backend, guards in the shared
    path, the review setting in `settings.yaml`.
