@@ -45,7 +45,7 @@ track's repo, the candor level, the guards.
 
 | Role | Model | Does |
 |---|---|---|
-| Orchestrator | The track's own, can be a smaller one | Takes the user's brief, resolves links it can open (a ticket, a doc), writes the brief, runs `tracks review`, presents the report, handles follow-ups |
+| Orchestrator | The track's own, can be a smaller one | Takes the user's brief, resolves links it can open (a ticket, a doc), writes the brief, runs `tracks review`, presents the report, answers questions the report already answers |
 | Reviewer | The review setting's engine and model | Reads the packet and the code around it, writes the report |
 
 The orchestrator never reviews itself; when `tracks review` fails it says so
@@ -95,6 +95,12 @@ around the code, never the code.
   aren't cut in the middle of a file: whole files are left out, the largest
   first, and listed as not reviewed in the report's Not run line. Threads and
   CI logs get their own limits.
+
+## Checks
+
+Review tracks don't run lint, typecheck or tests locally. A PR review relies on
+the CI results in the packet; a failing check is a finding. A Review track's
+setup stays lazy, as now.
 
 ## Scope: a code owner's part
 
@@ -162,11 +168,18 @@ How well the numbers work is measured, not assumed. In order:
 
 ## Follow-ups
 
-The reviewer's session is kept. `tracks review --follow-up "<question>"`
-resumes it (`claude --resume`, Cursor's `--resume`), so "is finding 3 a false
-positive?" or "look deeper at the cache" reaches the reviewer with its context,
-not the orchestrator guessing on a smaller model. A new `tracks review` starts
-a new session.
+The orchestrator answers what the report already holds: "summarise the
+blocks", "which findings touch the cache?", "explain finding 3". It doesn't
+add findings or change their severity, likelihood or confidence.
+
+Everything that needs the code read again goes back to a reviewer:
+
+- **A question about a finding** ("is finding 3 a false positive?", "look
+  deeper at the cache"): `tracks review --follow-up "<question>"` resumes the
+  last reviewer session (`claude --resume`, Cursor's `--resume`), so the
+  reviewer answers with its context.
+- **A new review**, after the branch changed, or **another scope** (another
+  `--owner`, the whole diff): a new `tracks review`, a new session.
 
 ## Control surface
 
@@ -195,10 +208,6 @@ a new session.
 
 ## Open
 
-- Should the orchestrator answer some follow-ups itself, such as "summarise
-  the blocks", without a reviewer call?
-- Running checks (lint, tests) locally in a Review track, which needs its
-  setup run first, or relying on the CI results the packet carries.
 - The reviewer's live view: a headless reviewer shows only its report. A pane
   that streams its progress, like a setup pane, may be worth it.
 - Where calibration data is shown: per engine and model, to compare reviewers.
