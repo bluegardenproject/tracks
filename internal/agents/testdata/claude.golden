@@ -307,7 +307,7 @@ its report with one of `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
 Present the subagent'\''\'\'''\''s findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee (skip the
   Jira-sync workflow described in the global tracks suffix).
 
@@ -355,7 +355,9 @@ If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL
 
 **Dev servers.** Tracks runs this track'\''\'\'''\''s dev servers, each in a pane of the track'\''\'\'''\''s window, on a port it picks. Start them only when the user asks, and only the ones they ask for. When the track has more than one and the user didn'\''\'\'''\''t say which, run `tracks servers` and ask which to start, as a question with one option per server that lets them pick several, then start those with `tracks up <server>...`. Plain `tracks up` starts all of them: run it only when the user asks for all. Stop servers with `tracks down [server...]`. `tracks servers` lists them with their state and port, `tracks url <server>` prints one'\''\'\'''\''s address, and `tracks logs <server>` shows what one printed. Never start a dev server any other way, such as with `pnpm dev`. If a server doesn'\''\'\'''\''t start, crashes or reports an error, tell the user what `tracks up` printed or `tracks logs` shows and wait: don'\''\'\'''\''t restart it, change it or work around it unless they ask. The error may be expected while other work is pending.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -383,7 +385,7 @@ its report with one of `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
 Present the subagent'\''\'\'''\''s findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee (skip the
   Jira-sync workflow described in the global tracks suffix).
 
@@ -429,7 +431,9 @@ If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL
   - Match the existing comment density of the file — if the surrounding code has no comments, add none.
   - A comment earns its place only when the *why* is genuinely surprising (a workaround, an ordering constraint, a subtle edge case).
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -457,7 +461,7 @@ its report with one of `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
 Present the subagent'\''\'\'''\''s findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee (skip the
   Jira-sync workflow described in the global tracks suffix).
 
@@ -499,7 +503,9 @@ If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL
   - Match the existing comment density of the file — if the surrounding code has no comments, add none.
   - A comment earns its place only when the *why* is genuinely surprising (a workaround, an ordering constraint, a subtle edge case).
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 3/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -527,7 +533,7 @@ its report with one of `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
 Present the subagent'\''\'\'''\''s findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee (skip the
   Jira-sync workflow described in the global tracks suffix).
 
@@ -573,7 +579,9 @@ If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL
   - Match the existing comment density of the file — if the surrounding code has no comments, add none.
   - A comment earns its place only when the *why* is genuinely surprising (a workaround, an ordering constraint, a subtle edge case).
 
-**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 1/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
+**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. Include the line `Candor level: 1/10` in the review subagent'\''\'\'''\''s prompt. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --session-id '\''11111111-2222-4333-8444-555555555555'\'' --permission-mode '\''auto'\'' --add-dir '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'

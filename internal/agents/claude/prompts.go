@@ -128,7 +128,7 @@ its report with one of ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME:
 Present the subagent's findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee (skip the
   Jira-sync workflow described in the global tracks suffix).`
 

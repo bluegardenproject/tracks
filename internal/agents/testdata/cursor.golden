@@ -188,7 +188,7 @@ Run `tracks review` rather than reviewing it yourself. It ends its report with `
 Present the findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
 **From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
@@ -217,7 +217,9 @@ Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s
 
 **Dev servers.** Tracks runs this track'\''\'\'''\''s dev servers, each in a pane of the track'\''\'\'''\''s window, on a port it picks. Start them only when the user asks, and only the ones they ask for. When the track has more than one and the user didn'\''\'\'''\''t say which, run `tracks servers` and ask which to start, as a question with one option per server that lets them pick several, then start those with `tracks up <server>...`. Plain `tracks up` starts all of them: run it only when the user asks for all. Stop servers with `tracks down [server...]`. `tracks servers` lists them with their state and port, `tracks url <server>` prints one'\''\'\'''\''s address, and `tracks logs <server>` shows what one printed. Never start a dev server any other way, such as with `pnpm dev`. If a server doesn'\''\'\'''\''t start, crashes or reports an error, tell the user what `tracks up` printed or `tracks logs` shows and wait: don'\''\'\'''\''t restart it, change it or work around it unless they ask. The error may be expected while other work is pending.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -234,7 +236,7 @@ Run `tracks review` rather than reviewing it yourself. It ends its report with `
 Present the findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
 **From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
@@ -261,7 +263,9 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -278,7 +282,7 @@ Run `tracks review` rather than reviewing it yourself. It ends its report with `
 Present the findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
 **Links you cannot read.** If the task links to something you cannot open (a Jira ticket, a Confluence page, a Google Doc, a Figma file, a GitHub page) because an MCP server is missing or not authenticated, or the page needs a login, STOP before you plan, explore or change anything. Do not guess what it says and do not make a plan from the rest of the prompt: the link usually holds the requirements. Tell the user which link failed and why, then ask one question: should you wait while they authenticate or add the MCP server, or skip the link and go on without it? Wait for the answer. If they authenticated, read the link again before anything else. The same applies when a subagent reports that it could not read a link.
@@ -301,7 +305,9 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'
@@ -318,7 +324,7 @@ Run `tracks review` rather than reviewing it yourself. It ends its report with `
 Present the findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
-- Do NOT push, commit, or open a PR.
+- Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
 **From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
@@ -345,7 +351,9 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
+**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+
+**This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
 code=$?
 tmux set-option -w -t "$TMUX_PANE" @tracks_exit "$code" 2>/dev/null
 exec ${SHELL:-bash} -l'

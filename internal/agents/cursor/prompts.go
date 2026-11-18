@@ -136,7 +136,7 @@ const reviewTemplate = "" +
 	"yourself, ending with the same `REVIEW OUTCOME:` line.\n\n" +
 	"Present the findings verbatim and wait for follow-up.\n\n" +
 	"This is a **read-only audit**:\n" +
-	"- Do NOT push, commit, or open a PR.\n" +
+	"- Do NOT edit files, commit, push, or open a PR.\n" +
 	"- Do NOT change any Jira ticket status or assignee."
 
 // reviewCandorSuffix carries the candor level onto a code-review track.
