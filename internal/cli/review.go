@@ -14,6 +14,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/agents/cursor"
 	"github.com/bluegardenproject/tracks/internal/platform"
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -28,13 +29,11 @@ func newReviewCmd() *cobra.Command {
 	var base string
 	cmd := &cobra.Command{
 		Use:   "review",
-		Short: "review this track's branch with a separate Cursor agent",
-		Long: "Runs the tracks-reviewer as a second Cursor agent with a fresh chat, " +
-			"so it reads the diff without the working agent's history. Cursor can't " +
-			"hand work to a custom subagent the way Claude Code does; this is the " +
-			"equivalent for Cursor tracks.\n\n" +
-			"The reviewer runs with no permission flags, so the approval policy " +
-			"configured for Cursor applies unchanged.",
+		Short: "review this track's branch with a separate agent session",
+		Long: "Runs the tracks-reviewer in a fresh agent session, so it reads the diff without the working " +
+			"agent's history. It runs on the engine and model of the reviewer setting in settings.yaml, by " +
+			"default the track's own engine. The reviewer only reads: Cursor's runs without permission " +
+			"flags, Claude's with read-only tools, and the worktree is checked for changes afterwards.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			id := os.Getenv("TRACKS_ID")
@@ -57,32 +56,107 @@ func newReviewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			found, err := agents.Check(c.Context(), agents.Cursor)
+			set, err := settings.Load(paths.Settings)
+			if err != nil {
+				return fmt.Errorf("the reviewer setting can't be read: %w", err)
+			}
+			engineID, model := set.ReviewerOn(t.Engine)
+			command, err := reviewCommand(c.Context(), engineID, model, dir)
 			if err != nil {
 				return err
 			}
-			var model string
-			if s, err := settings.Load(paths.Settings); err == nil && s.Engines.Cursor != nil {
-				model = s.Engines.Cursor.Model
-			}
 
-			fmt.Fprintln(c.ErrOrStderr(), "Running the reviewer in a separate agent session…")
-			report, err := cursor.Review(c.Context(), cursor.ReviewRequest{
-				Binary: found.Path, Workspace: dir, Diff: diff, Instructions: claude.ReviewerInstructions(),
-				Candor: t.Candor, LockDir: filepath.Join(paths.DataDir, "locks"), TrackID: id, Model: model,
+			before, err := worktreeState(c.Context(), dir)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.ErrOrStderr(), "Running the reviewer on %s in a separate agent session…\n", reviewerName(engineID, model))
+			report, err := review.Run(c.Context(), review.Request{
+				Command: command, Workspace: dir, Diff: diff, Instructions: claude.ReviewerInstructions(),
+				Candor: t.Candor, LockDir: filepath.Join(paths.DataDir, "locks"), TrackID: id,
 			})
-			if errors.Is(err, cursor.ErrAlreadyReviewing) {
+			if errors.Is(err, review.ErrAlreadyReviewing) {
 				return fmt.Errorf("%w: a reviewer doesn't review itself", err)
 			}
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(c.OutOrStdout(), report)
-			return err
+			if _, err := fmt.Fprintln(c.OutOrStdout(), report); err != nil {
+				return err
+			}
+			if after, err := worktreeState(c.Context(), dir); err == nil && after != before {
+				return errors.New("the worktree changed while the reviewer ran: HEAD or git status differ " +
+					"from before. A reviewer never changes anything, so check what changed before you go on")
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
 	return cmd
+}
+
+// reviewCommand is how engine id starts a reviewer of dir on model.
+func reviewCommand(ctx context.Context, id, model, dir string) (review.Command, error) {
+	e, ok := agents.ByID(id)
+	if !ok {
+		return review.Command{}, fmt.Errorf("tracks doesn't know the reviewer's engine %q", id)
+	}
+	var command func(binary string) review.Command
+	switch id {
+	case agents.Claude.ID:
+		command = func(binary string) review.Command { return claude.ReviewCommand(binary, model) }
+	case agents.Cursor.ID:
+		command = func(binary string) review.Command { return cursor.ReviewCommand(binary, dir, model) }
+	default:
+		return review.Command{}, fmt.Errorf("%s can't review yet", e.Name)
+	}
+	found, err := agents.Check(ctx, e)
+	if err != nil {
+		return review.Command{}, err
+	}
+	return command(found.Path), nil
+}
+
+// reviewerName names the engine and model a review runs on.
+func reviewerName(id, model string) string {
+	if e, ok := agents.ByID(id); ok {
+		id = e.Name
+	}
+	if model == "" {
+		return id
+	}
+	return id + " (" + model + ")"
+}
+
+// worktreeState is what a reviewer must leave as it is: HEAD, git
+// status, the changes to tracked files and the untracked files'
+// contents, since a file that was dirty before stays the same line in
+// git status after another edit.
+func worktreeState(ctx context.Context, dir string) (string, error) {
+	var state strings.Builder
+	for _, args := range [][]string{
+		{"rev-parse", "HEAD"},
+		{"status", "--porcelain"},
+		{"diff", "HEAD", "--binary"},
+	} {
+		out, err := git(ctx, dir, args...)
+		if err != nil {
+			return "", err
+		}
+		state.WriteString(out)
+	}
+	untracked, err := git(ctx, dir, "ls-files", "-z", "--others", "--exclude-standard")
+	if err != nil {
+		return "", err
+	}
+	if files := strings.FieldsFunc(untracked, func(r rune) bool { return r == 0 }); len(files) > 0 {
+		hashes, err := git(ctx, dir, append([]string{"hash-object", "--"}, files...)...)
+		if err != nil {
+			return "", err
+		}
+		state.WriteString(hashes)
+	}
+	return state.String(), nil
 }
 
 // askTrack is the track with id as the daemon has it, or an empty one
