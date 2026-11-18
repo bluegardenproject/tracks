@@ -19,10 +19,8 @@ type Settings struct {
 	Theme   string  `yaml:"theme,omitempty"` // the chosen theme's id
 	Engines Engines `yaml:"engines,omitempty"`
 	Tracks  Tracks  `yaml:"tracks,omitempty"`
-	// Reviewer is what `tracks review` runs on; nil, or no engine, for
-	// the track's own engine.
-	Reviewer *TrackType `yaml:"reviewer,omitempty"`
-	History  History    `yaml:"history,omitempty"`
+	Agents  Agents  `yaml:"agents,omitempty"`
+	History History `yaml:"history,omitempty"`
 
 	Notifications Notifications `yaml:"notifications,omitempty"`
 }

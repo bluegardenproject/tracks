@@ -75,6 +75,8 @@ type Config struct {
 	// TrackTypes each track type's default agent and model.
 	Engines    source.Engines
 	TrackTypes source.TrackTypes
+	// Agents the agents beside a track's own, such as the reviewer.
+	Agents source.Agents
 	// History keeps Tracks History, the auto-archive settings.
 	History source.History
 	// Notifications keeps Settings → General → Notifications.
@@ -113,6 +115,7 @@ type Model struct {
 	themesDir       string
 	engineSource    source.Engines
 	typeSource      source.TrackTypes
+	agentSource     source.Agents
 	historySource   source.History
 	notifySource    source.Notifications
 	aboutFacts      [][2]string
@@ -123,8 +126,8 @@ type Model struct {
 	settings        settingsTab
 	engines         enginesTab
 	// picker, when set, is open over the window; pickerFor is what it
-	// chooses, and pickerEngine the engine for pickModel and
-	// pickTypeModel.
+	// chooses, and pickerEngine the engine for pickModel,
+	// pickTypeModel and pickReviewerModel.
 	picker       *widget.Picker
 	pickerFor    int
 	pickerEngine string
@@ -141,7 +144,7 @@ func New(c Config) Model {
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
-		engineSource: c.Engines, typeSource: c.TrackTypes, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
+		engineSource: c.Engines, typeSource: c.TrackTypes, agentSource: c.Agents, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
 	if c.Watch != nil {
 		m.watchFn, m.changes = c.Watch, make(chan watchMsg, 1)
 	}
@@ -152,7 +155,7 @@ func New(c Config) Model {
 // changes.
 func (m Model) Init() tea.Cmd {
 	_, proxy := m.loadProxy(false)
-	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify(),
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify(),
 		proxy, m.nextProxyTick())
 }
 
@@ -230,6 +233,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.setNotify(msg), nil
 	case notifySavedMsg:
 		return m.notifySaved(msg)
+	case agentsMsg:
+		return m.setAgents(msg), nil
+	case agentsSavedMsg:
+		return m.agentsSaved(msg)
 	case typesSavedMsg:
 		return m.typesSaved(msg)
 	case themecreator.SaveMsg, themecreator.CreateMsg, themecreator.SavedMsg, themecreator.DoneMsg, themecreator.StayMsg, themecreator.LoadMsg:
@@ -464,7 +471,7 @@ func (m Model) switchTab(i int) (Model, tea.Cmd) {
 		m.engines.input.Blur()
 		return m.loadEngines()
 	case tabSettings:
-		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadHistory(), m.loadNotify())
+		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify())
 	}
 	return m, nil
 }

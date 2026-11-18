@@ -121,6 +121,8 @@ func (m Model) sectionBody(width, height int) []string {
 		return lines[min(m.settings.keysOffset, len(lines)):min(len(lines), m.settings.keysOffset+height)]
 	case sectionTracks:
 		return m.typesView(width)
+	case sectionAgents:
+		return m.agentsView(width)
 	case sectionFastTracks:
 		return m.fastTracks(width)
 	}
@@ -265,6 +267,9 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 	case sectionTracks:
 		s.editing = true
 		return m.typesClick(bx, by)
+	case sectionAgents:
+		s.editing = true
+		return m.agentsClick(bx, by)
 	}
 	return m, nil
 }
@@ -306,6 +311,12 @@ func (m Model) settingsHover(x, y int) Model {
 	if s.section == sectionTracks {
 		if bx, by, ok := m.inSection(x, y); ok {
 			s.types.hover = m.typeAt(bx, by)
+		}
+	}
+	s.agents.hover = -1
+	if s.section == sectionAgents {
+		if bx, by, ok := m.inSection(x, y); ok {
+			s.agents.hover = m.agentAt(bx, by)
 		}
 	}
 	s.fastHover = m.fastButtonAt(x, y)
