@@ -55,6 +55,12 @@ func TestWorktreeStateSeesContentChanges(t *testing.T) {
 		}
 		before = after
 	}
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if fromSub, _ := worktreeState(ctx, filepath.Join(dir, "sub")); fromSub != before {
+		t.Error("the state differs when taken from a subdirectory")
+	}
 	if again, _ := worktreeState(ctx, dir); again != before {
 		t.Error("the state changed with nothing changed")
 	}
