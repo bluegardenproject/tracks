@@ -20,6 +20,8 @@ The review:
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -66,6 +68,8 @@ The review:
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -111,6 +115,8 @@ The review:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
@@ -160,6 +166,8 @@ The review:
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -208,6 +216,8 @@ The review:
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -255,6 +265,8 @@ The review:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
@@ -331,6 +343,8 @@ The review:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
@@ -410,6 +424,8 @@ The review:
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -481,6 +497,8 @@ The review:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 
@@ -557,6 +575,8 @@ The review:
      `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and re-run the subagent. Do not push with unresolved blocks.
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a PR at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR — the dashboard tracks each one and rolls them up into the track'\''\'\'''\''s status.
 

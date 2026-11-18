@@ -17,6 +17,8 @@ The review:
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -45,6 +47,8 @@ The review:
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -72,6 +76,8 @@ The review:
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
@@ -103,6 +109,8 @@ The review:
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -133,6 +141,8 @@ The review:
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -162,6 +172,8 @@ The review:
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
@@ -208,6 +220,8 @@ The review:
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
@@ -257,6 +271,8 @@ The review:
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
+
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
 **Track terminal.** When the user asks for a terminal or shell in the track'\''\'\'''\''s worktree, run `tracks terminal`. It opens an interactive shell in the track window'\''\'\'''\''s right-hand pane column and returns immediately. `$TRACKS_ID` is already set, so do not pass `--track`. `tracks panes` lists the panes beside yours (terminals, dev servers, setup) with a number each, what runs in them and their ports. When the user asks you to close one, or to stop something running in one, run `tracks close <number>`: it ends what runs there and closes the pane. Never close panes the user didn'\''\'\'''\''t ask about, and never use `tmux kill-pane` or `kill` for this.
@@ -298,6 +314,8 @@ The review:
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 
@@ -344,6 +362,8 @@ The review:
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
   3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
   4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+**Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
 If you open a pull request at any point, include the URL on its own line as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. If you open several, emit one such line per PR.
 

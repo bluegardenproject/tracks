@@ -21,10 +21,12 @@ import (
 //     the repo documents. Docs- and agent-config-only diffs skip
 //     it: there is nothing for a code reviewer to find, and the
 //     round-trip is pure latency.
-//  3. Surface the TRACKS_PR_URL marker contract so the dashboard
+//  3. Open a pull request only with the user's agreement: the
+//     user decides when work is ready for others to see.
+//  4. Surface the TRACKS_PR_URL marker contract so the dashboard
 //     can detect PR creation — phrased as a side-channel, not a
 //     finish signal.
-//  4. Keep output terse and comment-free — these sessions are read
+//  5. Keep output terse and comment-free — these sessions are read
 //     in a dashboard, so brevity and clean diffs are project-agnostic
 //     wins that belong in the binary, not per-user CLAUDE.md.
 //
@@ -62,6 +64,10 @@ const taskSuffix = "" +
 	"  4. Acknowledge `warn` findings in the PR description and " +
 	"include the final `REVIEW OUTCOME` line so the human reviewer " +
 	"knows what was already vetted.\n\n" +
+	"**Ask before you open a pull request.** Commit and push as the work " +
+	"needs, but open a pull request only after the user agreed to it in " +
+	"this session, or the task asked for one; otherwise ask them when " +
+	"the work is ready.\n\n" +
 	"If you open a PR at any point, include the URL on its own line " +
 	"as `TRACKS_PR_URL=<url>` so the tracks dashboard surfaces it. " +
 	"If you open several, emit one such line per PR — the dashboard " +
