@@ -9,6 +9,9 @@ the v2.0.0 release; git history keeps them.
 - **Backends and repo config** ([docs/design/backends.md](design/backends.md)):
   a checked-in `.tracks/config.yaml`, named ports, proxy groups, Scala, Python
   and TypeScript services next to frontends. Steps 0–9, one PR each.
+- **Reviews** ([docs/design/review.md](design/review.md)): a reviewer on any
+  engine and model, a review packet built by Tracks, code-owner scope,
+  likelihood and confidence per finding. Steps 1–9, one PR each.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
