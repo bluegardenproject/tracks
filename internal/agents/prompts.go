@@ -111,6 +111,21 @@ const DevServersContract = "" +
 	"restart it, change it or work around it unless they ask. The error " +
 	"may be expected while other work is pending."
 
+// ReviewOnlyContract ends a Review track's prompt. The Work track's
+// instructions before it explain how to commit, push and open a PR,
+// and a user's "fix that" after the review reads like a go-ahead, so
+// the review's read-only contract has the last word.
+const ReviewOnlyContract = "" +
+	"**This is a Review track: review, don't change.** Never edit, " +
+	"create or delete files in this worktree, and never commit, push " +
+	"or open a pull request from it, even when the user asks for a fix " +
+	"after the review. The push, pull request and Jira steps above are " +
+	"for Work tracks: skip them here, but still run the review you were " +
+	"asked for. Running read-only " +
+	"checks such as lint, typecheck and tests is fine. When the user " +
+	"wants a finding fixed, describe the fix, with a snippet if it " +
+	"helps, and say it belongs in a Work track on that branch."
+
 // LinksContract is in every start prompt, right after the task.
 //
 // It exists because an agent that can't read a linked ticket or page

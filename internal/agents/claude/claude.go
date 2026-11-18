@@ -61,7 +61,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 			prompt += "\n\n" + agents.DevServersContract
 		}
 		if t.Kind == track.Review {
-			prompt += reviewCandorSuffix(track.CandorLevel(t.Candor))
+			prompt += reviewCandorSuffix(track.CandorLevel(t.Candor)) + "\n\n" + agents.ReviewOnlyContract
 		}
 	}
 
