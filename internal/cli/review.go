@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,9 +63,6 @@ func newReviewCmd() *cobra.Command {
 				return fmt.Errorf("the reviewer setting can't be read: %w", err)
 			}
 			engineID, model := set.ReviewerOn(trackEngine(t.Engine))
-			if engineID == "" {
-				return errors.New("no engine to review with: add one on the Engines tab")
-			}
 			command, err := reviewCommand(c.Context(), engineID, model, dir)
 			if err != nil {
 				return err
@@ -145,6 +143,11 @@ func reviewerName(id, model string) string {
 // contents, since a file that was dirty before stays the same line in
 // git status after another edit.
 func worktreeState(ctx context.Context, dir string) (string, error) {
+	top, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	dir = strings.TrimSpace(top)
 	var state strings.Builder
 	for _, args := range [][]string{
 		{"rev-parse", "HEAD"},
@@ -181,11 +184,16 @@ func fileState(path string) string {
 	case !info.Mode().IsRegular():
 		return info.Mode().String()
 	}
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "unreadable"
 	}
-	return fmt.Sprintf("%x", sha256.Sum256(data))
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "unreadable"
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // trackEngine is the engine of the track under review: as the daemon
