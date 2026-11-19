@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 3 are
+**Status:** being built, one PR per step under Order. Steps 1 to 4 are
 built.
 
 ## Problem
@@ -124,7 +124,9 @@ While a track has a reviewer, the footer's top row shows a green
 **Open reviewer** button. It moves the hidden pane into the track's right
 column, as a dev-server pane sits, running on as it was (`join-pane`); the
 button becomes **Hide reviewer**, which moves it back. There's no button to
-end it.
+end it. The track's info (name · status · engine) stays on the row's left,
+beside the buttons: the reviewer's button lasts as long as the track, so it
+can't take the info's place as the comment buttons did.
 
 Two button variants are added. They aren't part of the rotation the footer's
 other buttons take (variants 1 to 4); each belongs to one button:

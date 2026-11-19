@@ -131,3 +131,21 @@ func Render(buttons []Button, multiRepo bool) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// ReviewerRange names the click range of the reviewer's button.
+const ReviewerRange = "reviewer"
+
+// ReviewerVariant is the colour variant of the reviewer's button: one
+// of its own, outside the rotation, so it always looks the same.
+const ReviewerVariant = 6
+
+// Reviewer is the tmux format of a track's reviewer button: Open
+// reviewer while its pane is hidden, Hide reviewer while it's shown.
+func Reviewer(shown bool) string {
+	label := " Open reviewer "
+	if shown {
+		label = " Hide reviewer "
+	}
+	return "#[range=user|" + ReviewerRange + "]" + style("bg", VariantBg(ReviewerVariant)) +
+		style("fg", VariantText(ReviewerVariant)) + label + "#[norange default]"
+}

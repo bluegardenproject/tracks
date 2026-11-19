@@ -182,6 +182,8 @@ type Service struct {
 	// comments are the open tracks' review threads, as CountComments
 	// last counted them and RunAction sent them.
 	comments map[string]map[string]actions.Comments // by track, then PR URL
+	// reviewers is each track's reviewer as last seen, for its button.
+	reviewers map[string]ReviewerState
 	// info is what SyncInfo last showed, by window.
 	info map[string]string
 	// transcripts are the signatures of the open Claude tracks'
@@ -325,6 +327,36 @@ func (w TmuxWindows) EndHidden(track string) error {
 func (w TmuxWindows) OpenReviewer(track, dir string, p trackwin.Process) error {
 	_, err := trackwin.OpenHidden(w.Tmux, track, trackwin.RoleReviewer, dir, p)
 	return err
+}
+
+func (w TmuxWindows) Reviewer(track, window string) (ReviewerState, error) {
+	p, shown, err := trackwin.Hidden(w.Tmux, track, window, trackwin.RoleReviewer)
+	if errors.Is(err, trackwin.ErrNoHidden) {
+		return ReviewerState{}, nil
+	}
+	return ReviewerState{Pane: p.ID, Shown: shown}, err
+}
+
+func (w TmuxWindows) Reviewers() (map[string]ReviewerState, error) {
+	shown, err := w.Tmux.ListSessionPanes(w.Session)
+	if err != nil {
+		return nil, err
+	}
+	var hidden []tmux.Pane
+	if w.Tmux.HasSession(trackwin.BackSession) {
+		if hidden, err = w.Tmux.ListSessionPanes(trackwin.BackSession); err != nil {
+			return nil, err
+		}
+	}
+	return reviewerStates(shown, hidden), nil
+}
+
+func (w TmuxWindows) ShowReviewer(window, pane string) error {
+	return trackwin.Show(w.Tmux, window, pane)
+}
+
+func (w TmuxWindows) HideReviewer(window, pane string) error {
+	return trackwin.Hide(w.Tmux, window, pane)
 }
 
 func (w TmuxWindows) CloseReviewer(track, window string) error {

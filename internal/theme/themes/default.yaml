@@ -76,6 +76,10 @@ tokens:
   button.variant3.text:     "#d4a0c4"
   button.variant4.bg:       "#172b25"
   button.variant4.text:     "#9cc7b0"
+  button.variant5.bg:       "#700c50"
+  button.variant5.text:     "#ffb5e7"
+  button.variant6.bg:       "#00916f"
+  button.variant6.text:     "#c9fff0"
 
   listItem.bg.default:      "#041228"
   listItem.text.default:    "#e4e4e7"

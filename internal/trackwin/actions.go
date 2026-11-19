@@ -14,8 +14,8 @@ func SetButtons(t Tmux, window, buttons string) error {
 	return t.SetWindowOption(window, actions.ButtonsOption, buttons)
 }
 
-// InfoOption holds what the footer's top row shows of the track while
-// it has no buttons.
+// InfoOption holds what the footer's top row shows of the track, left
+// of its buttons.
 const InfoOption = "@tracks_info"
 
 // SetInfo shows text on window for the footer, escaped so tmux draws it
