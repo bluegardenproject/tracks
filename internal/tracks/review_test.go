@@ -212,6 +212,21 @@ func TestReviewerButton(t *testing.T) {
 		t.Errorf("buttons %q after a second click, want Open reviewer", b)
 	}
 
+	if _, err := f.svc.RunAction(ctx, "r", actions.CloseReviewerRange); err != nil {
+		t.Fatal(err)
+	}
+	if b := f.windows.buttons["@r"]; b != "" || panes.state.Pane != "" || len(panes.closed) != 2 {
+		t.Errorf("buttons %q, reviewer %+v after Close reviewer; want it ended, and no buttons", b, panes.state)
+	}
+	if _, err := os.Stat(f.svc.reviewDir("r")); !os.IsNotExist(err) {
+		t.Errorf("the closed reviewer's run is left: %v", err)
+	}
+
+	// A reviewer back, as the footer's tick finds it, then gone.
+	panes.state = ReviewerState{Pane: "%9"}
+	if err := f.svc.SyncInfo(ctx); err != nil {
+		t.Fatal(err)
+	}
 	panes.state = ReviewerState{}
 	if err := f.svc.SyncInfo(ctx); err != nil {
 		t.Fatal(err)

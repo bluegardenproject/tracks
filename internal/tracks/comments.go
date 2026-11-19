@@ -109,8 +109,11 @@ func (s *Service) trackWindows() (map[string]string, error) {
 // returns the track's name, and refuses while the agent can't take a
 // prompt or there's nothing to do: Problems say why.
 func (s *Service) RunAction(ctx context.Context, id, button string) (string, error) {
-	if button == actions.ReviewerRange {
+	switch button {
+	case actions.ReviewerRange:
 		return s.ToggleReviewer(ctx, id)
+	case actions.CloseReviewerRange:
+		return s.CloseReviewer(ctx, id)
 	}
 	i, ok := actions.ParseRange(button)
 	if !ok {

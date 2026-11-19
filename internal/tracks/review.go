@@ -323,6 +323,29 @@ func (s *Service) ToggleReviewer(ctx context.Context, id string) (string, error)
 	return t.Name, err
 }
 
+// CloseReviewer ends track id's reviewer and closes its pane: what its
+// Close button does. A tracks review --wait on it stops, since its run is
+// gone. It returns the track's name.
+func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) {
+	if s.Reviewers == nil {
+		return "", errors.New("reviews need tmux")
+	}
+	t, err := s.Store.Track(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	s.reviewMu.Lock()
+	window, _ := s.windowOf(id)
+	// The run goes whatever tmux says: the user asked for the review
+	// to end.
+	err = errors.Join(s.Reviewers.CloseReviewer(id, window), os.RemoveAll(s.reviewDir(id)))
+	s.reviewMu.Unlock()
+	if window != "" {
+		s.syncReviewer(t, window)
+	}
+	return t.Name, err
+}
+
 // syncReviewer reads t's reviewer and shows its button.
 func (s *Service) syncReviewer(t track.Track, window string) {
 	if s.Reviewers == nil {
