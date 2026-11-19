@@ -34,9 +34,11 @@ const (
 
 // Config is what the daemon runs with.
 type Config struct {
-	Paths   platform.Paths
-	Version string
-	Tracks  *tracks.Service
+	// stopping closes as the daemon exits, ending the waits for reviews.
+	stopping chan struct{}
+	Paths    platform.Paths
+	Version  string
+	Tracks   *tracks.Service
 	// Tmux is the Tracks server: the daemon exits once Session is gone
 	// or the server restarted, and tells a client how a creation went
 	// when its form closed.
@@ -93,6 +95,9 @@ func Run(ctx context.Context, c Config) error {
 	stop := make(chan struct{})
 	var once sync.Once
 	shutdown := func() { once.Do(func() { close(stop) }) }
+	// A review's wait doesn't keep the daemon from exiting, as a
+	// creation does: the reviewer runs on, and its report keeps.
+	c.stopping = make(chan struct{})
 	served := make(chan error, 1)
 	go func() { served <- rpc.Serve(context.WithoutCancel(ctx), ln, c.handlers(shutdown)) }()
 
@@ -168,6 +173,7 @@ func Run(ctx context.Context, c Config) error {
 		}
 	}
 	c.Log.Printf("exiting: %s", reason)
+	close(c.stopping)
 	c.Tracks.Changes.Close()
 	ln.Close()
 	return <-served

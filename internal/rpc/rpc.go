@@ -46,6 +46,12 @@ const (
 	Up   = "up"
 	Down = "down"
 	Logs = "logs"
+	// Review starts a track's reviewer on a diff and waits for its
+	// report; ReviewWait waits for the report of the one running;
+	// ReviewReply is a reply of a reviewer, from its hook.
+	Review      = "review"
+	ReviewWait  = "review-wait"
+	ReviewReply = "review-reply"
 	// Servers lists a track's dev servers and what listens in its panes,
 	// or every track's.
 	Servers = "servers"
@@ -94,6 +100,23 @@ type PingResult struct {
 	PID         int    `json:"pid"`
 	Exe         string `json:"exe,omitempty"`
 	ExeModified int64  `json:"exe_modified,omitempty"` // Unix nanoseconds
+}
+
+// ReviewIDParams names the track whose review to wait for.
+type ReviewIDParams struct {
+	ID string `json:"id"`
+}
+
+// ReviewReplyParams is a reply of run, a review of track ID.
+type ReviewReplyParams struct {
+	ID   string `json:"id"`
+	Run  string `json:"run"`
+	Text string `json:"text"`
+}
+
+// ReviewResult is a review's report.
+type ReviewResult struct {
+	Report string `json:"report"`
 }
 
 // CreateParams is a new track, and the tmux client that asked, which

@@ -70,6 +70,7 @@ func newDaemonCmd(version string) *cobra.Command {
 					Windows:   tracks.TmuxWindows{Tmux: c, Session: sessionName},
 					Setups:    tracks.TmuxWindows{Tmux: c, Session: sessionName},
 					Servers:   tracks.TmuxWindows{Tmux: c, Session: sessionName},
+					Reviewers: tracks.TmuxWindows{Tmux: c, Session: sessionName},
 					Settings:  load,
 					SocketDir: paths.DataDir,
 					BinDir:    paths.BinDir,

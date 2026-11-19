@@ -216,6 +216,24 @@ func (c Client) Up(ctx context.Context, p ServersParams) ([]tracks.Server, error
 	return r.Servers, c.Call(ctx, Up, p, &r, nil)
 }
 
+// Review starts a track's reviewer on p's diff and waits for its
+// report, which can take minutes.
+func (c Client) Review(ctx context.Context, p tracks.ReviewRequest, progress func(string)) (string, error) {
+	var r ReviewResult
+	return r.Report, c.Call(ctx, Review, p, &r, progress)
+}
+
+// ReviewWait waits for the report of track id's running review.
+func (c Client) ReviewWait(ctx context.Context, id string, progress func(string)) (string, error) {
+	var r ReviewResult
+	return r.Report, c.Call(ctx, ReviewWait, ReviewIDParams{ID: id}, &r, progress)
+}
+
+// ReviewReply hands the daemon a reply of a track's reviewer.
+func (c Client) ReviewReply(ctx context.Context, p ReviewReplyParams) error {
+	return c.Call(ctx, ReviewReply, p, nil, nil)
+}
+
 // Down stops some of a track's dev servers, or all of them.
 func (c Client) Down(ctx context.Context, p ServersParams) ([]tracks.Server, error) {
 	var r ServersResult

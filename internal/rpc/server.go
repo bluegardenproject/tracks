@@ -12,8 +12,9 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tracks"
 )
 
-// maxRequest bounds a request line; a prompt is at most a few KB.
-const maxRequest = 1 << 20
+// maxRequest bounds a request line. A review's diff is the largest:
+// up to a megabyte, which JSON escaping can grow several times.
+const maxRequest = 8 << 20
 
 // Call is one request being answered.
 type Call struct {

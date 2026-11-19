@@ -1,0 +1,2 @@
+'claude' 'Follow your instructions.' --permission-mode 'plan' --tools 'Read,Grep,Glob' --disallowedTools 'Edit,Write,NotebookEdit,ExitPlanMode' --strict-mcp-config --append-system-prompt-file '/r/brief.md' --model 'opus' --settings '/h/claude-settings.json'
+'claude' 'Follow your instructions.' --permission-mode 'plan' --tools 'Read,Grep,Glob' --disallowedTools 'Edit,Write,NotebookEdit,ExitPlanMode' --strict-mcp-config --append-system-prompt-file '/r/brief.md'

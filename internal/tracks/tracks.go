@@ -128,6 +128,8 @@ type Service struct {
 	// HooksDir holds each track's hooks, a folder per track; "" starts
 	// agents without them.
 	HooksDir string
+	// Reviewers runs the tracks' reviewers; nil runs none.
+	Reviewers ReviewerPanes
 	// Setups runs the repos' setups; nil runs none.
 	Setups SetupPanes
 	// Servers runs the repos' dev servers; nil runs none.
@@ -160,6 +162,9 @@ type Service struct {
 	claimed map[string]bool
 	// busy are the tracks being resumed, archived or ended.
 	busy map[string]bool
+	// reviewMu keeps a review's start, which resets the review's folder,
+	// and a reviewer's reply, which writes to it, apart.
+	reviewMu sync.Mutex
 	// setupMu keeps one StartSetup looking at and opening panes at a
 	// time, so a setup never starts twice.
 	setupMu sync.Mutex
@@ -315,6 +320,15 @@ func (w TmuxWindows) Close(window string) error {
 // EndHidden closes track's hidden panes, its window gone.
 func (w TmuxWindows) EndHidden(track string) error {
 	return trackwin.CloseHidden(w.Tmux, track, "", "")
+}
+
+func (w TmuxWindows) OpenReviewer(track, dir string, p trackwin.Process) error {
+	_, err := trackwin.OpenHidden(w.Tmux, track, trackwin.RoleReviewer, dir, p)
+	return err
+}
+
+func (w TmuxWindows) CloseReviewer(track, window string) error {
+	return trackwin.CloseHidden(w.Tmux, track, window, trackwin.RoleReviewer)
 }
 
 func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }

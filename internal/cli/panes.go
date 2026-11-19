@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,7 +31,7 @@ func newPanesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			column, err := trackwin.Column(t, w.Window)
+			column, err := trackPanes(t, w)
 			if err != nil {
 				return err
 			}
@@ -42,7 +43,7 @@ func newPanesCmd() *cobra.Command {
 			if err != nil {
 				snap = procs.New(nil, nil)
 			}
-			return printPanes(c.OutOrStdout(), column, snap)
+			return printPanes(c.OutOrStdout(), w.Window, column, snap)
 		},
 	}
 }
@@ -64,7 +65,7 @@ func newCloseCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			column, err := trackwin.Column(t, w.Window)
+			column, err := trackPanes(t, w)
 			if err != nil {
 				return err
 			}
@@ -208,6 +209,23 @@ func stopServer(ctx context.Context, id, key string) error {
 	return err
 }
 
+// trackPanes are the panes beside w's agent, and its reviewer while
+// it's hidden, last: closing it ends the reviewer too.
+func trackPanes(t *tmux.Client, w trackwin.Info) ([]tmux.Pane, error) {
+	column, err := trackwin.Column(t, w.Window)
+	if err != nil {
+		return nil, err
+	}
+	reviewer, shown, err := trackwin.Hidden(t, w.Track, w.Window, trackwin.RoleReviewer)
+	switch {
+	case errors.Is(err, trackwin.ErrNoHidden), err == nil && shown:
+		return column, nil
+	case err != nil:
+		return nil, err
+	}
+	return append(column, reviewer), nil
+}
+
 // paneLabel names p's role, and its server or setup.
 func paneLabel(p tmux.Pane) string {
 	switch {
@@ -219,10 +237,15 @@ func paneLabel(p tmux.Pane) string {
 	return p.Role
 }
 
-// printPanes prints a line per pane: its number, role and what runs.
-func printPanes(out io.Writer, column []tmux.Pane, snap procs.Snapshot) error {
+// printPanes prints a line per pane: its number, role and what runs. A
+// pane outside window, such as a hidden reviewer, says so.
+func printPanes(out io.Writer, window string, column []tmux.Pane, snap procs.Snapshot) error {
 	for _, p := range column {
-		if _, err := fmt.Fprintf(out, "%s  %s: %s\n", paneNumber(p), paneLabel(p), paneActivity(p, snap)); err != nil {
+		label := paneLabel(p)
+		if p.Window != "" && p.Window != window {
+			label += ", hidden"
+		}
+		if _, err := fmt.Fprintf(out, "%s  %s: %s\n", paneNumber(p), label, paneActivity(p, snap)); err != nil {
 			return err
 		}
 	}

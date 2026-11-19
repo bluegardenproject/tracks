@@ -12,32 +12,34 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bluegardenproject/tracks/internal/agents"
-	"github.com/bluegardenproject/tracks/internal/agents/claude"
-	"github.com/bluegardenproject/tracks/internal/agents/cursor"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/rpc"
-	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
+	"github.com/bluegardenproject/tracks/internal/tracks"
 	"github.com/spf13/cobra"
 )
 
 // askTimeout bounds asking the daemon for the track, which only sets
-// the base and the candor: without an answer the review still runs.
+// the base: without an answer the base is guessed.
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
 	var base string
+	var wait bool
 	cmd := &cobra.Command{
 		Use:   "review",
-		Short: "review this track's branch with a separate agent session",
-		Long: "Runs the tracks-reviewer in a fresh agent session, so it reads the diff without the working " +
-			"agent's history. It runs on the agent and model picked under Settings → Agents → Reviewer, by " +
-			"default the track's own agent. The reviewer only reads: Cursor's runs without permission " +
-			"flags, Claude's with read-only tools, and the worktree is checked for changes afterwards.",
+		Short: "review this track's branch with the track's reviewer",
+		Long: "Starts the track's reviewer on the branch's diff and waits for its report. The reviewer is a " +
+			"session of its own, on the agent and model picked under Settings → Agents → Reviewer, in a pane of " +
+			"the track that stays hidden until it's shown with the footer's button. It only reads. A review " +
+			"ends the reviewer that's there and starts a fresh one; with --wait, it waits for the report of " +
+			"the one that's running.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			if os.Getenv(review.EnvMarker) != "" {
+				return fmt.Errorf("%w: a reviewer doesn't start reviewers", review.ErrAlreadyReviewing)
+			}
 			id := os.Getenv("TRACKS_ID")
 			if id == "" {
 				return errNoTrack("review")
@@ -46,39 +48,33 @@ func newReviewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			client := rpc.Client{Socket: paths.Socket}
+			progress := func(step string) { fmt.Fprintln(c.ErrOrStderr(), step) }
 			dir, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			t := askTrack(c.Context(), rpc.Client{Socket: paths.Socket}, id)
-			if base == "" {
-				base = reviewBase(c.Context(), dir, t)
+			var diff string
+			if !wait {
+				if base == "" {
+					base = reviewBase(c.Context(), dir, askTrack(c.Context(), client, id))
+				}
+				if diff, err = branchDiff(c.Context(), dir, base); err != nil {
+					return err
+				}
 			}
-			diff, err := branchDiff(c.Context(), dir, base)
-			if err != nil {
-				return err
-			}
-			set, err := settings.Load(paths.Settings)
-			if err != nil {
-				return fmt.Errorf("the reviewer setting can't be read: %w", err)
-			}
-			engineID, model := set.ReviewerOn(trackEngine(t.Engine))
-			command, err := reviewCommand(c.Context(), engineID, model, dir)
-			if err != nil {
-				return err
-			}
-
+			// The worktree is checked here, in the agent's sandbox: the
+			// daemon runs no git, since a repo's config can make git run
+			// commands. --wait checks the time it waits.
 			before, err := worktreeState(c.Context(), dir)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(c.ErrOrStderr(), "Running the reviewer on %s in a separate agent session…\n", reviewerName(engineID, model))
-			report, err := review.Run(c.Context(), review.Request{
-				Command: command, Workspace: dir, Diff: diff, Instructions: claude.ReviewerInstructions(),
-				Candor: t.Candor, LockDir: filepath.Join(paths.DataDir, "locks"), TrackID: id,
-			})
-			if errors.Is(err, review.ErrAlreadyReviewing) {
-				return fmt.Errorf("%w: a reviewer doesn't review itself", err)
+			var report string
+			if wait {
+				report, err = client.ReviewWait(c.Context(), id, progress)
+			} else {
+				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Diff: review.Truncate(diff)}, progress)
 			}
 			if err != nil {
 				return err
@@ -102,40 +98,8 @@ func newReviewCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
+	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running")
 	return cmd
-}
-
-// reviewCommand is how engine id starts a reviewer of dir on model.
-func reviewCommand(ctx context.Context, id, model, dir string) (review.Command, error) {
-	e, ok := agents.ByID(id)
-	if !ok {
-		return review.Command{}, fmt.Errorf("tracks doesn't know the reviewer's engine %q", id)
-	}
-	var command func(binary string) review.Command
-	switch id {
-	case agents.Claude.ID:
-		command = func(binary string) review.Command { return claude.ReviewCommand(binary, model) }
-	case agents.Cursor.ID:
-		command = func(binary string) review.Command { return cursor.ReviewCommand(binary, dir, model) }
-	default:
-		return review.Command{}, fmt.Errorf("%s can't review yet", e.Name)
-	}
-	found, err := agents.Check(ctx, e)
-	if err != nil {
-		return review.Command{}, err
-	}
-	return command(found.Path), nil
-}
-
-// reviewerName names the engine and model a review runs on.
-func reviewerName(id, model string) string {
-	if e, ok := agents.ByID(id); ok {
-		id = e.Name
-	}
-	if model == "" {
-		return id
-	}
-	return id + " (" + model + ")"
 }
 
 // worktreeState is what a reviewer must leave as it is: HEAD, git
@@ -194,20 +158,6 @@ func fileState(path string) string {
 		return "unreadable"
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-// trackEngine is the engine of the track under review: as the daemon
-// has it, else the agent running this command, told by its
-// environment. Claude Code sets CLAUDECODE in its shells; Cursor, the
-// other engine, sets nothing to tell it by.
-func trackEngine(known string) string {
-	switch {
-	case known != "":
-		return known
-	case os.Getenv("CLAUDECODE") != "":
-		return agents.Claude.ID
-	}
-	return agents.Cursor.ID
 }
 
 // askTrack is the track with id as the daemon has it, or an empty one
