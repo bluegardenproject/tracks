@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -24,6 +26,9 @@ type GitHub interface {
 	// OpenThreads is how many review threads on pr wait on the gh user:
 	// unresolved, with someone else having the last word.
 	OpenThreads(ctx context.Context, pr track.PR) (int, error)
+	// ReviewPR is what a review of pr is given from GitHub, the commit
+	// its head is at, and notes on what else couldn't be fetched.
+	ReviewPR(ctx context.Context, pr track.PR) (review.PR, string, []string, error)
 }
 
 // ErrNoGH means gh isn't installed, so no PR is checked.
@@ -152,6 +157,12 @@ func openThreads(answer []byte) (int, error) {
 }
 
 func (g GH) run(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	return g.runTail(ctx, dir, 0, args...)
+}
+
+// runTail runs gh and keeps the last limit bytes it prints, all of it
+// for 0.
+func (g GH) runTail(ctx context.Context, dir string, limit int, args ...string) ([]byte, error) {
 	program := g.Program
 	if program == "" {
 		var err error
@@ -164,14 +175,29 @@ func (g GH) run(ctx context.Context, dir string, args ...string) ([]byte, error)
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	out, err := cmd.Output()
-	if err != nil {
+	out := &tail{limit: limit}
+	var stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = out, &stderr
+	if err := cmd.Run(); err != nil {
 		msg := err.Error()
-		var ee *exec.ExitError
-		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
-			msg, _, _ = strings.Cut(strings.TrimSpace(string(ee.Stderr)), "\n")
+		if stderr.Len() > 0 {
+			msg, _, _ = strings.Cut(strings.TrimSpace(stderr.String()), "\n")
 		}
 		return nil, fmt.Errorf("gh %s %s: %s", args[0], args[1], msg)
 	}
-	return out, nil
+	return out.buf, nil
+}
+
+// tail keeps the last limit bytes written to it, all of them for 0.
+type tail struct {
+	limit int
+	buf   []byte
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if t.limit > 0 && len(t.buf) > 2*t.limit {
+		t.buf = append(t.buf[:0], t.buf[len(t.buf)-t.limit:]...)
+	}
+	return len(p), nil
 }

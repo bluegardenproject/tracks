@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 6 are
+**Status:** being built, one PR per step under Order. Steps 1 to 7 are
 built.
 
 ## Problem
@@ -174,9 +174,17 @@ around the code, never the code.
 | Brief | The user's words | The form's prompt, and what the orchestrator resolved | `--brief <file>` |
 | Settings | Candor, base, scope | The same | Tracks |
 
+- **From GitHub, by the daemon.** The PR's parts come through `gh` with the
+  PR's URL only, never in a worktree, so no repo's config is read and the
+  agent's sandbox needs no network. What can't be fetched is named in the
+  brief, for the report's Not run line, and the review goes on without it.
+  Failed checks bring the end of their failed steps' log (`gh run view
+  --log-failed`), for up to three checks.
 - **A moved PR.** Before a PR review, Tracks compares the worktree's HEAD with
-  the PR's head SHA. When the PR moved on, it says so and asks whether to
-  fetch; it never reviews a stale head silently.
+  the PR's head SHA. When the PR moved on, `tracks review` refuses and says
+  how to fetch the new head, for the orchestrator to ask the user;
+  `--stale` reviews what's there, and the brief says it's an older head. It
+  never reviews a stale head silently.
 - **Limits.** The changed-file list holds up to 3,000 files, and says how
   many more there are. Diffs over the limit
   aren't cut in the middle of a file: whole files are left out, the largest
@@ -288,6 +296,7 @@ Everything that needs the code read again goes back to the reviewer:
 | `--ask <question>` | Asks the reviewer that's there, and prints its answer |
 | `--wait` | Waits for the report of the review that's running, or its answer to the last question |
 | `--base <ref>` | As now |
+| `--stale` | Reviews a PR's worktree that's behind the PR |
 
 ## Order
 
@@ -307,9 +316,7 @@ can be reviewed and merged while the next is built.
    `tracks-reviewer` subagent goes.
 6. `tracks review --ask`.
 7. The packet: changed files, PR intent, threads, checks, the moved-PR check,
-   per-file limits. Built from git: the diff per file, the changed files,
-   the commits, `--brief` and the limits. To come, from `gh`: the PR's
-   intent, threads and checks, and the moved-PR check.
+   per-file limits. Built.
 8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
 9. Likelihood and confidence in the report (experiment 1).
 10. The verify pass (experiment 2).

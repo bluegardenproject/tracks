@@ -13,7 +13,18 @@ func (c Config) review(ctx context.Context, call *rpc.Call) (any, error) {
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	name, err := c.Tracks.StartReview(ctx, p)
+	call.Progress("Starting the reviewer. For a Review track, its pull request is read from GitHub first.")
+	start, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-call.Gone:
+		case <-c.stopping:
+		case <-start.Done():
+		}
+		cancel()
+	}()
+	name, err := c.Tracks.StartReview(start, p)
 	if err != nil {
 		c.Log.Printf("starting the reviewer of %s: %v", p.ID, err)
 		return nil, err

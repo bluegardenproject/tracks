@@ -25,7 +25,59 @@ type Packet struct {
 	Left  []string   `json:"left,omitempty"`
 	// MoreFiles counts the changed files over the list's limit.
 	MoreFiles int `json:"more_files,omitempty"`
+	// Head is the commit the worktree is at.
+	Head string `json:"head,omitempty"`
+	// PR is the pull request under review, from GitHub; nil before a
+	// push.
+	PR *PR `json:"pr,omitempty"`
+	// Notes say what couldn't be gathered.
+	Notes []string `json:"notes,omitempty"`
 }
+
+// PR is a pull request under review: what it's for, its open threads
+// and its checks.
+type PR struct {
+	URL     string   `json:"url"`
+	Title   string   `json:"title"`
+	Body    string   `json:"body,omitempty"`
+	Threads []Thread `json:"threads,omitempty"`
+	// MoreThreads counts the threads over the limit.
+	MoreThreads int     `json:"more_threads,omitempty"`
+	Checks      []Check `json:"checks,omitempty"`
+}
+
+// Thread is an unresolved review thread.
+type Thread struct {
+	Path     string    `json:"path"`
+	Line     int       `json:"line,omitempty"`
+	Outdated bool      `json:"outdated,omitempty"`
+	Comments []Comment `json:"comments"`
+	// EarlierComments counts the comments before these, not fetched.
+	EarlierComments int `json:"earlier_comments,omitempty"`
+}
+
+// Comment is one comment of a thread.
+type Comment struct {
+	Author string `json:"author"`
+	Body   string `json:"body"`
+}
+
+// Check is a CI check of the PR's head, and the end of a failed one's
+// log.
+type Check struct {
+	Name  string `json:"name"`
+	State string `json:"state"` // CheckPass, CheckFail, CheckPending or CheckSkipped
+	Link  string `json:"link,omitempty"`
+	Log   string `json:"log,omitempty"`
+}
+
+// A check's states.
+const (
+	CheckPass    = "pass"
+	CheckFail    = "fail"
+	CheckPending = "pending"
+	CheckSkipped = "skipped"
+)
 
 // File is a changed file and its added and removed lines; a binary
 // file has none.
@@ -53,6 +105,9 @@ const (
 	maxCommitsBytes = 64_000
 	maxBriefBytes   = 64_000
 	maxFiles        = 3_000
+	maxPRBodyBytes  = 32_000
+	maxThreadsBytes = 64_000
+	maxLogBytes     = 16_000
 )
 
 // Empty reports whether p has no change to review.
@@ -82,7 +137,41 @@ func (p Packet) Fit() Packet {
 	}
 	p.Commits = cut(p.Commits, maxCommitsBytes)
 	p.Brief = cut(p.Brief, maxBriefBytes)
+	if p.PR != nil {
+		pr := p.PR.fit()
+		p.PR = &pr
+	}
 	return p
+}
+
+// fit keeps pr within the limits: its body and each log cut, and the
+// threads that don't fit left out and counted.
+func (pr PR) fit() PR {
+	pr.Body = cut(pr.Body, maxPRBodyBytes)
+	pr.Checks = slices.Clone(pr.Checks)
+	for i := range pr.Checks {
+		pr.Checks[i].Log = cutStart(pr.Checks[i].Log, maxLogBytes)
+	}
+	size := 0
+	for i, t := range pr.Threads {
+		for _, c := range t.Comments {
+			size += len(c.Body) + len(t.Path)
+		}
+		if size > maxThreadsBytes {
+			pr.MoreThreads += len(pr.Threads) - i
+			pr.Threads = pr.Threads[:i]
+			break
+		}
+	}
+	return pr
+}
+
+// cutStart keeps the end of text, a log's, within limit bytes.
+func cutStart(text string, limit int) string {
+	if len(text) <= limit || cutStartNote.MatchString(text) && len(text) <= limit+maxNote {
+		return text
+	}
+	return "[the log's start left out]\n" + strings.ToValidUTF8(text[len(text)-limit:], "")
 }
 
 // fitDiffs leaves out whole diffs, the largest first, until the rest
@@ -126,6 +215,9 @@ func cut(text string, limit int) string {
 	}
 	return strings.ToValidUTF8(text[:limit], "") + "\n\n[cut at " + strconv.Itoa(limit) + " bytes of " + strconv.Itoa(len(text)) + "]"
 }
+
+// cutStartNote matches the note cutStart starts a text with.
+var cutStartNote = regexp.MustCompile(`\A\[the log's start left out\]\n`)
 
 // maxNote bounds the length of cut's note.
 const maxNote = 64

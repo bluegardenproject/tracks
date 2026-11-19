@@ -61,6 +61,8 @@ type ReviewRequest struct {
 	ID     string        `json:"id"`
 	Dir    string        `json:"dir"`
 	Packet review.Packet `json:"packet"`
+	// Stale reviews a pull request's worktree that's behind the PR.
+	Stale bool `json:"stale,omitempty"`
 }
 
 // reviewPoll is how often WaitReview looks for the report.
@@ -93,6 +95,9 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	if !ok {
 		return "", Problem("Run tracks review in one of the track's worktrees.")
+	}
+	if req.Packet, err = s.addPR(ctx, t, req.Packet, req.Stale); err != nil {
+		return "", err
 	}
 	set, err := s.Settings()
 	if err != nil {
