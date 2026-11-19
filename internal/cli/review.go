@@ -25,7 +25,7 @@ import (
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
-	var base string
+	var base, ask string
 	var wait bool
 	cmd := &cobra.Command{
 		Use:   "review",
@@ -33,8 +33,9 @@ func newReviewCmd() *cobra.Command {
 		Long: "Starts the track's reviewer on the branch's diff and waits for its report. The reviewer is a " +
 			"session of its own, on the agent and model picked under Settings → Agents → Reviewer, in a pane of " +
 			"the track that stays hidden until it's shown with the footer's button. It only reads. A review " +
-			"ends the reviewer that's there and starts a fresh one; with --wait, it waits for the report of " +
-			"the one that's running.",
+			"ends the reviewer that's there and starts a fresh one. --ask asks the reviewer that's there about " +
+			"its review and prints its answer; --wait waits for the report of the one that's running, or its " +
+			"answer to the last question.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if os.Getenv(review.EnvMarker) != "" {
@@ -54,8 +55,15 @@ func newReviewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			asking := c.Flags().Changed("ask")
+			switch {
+			case wait && asking:
+				return errors.New("--wait and --ask can't go together")
+			case (wait || asking) && c.Flags().Changed("base"):
+				return errors.New("--base is for a new review, not with --wait or --ask")
+			}
 			var diff string
-			if !wait {
+			if !wait && !asking {
 				if base == "" {
 					base = reviewBase(c.Context(), dir, askTrack(c.Context(), client, id))
 				}
@@ -71,9 +79,12 @@ func newReviewCmd() *cobra.Command {
 				return err
 			}
 			var report string
-			if wait {
+			switch {
+			case wait:
 				report, err = client.ReviewWait(c.Context(), id, progress)
-			} else {
+			case asking:
+				report, err = client.ReviewAsk(c.Context(), id, ask, progress)
+			default:
 				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Diff: review.Truncate(diff)}, progress)
 			}
 			if err != nil {
@@ -98,7 +109,8 @@ func newReviewCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
-	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running")
+	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running, or its answer to the last question")
+	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
 }
 

@@ -25,6 +25,7 @@ const hookWait = time.Second
 // and logs what went wrong.
 func newHookCmd() *cobra.Command {
 	var engine, id, reviewer, replyFile string
+	var answer bool
 	cmd := &cobra.Command{
 		Use:    "hook",
 		Hidden: true,
@@ -39,7 +40,7 @@ func newHookCmd() *cobra.Command {
 				_ = appendLog(filepath.Join(paths.DataDir, "logs", "hook.log"), fmt.Sprintf(format, args...))
 			}
 			if reviewer != "" && replyFile != "" {
-				sendReplyFile(c.Context(), replyFile, id, reviewer, client.ReviewReply, logf)
+				sendReplyFile(c.Context(), replyFile, id, reviewer, answer, client.ReviewReply, logf)
 				return nil
 			}
 			if reviewer != "" {
@@ -54,6 +55,7 @@ func newHookCmd() *cobra.Command {
 	cmd.Flags().StringVar(&id, "track", "", "the track's ID")
 	cmd.Flags().StringVar(&reviewer, "reviewer", "", "the review run, for the hooks of a track's reviewer")
 	cmd.Flags().StringVar(&replyFile, "reply-file", "", "with --reviewer: a file holding the reviewer's reply")
+	cmd.Flags().BoolVar(&answer, "answer", false, "with --reply-file: the reply answers a question, not a review")
 	return cmd
 }
 
@@ -108,7 +110,7 @@ func runReviewerHook(ctx context.Context, in io.Reader, out io.Writer, engine, i
 // sendReplyFile hands the daemon a reviewer's reply from a file, for an
 // engine whose hooks don't carry it: Cursor's reviewer writes its
 // review's turn to one.
-func sendReplyFile(ctx context.Context, path, id, run string,
+func sendReplyFile(ctx context.Context, path, id, run string, answer bool,
 	reply func(context.Context, rpc.ReviewReplyParams) error, logf func(string, ...any)) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -116,15 +118,22 @@ func sendReplyFile(ctx context.Context, path, id, run string,
 	}
 	ctx, cancel := context.WithTimeout(ctx, reviewReplyWait)
 	defer cancel()
-	if err := reply(ctx, rpc.ReviewReplyParams{ID: id, Run: run, Text: replyFileText(string(b))}); err != nil {
+	if err := reply(ctx, rpc.ReviewReplyParams{ID: id, Run: run, Text: replyFileText(string(b), answer)}); err != nil {
 		logf("reviewer reply for %s: %v", id, err)
 	}
 }
 
-// replyFileText is the report a reviewer's turn wrote. A turn that
-// failed, such as on its sign-in or the network, wrote none: it says so,
-// with an outcome line, so tracks review doesn't wait for one in vain.
-func replyFileText(text string) string {
+// replyFileText is the report, or the answer, a reviewer's turn wrote.
+// A turn that failed, such as on its sign-in or the network, wrote
+// none: it says so, a report with an outcome line, so tracks review
+// doesn't wait for one in vain.
+func replyFileText(text string, answer bool) string {
+	if answer {
+		if strings.TrimSpace(text) == "" {
+			return "The reviewer's turn ended without an answer: its pane, which the footer's button shows, says why."
+		}
+		return text
+	}
 	if strings.Contains(text, review.Outcome) {
 		return text
 	}

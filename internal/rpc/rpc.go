@@ -47,10 +47,13 @@ const (
 	Down = "down"
 	Logs = "logs"
 	// Review starts a track's reviewer on a diff and waits for its
-	// report; ReviewWait waits for the report of the one running;
-	// ReviewReply is a reply of a reviewer, from its hook.
+	// report; ReviewWait waits for the report of the one running, or
+	// its answer to the last question; ReviewAsk asks it a question and
+	// waits for the answer; ReviewReply is a reply of a reviewer, from
+	// its hook.
 	Review      = "review"
 	ReviewWait  = "review-wait"
+	ReviewAsk   = "review-ask"
 	ReviewReply = "review-reply"
 	// Servers lists a track's dev servers and what listens in its panes,
 	// or every track's.
@@ -105,6 +108,12 @@ type PingResult struct {
 // ReviewIDParams names the track whose review to wait for.
 type ReviewIDParams struct {
 	ID string `json:"id"`
+}
+
+// ReviewAskParams is a question for track ID's reviewer.
+type ReviewAskParams struct {
+	ID       string `json:"id"`
+	Question string `json:"question"`
 }
 
 // ReviewReplyParams is a reply of run, a review of track ID.

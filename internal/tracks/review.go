@@ -14,7 +14,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
-	"github.com/bluegardenproject/tracks/internal/agents/cursor"
 	"github.com/bluegardenproject/tracks/internal/hooks"
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/shellx"
@@ -40,6 +39,11 @@ type ReviewerPanes interface {
 	// window's right column and back, running on.
 	ShowReviewer(window, pane string) error
 	HideReviewer(window, pane string) error
+	// TypeReviewer types text into the reviewer's pane and sends it.
+	TypeReviewer(pane, text string) error
+	// RespawnReviewer ends what the reviewer's pane runs and starts
+	// command in dir there.
+	RespawnReviewer(pane, dir, command string) error
 }
 
 // ReviewerState is a track's reviewer: its pane, "" for none, and
@@ -119,6 +123,7 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		return "", err
 	}
 	reply := hooks.ReviewerCommand(filepath.Join(s.BinDir, "tracks"), id, t.ID, run)
+	sess := reviewSession{Engine: id, Program: e.Program, Model: model, Workspace: worktree, Reply: reply}
 	var script string
 	switch id {
 	case agents.Claude.ID:
@@ -137,13 +142,13 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		if err != nil {
 			return "", fmt.Errorf("start the reviewer's chat: %w", err)
 		}
-		report := filepath.Join(dir, "report.out")
-		script = cursor.Reviewer{
-			Program: e.Program, Model: model, Chat: chat, Workspace: worktree, Prompt: review.Prompt(brief),
-			Report: report, Reply: reply + " --reply-file " + shellx.Quote(report),
-		}.Script()
+		sess.Chat = chat
+		script = sess.cursorTurn(review.Prompt(brief), filepath.Join(dir, "report.out"), false)
 	default:
 		return "", Problem(e.Name + " can't review yet.")
+	}
+	if err := sess.save(dir); err != nil {
+		return "", err
 	}
 	name := e.Name
 	if model != "" {
@@ -171,7 +176,9 @@ func (s *Service) reviewerCommand(id, script string) string {
 }
 
 // ReviewReply takes a reply of track id's reviewer from its hook: the
-// one that ends a review is its report. A reply of another run, from a
+// one that ends a review is its report, the first after it while a
+// question of AskReview waits is its answer, and the others are the
+// user's talk with it in its pane. A reply of another run, from a
 // reviewer since ended, is dropped.
 func (s *Service) ReviewReply(ctx context.Context, id, run, text string) error {
 	if _, err := s.Store.Track(ctx, id); err != nil {
@@ -184,14 +191,21 @@ func (s *Service) ReviewReply(ctx context.Context, id, run, text string) error {
 	if err != nil || string(current) != run {
 		return nil
 	}
-	if !strings.Contains(text, review.Outcome) {
-		return nil
-	}
 	path := filepath.Join(dir, "report.md")
 	if _, err := os.Stat(path); err == nil {
+		if !s.asking(id) {
+			return nil
+		}
+		path = filepath.Join(dir, "answer.md")
+	} else if !strings.Contains(text, review.Outcome) {
 		return nil
 	}
-	// Written whole and then renamed, so WaitReview never reads half.
+	return writeWhole(path, text)
+}
+
+// writeWhole writes text to path whole and then renames it, so
+// WaitReview never reads half.
+func writeWhole(path, text string) error {
 	if err := os.WriteFile(path+".part", []byte(text), 0o600); err != nil {
 		return err
 	}
@@ -203,14 +217,21 @@ func (s *Service) ReviewReply(ctx context.Context, id, run, text string) error {
 // for good.
 var reviewWait = 30 * time.Minute
 
-// WaitReview waits for the report of track id's current review.
+// WaitReview waits for the report of track id's current review, or,
+// once it was asked a question, for its answer to the last one.
 func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 	if _, err := s.Store.Track(ctx, id); err != nil {
 		return "", err
 	}
 	ctx, cancel := context.WithTimeout(ctx, reviewWait)
 	defer cancel()
-	path := filepath.Join(s.reviewDir(id), "report.md")
+	// Picked under the lock, so an AskReview on its way is seen whole.
+	s.reviewMu.Lock()
+	path, what := filepath.Join(s.reviewDir(id), "report.md"), "report"
+	if exists(filepath.Join(s.reviewDir(id), "question.md")) {
+		path, what = filepath.Join(s.reviewDir(id), "answer.md"), "answer"
+	}
+	s.reviewMu.Unlock()
 	for {
 		if b, err := os.ReadFile(path); err == nil {
 			return string(b), nil
@@ -221,8 +242,8 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", Problem(fmt.Sprintf("No report after %s. The reviewer still runs in its pane: "+
-					"the footer's button shows it.", reviewWait))
+				return "", Problem(fmt.Sprintf("No %s after %s. The reviewer still runs in its pane: "+
+					"the footer's button shows it.", what, reviewWait))
 			}
 			return "", ctx.Err()
 		case <-time.After(reviewPoll):

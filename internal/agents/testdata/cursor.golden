@@ -20,7 +20,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -55,7 +55,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -90,7 +90,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -127,7 +127,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -164,7 +164,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -201,7 +201,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -252,7 +252,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -305,7 +305,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -352,7 +352,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -403,7 +403,7 @@ The review:
   4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
   5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
 
-You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
+You may summarise the report or explain a finding yourself. When a question needs the code read again, such as whether a finding is real, run `tracks review --ask "<question>"`, which asks the reviewer and prints its answer; the user can also ask it in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 

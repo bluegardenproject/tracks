@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 5 are
+**Status:** being built, one PR per step under Order. Steps 1 to 6 are
 built.
 
 ## Problem
@@ -263,7 +263,17 @@ Everything that needs the code read again goes back to the reviewer:
 - **A question about a finding** ("is finding 3 a false positive?", "look
   deeper at the cache"): the user asks in the reviewer pane, or the
   orchestrator runs `tracks review --ask "<question>"`, which types it into
-  the reviewer's session and returns its answer.
+  the reviewer's session and returns its answer. The reviewer's first reply
+  after the question is the answer; `tracks review --wait` then waits for it
+  instead of the report. One question at a time, only once the report is
+  in, and only while the pane is hidden: a user who shows it talks to the
+  reviewer there, and a reply of theirs would pass for the answer. The
+  question goes in behind a fixed lead-in, on one line, so it can't switch
+  Claude's input to a shell (`!`) or slash command. Cursor's hooks don't
+  carry its replies in the interactive CLI, so a Cursor reviewer's pane is
+  started again (`respawn-pane`) on a print-mode turn on the question, in
+  the same chat, and goes on interactively after it: what was typed in the
+  pane but not sent is lost.
 - **A new review**, after the branch changed, or **another scope** (another
   `--owner`, the whole diff): a new `tracks review`, a new session.
 
@@ -275,6 +285,7 @@ Everything that needs the code read again goes back to the reviewer:
 | `--brief <file>` | Adds the orchestrator's brief to the packet |
 | `--owner <handle>` | Reviews only the files `<handle>` owns |
 | `--ask <question>` | Asks the reviewer that's there, and prints its answer |
+| `--wait` | Waits for the report of the review that's running, or its answer to the last question |
 | `--base <ref>` | As now |
 
 ## Order
