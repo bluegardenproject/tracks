@@ -51,7 +51,7 @@ func (s *Service) CountComments(ctx context.Context) error {
 			s.comments = map[string]map[string]actions.Comments{}
 		}
 		s.comments[t.ID] = now
-		buttons := renderButtons(t, now)
+		buttons := s.buttons(t)
 		s.mu.Unlock()
 		if err := s.Windows.Buttons(window, buttons); err != nil {
 			errs = append(errs, err)
@@ -109,6 +109,9 @@ func (s *Service) trackWindows() (map[string]string, error) {
 // returns the track's name, and refuses while the agent can't take a
 // prompt or there's nothing to do: Problems say why.
 func (s *Service) RunAction(ctx context.Context, id, button string) (string, error) {
+	if button == actions.ReviewerRange {
+		return s.ToggleReviewer(ctx, id)
+	}
 	i, ok := actions.ParseRange(button)
 	if !ok {
 		return "", Problem("Tracks doesn't know the button " + button + ".")
@@ -161,7 +164,7 @@ func (s *Service) RunAction(ctx context.Context, id, button string) (string, err
 		return t.Name, err
 	}
 	s.mu.Lock()
-	buttons := renderButtons(t, s.comments[id])
+	buttons := s.buttons(t)
 	s.mu.Unlock()
 	return t.Name, s.Windows.Buttons(window, buttons)
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/agents"
@@ -11,7 +12,7 @@ import (
 )
 
 // SyncInfo shows each open track's info on its window, for the footer's
-// top row while the track has no buttons. Only changed info is written.
+// top row beside its buttons. Only changed info is written.
 func (s *Service) SyncInfo(ctx context.Context) error {
 	open, err := s.Store.OpenTracks(ctx)
 	if err != nil {
@@ -21,12 +22,21 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var reviewers map[string]ReviewerState
+	if s.Reviewers != nil {
+		reviewers, _ = s.Reviewers.Reviewers()
+	}
 	shown := map[string]string{}
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
 		if !ok {
 			continue
+		}
+		// The reviewer's button follows its pane, which ends with the
+		// reviewer or a tracks close.
+		if reviewers != nil {
+			s.showReviewer(t, window, reviewers[t.ID])
 		}
 		text := Info(t)
 		s.mu.Lock()
@@ -42,6 +52,11 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.info = shown
+	for id := range s.reviewers {
+		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
+			delete(s.reviewers, id)
+		}
+	}
 	s.mu.Unlock()
 	return errors.Join(errs...)
 }

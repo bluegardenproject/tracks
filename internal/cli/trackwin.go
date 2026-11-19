@@ -80,7 +80,8 @@ func newTrackwinCmd() *cobra.Command {
 func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 	Action(ctx context.Context, id, action string) (string, error)
 }, button, window string) string {
-	if _, ok := actions.ParseRange(button); !ok {
+	_, pr := actions.ParseRange(button)
+	if !pr && button != actions.ReviewerRange {
 		return ""
 	}
 	windows, err := trackwin.List(t, sessionName)
@@ -92,8 +93,11 @@ func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 			continue
 		}
 		name, err := daemon.Action(ctx, w.Track, button)
-		if err != nil {
+		switch {
+		case err != nil:
 			return err.Error()
+		case !pr:
+			return ""
 		}
 		return "Sent " + name + "'s open comments to its agent."
 	}

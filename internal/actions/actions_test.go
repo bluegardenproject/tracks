@@ -124,3 +124,17 @@ func TestRenderTakesVariantsInTurn(t *testing.T) {
 		t.Errorf("around a sent one, buttons took variants %v; want [1 2], the sent one taking none", got)
 	}
 }
+
+func TestReviewer(t *testing.T) {
+	for shown, want := range map[bool]string{
+		false: "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Open reviewer #[norange default]",
+		true:  "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Hide reviewer #[norange default]",
+	} {
+		if got := Reviewer(shown); got != want {
+			t.Errorf("Reviewer(%v) = %s", shown, got)
+		}
+	}
+	if len(ReviewerRange) > 15 {
+		t.Error("tmux cuts a range's name at 15 bytes")
+	}
+}

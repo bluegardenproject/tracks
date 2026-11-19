@@ -48,8 +48,12 @@ func TestActionsRow(t *testing.T) {
 		{Index: 0, Repo: "a/b", Number: 3, Comments: actions.Comments{Open: 2}},
 		{Index: 1, Repo: "a/b", Number: 7, Comments: actions.Comments{Open: 1}},
 	}, false))
-	if text := strings.TrimSpace(styles.ReplaceAllString(got, "")); text != "PR #3 · solve 2 comments   PR #7 · solve 1 comment" {
+	text := styles.ReplaceAllString(got, "")
+	if !strings.Contains(text, "PR #3 · solve 2 comments   PR #7 · solve 1 comment") {
 		t.Errorf("with buttons: %q", text)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(text), "api · active · Claude Code opus") {
+		t.Errorf("with buttons: %q, want the track's info beside them", text)
 	}
 	if !strings.Contains(got, "#[bg="+th.Value(theme.ButtonVariant2Bg)+"]") {
 		t.Errorf("the buttons' colour didn't come from the theme's options: %s", got)
