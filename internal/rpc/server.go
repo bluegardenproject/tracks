@@ -12,8 +12,9 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tracks"
 )
 
-// maxRequest bounds a request line. A review's diff is the largest:
-// up to a megabyte, which JSON escaping can grow several times.
+// maxRequest bounds a request line. A review's packet is the largest:
+// a megabyte of diff, which JSON escaping can grow several times, and
+// its commits, brief and file list, within review.Packet's limits.
 const maxRequest = 8 << 20
 
 // Call is one request being answered.

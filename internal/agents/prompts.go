@@ -185,8 +185,9 @@ func DraftPRSuffix(draftRepos []string, totalRepos int) string {
 func ReviewTask(instructions, prompt string) string {
 	if p := strings.TrimSpace(prompt); p != "" {
 		return instructions + "\n\n**From the user, for this review.** Pass it " +
-			"on to the reviewer with its prompt where you can, and keep it " +
-			"in mind when you present the findings:\n\n" + p
+			"on to the reviewer with `tracks review --brief - <<'BRIEF'`, the " +
+			"text on the lines after it and `BRIEF` last, and keep it in mind " +
+			"when you present the findings:\n\n" + p
 	}
 	return instructions
 }

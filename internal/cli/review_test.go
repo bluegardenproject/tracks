@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -66,24 +68,60 @@ func TestReviewBaseIsTheTrackRepos(t *testing.T) {
 	}
 }
 
-func TestBranchDiffIncludesUncommittedWork(t *testing.T) {
+func TestGatherPacket(t *testing.T) {
 	ctx := context.Background()
 	dir := repo(t)
-	got, err := branchDiff(ctx, dir, "origin/develop")
+	p, err := gatherPacket(ctx, dir, "origin/develop")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "+committed") || !strings.Contains(got, "--- uncommitted changes") || !strings.Contains(got, "+uncommitted") {
-		t.Errorf("the diff lacks the committed or uncommitted change:\n%s", got)
+	if len(p.Diffs) != 2 || p.Diffs[0].Uncommitted || !strings.Contains(p.Diffs[0].Text, "+committed") ||
+		!p.Diffs[1].Uncommitted || !strings.Contains(p.Diffs[1].Text, "+uncommitted") {
+		t.Errorf("diffs %+v; want the committed change, then the uncommitted one", p.Diffs)
+	}
+	if len(p.Files) != 1 || p.Files[0] != (review.File{Path: "a.txt", Added: 2}) {
+		t.Errorf("files %+v; want a.txt with the lines of both", p.Files)
+	}
+	if p.Base != "origin/develop" || !strings.Contains(p.Commits, " work") || strings.Contains(p.Commits, " base") {
+		t.Errorf("base %q, commits %q; want the branch's own commit", p.Base, p.Commits)
 	}
 
-	if err := exec.Command("git", "-C", dir, "commit", "-qam", "more").Run(); err != nil {
+	for _, args := range [][]string{{"mv", "a.txt", "café.txt"}, {"-c", "diff.noprefix=true", "-c", "diff.renames=true", "commit", "-qam", "more"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if err := exec.Command("git", "-C", dir, "config", "diff.noprefix", "true").Run(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := branchDiff(ctx, dir, "HEAD"); err == nil || err.Error() != "no changes against HEAD: nothing to review" {
-		t.Errorf("an empty diff: %v", err)
+	p, err = gatherPacket(ctx, dir, "origin/develop")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := branchDiff(ctx, dir, "origin/nope"); err == nil || !strings.Contains(err.Error(), "origin/nope") {
+	var files, diffs []string
+	for _, f := range p.Files {
+		files = append(files, f.Path)
+	}
+	for _, d := range p.Diffs {
+		diffs = append(diffs, d.Path)
+	}
+	if !slices.Equal(files, []string{"a.txt", "café.txt"}) || !slices.Equal(diffs, files) {
+		t.Errorf("a renamed file, with diff.noprefix set: files %q, diffs %q; want the same paths in both", files, diffs)
+	}
+
+	if _, err := gatherPacket(ctx, dir, "HEAD"); err == nil || err.Error() != "no changes against HEAD: nothing to review" {
+		t.Errorf("no changes: %v", err)
+	}
+	if _, err := gatherPacket(ctx, dir, "origin/nope"); err == nil || !strings.Contains(err.Error(), "origin/nope") {
 		t.Errorf("a base that doesn't exist: %v", err)
+	}
+}
+
+func TestReadBrief(t *testing.T) {
+	if got, err := readBrief(strings.NewReader("  from stdin\n"), "-"); err != nil || got != "from stdin" {
+		t.Errorf("stdin: %q, %v", got, err)
+	}
+	if _, err := readBrief(nil, filepath.Join(t.TempDir(), "none")); err == nil {
+		t.Error("a missing file was read")
 	}
 }

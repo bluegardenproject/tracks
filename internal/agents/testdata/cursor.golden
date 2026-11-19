@@ -231,7 +231,7 @@ This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
-**From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
+**From the user, for this review.** Pass it on to the reviewer with `tracks review --brief - <<'\''\'\'''\''BRIEF'\''\'\'''\''`, the text on the lines after it and `BRIEF` last, and keep it in mind when you present the findings:
 
 Fix what'\''\'\'''\''s flaky in "CI" $HOME
 
@@ -284,7 +284,7 @@ This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
-**From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
+**From the user, for this review.** Pass it on to the reviewer with `tracks review --brief - <<'\''\'\'''\''BRIEF'\''\'\'''\''`, the text on the lines after it and `BRIEF` last, and keep it in mind when you present the findings:
 
 Fix what'\''\'\'''\''s flaky in "CI" $HOME
 
@@ -382,7 +382,7 @@ This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
 - Do NOT change any Jira ticket status or assignee.
 
-**From the user, for this review.** Pass it on to the reviewer with its prompt where you can, and keep it in mind when you present the findings:
+**From the user, for this review.** Pass it on to the reviewer with `tracks review --brief - <<'\''\'\'''\''BRIEF'\''\'\'''\''`, the text on the lines after it and `BRIEF` last, and keep it in mind when you present the findings:
 
 Fix what'\''\'\'''\''s flaky in "CI" $HOME
 
