@@ -47,6 +47,9 @@ func TestHiddenPane(t *testing.T) {
 	if err := trackwin.Show(c, w.ID, pane); err != nil {
 		t.Fatal(err)
 	}
+	if err := trackwin.Show(c, w.ID, pane); err != nil {
+		t.Errorf("showing a shown pane: %v", err)
+	}
 	panes := mustPanes(t, c, w.ID)
 	if len(panes) != 3 || byRole(panes, trackwin.RoleReviewer).ID != pane {
 		t.Fatalf("panes %+v; want the reviewer in the track's column", panes)
@@ -57,12 +60,15 @@ func TestHiddenPane(t *testing.T) {
 	if _, shown, _ := trackwin.Hidden(c, "t1", w.ID, trackwin.RoleReviewer); !shown {
 		t.Error("a shown reviewer isn't found as shown")
 	}
-	if !c.HasSession(trackwin.BackSession) {
-		t.Error("the session for hidden panes ended when its only hidden pane was shown")
+	if c.HasSession(trackwin.BackSession) {
+		t.Error("the session for hidden panes outlived its last hidden pane, keeping tmux alive")
 	}
 
 	if err := trackwin.Hide(c, w.ID, pane); err != nil {
 		t.Fatal(err)
+	}
+	if err := trackwin.Hide(c, w.ID, pane); err != nil {
+		t.Errorf("hiding a hidden pane: %v", err)
 	}
 	if got := mustPanes(t, c, w.ID); len(got) != 2 {
 		t.Errorf("the track's window has %d panes after hiding, want 2", len(got))
@@ -79,5 +85,8 @@ func TestHiddenPane(t *testing.T) {
 	}
 	if _, _, err := trackwin.Hidden(c, "t1", w.ID, trackwin.RoleReviewer); !errors.Is(err, trackwin.ErrNoHidden) {
 		t.Errorf("after CloseHidden: %v, want ErrNoHidden", err)
+	}
+	if c.HasSession(trackwin.BackSession) {
+		t.Error("the session for hidden panes outlived its last hidden pane")
 	}
 }

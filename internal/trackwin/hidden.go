@@ -3,6 +3,7 @@ package trackwin
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/bluegardenproject/tracks/internal/tmux"
 )
@@ -40,10 +41,8 @@ var ErrNoHidden = errors.New("no such pane")
 // labelled role and title for track, and returns its ID. It's shown in
 // the track's window with Show.
 func OpenHidden(t HiddenTmux, track, role, dir string, p Process) (string, error) {
-	if !t.HasSession(BackSession) {
-		if err := t.NewSessionAt(BackSession, keepWindow, "", keepCommand); err != nil && !t.HasSession(BackSession) {
-			return "", fmt.Errorf("start the session for hidden panes: %w", err)
-		}
+	if err := ensureBack(t); err != nil {
+		return "", err
 	}
 	_, pane, err := t.NewWindow(BackSession, track+"-"+role, dir, p.Command)
 	if err != nil {
@@ -85,34 +84,48 @@ func Hidden(t HiddenTmux, track, window, role string) (pane tmux.Pane, shown boo
 }
 
 // Show moves hidden pane into the bottom of window's right column,
-// running on as it was, and evens out the column.
+// running on as it was, and evens out the column. A pane already there
+// is left as it is. When the column's last pane closes as the pane
+// joins it, as a finished setup's does, Show tries again.
 func Show(t HiddenTmux, window, pane string) error {
-	panes, err := t.ListPanes(window)
-	if err != nil {
-		return err
+	for range tries {
+		panes, err := t.ListPanes(window)
+		if err != nil {
+			return err
+		}
+		if slices.ContainsFunc(panes, func(p tmux.Pane) bool { return p.ID == pane }) {
+			return nil
+		}
+		agent, column := layout(panes)
+		var target string
+		switch {
+		case agent == nil:
+			return fmt.Errorf("window %s has no agent pane", window)
+		case len(column) == 0:
+			target, err = agent.ID, t.JoinPane(pane, agent.ID, tmux.Right, ColumnPercent)
+		default:
+			target = column[len(column)-1].ID
+			err = t.JoinPane(pane, target, tmux.Below, 0)
+		}
+		if err == nil {
+			dropBack(t)
+			return even(t, window)
+		}
+		if !gone(t, window, target) {
+			return err
+		}
 	}
-	agent, column := layout(panes)
-	switch {
-	case agent == nil:
-		return fmt.Errorf("window %s has no agent pane", window)
-	case len(column) == 0:
-		err = t.JoinPane(pane, agent.ID, tmux.Right, ColumnPercent)
-	default:
-		err = t.JoinPane(pane, column[len(column)-1].ID, tmux.Below, 0)
-	}
-	if err != nil {
-		return err
-	}
-	return even(t, window)
+	return fmt.Errorf("window %s: the right column's panes keep closing", window)
 }
 
 // Hide moves pane out of window back into BackSession, running on, and
 // evens out what's left of the column.
 func Hide(t HiddenTmux, window, pane string) error {
-	if !t.HasSession(BackSession) {
-		if err := t.NewSessionAt(BackSession, keepWindow, "", keepCommand); err != nil && !t.HasSession(BackSession) {
-			return fmt.Errorf("start the session for hidden panes: %w", err)
-		}
+	if panes, err := t.ListPanes(window); err == nil && !slices.ContainsFunc(panes, func(p tmux.Pane) bool { return p.ID == pane }) {
+		return nil
+	}
+	if err := ensureBack(t); err != nil {
+		return err
 	}
 	if err := t.BreakPane(pane, BackSession); err != nil {
 		return err
@@ -147,11 +160,37 @@ func CloseHidden(t HiddenTmux, track, window, role string) error {
 	if closed && window != "" {
 		errs = append(errs, even(t, window))
 	}
+	dropBack(t)
 	return errors.Join(errs...)
 }
 
+// ensureBack starts BackSession, with its window that never closes,
+// when it isn't running.
+func ensureBack(t HiddenTmux) error {
+	if t.HasSession(BackSession) {
+		return nil
+	}
+	if err := t.NewSessionAt(BackSession, keepWindow, "", keepCommand); err != nil && !t.HasSession(BackSession) {
+		return fmt.Errorf("start the session for hidden panes: %w", err)
+	}
+	return nil
+}
+
+// dropBack ends BackSession once it holds nothing but its window that
+// never closes: left running, it would keep the tmux server alive after
+// the Tracks session ended.
+func dropBack(t HiddenTmux) {
+	if !t.HasSession(BackSession) {
+		return
+	}
+	panes, err := t.ListSessionPanes(BackSession)
+	if err != nil || len(panes) != 1 {
+		return
+	}
+	_ = t.KillPane(panes[0].ID)
+}
+
 // TrackOf is the ID of the track window belongs to, "" for none.
-func TrackOf(t Tmux, window string) string {
-	id, _ := t.WindowOption(window, trackOption)
-	return id
+func TrackOf(t Tmux, window string) (string, error) {
+	return t.WindowOption(window, trackOption)
 }

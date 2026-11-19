@@ -157,7 +157,9 @@ type fakeWindows struct {
 	// respawned are the specs windows were respawned on.
 	respawned []trackwin.Spec
 	closed    []string
-	fail      bool
+	// endedHidden are the tracks whose hidden panes were closed.
+	endedHidden []string
+	fail        bool
 	// attention is each window's mark, as last set; screens what each
 	// window's agent pane shows.
 	attention map[string]bool
@@ -227,6 +229,11 @@ func (w *fakeWindows) Respawn(window string, s trackwin.Spec) (trackwin.Window, 
 		}
 	}
 	return trackwin.Window{ID: window, Agent: "%1"}, nil
+}
+
+func (w *fakeWindows) EndHidden(track string) error {
+	w.endedHidden = append(w.endedHidden, track)
+	return nil
 }
 
 func (w *fakeWindows) Close(window string) error {
@@ -590,6 +597,9 @@ func TestSweepAndEnd(t *testing.T) {
 	f.windows.windows = slices.DeleteFunc(f.windows.windows, func(in trackwin.Info) bool { return in.Name == "two" })
 	if err := f.svc.Sweep(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Equal(f.windows.endedHidden, []string{ids[1]}) {
+		t.Errorf("the hidden panes ended for %v, want two's, whose window went", f.windows.endedHidden)
 	}
 	listed, err := f.svc.List(ctx)
 	if err != nil {
