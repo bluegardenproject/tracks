@@ -14,7 +14,7 @@ func layout(panes []tmux.Pane) (agent *tmux.Pane, column []tmux.Pane) {
 		switch p.Role {
 		case RoleAgent:
 			agent = &panes[i]
-		case RoleTerminal, RoleDevServer, RoleSetup:
+		case RoleTerminal, RoleDevServer, RoleSetup, RoleReviewer:
 			column = append(column, p)
 		}
 	}

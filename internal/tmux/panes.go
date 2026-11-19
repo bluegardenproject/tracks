@@ -26,6 +26,9 @@ type Pane struct {
 	// State is the @tracks_state pane option, which a pane's own
 	// script sets: a setup pane's "running" or "failed <code>".
 	State string
+	// Track is the @tracks_track pane option: the track a pane outside
+	// its track's window belongs to. Window is the pane's window.
+	Track, Window string
 	// Key and Port are a dev-server pane's @tracks_key, which names its
 	// repo and server, and @tracks_port, 0 for none.
 	Key                      string
@@ -80,15 +83,34 @@ func (c *Client) SplitPane(target string, dir Split, percent int, cwd, command s
 
 // ListPanes returns the panes of window.
 func (c *Client) ListPanes(window string) ([]Pane, error) {
-	out, err := c.run("list-panes", "-t", window, "-F",
-		"#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_pid}\t#{@tracks_port}\t#{pane_tty}\t#{@tracks_role}\t#{@tracks_state}\t#{@tracks_key}\t#{@tracks_title}")
+	return c.listPanes("list-panes", "-t", window)
+}
+
+// ListSessionPanes returns the panes of every window of session.
+func (c *Client) ListSessionPanes(session string) ([]Pane, error) {
+	return c.listPanes("list-panes", "-s", "-t", "="+session)
+}
+
+// paneFormat is what listPanes asks tmux for; the title goes last, as
+// the one field a program can fill with anything.
+const paneFormat = "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_pid}\t" +
+	"#{@tracks_port}\t#{pane_tty}\t#{@tracks_role}\t#{@tracks_state}\t#{@tracks_key}\t#{@tracks_track}\t" +
+	"#{window_id}\t#{@tracks_title}"
+
+func (c *Client) listPanes(args ...string) ([]Pane, error) {
+	out, err := c.run(append(args, "-F", paneFormat)...)
 	if err != nil {
 		return nil, err
 	}
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "\t", 12)
-		if len(f) != 12 {
+		f := strings.SplitN(line, "\t", 14)
+		if len(f) == 13 {
+			// The output's trailing whitespace is trimmed, taking the
+			// last pane's tab before an empty title with it.
+			f = append(f, "")
+		}
+		if len(f) != 14 {
 			continue
 		}
 		n := make([]int, 6)
@@ -96,9 +118,46 @@ func (c *Client) ListPanes(window string) ([]Pane, error) {
 			n[i], _ = strconv.Atoi(f[i+1])
 		}
 		panes = append(panes, Pane{ID: f[0], Left: n[0], Top: n[1], Width: n[2], Height: n[3], PID: n[4], Port: n[5],
-			TTY: f[7], Role: f[8], State: f[9], Key: f[10], Title: f[11]})
+			TTY: f[7], Role: f[8], State: f[9], Key: f[10], Track: f[11], Window: f[12], Title: f[13]})
 	}
 	return panes, nil
+}
+
+// NewSessionAt starts a detached session called name, its first window
+// running command in dir, on a server that's already running.
+func (c *Client) NewSessionAt(name, window, dir, command string) error {
+	args := []string{"new-session", "-d", "-s", name, "-n", window}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	_, err := c.run(args...)
+	return err
+}
+
+// JoinPane moves pane src into target's window, beside or below
+// target, without selecting it; percent is its share, 0 for half.
+func (c *Client) JoinPane(src, target string, dir Split, percent int) error {
+	args := []string{"join-pane", "-d", "-s", src, "-t", target}
+	if dir == Right {
+		args = append(args, "-h", "-f")
+	} else {
+		args = append(args, "-v")
+	}
+	if percent > 0 {
+		args = append(args, "-l", strconv.Itoa(percent)+"%")
+	}
+	_, err := c.run(args...)
+	return err
+}
+
+// BreakPane moves pane out of its window into a new window of session,
+// without selecting it.
+func (c *Client) BreakPane(pane, session string) error {
+	_, err := c.run("break-pane", "-d", "-s", pane, "-t", "="+session+":")
+	return err
 }
 
 // CaptureHistory returns pane's visible rows and up to lines rows of
