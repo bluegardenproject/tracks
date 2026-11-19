@@ -125,3 +125,44 @@ func TestReadBrief(t *testing.T) {
 		t.Error("a missing file was read")
 	}
 }
+
+func TestOwnedPacket(t *testing.T) {
+	ctx := context.Background()
+	dir := repo(t)
+	p, err := gatherPacket(ctx, dir, "origin/develop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownedPacket(ctx, dir, p, "team"); err == nil || !strings.Contains(err.Error(), "no CODEOWNERS") {
+		t.Errorf("without CODEOWNERS: %v; want the review stopped", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".github"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".github", "CODEOWNERS"), []byte("*.txt @team\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownedPacket(ctx, dir, p, "team"); err == nil {
+		t.Error("a CODEOWNERS that isn't committed was read: the base has none")
+	}
+	for _, args := range [][]string{{"add", ".github"}, {"commit", "-qm", "owners"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if _, err := ownedPacket(ctx, dir, p, "team"); err == nil {
+		t.Error("the branch's own CODEOWNERS set its scope: GitHub reads the base's")
+	}
+	for _, args := range [][]string{{"update-ref", "refs/remotes/origin/develop", "HEAD"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	owned, err := ownedPacket(ctx, dir, p, "team")
+	if err != nil || owned.Scope.Owned != 1 || len(owned.Diffs) != 2 {
+		t.Errorf("%+v, %v; want @team's a.txt, committed and not", owned.Scope, err)
+	}
+	if _, err := ownedPacket(ctx, dir, p, "@someone"); err == nil || !strings.Contains(err.Error(), "owns none") {
+		t.Errorf("an owner of nothing: %v", err)
+	}
+}

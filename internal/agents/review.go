@@ -38,7 +38,9 @@ const ReviewSteps = "" +
 	"real, run `tracks review --ask \"<question>\"`, which asks the " +
 	"reviewer and prints its answer; the user can also ask it in its " +
 	"pane, which the footer's button shows. A new review, or one of " +
-	"another scope, is always a new `tracks review`, never your own."
+	"another scope, is always a new `tracks review`, never your own. " +
+	"When the user asks to review only a code owner's part, run " +
+	"`tracks review --owner <handle>`."
 
 // ReviewTemplate is a Review track's task. The track's prompt also
 // holds ReviewSteps, which say how the review runs. The user's prompt,

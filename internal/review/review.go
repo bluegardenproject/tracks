@@ -48,6 +48,14 @@ func Brief(instructions string, candor int, p Packet) string {
 	if brief := strings.TrimSpace(p.Brief); brief != "" {
 		b.WriteString("## Asked of this review\n\n" + brief + "\n\n")
 	}
+	if sc := p.Scope; sc != nil {
+		owner := oneLine(sc.Owner)
+		fmt.Fprintf(&b, "## Scope\n\nReview only the files %s owns: %d of the %d changed files, by the base "+
+			"branch's CODEOWNERS. Their diffs are below; the other changed files are listed, marked outside the "+
+			"scope, without diffs. Read any file for context. A change outside the scope that breaks owned code "+
+			"still goes in your report, under `### Whole diff`. Add to your report's first line: `Reviewed %d of %d "+
+			"changed files, those owned by %s.`\n\n", owner, sc.Owned, sc.Total, sc.Owned, sc.Total, owner)
+	}
 	if len(p.Notes) > 0 {
 		notes := make([]string, len(p.Notes))
 		for i, n := range p.Notes {
@@ -65,10 +73,14 @@ func Brief(instructions string, candor int, p Packet) string {
 	}
 	b.WriteString("## Changed files\n\n")
 	for _, f := range p.Files {
+		outside := ""
+		if f.Outside {
+			outside = " (outside the scope)"
+		}
 		if f.Binary {
-			fmt.Fprintf(&b, "- %s (binary)\n", f.Path)
+			fmt.Fprintf(&b, "- %s (binary)%s\n", f.Path, outside)
 		} else {
-			fmt.Fprintf(&b, "- %s +%d −%d\n", f.Path, f.Added, f.Removed)
+			fmt.Fprintf(&b, "- %s +%d −%d%s\n", f.Path, f.Added, f.Removed, outside)
 		}
 	}
 	if p.MoreFiles > 0 {

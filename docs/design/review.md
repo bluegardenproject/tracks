@@ -203,10 +203,16 @@ setup stays lazy, as now.
 Repositories tab that sets it by default (empty: the whole diff).
 
 - Tracks reads the repo's `CODEOWNERS` (`.github/`, the root, `docs/`, the
-  first found) at the reviewed head, with GitHub's rules: the last matching
-  pattern wins. Parsing and matching are a pure function with tests.
-- The packet's diff holds only the files `<handle>` owns. The reviewer may
-  still read any file for context, such as a caller outside the scope.
+  first found) on the base branch, as GitHub does, so a branch can't change
+  its own scope. GitHub's rules: the last matching pattern wins, a name also
+  covers what's in a folder of that name, a trailing `/*` matches only the
+  files directly in its folder, and lines with `!` or `[ ]` are skipped.
+  Parsing and matching are a pure function with tests. An owner is matched
+  without regard to case, and a handle may be given without its `@`.
+- The packet's diff holds only the files `<handle>` owns, and the PR's
+  threads only those on them. The other changed files are listed, marked
+  outside the scope, without diffs. The reviewer may still read any file
+  for context, such as a caller outside the scope.
 - The report's first line says the scope: `Reviewed 38 of 412 changed files,
   those owned by <handle>.` A change outside the scope that breaks owned code
   is still reported, under `### Whole diff`.
@@ -318,6 +324,7 @@ can be reviewed and merged while the next is built.
 7. The packet: changed files, PR intent, threads, checks, the moved-PR check,
    per-file limits. Built.
 8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
+   Built: the matching and `--owner`. To come: the repo field.
 9. Likelihood and confidence in the report (experiment 1).
 10. The verify pass (experiment 2).
 11. Structured findings and calibration (experiments 3 and 4).
