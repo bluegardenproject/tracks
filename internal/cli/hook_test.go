@@ -61,3 +61,39 @@ func TestRunHookWithTheDaemonDown(t *testing.T) {
 		t.Errorf("replied %q, logged %v; want the reply anyway and the error logged", out.String(), logs)
 	}
 }
+
+// A reviewer's hooks hand over its replies, and never the track's
+// status: the reviewer isn't the track's agent.
+func TestRunReviewerHook(t *testing.T) {
+	for _, tt := range []struct {
+		engine, input, replied, out string
+	}{
+		{"claude", `{"hook_event_name":"Stop","last_assistant_message":"Report.\nREVIEW OUTCOME: pass"}`, "t1 r1 Report.\nREVIEW OUTCOME: pass", ""},
+		{"cursor", `{"hook_event_name":"afterAgentResponse","text":"An answer."}`, "t1 r1 An answer.", "{}"},
+		{"claude", `{"hook_event_name":"PermissionRequest"}`, "", ""},
+		{"cursor", `{"hook_event_name":"beforeSubmitPrompt"}`, "", `{"continue":true}`},
+	} {
+		var out bytes.Buffer
+		var got string
+		reply := func(_ context.Context, p rpc.ReviewReplyParams) error {
+			got = p.ID + " " + p.Run + " " + p.Text
+			return nil
+		}
+		runReviewerHook(context.Background(), strings.NewReader(tt.input), &out, tt.engine, "t1", "r1", reply, func(string, ...any) {})
+		if got != tt.replied || out.String() != tt.out {
+			t.Errorf("%s %s: replied %q, answered %q; want %q, %q", tt.engine, tt.input, got, out.String(), tt.replied, tt.out)
+		}
+	}
+}
+
+func TestReplyFileText(t *testing.T) {
+	if got := replyFileText("Report.\nREVIEW OUTCOME: pass"); got != "Report.\nREVIEW OUTCOME: pass" {
+		t.Errorf("a report changed: %q", got)
+	}
+	for _, failed := range []string{"", "Error: Authentication required.\n"} {
+		got := replyFileText(failed)
+		if !strings.HasSuffix(got, "REVIEW OUTCOME: not run") || !strings.Contains(got, strings.TrimSpace(failed)) {
+			t.Errorf("a failed turn %q gave %q; want what it printed, and an outcome", failed, got)
+		}
+	}
+}

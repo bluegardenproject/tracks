@@ -65,17 +65,3 @@ func TestWorktreeStateSeesContentChanges(t *testing.T) {
 		t.Error("the state changed with nothing changed")
 	}
 }
-
-func TestTrackEngine(t *testing.T) {
-	t.Setenv("CLAUDECODE", "")
-	if got := trackEngine("claude"); got != "claude" {
-		t.Errorf("a known engine became %s", got)
-	}
-	if got := trackEngine(""); got != "cursor" {
-		t.Errorf("outside Claude Code the fallback is %s, want cursor", got)
-	}
-	t.Setenv("CLAUDECODE", "1")
-	if got := trackEngine(""); got != "claude" {
-		t.Errorf("inside Claude Code the fallback is %s, want claude", got)
-	}
-}

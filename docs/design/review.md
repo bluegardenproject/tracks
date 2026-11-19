@@ -1,7 +1,7 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 and 2 are
-built; the reviewer moves into a pane of its own (see The reviewer pane).
+**Status:** being built, one PR per step under Order. Steps 1 to 3 are
+built.
 
 ## Problem
 
@@ -98,11 +98,22 @@ pane of its own, hidden until the user opens it.
 - **Read-only.** Claude starts in plan mode with `Edit`, `Write` and
   `NotebookEdit` denied; Cursor with `--mode ask`. `tracks review` also
   checks the worktree before and after, in the orchestrator's own sandbox.
-- **The report comes back through the engine's hooks**, which Tracks already
-  installs: when Claude stops, its last reply is read from the transcript;
-  for Cursor, the hook event that carries the reply's text. `tracks review`
-  waits for it and prints it to the orchestrator. The reviewer never has to
-  run a command.
+- **The report comes back to Tracks**, and `tracks review` waits for it and
+  prints it to the orchestrator; the reviewer never runs a command.
+  - **Claude:** its `Stop` hook carries its reply. Its brief comes in with
+    `--append-system-prompt-file`, which Claude Code reads itself: a folder
+    given with `--add-dir` makes it ask, in the hidden pane, whether to trust
+    it, on every review.
+  - **Cursor:** its interactive CLI's hooks carry no reply text, and their
+    transcript path is empty (checked live). So the review is one turn in
+    print mode, written to a file and shown, which the pane hands to Tracks;
+    the same chat then goes on interactively, for questions.
+  - A reply that has the `REVIEW OUTCOME:` line is the report. A run ID in
+    the reviewer's hook command keeps a reply of an ended reviewer from
+    counting for the new one.
+- **Questions it asks wait for the user.** A Claude reviewer on a worktree
+  Claude hasn't worked in, such as a Cursor track's, asks whether to trust it;
+  `tracks review` says to answer it in the pane.
 - **In Work tracks too.** The pane opens in the Work track's window and
   worktree, so a pre-push review sees what isn't committed yet. The pane
   route replaces the in-session `tracks-reviewer` subagent once it's built.
@@ -289,5 +300,4 @@ can be reviewed and merged while the next is built.
 
 ## Open
 
-- Which of Cursor's hook events carries the reply's text, for the report.
 - Where calibration data is shown: per engine and model, to compare reviewers.
