@@ -8,6 +8,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tracks"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ func newStopCmd() *cobra.Command {
 				return err
 			}
 			server := tmux.New(paths.TmuxSocket)
-			if !server.HasSession(sessionName) {
+			if !server.HasSession(sessionName) && !server.HasSession(trackwin.BackSession) {
 				_, err := fmt.Fprintf(c.OutOrStdout(), "%s isn't running.\n", name)
 				return err
 			}

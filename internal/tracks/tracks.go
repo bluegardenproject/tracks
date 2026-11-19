@@ -94,6 +94,9 @@ type Windows interface {
 	List() ([]trackwin.Info, error)
 	Open(s trackwin.Spec) (trackwin.Window, error)
 	Close(window string) error
+	// EndHidden closes track's hidden panes, such as its reviewer, once
+	// its window is gone some other way than Close.
+	EndHidden(track string) error
 	// Attention marks window as needing the user, or not.
 	Attention(window string, on bool) error
 	// Screen is what window's agent pane shows.
@@ -302,11 +305,16 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 // hidden panes, such as its reviewer, even when a server wouldn't stop.
 func (w TmuxWindows) Close(window string) error {
 	stopped := w.StopServers(window)
-	var hidden error
-	if id := trackwin.TrackOf(w.Tmux, window); id != "" {
+	id, hidden := trackwin.TrackOf(w.Tmux, window)
+	if id != "" {
 		hidden = trackwin.CloseHidden(w.Tmux, id, "", "")
 	}
 	return errors.Join(stopped, w.Tmux.KillWindow(window), hidden)
+}
+
+// EndHidden closes track's hidden panes, its window gone.
+func (w TmuxWindows) EndHidden(track string) error {
+	return trackwin.CloseHidden(w.Tmux, track, "", "")
 }
 
 func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }

@@ -113,6 +113,11 @@ func (s *Service) Sweep(ctx context.Context) error {
 			if err := s.Report(ctx, t.ID, track.Ended); err != nil {
 				return err
 			}
+			// A window closed some other way than Close leaves the
+			// track's hidden panes, such as its reviewer, running.
+			if err := s.Windows.EndHidden(t.ID); err != nil {
+				return err
+			}
 		}
 	}
 	for _, in := range infos {
