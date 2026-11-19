@@ -126,15 +126,16 @@ func TestRenderTakesVariantsInTurn(t *testing.T) {
 }
 
 func TestReviewer(t *testing.T) {
+	const closeButton = "#[range=user|close-reviewer]#[bg=#{@tracks_button5_bg}]#[fg=#{@tracks_button5_text}] Close reviewer #[norange default]"
 	for shown, want := range map[bool]string{
-		false: "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Open reviewer #[norange default]",
-		true:  "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Hide reviewer #[norange default]",
+		false: "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Open reviewer #[norange default] " + closeButton,
+		true:  "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Hide reviewer #[norange default] " + closeButton,
 	} {
 		if got := Reviewer(shown); got != want {
 			t.Errorf("Reviewer(%v) = %s", shown, got)
 		}
 	}
-	if len(ReviewerRange) > 15 {
+	if len(ReviewerRange) > 15 || len(CloseReviewerRange) > 15 {
 		t.Error("tmux cuts a range's name at 15 bytes")
 	}
 }

@@ -81,7 +81,7 @@ func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 	Action(ctx context.Context, id, action string) (string, error)
 }, button, window string) string {
 	_, pr := actions.ParseRange(button)
-	if !pr && button != actions.ReviewerRange {
+	if !pr && button != actions.ReviewerRange && button != actions.CloseReviewerRange {
 		return ""
 	}
 	windows, err := trackwin.List(t, sessionName)

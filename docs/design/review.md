@@ -124,22 +124,25 @@ pane of its own, hidden until the user opens it.
 While a track has a reviewer, the footer's top row shows a green
 **Open reviewer** button. It moves the hidden pane into the track's right
 column, as a dev-server pane sits, running on as it was (`join-pane`); the
-button becomes **Hide reviewer**, which moves it back. There's no button to
-end it. The track's info (name · status · engine) stays on the row's left,
-beside the buttons: the reviewer's button lasts as long as the track, so it
-can't take the info's place as the comment buttons did.
+button becomes **Hide reviewer**, which moves it back. Beside it, a magenta
+**Close reviewer** ends the reviewer, closes its pane and drops its run, so a
+`tracks review --wait` on it stops. The track's info (name · status ·
+engine) stays on the row's left, beside the buttons: the reviewer's buttons
+last as long as the reviewer, often the track, so they can't take the
+info's place as the comment buttons did.
 
 Two button variants are added. They aren't part of the rotation the footer's
 other buttons take (variants 1 to 4); each belongs to one button:
 
 | Variant | Use | Default (dark) | Default light |
 |---|---|---|---|
-| `button.variant5` | Reserved: an End reviewer option, or the Station | bg `#700c50`, text `#ffb5e7` | bg `#ffd9f1`, text `#700c50` |
+| `button.variant5` | Close reviewer | bg `#700c50`, text `#ffb5e7` | bg `#ffd9f1`, text `#700c50` |
 | `button.variant6` | Open reviewer / Hide reviewer | bg `#00916f`, text `#c9fff0` | bg `#c9fff0`, text `#00664f` |
 
 ### Lifetime
 
-- **One reviewer per track.** It stays, hidden or shown, until the track ends.
+- **One reviewer per track.** It stays, hidden or shown, until the track ends
+  or the user clicks **Close reviewer**.
 - **A new review starts fresh.** `tracks review` ends a reviewer that's there
   and starts a new session, after the branch changed or for another scope.
 - **Closing its pane ends it**, such as the orchestrator running
