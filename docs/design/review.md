@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 4 are
+**Status:** being built, one PR per step under Order. Steps 1 to 5 are
 built.
 
 ## Problem
@@ -116,7 +116,8 @@ pane of its own, hidden until the user opens it.
   `tracks review` says to answer it in the pane.
 - **In Work tracks too.** The pane opens in the Work track's window and
   worktree, so a pre-push review sees what isn't committed yet. The pane
-  route replaces the in-session `tracks-reviewer` subagent once it's built.
+  route replaced the in-session `tracks-reviewer` subagent, which Tracks no
+  longer installs and removes where it installed it.
 
 ### The button
 

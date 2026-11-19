@@ -189,8 +189,8 @@ func (m Model) reviewerFieldWidth() int {
 
 // reviewerAbout is the Reviewer frame's text above its fields.
 func (m Model) reviewerAbout(width int) []string {
-	about := "Reviews a track's changes when its agent runs `tracks review`, as Cursor tracks do, and only reads: " +
-		"it never edits, commits or pushes. Claude tracks review with their own subagent for now."
+	about := "Reviews a track's changes when its agent runs `tracks review`, in a pane of the track the footer's " +
+		"button shows. It only reads: it never edits, commits or pushes."
 	return strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(about), "\n")
 }
 
