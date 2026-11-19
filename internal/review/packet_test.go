@@ -97,3 +97,32 @@ func TestFit(t *testing.T) {
 		t.Error("a short brief changed")
 	}
 }
+
+func TestOwnedBy(t *testing.T) {
+	c := ParseCodeowners("*.go @team\n/web/ @web")
+	p := Packet{
+		Files:     []File{{Path: "a.go"}, {Path: "web/x.ts"}, {Path: "web/y.go"}},
+		Diffs:     []FileDiff{{Path: "a.go"}, {Path: "web/x.ts"}, {Path: "a.go", Uncommitted: true}},
+		MoreFiles: 2,
+	}.OwnedBy(c, "team")
+	var files, diffs []string
+	for _, f := range p.Files {
+		if !f.Outside {
+			files = append(files, f.Path)
+		}
+	}
+	for _, d := range p.Diffs {
+		diffs = append(diffs, d.Path)
+	}
+	if !slices.Equal(files, []string{"a.go"}) || !slices.Equal(diffs, []string{"a.go", "a.go"}) ||
+		*p.Scope != (Scope{Owner: "@team", Owned: 1, Total: 5}) {
+		t.Errorf("files %q, diffs %q, scope %+v; want @team's, of all five", files, diffs, p.Scope)
+	}
+	if len(p.Files) != 3 {
+		t.Errorf("%d files listed; want the others too, outside the scope", len(p.Files))
+	}
+	withPR := Packet{PR: &PR{Threads: []Thread{{Path: "a.go"}, {Path: "web/x.ts"}, {}}}}.OwnedBy(c, "@team")
+	if len(withPR.PR.Threads) != 2 {
+		t.Errorf("threads %+v; want those on @team's files, and on none", withPR.PR.Threads)
+	}
+}

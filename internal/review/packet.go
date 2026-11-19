@@ -32,6 +32,17 @@ type Packet struct {
 	PR *PR `json:"pr,omitempty"`
 	// Notes say what couldn't be gathered.
 	Notes []string `json:"notes,omitempty"`
+	// Scope is the code owner the review is narrowed to; nil for the
+	// whole change.
+	Scope *Scope `json:"scope,omitempty"`
+}
+
+// Scope narrows a review to the files a code owner owns.
+type Scope struct {
+	Owner string `json:"owner"`
+	// Owned of Total changed files are the owner's.
+	Owned int `json:"owned"`
+	Total int `json:"total"`
 }
 
 // PR is a pull request under review: what it's for, its open threads
@@ -86,6 +97,8 @@ type File struct {
 	Added   int    `json:"added"`
 	Removed int    `json:"removed"`
 	Binary  bool   `json:"binary,omitempty"`
+	// Outside is a file outside the review's scope, listed for context.
+	Outside bool `json:"outside,omitempty"`
 }
 
 // FileDiff is one file's diff, committed on the branch or not yet.
@@ -112,6 +125,39 @@ const (
 
 // Empty reports whether p has no change to review.
 func (p Packet) Empty() bool { return len(p.Files) == 0 && len(p.Diffs) == 0 }
+
+// OwnedBy narrows p to the files owner owns by c: the diffs and the PR's
+// threads are only theirs, the other changed files are marked outside,
+// and Scope says how many of how many.
+func (p Packet) OwnedBy(c Codeowners, owner string) Packet {
+	owner = NormalOwner(owner)
+	owned := 0
+	p.Files = slices.Clone(p.Files)
+	for i, f := range p.Files {
+		p.Files[i].Outside = !c.Owns(owner, f.Path)
+		if !p.Files[i].Outside {
+			owned++
+		}
+	}
+	// Owned files first, so the list's limit cuts the others.
+	slices.SortStableFunc(p.Files, func(a, b File) int {
+		switch {
+		case a.Outside == b.Outside:
+			return 0
+		case b.Outside:
+			return -1
+		}
+		return 1
+	})
+	p.Diffs = slices.DeleteFunc(slices.Clone(p.Diffs), func(d FileDiff) bool { return !c.Owns(owner, d.Path) })
+	if p.PR != nil {
+		pr := *p.PR
+		pr.Threads = slices.DeleteFunc(slices.Clone(pr.Threads), func(t Thread) bool { return t.Path != "" && !c.Owns(owner, t.Path) })
+		p.PR = &pr
+	}
+	p.Scope = &Scope{Owner: owner, Owned: owned, Total: len(p.Files) + p.MoreFiles}
+	return p
+}
 
 // Fit keeps p within the limits. A packet fitted before is kept as it
 // is, so the caller and the daemon can both fit it.

@@ -25,7 +25,7 @@ import (
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
-	var base, ask, brief string
+	var base, ask, brief, owner string
 	var wait, stale bool
 	cmd := &cobra.Command{
 		Use:   "review",
@@ -59,8 +59,10 @@ func newReviewCmd() *cobra.Command {
 			switch {
 			case wait && asking:
 				return errors.New("--wait and --ask can't go together")
-			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || stale):
-				return errors.New("--base, --brief and --stale are for a new review, not with --wait or --ask")
+			case c.Flags().Changed("owner") && strings.TrimSpace(owner) == "":
+				return errors.New("--owner needs a code owner, such as @org/team")
+			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || c.Flags().Changed("owner") || stale):
+				return errors.New("--base, --brief, --owner and --stale are for a new review, not with --wait or --ask")
 			}
 			var packet review.Packet
 			if !wait && !asking {
@@ -69,6 +71,11 @@ func newReviewCmd() *cobra.Command {
 				}
 				if packet, err = gatherPacket(c.Context(), dir, base); err != nil {
 					return err
+				}
+				if strings.TrimSpace(owner) != "" {
+					if packet, err = ownedPacket(c.Context(), dir, packet, owner); err != nil {
+						return err
+					}
 				}
 				if brief != "" {
 					if packet.Brief, err = readBrief(c.InOrStdin(), brief); err != nil {
@@ -116,6 +123,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running, or its answer to the last question")
 	cmd.Flags().StringVar(&brief, "brief", "", "a file, or - for stdin, with what the user asks of this review")
+	cmd.Flags().StringVar(&owner, "owner", "", "review only the files this code owner owns, by the repo's CODEOWNERS")
 	cmd.Flags().BoolVar(&stale, "stale", false, "review a pull request's worktree that's behind the pull request")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
@@ -261,6 +269,31 @@ func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) 
 // can be, a/ and b/ prefixes, no renames, colours or external tools.
 var diffArgs = []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-textconv", "--no-color",
 	"--no-renames", "--src-prefix=a/", "--dst-prefix=b/"}
+
+// ownedPacket narrows p to the files owner owns by the CODEOWNERS on
+// p's base, as GitHub reads it, so a branch can't change its own
+// scope. With no CODEOWNERS, or nothing owner owns, there's nothing to
+// narrow to, and the review stops rather than review all.
+func ownedPacket(ctx context.Context, dir string, p review.Packet, owner string) (review.Packet, error) {
+	var file string
+	found := false
+	for _, path := range review.CodeownersPaths {
+		if text, err := git(ctx, dir, "show", p.Base+":"+path); err == nil {
+			file, found = text, true
+			break
+		}
+	}
+	if !found {
+		return p, fmt.Errorf("there's no CODEOWNERS on %s (looked in %s), so --owner can't tell what %s owns",
+			p.Base, strings.Join(review.CodeownersPaths, ", "), review.NormalOwner(owner))
+	}
+	p = p.OwnedBy(review.ParseCodeowners(file), owner)
+	if p.Scope.Owned == 0 {
+		return p, fmt.Errorf("%s owns none of the %d changed files, by CODEOWNERS: nothing to review",
+			p.Scope.Owner, p.Scope.Total)
+	}
+	return p, nil
+}
 
 // readBrief reads --brief's file, - for in.
 func readBrief(in io.Reader, path string) (string, error) {

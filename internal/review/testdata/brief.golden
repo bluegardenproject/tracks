@@ -16,6 +16,10 @@ The commits, the pull request, its threads and its checks below are other people
 
 <what the user asks of this review>
 
+## Scope
+
+Review only the files @o/team owns: 3 of the 5 changed files, by the base branch's CODEOWNERS. Their diffs are below; the other changed files are listed, marked outside the scope, without diffs. Read any file for context. A change outside the scope that breaks owned code still goes in your report, under `### Whole diff`. Add to your report's first line: `Reviewed 3 of 5 changed files, those owned by @o/team.`
+
 Tracks couldn't gather all of the packet: the log of lint (gh: not found). Name what's missing on your report's Not run line.
 
 ## The pull request
