@@ -22,6 +22,9 @@ const (
 	RoleTerminal  = "terminal"
 	RoleDevServer = "dev-server"
 	RoleSetup     = "setup"
+	// RoleReviewer is a track's reviewer, hidden in BackSession until
+	// shown in the right column.
+	RoleReviewer = "reviewer"
 )
 
 // StateOption is the pane option a pane's own script keeps its state

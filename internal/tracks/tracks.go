@@ -284,9 +284,8 @@ func reviewLabel(ref string) string {
 // TmuxWindows are the track windows of a tmux session.
 type TmuxWindows struct {
 	Tmux interface {
-		trackwin.Tmux
+		trackwin.HiddenTmux
 		KillWindow(window string) error
-		KillPane(pane string) error
 		CapturePane(pane string) (string, error)
 		CaptureHistory(pane string, lines int) (string, error)
 	}
@@ -299,11 +298,15 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Open(w.Tmux, w.Session, s)
 }
 
-// Close stops window's dev servers, then closes it, even when a server
-// wouldn't stop.
+// Close stops window's dev servers, then closes it and the track's
+// hidden panes, such as its reviewer, even when a server wouldn't stop.
 func (w TmuxWindows) Close(window string) error {
 	stopped := w.StopServers(window)
-	return errors.Join(stopped, w.Tmux.KillWindow(window))
+	var hidden error
+	if id := trackwin.TrackOf(w.Tmux, window); id != "" {
+		hidden = trackwin.CloseHidden(w.Tmux, id, "", "")
+	}
+	return errors.Join(stopped, w.Tmux.KillWindow(window), hidden)
 }
 
 func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }
