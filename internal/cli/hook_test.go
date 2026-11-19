@@ -87,11 +87,17 @@ func TestRunReviewerHook(t *testing.T) {
 }
 
 func TestReplyFileText(t *testing.T) {
-	if got := replyFileText("Report.\nREVIEW OUTCOME: pass"); got != "Report.\nREVIEW OUTCOME: pass" {
+	if got := replyFileText("Report.\nREVIEW OUTCOME: pass", false); got != "Report.\nREVIEW OUTCOME: pass" {
 		t.Errorf("a report changed: %q", got)
 	}
+	if got := replyFileText("An answer.", true); got != "An answer." {
+		t.Errorf("an answer changed: %q", got)
+	}
+	if got := replyFileText(" \n", true); strings.Contains(got, "OUTCOME") || !strings.Contains(got, "without an answer") {
+		t.Errorf("a failed answer gave %q", got)
+	}
 	for _, failed := range []string{"", "Error: Authentication required.\n"} {
-		got := replyFileText(failed)
+		got := replyFileText(failed, false)
 		if !strings.HasSuffix(got, "REVIEW OUTCOME: not run") || !strings.Contains(got, strings.TrimSpace(failed)) {
 			t.Errorf("a failed turn %q gave %q; want what it printed, and an outcome", failed, got)
 		}

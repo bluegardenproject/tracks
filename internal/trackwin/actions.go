@@ -40,9 +40,14 @@ func Prompt(t Tmux, window, text string) error {
 	if agent == nil {
 		return fmt.Errorf("window %s has no agent pane", window)
 	}
-	if err := t.SendText(agent.ID, text); err != nil {
+	return Type(t, agent.ID, text)
+}
+
+// Type types text into pane and presses Enter.
+func Type(t Tmux, pane, text string) error {
+	if err := t.SendText(pane, text); err != nil {
 		return err
 	}
 	time.Sleep(submitDelay)
-	return t.SendKey(agent.ID, "Enter")
+	return t.SendKey(pane, "Enter")
 }

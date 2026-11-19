@@ -359,6 +359,12 @@ func (w TmuxWindows) HideReviewer(window, pane string) error {
 	return trackwin.Hide(w.Tmux, window, pane)
 }
 
+func (w TmuxWindows) TypeReviewer(pane, text string) error { return trackwin.Type(w.Tmux, pane, text) }
+
+func (w TmuxWindows) RespawnReviewer(pane, dir, command string) error {
+	return w.Tmux.RespawnPane(pane, dir, command)
+}
+
 func (w TmuxWindows) CloseReviewer(track, window string) error {
 	return trackwin.CloseHidden(w.Tmux, track, window, trackwin.RoleReviewer)
 }

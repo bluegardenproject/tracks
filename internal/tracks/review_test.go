@@ -16,10 +16,22 @@ import (
 )
 
 type fakeReviewers struct {
-	opened []trackwin.Process
-	dirs   []string
-	closed []string
-	state  ReviewerState
+	opened    []trackwin.Process
+	dirs      []string
+	closed    []string
+	state     ReviewerState
+	typed     []string
+	respawned []string
+}
+
+func (f *fakeReviewers) TypeReviewer(pane, text string) error {
+	f.typed = append(f.typed, pane+" "+text)
+	return nil
+}
+
+func (f *fakeReviewers) RespawnReviewer(pane, dir, command string) error {
+	f.respawned = append(f.respawned, pane+" "+dir+" "+command)
+	return nil
 }
 
 func (f *fakeReviewers) OpenReviewer(_, dir string, p trackwin.Process) error {
@@ -211,5 +223,88 @@ func TestReviewerStates(t *testing.T) {
 	got := reviewerStates(shown, hidden)
 	if len(got) != 2 || got["a"] != (ReviewerState{Pane: "%2", Shown: true}) || got["b"] != (ReviewerState{Pane: "%4"}) {
 		t.Errorf("reviewerStates = %+v; want a's shown and b's hidden", got)
+	}
+}
+
+// A question reaches the reviewer once it has reported, and its next
+// reply is the answer; --wait then waits for that answer.
+func TestAskReview(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	worktree := t.TempDir()
+	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "r", Engine: "claude",
+		Repos: []track.Repo{{Name: "api", Worktree: worktree}}}); err != nil {
+		t.Fatal(err)
+	}
+	f.windows.windows = append(f.windows.windows, trackwin.Info{Window: "@r", Track: "r", Name: "r"})
+	panes := &fakeReviewers{}
+	f.svc.Reviewers = panes
+	f.svc.Settings = func() (settings.Settings, error) { return settings.Settings{Engines: f.engines}, nil }
+
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil {
+		t.Error("a track without a reviewer was asked")
+	}
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+x\n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "hasn't reported") {
+		t.Errorf("a reviewer still on its review was asked: %v", err)
+	}
+	run, _ := os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
+	reply := func(text string) {
+		t.Helper()
+		if err := f.svc.ReviewReply(ctx, "r", string(run), text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reply("Report.\nREVIEW OUTCOME: blocked")
+	reply("Talk in the pane, before any question.")
+	for _, bad := range []string{"", "  ", "line\nbreak", "esc\x1b[A"} {
+		if err := f.svc.AskReview(ctx, "r", bad); err == nil {
+			t.Errorf("question %q was asked", bad)
+		}
+	}
+	panes.state.Shown = true
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "pane is open") {
+		t.Errorf("a shown reviewer was asked: %v", err)
+	}
+	panes.state.Shown = false
+	if err := f.svc.AskReview(ctx, "r", "  Is finding 1 real?  "); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "question.md")); !strings.HasPrefix(string(b), questionLead) {
+		t.Errorf("question.md %q", b)
+	}
+	if len(panes.typed) != 1 || panes.typed[0] != "%9 "+questionLead+"Is finding 1 real?" {
+		t.Errorf("typed %q; want the question in the reviewer's pane", panes.typed)
+	}
+	if err := f.svc.AskReview(ctx, "r", "And 2?"); err == nil {
+		t.Error("a second question went in before the first was answered")
+	}
+	reply("Yes: the cache is never cleared.\nREVIEW OUTCOME: blocked")
+	reply("Later talk.")
+	answer, err := f.svc.WaitReview(ctx, "r")
+	if err != nil || answer != "Yes: the cache is never cleared.\nREVIEW OUTCOME: blocked" {
+		t.Errorf("answer %q, %v; want the first reply after the question", answer, err)
+	}
+
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.TrackType{Engine: "cursor"}}}, nil
+	}
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+x\n"}); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
+	reply("Report.\nREVIEW OUTCOME: pass")
+	if err := f.svc.AskReview(ctx, "r", "What about tests?"); err != nil {
+		t.Fatal(err)
+	}
+	if len(panes.respawned) != 1 {
+		t.Fatalf("respawned %q; want Cursor's pane started again on the question", panes.respawned)
+	}
+	for _, want := range []string{"%9 " + worktree, "-p", "--resume", "What about tests?", "answer.out", "--answer", "exec"} {
+		if !strings.Contains(panes.respawned[0], want) {
+			t.Errorf("Cursor's turn on the question lacks %s: %s", want, panes.respawned[0])
+		}
 	}
 }

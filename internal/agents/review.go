@@ -33,10 +33,12 @@ const ReviewSteps = "" +
 	"reviewer unavailable), say so plainly and review the diff yourself as " +
 	"a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded " +
 	"review beats a skipped one, but say which you did.\n\n" +
-	"You may summarise the report or explain a finding yourself, and the " +
-	"user can ask the reviewer about its review in its pane, which the " +
-	"footer's button shows. A new review, or one of another scope, is " +
-	"always a new `tracks review`, never your own."
+	"You may summarise the report or explain a finding yourself. When a " +
+	"question needs the code read again, such as whether a finding is " +
+	"real, run `tracks review --ask \"<question>\"`, which asks the " +
+	"reviewer and prints its answer; the user can also ask it in its " +
+	"pane, which the footer's button shows. A new review, or one of " +
+	"another scope, is always a new `tracks review`, never your own."
 
 // ReviewTemplate is a Review track's task. The track's prompt also
 // holds ReviewSteps, which say how the review runs. The user's prompt,

@@ -24,12 +24,27 @@ func (c Config) review(ctx context.Context, call *rpc.Call) (any, error) {
 	return c.waitReview(ctx, call, p.ID)
 }
 
-// reviewWait waits for the report of a track's running review.
+// reviewWait waits for the report of a track's running review, or its
+// answer to the last question.
 func (c Config) reviewWait(ctx context.Context, call *rpc.Call) (any, error) {
 	var p rpc.ReviewIDParams
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
+	return c.waitReview(ctx, call, p.ID)
+}
+
+// reviewAsk asks a track's reviewer a question and waits for its
+// answer.
+func (c Config) reviewAsk(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.ReviewAskParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	if err := c.Tracks.AskReview(ctx, p.ID, p.Question); err != nil {
+		return nil, err
+	}
+	call.Progress("Asked the reviewer. If this command is stopped, tracks review --wait waits for its answer.")
 	return c.waitReview(ctx, call, p.ID)
 }
 

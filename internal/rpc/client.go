@@ -223,10 +223,18 @@ func (c Client) Review(ctx context.Context, p tracks.ReviewRequest, progress fun
 	return r.Report, c.Call(ctx, Review, p, &r, progress)
 }
 
-// ReviewWait waits for the report of track id's running review.
+// ReviewWait waits for the report of track id's running review, or
+// its answer to the last question.
 func (c Client) ReviewWait(ctx context.Context, id string, progress func(string)) (string, error) {
 	var r ReviewResult
 	return r.Report, c.Call(ctx, ReviewWait, ReviewIDParams{ID: id}, &r, progress)
+}
+
+// ReviewAsk asks track id's reviewer question and waits for its
+// answer.
+func (c Client) ReviewAsk(ctx context.Context, id, question string, progress func(string)) (string, error) {
+	var r ReviewResult
+	return r.Report, c.Call(ctx, ReviewAsk, ReviewAskParams{ID: id, Question: question}, &r, progress)
 }
 
 // ReviewReply hands the daemon a reply of a track's reviewer.
