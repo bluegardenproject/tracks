@@ -26,7 +26,7 @@ const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
 	var base, ask, brief string
-	var wait bool
+	var wait, stale bool
 	cmd := &cobra.Command{
 		Use:   "review",
 		Short: "review this track's branch with the track's reviewer",
@@ -59,8 +59,8 @@ func newReviewCmd() *cobra.Command {
 			switch {
 			case wait && asking:
 				return errors.New("--wait and --ask can't go together")
-			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief")):
-				return errors.New("--base and --brief are for a new review, not with --wait or --ask")
+			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || stale):
+				return errors.New("--base, --brief and --stale are for a new review, not with --wait or --ask")
 			}
 			var packet review.Packet
 			if !wait && !asking {
@@ -90,7 +90,7 @@ func newReviewCmd() *cobra.Command {
 			case asking:
 				report, err = client.ReviewAsk(c.Context(), id, ask, progress)
 			default:
-				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit()}, progress)
+				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit(), Stale: stale}, progress)
 			}
 			if err != nil {
 				return err
@@ -116,6 +116,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running, or its answer to the last question")
 	cmd.Flags().StringVar(&brief, "brief", "", "a file, or - for stdin, with what the user asks of this review")
+	cmd.Flags().BoolVar(&stale, "stale", false, "review a pull request's worktree that's behind the pull request")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
 }
@@ -248,6 +249,11 @@ func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) 
 		return p, fmt.Errorf("git log %s..HEAD: %w", base, err)
 	}
 	p.Commits = strings.TrimSpace(commits)
+	head, err := git(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return p, fmt.Errorf("git rev-parse HEAD: %w", err)
+	}
+	p.Head = strings.TrimSpace(head)
 	return p, nil
 }
 

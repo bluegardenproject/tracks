@@ -69,6 +69,20 @@ func TestFit(t *testing.T) {
 		t.Errorf("%d files listed, %d more; want the list's limit and the rest counted, once", len(many.Files), many.MoreFiles)
 	}
 
+	pr := Packet{PR: &PR{Body: strings.Repeat("b", maxPRBodyBytes+10),
+		Checks:  []Check{{Log: strings.Repeat("l", maxLogBytes) + "THE END"}},
+		Threads: []Thread{{Comments: []Comment{{Body: strings.Repeat("t", maxThreadsBytes-10)}}}, {Comments: []Comment{{Body: strings.Repeat("o", 20)}}}, {}},
+	}}.Fit()
+	if log := pr.PR.Checks[0].Log; !strings.HasSuffix(log, "THE END") || len(log) > maxLogBytes+maxNote {
+		t.Error("a check's log wasn't cut to its end")
+	}
+	if pr.Fit().PR.Checks[0].Log != pr.PR.Checks[0].Log {
+		t.Error("a cut log was cut again")
+	}
+	if len(pr.PR.Threads) != 1 || pr.PR.MoreThreads != 2 || !strings.Contains(pr.PR.Body, "[cut at") {
+		t.Errorf("%d threads, %d more; want the threads over the limit counted", len(pr.PR.Threads), pr.PR.MoreThreads)
+	}
+
 	p := Packet{Commits: strings.Repeat("é", maxCommitsBytes), Brief: "short"}.Fit()
 	if again := p.Fit(); again.Commits != p.Commits {
 		t.Error("cut commit messages were cut again")

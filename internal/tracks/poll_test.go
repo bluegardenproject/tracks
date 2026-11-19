@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -15,6 +16,17 @@ type fakeGitHub struct {
 	fail     error
 	asked    []string
 	threads  map[string]int // by PR URL
+	// ReviewPR's answer.
+	head        string
+	reviewNotes []string
+	reviewErr   error
+}
+
+func (g *fakeGitHub) ReviewPR(_ context.Context, pr track.PR) (review.PR, string, []string, error) {
+	if g.reviewErr != nil {
+		return review.PR{}, "", nil, g.reviewErr
+	}
+	return review.PR{URL: pr.URL, Title: "Fix the cache"}, g.head, g.reviewNotes, nil
 }
 
 func (g *fakeGitHub) OpenThreads(_ context.Context, pr track.PR) (int, error) {
