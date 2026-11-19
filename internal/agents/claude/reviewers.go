@@ -44,13 +44,11 @@ isn't true". That is still within the register; losing it is not.
 
 `
 
-// reviewerAgent is the system prompt for the code-review subagent.
+// reviewerAgent is the code reviewer's prompt. It was a subagent's
+// file; `tracks review` now gives its body, without the frontmatter, to
+// the reviewer it starts (ReviewerInstructions).
 //
-// Frontmatter `description` is the auto-discovery hook — Claude
-// reads it when deciding whether to invoke a subagent. Keep it
-// trigger-worthy so the main agent picks it up when about to push.
-//
-// The body is the subagent's system prompt. It's intentionally
+// The body is the reviewer's system prompt. It's intentionally
 // strict: read-only tools, no commits, no PRs, always end with a
 // `REVIEW OUTCOME:` line so callers can grep the verdict.
 const reviewerAgent = `---
@@ -558,10 +556,9 @@ counts exactly like one that came from a failed fact-check.
 // frontmatter matches the YAML block the agent definitions open with.
 var frontmatter = regexp.MustCompile(`(?s)\A---\n.*?\n---\n`)
 
-// ReviewerInstructions is the reviewer subagent's prompt without its
-// frontmatter, for `tracks review`: Cursor tracks are reviewed to the
-// same standard as Claude tracks. It is the built-in text, never the
-// installed file, which the user may have replaced with their own.
+// ReviewerInstructions is the code reviewer's prompt without its
+// frontmatter, for `tracks review`, on every engine. It is the built-in
+// text: the subagent file earlier versions installed isn't read.
 func ReviewerInstructions() string {
 	return strings.TrimSpace(frontmatter.ReplaceAllString(reviewerAgent, ""))
 }

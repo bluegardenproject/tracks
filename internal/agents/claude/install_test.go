@@ -38,8 +38,8 @@ func TestInstallHelpers(t *testing.T) {
 	if len(skipped) != 1 || skipped[0] != mine {
 		t.Errorf("skipped = %v, want the user's file", skipped)
 	}
-	if b, _ := os.ReadFile(ours); string(b) != reviewerAgent {
-		t.Error("an older reviewer of ours was not replaced")
+	if _, err := os.Stat(ours); !os.IsNotExist(err) {
+		t.Errorf("the code reviewer subagent of ours is still installed: %v", err)
 	}
 	if b, _ := os.ReadFile(mine); string(b) != "the user's own\n" {
 		t.Error("the user's file was overwritten")
@@ -56,6 +56,16 @@ func TestInstallHelpers(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(home, ".claude", "skills", "tracks-add-repo", "SKILL.md")); string(b) != addRepoSkill {
 		t.Error("the add-repo skill was not written")
+	}
+
+	if err := os.WriteFile(ours, []byte("the user's own reviewer\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallHelpers(home); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(ours); string(b) != "the user's own reviewer\n" {
+		t.Error("the user's own tracks-reviewer was removed")
 	}
 }
 

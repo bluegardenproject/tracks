@@ -14,10 +14,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -46,10 +49,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -78,10 +84,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -112,10 +121,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -146,10 +158,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -180,10 +195,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -207,9 +225,7 @@ TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/
 
 The worktree is already on the target you picked (detached at the PR head or branch tip), so "the current branch against its base" is the diff you want to review.
 
-Run `tracks review` rather than reviewing it yourself. It ends its report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If `tracks review` itself fails, say so plainly and review the diff yourself, ending with the same `REVIEW OUTCOME:` line.
-
-Present the findings verbatim and wait for follow-up.
+Run `tracks review`, as **The review** below describes, rather than reviewing it yourself. Present its findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
@@ -230,10 +246,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -245,7 +264,7 @@ Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s
 
 **Dev servers.** Tracks runs this track'\''\'\'''\''s dev servers, each in a pane of the track'\''\'\'''\''s window, on a port it picks. Start them only when the user asks, and only the ones they ask for. When the track has more than one and the user didn'\''\'\'''\''t say which, run `tracks servers` and ask which to start, as a question with one option per server that lets them pick several, then start those with `tracks up <server>...`. Plain `tracks up` starts all of them: run it only when the user asks for all. Stop servers with `tracks down [server...]`. `tracks servers` lists them with their state and port, `tracks url <server>` prints one'\''\'\'''\''s address, and `tracks logs <server>` shows what one printed. Never start a dev server any other way, such as with `pnpm dev`. If a server doesn'\''\'\'''\''t start, crashes or reports an error, tell the user what `tracks up` printed or `tracks logs` shows and wait: don'\''\'\'''\''t restart it, change it or work around it unless they ask. The error may be expected while other work is pending.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. `tracks review` hands this level to the reviewer. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
 
 **This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
@@ -259,9 +278,7 @@ TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/
 
 The worktree is already on the target you picked (detached at the PR head or branch tip), so "the current branch against its base" is the diff you want to review.
 
-Run `tracks review` rather than reviewing it yourself. It ends its report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If `tracks review` itself fails, say so plainly and review the diff yourself, ending with the same `REVIEW OUTCOME:` line.
-
-Present the findings verbatim and wait for follow-up.
+Run `tracks review`, as **The review** below describes, rather than reviewing it yourself. Present its findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
@@ -282,10 +299,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -295,7 +315,7 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. `tracks review` hands this level to the reviewer. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
 
 **This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
@@ -309,9 +329,7 @@ TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/
 
 The worktree is already on the target you picked (detached at the PR head or branch tip), so "the current branch against its base" is the diff you want to review.
 
-Run `tracks review` rather than reviewing it yourself. It ends its report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If `tracks review` itself fails, say so plainly and review the diff yourself, ending with the same `REVIEW OUTCOME:` line.
-
-Present the findings verbatim and wait for follow-up.
+Run `tracks review`, as **The review** below describes, rather than reviewing it yourself. Present its findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
@@ -328,10 +346,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -341,7 +362,7 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+**Review candor: 3/10** (direct — plain statements, no hedging) — 1 is radical candor, 10 is honest but gently framed. `tracks review` hands this level to the reviewer. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
 
 **This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\''
 code=$?
@@ -355,9 +376,7 @@ TRACKS_ID='20260928-101500-abc123' TRACKS_SOCKET_DIR='/data/tracks' PATH='/data/
 
 The worktree is already on the target you picked (detached at the PR head or branch tip), so "the current branch against its base" is the diff you want to review.
 
-Run `tracks review` rather than reviewing it yourself. It ends its report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If `tracks review` itself fails, say so plainly and review the diff yourself, ending with the same `REVIEW OUTCOME:` line.
-
-Present the findings verbatim and wait for follow-up.
+Run `tracks review`, as **The review** below describes, rather than reviewing it yourself. Present its findings verbatim and wait for follow-up.
 
 This is a **read-only audit**:
 - Do NOT edit files, commit, push, or open a PR.
@@ -378,10 +397,13 @@ You'\''\'\'''\''re running interactively inside a `tracks` worktree (the TRACKS_
   - Otherwise (any source, config, test, schema, lockfile, build or CI change, including a diff that mixes those with docs) review before pushing. When in doubt, review.
 
 The review:
-  1. Run `tracks review`. It runs the reviewer as a separate agent session that has not seen this conversation, so it reads your diff with fresh eyes rather than re-reading your own reasoning. Do NOT review the diff yourself instead, and do NOT invoke `agent` directly — `tracks review` is what stops a reviewer reviewing itself.
+  1. Run `tracks review`. It starts this track'\''\'\'''\''s reviewer, an agent session that has not seen this conversation, in a hidden pane of the track, and prints its report when it'\''\'\'''\''s done. That can take minutes: give the command the longest timeout your shell tool allows (in Claude Code, the Bash tool'\''\'\'''\''s `timeout: 600000`). If the command is stopped before the report comes, run `tracks review --wait`: the reviewer runs on, and that picks its report up. Do NOT review the diff yourself instead, and do NOT start a reviewer any other way.
   2. Read its report. It ends with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.
-  3. If blocked, address every `block` finding and run `tracks review` again. Do not push with unresolved blocks.
-  4. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+  3. If blocked, address every `block` finding and run `tracks review` again: it ends the old reviewer and starts a fresh one. Do not push with unresolved blocks.
+  4. Acknowledge `warn` findings in the PR description and include the final `REVIEW OUTCOME` line so the human reviewer knows what was already vetted.
+  5. If `tracks review` itself fails (command not found, no changes, reviewer unavailable), say so plainly and review the diff yourself as a fallback, ending with the same `REVIEW OUTCOME:` line — a degraded review beats a skipped one, but say which you did.
+
+You may summarise the report or explain a finding yourself, and the user can ask the reviewer about its review in its pane, which the footer'\''\'\'''\''s button shows. A new review, or one of another scope, is always a new `tracks review`, never your own.
 
 **Ask before you open a pull request.** Commit and push as the work needs, but open a pull request only after the user agreed to it in this session, or the task asked for one; otherwise ask them when the work is ready.
 
@@ -391,7 +413,7 @@ If you open a pull request at any point, include the URL on its own line as `TRA
 
 Keep your output terse and your diffs comment-free unless the repo'\''\'\'''\''s conventions ask otherwise — these sessions are read in a dashboard.
 
-**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. Candor governs wording only: it never changes which findings you report, their severity, or the verdict.
+**Review candor: 1/10** (radical candor — lead with the problem, no cushioning) — 1 is radical candor, 10 is honest but gently framed. `tracks review` hands this level to the reviewer. Candor governs wording only: it never changes which findings are reported, their severity, or the pass/blocked verdict.
 
 **This is a Review track: review, don'\''\'\'''\''t change.** Never edit, create or delete files in this worktree, and never commit, push or open a pull request from it, even when the user asks for a fix after the review. The push, pull request and Jira steps above are for Work tracks: skip them here, but still run the review you were asked for. Running read-only checks such as lint, typecheck and tests is fine. When the user wants a finding fixed, describe the fix, with a snippet if it helps, and say it belongs in a Work track on that branch.'\'' --resume '\''11111111-2222-4333-8444-555555555555'\'' --force --workspace '\''/tmp/track/worktrees/api'\'' --add-dir '\''/tmp/track/worktrees/web'\''
 code=$?

@@ -9,20 +9,8 @@ import (
 )
 
 // taskSuffix is appended to every work/review prompt, the Cursor
-// counterpart to claude.taskSuffix.
-//
-// It is a rewrite rather than a copy, because the Claude version's
-// central instruction — invoke the `tracks-reviewer` subagent via the
-// Task tool — names a mechanism the Cursor CLI does not expose. Its
-// Task tool accepts only built-in types, and invoking a custom agent
-// by slash loads the definition into the *same* conversation.
-//
-// The gate is preserved by other means: `tracks review` runs the same
-// reviewer definition as a second agent process with a fresh chat, so
-// the isolation comes from the process boundary. The agent is told to
-// run that command rather than to review its own work, and rather than
-// to spawn the reviewer itself — keeping the spawn inside tracks is
-// what lets it refuse a review from inside a review.
+// counterpart to claude.taskSuffix. The review runs the same way on
+// both, through agents.ReviewSteps.
 //
 // The wording overlaps claude.taskSuffix in the parts that describe
 // tracks rather than the assistant (the interactive framing, the PR
@@ -46,22 +34,7 @@ const taskSuffix = "" +
 	"  - Otherwise (any source, config, test, schema, lockfile, build " +
 	"or CI change, including a diff that mixes those with docs) review " +
 	"before pushing. When in doubt, review.\n\n" +
-	"The review:\n" +
-	"  1. Run `tracks review`. It runs the reviewer as a separate " +
-	"agent session that has not seen this conversation, so it reads " +
-	"your diff with fresh eyes rather than re-reading your own " +
-	"reasoning. Do NOT review the diff yourself instead, and do NOT " +
-	"invoke `agent` directly — `tracks review` is what stops a " +
-	"reviewer reviewing itself.\n" +
-	"  2. Read its report. It ends with `REVIEW OUTCOME: pass` or " +
-	"`REVIEW OUTCOME: blocked`.\n" +
-	"  3. If blocked, address every `block` finding and run " +
-	"`tracks review` again. Do not push with unresolved blocks.\n" +
-	"  4. If `tracks review` itself fails (command not found, no " +
-	"changes, reviewer unavailable), say so plainly and review the " +
-	"diff yourself as a fallback, ending with the same " +
-	"`REVIEW OUTCOME:` line — a degraded review beats a skipped " +
-	"one, but say which you did.\n\n" +
+	agents.ReviewSteps + "\n\n" +
 	"**Ask before you open a pull request.** Commit and push as the work " +
 	"needs, but open a pull request only after the user agreed to it in " +
 	"this session, or the task asked for one; otherwise ask them when " +
@@ -124,35 +97,4 @@ func docReviewBrief(t track.Track) string {
 	fmt.Fprintf(&b, "  - Opinion section: %s\n", onOff(t.Opinion))
 	fmt.Fprintf(&b, "  - Claim check section: %s", onOff(t.ClaimCheck))
 	return b.String()
-}
-
-// reviewTemplate is a review track's task, the Cursor counterpart to
-// claude.reviewTemplate: the reviewer runs through `tracks review`, as
-// taskSuffix explains. The user's prompt, which is optional, follows it.
-const reviewTemplate = "" +
-	"Run a code review of the checked-out PR / branch against its base.\n\n" +
-	"The worktree is already on the target you picked (detached at the " +
-	"PR head or branch tip), so \"the current branch against its base\" " +
-	"is the diff you want to review.\n\n" +
-	"Run `tracks review` rather than reviewing it yourself. It ends its " +
-	"report with `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`. If " +
-	"`tracks review` itself fails, say so plainly and review the diff " +
-	"yourself, ending with the same `REVIEW OUTCOME:` line.\n\n" +
-	"Present the findings verbatim and wait for follow-up.\n\n" +
-	"This is a **read-only audit**:\n" +
-	"- Do NOT edit files, commit, push, or open a PR.\n" +
-	"- Do NOT change any Jira ticket status or assignee."
-
-// reviewCandorSuffix carries the candor level onto a code-review track.
-//
-// Claude's equivalent tells the model to pass the level to the review
-// subagent; here the model is the reviewer, so it is addressed
-// directly. Without this the level the creation form collects is
-// silently discarded.
-func reviewCandorSuffix(level int) string {
-	return fmt.Sprintf("\n\n**Review candor: %d/10** (%s) — 1 is radical "+
-		"candor, 10 is honest but gently framed. Candor governs wording "+
-		"only: it never changes which findings you report, their "+
-		"severity, or the verdict.",
-		level, track.CandorLabel(level))
 }

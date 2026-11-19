@@ -17,8 +17,8 @@ import (
 //  1. Make sure Claude knows it's running interactively (don't
 //     treat every task as one-shot).
 //  2. Mandate a code-review gate before any push / PR when the
-//     diff contains code — the review uses whatever conventions
-//     the repo documents. Docs- and agent-config-only diffs skip
+//     diff contains code, run by `tracks review` (agents.ReviewSteps),
+//     to whatever conventions the repo documents. Docs- and agent-config-only diffs skip
 //     it: there is nothing for a code reviewer to find, and the
 //     round-trip is pure latency.
 //  3. Open a pull request only with the user's agreement: the
@@ -51,19 +51,7 @@ const taskSuffix = "" +
 	"  - Otherwise (any source, config, test, schema, lockfile, " +
 	"build or CI change, including a diff that mixes those with " +
 	"docs) the review below is mandatory. When in doubt, review.\n\n" +
-	"The review:\n" +
-	"  1. Invoke the dedicated review subagent via the Task tool:\n" +
-	"     `Task({ subagent_type: \"tracks-reviewer\", prompt: " +
-	"\"Review my changes in this worktree before push.\" })`\n" +
-	"     The subagent is auto-discovered from the user's global " +
-	"Claude config — no setup needed inside the worktree.\n" +
-	"  2. Read the findings. The subagent ends its report with one of:\n" +
-	"     `REVIEW OUTCOME: pass` or `REVIEW OUTCOME: blocked`.\n" +
-	"  3. If blocked, address every `block` finding and re-run the " +
-	"subagent. Do not push with unresolved blocks.\n" +
-	"  4. Acknowledge `warn` findings in the PR description and " +
-	"include the final `REVIEW OUTCOME` line so the human reviewer " +
-	"knows what was already vetted.\n\n" +
+	agents.ReviewSteps + "\n\n" +
 	"**Ask before you open a pull request.** Commit and push as the work " +
 	"needs, but open a pull request only after the user agreed to it in " +
 	"this session, or the task asked for one; otherwise ask them when " +
@@ -111,32 +99,6 @@ const taskSuffix = "" +
 	"  - A comment earns its place only when the *why* is genuinely " +
 	"surprising (a workaround, an ordering constraint, a subtle edge " +
 	"case)."
-
-// reviewTemplate is a review track's task. The user's prompt, which
-// is optional, follows it.
-const reviewTemplate = `Run a code review of the checked-out PR / branch against its base.
-
-The worktree is already on the target you picked (detached at the PR
-head or branch tip), so "the current branch against its base" is the
-diff you want to review.
-
-Invoke the dedicated review subagent rather than reviewing yourself:
-
-  Task({
-    subagent_type: "tracks-reviewer",
-    prompt: "Review the current branch against its base and report findings."
-  })
-
-The subagent is auto-discovered from the user's global Claude config —
-no setup needed inside the worktree. It's read-only by design and ends
-its report with one of ` + "`REVIEW OUTCOME: pass`" + ` or ` + "`REVIEW OUTCOME: blocked`" + `.
-
-Present the subagent's findings verbatim and wait for follow-up.
-
-This is a **read-only audit**:
-- Do NOT edit files, commit, push, or open a PR.
-- Do NOT change any Jira ticket status or assignee (skip the
-  Jira-sync workflow described in the global tracks suffix).`
 
 // docReviewTemplate is appended for KindDoc tracks. It owns the two
 // invariants of a doc review that must survive the user editing the
@@ -206,19 +168,6 @@ func docReviewBrief(t track.Track) string {
 		lines = append(lines, "    Claim check: ON — verify the load-bearing claims and report the claim-check table.")
 	}
 	return strings.Join(lines, "\n")
-}
-
-// reviewCandorSuffix is appended for KindReview (code) tracks so the
-// candor level reaches tracks-reviewer the same way it reaches the docs
-// reviewer. Kept short: unlike a doc review, nothing else about a code
-// review's shape is configurable.
-func reviewCandorSuffix(level int) string {
-	return fmt.Sprintf("\n\n**Review candor: %d/10** (%s) — 1 is radical "+
-		"candor, 10 is honest but gently framed. Include the line "+
-		"`Candor level: %d/10` in the review subagent's prompt. Candor "+
-		"governs wording only: it never changes which findings are "+
-		"reported, their severity, or the pass/blocked verdict.",
-		level, track.CandorLabel(level), level)
 }
 
 // docPermissionMode clamps the configured permission mode for a

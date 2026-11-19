@@ -39,3 +39,21 @@ func WriteManaged(path string, content []byte) (bool, error) {
 	}
 	return true, nil
 }
+
+// RemoveManaged removes path when it's a file tracks installed, one
+// with the marker, and leaves anything else there as it is.
+func RemoveManaged(path string) error {
+	existing, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil
+	case err != nil:
+		return fmt.Errorf("read %s: %w", path, err)
+	case !bytes.Contains(existing[:min(len(existing), markerScanLimit)], []byte(ManagedMarker)):
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}

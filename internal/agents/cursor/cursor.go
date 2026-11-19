@@ -45,7 +45,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 
 	task := t.Prompt
 	if t.Kind == track.Review {
-		task = agents.ReviewTask(reviewTemplate, t.Prompt)
+		task = agents.ReviewTask(agents.ReviewTemplate, t.Prompt)
 	}
 	prompt := strings.TrimRight(task, " \t\n\r") + "\n\n" + agents.LinksContract + "\n\n" + agents.NewTrackContract
 	mode, force := "", s.Auto
@@ -72,7 +72,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 			prompt += "\n\n" + agents.DevServersContract
 		}
 		if t.Kind == track.Review {
-			prompt += reviewCandorSuffix(track.CandorLevel(t.Candor)) + "\n\n" + agents.ReviewOnlyContract
+			prompt += agents.ReviewCandor(track.CandorLevel(t.Candor)) + "\n\n" + agents.ReviewOnlyContract
 		}
 	}
 

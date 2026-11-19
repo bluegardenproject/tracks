@@ -45,7 +45,7 @@ func TestReviewerSettings(t *testing.T) {
 		t.Fatalf("section %d, want Agents after Tracks", m.settings.section)
 	}
 	view := plainView(m)
-	for _, want := range []string{" Agents ", "─ Reviewer ─", sameAsTrack, "The track's", "never edits, commits or pushes"} {
+	for _, want := range []string{" Agents ", "─ Reviewer ─", sameAsTrack, "The track's", "It only reads"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}
