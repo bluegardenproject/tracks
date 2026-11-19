@@ -25,7 +25,7 @@ import (
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
-	var base, ask string
+	var base, ask, brief string
 	var wait bool
 	cmd := &cobra.Command{
 		Use:   "review",
@@ -59,16 +59,21 @@ func newReviewCmd() *cobra.Command {
 			switch {
 			case wait && asking:
 				return errors.New("--wait and --ask can't go together")
-			case (wait || asking) && c.Flags().Changed("base"):
-				return errors.New("--base is for a new review, not with --wait or --ask")
+			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief")):
+				return errors.New("--base and --brief are for a new review, not with --wait or --ask")
 			}
-			var diff string
+			var packet review.Packet
 			if !wait && !asking {
 				if base == "" {
 					base = reviewBase(c.Context(), dir, askTrack(c.Context(), client, id))
 				}
-				if diff, err = branchDiff(c.Context(), dir, base); err != nil {
+				if packet, err = gatherPacket(c.Context(), dir, base); err != nil {
 					return err
+				}
+				if brief != "" {
+					if packet.Brief, err = readBrief(c.InOrStdin(), brief); err != nil {
+						return err
+					}
 				}
 			}
 			// The worktree is checked here, in the agent's sandbox: the
@@ -85,7 +90,7 @@ func newReviewCmd() *cobra.Command {
 			case asking:
 				report, err = client.ReviewAsk(c.Context(), id, ask, progress)
 			default:
-				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Diff: review.Truncate(diff)}, progress)
+				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit()}, progress)
 			}
 			if err != nil {
 				return err
@@ -110,6 +115,7 @@ func newReviewCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&base, "base", "", "the ref to diff against (default origin/<base> of the track's repo)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running, or its answer to the last question")
+	cmd.Flags().StringVar(&brief, "brief", "", "a file, or - for stdin, with what the user asks of this review")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
 }
@@ -213,25 +219,56 @@ func fallbackBase(ctx context.Context, dir string) string {
 	return "HEAD~1"
 }
 
-// branchDiff is the change under review: the branch's own commits and
-// what isn't committed yet. The review runs before a push, which is
-// often before the last commit.
-func branchDiff(ctx context.Context, dir, base string) (string, error) {
-	out, err := git(ctx, dir, "diff", base+"...HEAD")
+// gatherPacket is the change under review and what's around it: the
+// branch's own commits and what isn't committed yet, since the review
+// runs before a push, which is often before the last commit.
+func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) {
+	p := review.Packet{Base: base}
+	for _, part := range []struct {
+		rng         []string
+		uncommitted bool
+	}{{[]string{base + "...HEAD"}, false}, {[]string{"HEAD"}, true}} {
+		// The same paths in both, whatever the user's diff config.
+		diff, err := git(ctx, dir, append(diffArgs, part.rng...)...)
+		if err != nil {
+			return p, fmt.Errorf("git diff %s: %w", part.rng[0], err)
+		}
+		numstat, err := git(ctx, dir, append(append(diffArgs, "--numstat", "-z"), part.rng...)...)
+		if err != nil {
+			return p, fmt.Errorf("git diff --numstat %s: %w", part.rng[0], err)
+		}
+		p.Diffs = append(p.Diffs, review.SplitDiff(diff, part.uncommitted)...)
+		p.Files = review.MergeFiles(p.Files, review.ParseNumstat(numstat))
+	}
+	if p.Empty() {
+		return p, fmt.Errorf("no changes against %s: nothing to review", base)
+	}
+	commits, err := git(ctx, dir, "log", "--no-merges", "--no-color", "--format=### %h %s%n%n%b", base+"..HEAD")
 	if err != nil {
-		return "", fmt.Errorf("git diff %s...HEAD: %w", base, err)
+		return p, fmt.Errorf("git log %s..HEAD: %w", base, err)
 	}
-	uncommitted, err := git(ctx, dir, "diff", "HEAD")
+	p.Commits = strings.TrimSpace(commits)
+	return p, nil
+}
+
+// diffArgs run git diff with plain output: paths unquoted where they
+// can be, a/ and b/ prefixes, no renames, colours or external tools.
+var diffArgs = []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-textconv", "--no-color",
+	"--no-renames", "--src-prefix=a/", "--dst-prefix=b/"}
+
+// readBrief reads --brief's file, - for in.
+func readBrief(in io.Reader, path string) (string, error) {
+	var b []byte
+	var err error
+	if path == "-" {
+		b, err = io.ReadAll(in)
+	} else {
+		b, err = os.ReadFile(path)
+	}
 	if err != nil {
-		return "", fmt.Errorf("git diff HEAD: %w", err)
+		return "", fmt.Errorf("read the brief: %w", err)
 	}
-	if strings.TrimSpace(uncommitted) != "" {
-		out += "\n\n--- uncommitted changes (not yet in a commit) ---\n" + uncommitted
-	}
-	if strings.TrimSpace(out) == "" {
-		return "", fmt.Errorf("no changes against %s: nothing to review", base)
-	}
-	return out, nil
+	return strings.TrimSpace(string(b)), nil
 }
 
 // git runs git in dir and returns its output, or its stderr as the

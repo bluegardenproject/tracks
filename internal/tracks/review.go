@@ -54,13 +54,13 @@ type ReviewerState struct {
 }
 
 // ReviewRequest is a review of the changes in Dir, a worktree of track
-// ID. The caller makes the diff and checks the worktree is unchanged
-// after, in its own sandbox; the daemon runs no git, since a repo's
-// config, which an agent can write, can make git run commands.
+// ID. The caller gathers the packet and checks the worktree is
+// unchanged after, in its own sandbox; the daemon runs no git, since a
+// repo's config, which an agent can write, can make git run commands.
 type ReviewRequest struct {
-	ID   string `json:"id"`
-	Dir  string `json:"dir"`
-	Diff string `json:"diff"`
+	ID     string        `json:"id"`
+	Dir    string        `json:"dir"`
+	Packet review.Packet `json:"packet"`
 }
 
 // reviewPoll is how often WaitReview looks for the report.
@@ -83,6 +83,9 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		return "", Problem("That track is gone.")
 	} else if err != nil {
 		return "", err
+	}
+	if req.Packet.Empty() {
+		return "", Problem("There are no changes to review.")
 	}
 	worktree, ok := "", filepath.IsAbs(req.Dir)
 	if ok {
@@ -116,7 +119,7 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	run := newRun()
 	brief := filepath.Join(dir, "brief.md")
-	if err := os.WriteFile(brief, []byte(review.Brief(claude.ReviewerInstructions(), t.Candor, req.Diff)), 0o600); err != nil {
+	if err := os.WriteFile(brief, []byte(review.Brief(claude.ReviewerInstructions(), t.Candor, req.Packet.Fit())), 0o600); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "run"), []byte(run), 0o600); err != nil {

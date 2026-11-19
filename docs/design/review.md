@@ -177,7 +177,8 @@ around the code, never the code.
 - **A moved PR.** Before a PR review, Tracks compares the worktree's HEAD with
   the PR's head SHA. When the PR moved on, it says so and asks whether to
   fetch; it never reviews a stale head silently.
-- **Limits.** The changed-file list is always complete. Diffs over the limit
+- **Limits.** The changed-file list holds up to 3,000 files, and says how
+  many more there are. Diffs over the limit
   aren't cut in the middle of a file: whole files are left out, the largest
   first, and listed as not reviewed in the report's Not run line. Threads and
   CI logs get their own limits.
@@ -306,7 +307,9 @@ can be reviewed and merged while the next is built.
    `tracks-reviewer` subagent goes.
 6. `tracks review --ask`.
 7. The packet: changed files, PR intent, threads, checks, the moved-PR check,
-   per-file limits.
+   per-file limits. Built from git: the diff per file, the changed files,
+   the commits, `--brief` and the limits. To come, from `gh`: the PR's
+   intent, threads and checks, and the moved-PR check.
 8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
 9. Likelihood and confidence in the report (experiment 1).
 10. The verify pass (experiment 2).

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -84,7 +85,7 @@ func TestReview(t *testing.T) {
 	if err := os.Mkdir(sub, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	name, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Diff: "+changed\n"})
+	name, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+changed\n"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +102,9 @@ func TestReview(t *testing.T) {
 	brief, _ := os.ReadFile(filepath.Join(dir, "brief.md"))
 	if !strings.Contains(string(brief), "Candor level: 7/10") || !strings.Contains(string(brief), "+changed") {
 		t.Errorf("brief:\n%s", brief)
+	}
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub}); err == nil {
+		t.Error("an empty packet was reviewed")
 	}
 	run, _ := os.ReadFile(filepath.Join(dir, "run"))
 	if !strings.Contains(cmd, "--reviewer "+string(run)) {
@@ -134,7 +138,7 @@ func TestReview(t *testing.T) {
 		t.Fatal("WaitReview didn't return the report")
 	}
 
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Diff: "+again\n"}); err != nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+again\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(panes.closed) != 2 {
@@ -152,7 +156,7 @@ func TestReview(t *testing.T) {
 	f.svc.Settings = func() (settings.Settings, error) {
 		return settings.Settings{Engines: f.engines}, nil
 	}
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+claude\n"}); err != nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+claude\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	run, _ = os.ReadFile(filepath.Join(dir, "run"))
@@ -163,11 +167,11 @@ func TestReview(t *testing.T) {
 	}
 
 	for _, other := range []string{"relative", t.TempDir(), worktree + "2", filepath.Join(worktree, "..")} {
-		if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: other, Diff: "x"}); err == nil {
+		if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: other, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "x"}}}}); err == nil {
 			t.Errorf("%s, not the track's worktree, was reviewed", other)
 		}
 	}
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "gone", Dir: worktree, Diff: "x"}); err == nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "gone", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "x"}}}}); err == nil {
 		t.Error("a track that isn't there was reviewed")
 	}
 }
@@ -189,7 +193,7 @@ func TestReviewerButton(t *testing.T) {
 	if _, err := f.svc.RunAction(ctx, "r", actions.ReviewerRange); err == nil {
 		t.Error("toggling a reviewer that isn't there worked")
 	}
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+x\n"}); err != nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	if b := f.windows.buttons["@r"]; b != actions.Reviewer(false) {
@@ -244,7 +248,7 @@ func TestAskReview(t *testing.T) {
 	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil {
 		t.Error("a track without a reviewer was asked")
 	}
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+x\n"}); err != nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "hasn't reported") {
@@ -291,7 +295,7 @@ func TestAskReview(t *testing.T) {
 	f.svc.Settings = func() (settings.Settings, error) {
 		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.TrackType{Engine: "cursor"}}}, nil
 	}
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Diff: "+x\n"}); err != nil {
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	run, _ = os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
