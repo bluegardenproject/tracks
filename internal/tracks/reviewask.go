@@ -27,6 +27,9 @@ type reviewSession struct {
 	Chat string `json:"chat,omitempty"`
 	// Reply is the hook command that hands a reply to Tracks.
 	Reply string `json:"reply"`
+	// Tracks is the tracks command the reviewer's pane runs; "" in a
+	// review started before it was kept.
+	Tracks string `json:"tracks,omitempty"`
 }
 
 func (r reviewSession) save(dir string) error {
@@ -55,15 +58,18 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 	if r.Model != "" {
 		name += " (" + r.Model + ")"
 	}
-	status := name + " is reviewing the change. It shows nothing until it's done: then its report shows " +
-		"here, and you can ask it about it."
+	status := name + " is reviewing the change. When its report is done, you can ask it about it here."
 	if answer {
 		reply += " --answer"
-		status = name + " is answering a question about its review. Its answer shows here when it's done."
+		status = name + " is answering a question about its review."
+	}
+	stream := ""
+	if r.Tracks != "" {
+		stream = shellx.Quote(r.Tracks) + " review-stream"
 	}
 	return cursor.Reviewer{
 		Program: r.Program, Model: r.Model, Chat: r.Chat, Workspace: r.Workspace, Prompt: prompt,
-		Report: out, Reply: reply + " --reply-file " + shellx.Quote(out), Status: status,
+		Report: out, Reply: reply + " --reply-file " + shellx.Quote(out), Status: status, Stream: stream,
 	}.Script()
 }
 

@@ -106,8 +106,11 @@ pane of its own, hidden until the user opens it.
     it, on every review.
   - **Cursor:** its interactive CLI's hooks carry no reply text, and their
     transcript path is empty (checked live). So the review is one turn in
-    print mode, written to a file and shown, which the pane hands to Tracks;
-    the same chat then goes on interactively, for questions.
+    print mode, which the pane hands to Tracks; the same chat then goes on
+    interactively, for questions. The turn streams (`--output-format
+    stream-json`) through `tracks review-stream`, which shows its tool calls
+    and text as they come and keeps only its final text, so the pane isn't
+    blank for the minutes a review takes.
   - A reply that has the `REVIEW OUTCOME:` line is the report. A run ID in
     the reviewer's hook command keeps a reply of an ended reviewer from
     counting for the new one.
