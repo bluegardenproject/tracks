@@ -184,6 +184,11 @@ type Service struct {
 	comments map[string]map[string]actions.Comments // by track, then PR URL
 	// reviewers is each track's reviewer as last seen, for its button.
 	reviewers map[string]ReviewerState
+	// reviewerReads counts the reads of one reviewer, after a click;
+	// reviewerRead is, by track, the count its buttons were last written
+	// at, so a tick's older read doesn't undo a click's.
+	reviewerReads uint64
+	reviewerRead  map[string]uint64
 	// trustShown is the review run, by track, whose reviewer the tick
 	// showed for Claude's trust question.
 	trustShown map[string]string

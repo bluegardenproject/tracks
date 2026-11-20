@@ -411,4 +411,50 @@ func TestReviewerAsksTrustIsShown(t *testing.T) {
 	if panes.state.Shown {
 		t.Error("a reviewer the user hid again was shown again in the same run")
 	}
+
+	// Past its first minute, a reviewer isn't looked at: Claude asks as
+	// it starts.
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	old := f.svc.now().Add(-2 * trustWindow)
+	if err := os.Chtimes(filepath.Join(f.svc.reviewDir("r"), "run"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	tick()
+	if panes.state.Shown {
+		t.Error("a reviewer past its first minute was looked at")
+	}
+}
+
+// A tick that read the panes before a click doesn't undo the click's
+// buttons.
+func TestReviewerButtonKeepsTheClick(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "r", Engine: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	tr, err := f.store.Track(ctx, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	panes := &fakeReviewers{state: ReviewerState{Pane: "%9"}}
+	f.svc.Reviewers = panes
+	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, 0)
+	tickRead := f.svc.reviewerReads // a tick reads the panes: hidden
+
+	panes.state.Shown = true // the click shows the reviewer
+	f.svc.syncReviewer(tr, "@r")
+	if b := f.windows.buttons["@r"]; b != actions.Reviewer(true) {
+		t.Fatalf("buttons %q after the click, want Hide reviewer", b)
+	}
+	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, tickRead) // the tick goes on
+	if b := f.windows.buttons["@r"]; b != actions.Reviewer(true) {
+		t.Errorf("buttons %q: the tick's older read undid the click", b)
+	}
+	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, f.svc.reviewerReads) // a later tick
+	if b := f.windows.buttons["@r"]; b != actions.Reviewer(false) {
+		t.Errorf("buttons %q: a later read wasn't shown", b)
+	}
 }

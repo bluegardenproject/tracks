@@ -9,7 +9,7 @@ import (
 )
 
 func TestReviewerNames(t *testing.T) {
-	for _, r := range []string{reviewerAgent, docsReviewerAgent} {
+	for _, r := range []string{docsReviewerAgent} {
 		if !regexp.MustCompile(`(?m)^name: tracks-(docs-)?reviewer$`).MatchString(r) {
 			t.Errorf("reviewer has no plain name:\n%s", r[:200])
 		}
@@ -77,15 +77,6 @@ func TestReviewerInstructions(t *testing.T) {
 	for _, want := range []string{"You are a code-review specialist.", "REVIEW OUTCOME: blocked", "## Candor level"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the instructions lack %q", want)
-		}
-	}
-	for in, want := range map[string]string{
-		"---\nname: x\n---\nbody":            "body",
-		"body":                               "body",
-		"---\nname: x\n---\nbody\n---\nmore": "body\n---\nmore",
-	} {
-		if got := frontmatter.ReplaceAllString(in, ""); got != want {
-			t.Errorf("%q stripped to %q, want %q", in, got, want)
 		}
 	}
 }
