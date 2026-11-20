@@ -58,14 +58,14 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 	if r.Model != "" {
 		name += " (" + r.Model + ")"
 	}
-	status := name + " is reviewing the change. When its report is done, you can ask it about it here."
+	stream, wait := "", " It shows nothing until it's done."
+	if r.Tracks != "" {
+		stream, wait = shellx.Quote(r.Tracks)+" review-stream", ""
+	}
+	status := name + " is reviewing the change." + wait + " When its report is done, you can ask it about it here."
 	if answer {
 		reply += " --answer"
-		status = name + " is answering a question about its review."
-	}
-	stream := ""
-	if r.Tracks != "" {
-		stream = shellx.Quote(r.Tracks) + " review-stream"
+		status = name + " is answering a question about its review." + wait
 	}
 	return cursor.Reviewer{
 		Program: r.Program, Model: r.Model, Chat: r.Chat, Workspace: r.Workspace, Prompt: prompt,
@@ -124,8 +124,10 @@ func (s *Service) AskReview(ctx context.Context, id, question string) error {
 	if err := writeWhole(filepath.Join(dir, "question.md"), question); err != nil {
 		return err
 	}
-	if err := os.Remove(filepath.Join(dir, "answer.md")); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+	for _, old := range []string{"answer.md", "answer.out"} {
+		if err := os.Remove(filepath.Join(dir, old)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	switch sess.Engine {
 	case agents.Cursor.ID:
