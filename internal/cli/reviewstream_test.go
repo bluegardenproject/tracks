@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/bluegardenproject/tracks/internal/agents/cursor"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,8 @@ func TestFollowStream(t *testing.T) {
 		t.Errorf("shown %q", shown.String())
 	}
 
+	defer func(n int) { maxStreamLine = n }(maxStreamLine)
+	maxStreamLine = 4096
 	for name, in := range map[string]string{
 		"failed":     `{"type":"result","is_error":true,"result":"no"}`,
 		"unfinished": `{"type":"assistant","message":{"content":[{"type":"text","text":"Half"}]}}`,
@@ -43,6 +46,23 @@ func TestFollowStream(t *testing.T) {
 		}
 		if shown.Len() > 200 {
 			t.Errorf("%s: %d bytes shown", name, shown.Len())
+		}
+	}
+}
+
+func TestTurnText(t *testing.T) {
+	report := "Report.\nREVIEW OUTCOME: pass"
+	for _, c := range []struct {
+		s    cursor.Stream
+		want string
+	}{
+		{cursor.Stream{Segments: []string{"I'll look.", report}}, report},
+		{cursor.Stream{Segments: []string{"I'll look.", report, "Done."}}, report},
+		{cursor.Stream{Segments: []string{"Looking.", "An answer."}}, "An answer."},
+		{cursor.Stream{Result: "only the result"}, "only the result"},
+	} {
+		if got := turnText(c.s); got != c.want {
+			t.Errorf("segments %q: kept %q, want %q", c.s.Segments, got, c.want)
 		}
 	}
 }

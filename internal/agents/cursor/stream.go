@@ -19,13 +19,13 @@ type Stream struct {
 	// that may be its repeat.
 	segment strings.Builder
 	held    string
-	// Result is the turn's final text once a result event came: its last
-	// segment, as Claude's reviewer hands over its last message, so text
-	// written before the last tool call isn't part of a report. Failed
-	// says the turn ended in an error.
-	Result string
-	Done   bool
-	Failed bool
+	// Segments are the turn's texts between its tool calls, once a
+	// result event came; Result is its whole text, as Cursor gives it.
+	// Failed says the turn ended in an error.
+	Segments []string
+	Result   string
+	Done     bool
+	Failed   bool
 	// cwd is the turn's folder, from its init event: paths in it are
 	// shown relative to it.
 	cwd string
@@ -80,7 +80,7 @@ func (s *Stream) feed(line string) string {
 			return ""
 		}
 		out := s.release()
-		if s.segment.Len() > 0 && piece == s.segment.String() {
+		if s.segment.Len() > 0 && strings.TrimSpace(piece) == strings.TrimSpace(s.segment.String()) {
 			s.held = piece
 			return out
 		}
@@ -95,21 +95,28 @@ func (s *Stream) feed(line string) string {
 			out = out[1:]
 		}
 		s.held = ""
-		s.segment.Reset()
+		s.endSegment()
 		return out
 	case "result":
+		// A piece held back here is dropped: it's the repeat, or, rarely,
+		// a last piece that happens to equal its segment.
 		s.held = ""
-		s.Done, s.Failed = true, e.IsError
-		s.Result = strings.TrimSpace(s.segment.String())
-		if s.Result == "" {
-			s.Result = e.Result
-		}
+		s.endSegment()
+		s.Done, s.Failed, s.Result = true, e.IsError, e.Result
 		if s.Failed {
 			return "\nThe turn failed: " + oneLine(e.Result, maxOther) + "\n"
 		}
 		return "\n"
 	}
 	return ""
+}
+
+// endSegment keeps the text since the last tool call as a segment.
+func (s *Stream) endSegment() {
+	if text := strings.TrimSpace(s.segment.String()); text != "" {
+		s.Segments = append(s.Segments, text)
+	}
+	s.segment.Reset()
 }
 
 // release shows a held piece once more text shows it wasn't a repeat.
@@ -162,14 +169,14 @@ func oneLine(s string, max int) string {
 }
 
 // plain is s without control characters but line ends and tabs, and
-// without the format characters that reorder text: no escape sequence
-// reaches the pane.
+// without the characters that reorder text: no escape sequence reaches
+// the pane.
 func plain(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' {
+		switch {
+		case r == '\n' || r == '\t':
 			return r
-		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		case unicode.IsControl(r), r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069, r == 0x200e, r == 0x200f:
 			return -1
 		}
 		return r

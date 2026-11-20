@@ -109,8 +109,10 @@ pane of its own, hidden until the user opens it.
     print mode, which the pane hands to Tracks; the same chat then goes on
     interactively, for questions. The turn streams (`--output-format
     stream-json`) through `tracks review-stream`, which shows its tool calls
-    and text as they come and keeps only its final text, so the pane isn't
-    blank for the minutes a review takes.
+    and text as they come, so the pane isn't blank for the minutes a review
+    takes. It hands over the text after the turn's last tool call, as the
+    Claude reviewer's last message is, or for a review the last such text
+    with the outcome line.
   - A reply that has the `REVIEW OUTCOME:` line is the report. A run ID in
     the reviewer's hook command keeps a reply of an ended reviewer from
     counting for the new one.
