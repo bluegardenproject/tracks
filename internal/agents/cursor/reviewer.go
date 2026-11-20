@@ -1,6 +1,9 @@
 package cursor
 
-import "github.com/bluegardenproject/tracks/internal/agents"
+import (
+	"github.com/bluegardenproject/tracks/internal/agents"
+	"github.com/bluegardenproject/tracks/internal/shellx"
+)
 
 // Reviewer is how a track's Cursor reviewer runs in its pane.
 type Reviewer struct {
@@ -12,6 +15,9 @@ type Reviewer struct {
 	// Prompt is its first message, Report the file its report goes to,
 	// and Reply the command that hands that file to Tracks.
 	Prompt, Report, Reply string
+	// Status is shown in the pane while the print-mode turn runs, which
+	// shows nothing until it's done; "" for none.
+	Status string
 }
 
 // Script is the pane's shell script. Cursor's hooks don't carry its
@@ -38,5 +44,9 @@ func (r Reviewer) Script() string {
 		return string(line.Build())
 	}
 	report := string(agents.NewLine(r.Report).Build())
-	return turn(true) + " | tee " + report + "\n" + r.Reply + "\nexec " + turn(false)
+	status := ""
+	if r.Status != "" {
+		status = "printf '%s\\n\\n' " + shellx.Quote(r.Status) + "\n"
+	}
+	return status + turn(true) + " | tee " + report + "\n" + r.Reply + "\nexec " + turn(false)
 }
