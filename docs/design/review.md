@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 8 are
+**Status:** being built, one PR per step under Order. Steps 1 to 9 are
 built.
 
 ## Problem
@@ -226,7 +226,8 @@ its own whole change. `--all` reviews the whole change despite the field.
 
 ## Likelihood and confidence
 
-Each finding gets two numbers next to its severity:
+Each block and warn gets two numbers next to its severity; hints, style
+and naming points, carry none:
 
 ```
 - 🔴 **block** · `L42` · 90% sure · 60% likely — <one-sentence finding>
@@ -331,7 +332,8 @@ can be reviewed and merged while the next is built.
    per-file limits. Built.
 8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
    Built.
-9. Likelihood and confidence in the report (experiment 1).
+9. Likelihood and confidence in the report (experiment 1). Built: on blocks
+   and warns, with a Path line; hints carry none.
 10. The verify pass (experiment 2).
 11. Structured findings and calibration (experiments 3 and 4).
 
