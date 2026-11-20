@@ -9,10 +9,8 @@ import (
 )
 
 func TestReviewerNames(t *testing.T) {
-	for _, r := range []string{docsReviewerAgent} {
-		if !regexp.MustCompile(`(?m)^name: tracks-(docs-)?reviewer$`).MatchString(r) {
-			t.Errorf("reviewer has no plain name:\n%s", r[:200])
-		}
+	if !regexp.MustCompile(`(?m)^name: tracks-docs-reviewer$`).MatchString(docsReviewerAgent) {
+		t.Errorf("the docs reviewer has no plain name:\n%s", docsReviewerAgent[:200])
 	}
 }
 

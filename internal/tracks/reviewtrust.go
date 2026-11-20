@@ -26,7 +26,8 @@ func (s *Service) showAsking(id, window string, r ReviewerState) ReviewerState {
 	}
 	dir := s.reviewDir(id)
 	info, err := os.Stat(filepath.Join(dir, "run"))
-	if err != nil || s.now().Sub(info.ModTime()) > trustWindow {
+	// A file's time is the real clock's, whatever s.Now says.
+	if err != nil || time.Since(info.ModTime()) > trustWindow {
 		return r
 	}
 	run, err := os.ReadFile(filepath.Join(dir, "run"))
