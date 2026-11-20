@@ -133,7 +133,8 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		return "", err
 	}
 	reply := hooks.ReviewerCommand(filepath.Join(s.BinDir, "tracks"), id, t.ID, run)
-	sess := reviewSession{Engine: id, Program: e.Program, Model: model, Workspace: worktree, Reply: reply}
+	sess := reviewSession{Engine: id, Program: e.Program, Model: model, Workspace: worktree, Reply: reply,
+		Tracks: filepath.Join(s.BinDir, "tracks")}
 	var script string
 	switch id {
 	case agents.Claude.ID:
