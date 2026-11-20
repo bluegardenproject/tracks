@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.5.0](https://github.com/bluegardenproject/tracks/compare/v3.4.0...v3.5.0) (2026-11-20)
+
+
+### Features
+
+* **review:** stream a Cursor reviewer's turn into its pane ([eba7449](https://github.com/bluegardenproject/tracks/commit/eba7449ea872f70e7d421ab5388098aa5b949fa4))
+
+
+### Bug Fixes
+
+* **review:** hold back Cursor's repeated segments, keep the last one ([c1ce58a](https://github.com/bluegardenproject/tracks/commit/c1ce58a64fc81c661534727920a7982ad9a82cc0))
+* **review:** keep a Cursor review's report segment, and emoji whole ([e3c9a64](https://github.com/bluegardenproject/tracks/commit/e3c9a642221358d73bc0b4f096dd75a06dd0f9d4))
+* **review:** say in a Cursor reviewer's pane that it's at work ([d4f40f9](https://github.com/bluegardenproject/tracks/commit/d4f40f9e5a179657e02c7ac30ebd9ed09604e4d0))
+
 ## [3.4.0](https://github.com/bluegardenproject/tracks/compare/v3.3.0...v3.4.0) (2026-11-20)
 
 
