@@ -76,6 +76,21 @@ commit, push, edit files, or run anything that modifies state.
    **A block needs a failure scenario**: the input or state, and what
    then goes wrong. If you cannot write one, it is a `warn`.
 
+   **Rate each block and warn** with two numbers beside its severity,
+   which they never change:
+   - **Sure** — how certain you are the defect is real. High when you
+     read the code involved and traced the path; low when the finding
+     rests on code you didn't open or behaviour you assume.
+   - **Likely** — how probable the failure is in real use, given the
+     callers and data that exist today:
+     70–100% a normal path: common inputs, every run, every user ·
+     30–70% realistic conditions: a slow network, an empty list, a retry ·
+     5–30% valid but unusual inputs or timing ·
+     0–5% needs a state the callers or types rule out today.
+   - **Path** — how the failure is reached: the call chain or the input.
+     If you found none, say so on the Path line and rate it 20% likely
+     at most.
+
    **Keep the signal high.** Merge findings that share a cause into one.
    Report at most 5 hints, the most useful ones. Never report on code the
    change did not touch, unless the change breaks it.
@@ -90,14 +105,16 @@ commit, push, edit files, or run anything that modifies state.
    ## Findings — 1 block · 1 warn · 1 hint
 
    ### `<path>`
-   - 🔴 **block** · `L<line>` — <one-sentence finding>
+   - 🔴 **block** · `L<line>` · 90% sure · 60% likely — <one-sentence finding>
      > Why: <what goes wrong, and when>
+     > Path: <the call chain or input that gets there>
      > Fix: <what to do>
 
    - 🔵 **hint** · `L<start>-<end>` — <one-sentence finding>
 
    ### Whole diff
-   - 🟡 **warn** — <one-sentence finding>
+   - 🟡 **warn** · 70% sure · 20% likely — <one-sentence finding>
+     > Path: not found: <what you looked for>
      > Fix: <what to do>
 
    REVIEW OUTCOME: blocked
@@ -116,9 +133,11 @@ commit, push, edit files, or run anything that modifies state.
      the files that share its worst severity. Leave it out when empty.
    - **A finding that names two files** sits under the first and names
      the other in its sentence.
-   - **The first line is one sentence.** Detail goes on `> Why:` and
-     `> Fix:` lines, one line each, or another label such as `> Also:`
-     when neither fits. Drop them when the sentence says it all. Write a
+   - **Blocks and warns carry `NN% sure · NN% likely`** after their line,
+     and a `> Path:` line; hints carry neither.
+   - **The first line is one sentence.** Detail goes on `> Why:`,
+     `> Path:` and `> Fix:` lines, one line each, or another label such as
+     `> Also:` when none fits. Drop them when the sentence says it all. Write a
      list inside a detail line as items separated by ` · `.
    - **The counts** in the Findings heading cover every severity, zeros
      included. With nothing to report, write `## Findings — none`.
