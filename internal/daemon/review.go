@@ -45,6 +45,19 @@ func (c Config) reviewWait(ctx context.Context, call *rpc.Call) (any, error) {
 	return c.waitReview(ctx, call, p.ID)
 }
 
+// reviewOwner is the code owner a track's review narrows to by default.
+func (c Config) reviewOwner(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.ReviewOwnerParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	owner, err := c.Tracks.ReviewOwner(ctx, p.ID, p.Dir)
+	if err != nil {
+		return nil, err
+	}
+	return rpc.ReviewOwnerResult{Owner: owner}, nil
+}
+
 // reviewAsk asks a track's reviewer a question and waits for its
 // answer.
 func (c Config) reviewAsk(ctx context.Context, call *rpc.Call) (any, error) {

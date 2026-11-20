@@ -51,9 +51,12 @@ const (
 	// its answer to the last question; ReviewAsk asks it a question and
 	// waits for the answer; ReviewReply is a reply of a reviewer, from
 	// its hook.
-	Review      = "review"
-	ReviewWait  = "review-wait"
-	ReviewAsk   = "review-ask"
+	Review     = "review"
+	ReviewWait = "review-wait"
+	ReviewAsk  = "review-ask"
+	// ReviewOwner is the code owner a track's review narrows to by
+	// default.
+	ReviewOwner = "review-owner"
 	ReviewReply = "review-reply"
 	// Servers lists a track's dev servers and what listens in its panes,
 	// or every track's.
@@ -108,6 +111,17 @@ type PingResult struct {
 // ReviewIDParams names the track whose review to wait for.
 type ReviewIDParams struct {
 	ID string `json:"id"`
+}
+
+// ReviewOwnerParams names a track and the worktree it reviews.
+type ReviewOwnerParams struct {
+	ID  string `json:"id"`
+	Dir string `json:"dir"`
+}
+
+// ReviewOwnerResult is a review's default code owner, "" for none.
+type ReviewOwnerResult struct {
+	Owner string `json:"owner"`
 }
 
 // ReviewAskParams is a question for track ID's reviewer.

@@ -150,7 +150,7 @@ func TestFieldErrorsStayInTheForm(t *testing.T) {
 	if m.repos.form.focus != fieldBase || !strings.Contains(plainView(m), "Use an absolute path.") {
 		t.Error("a bad path should explain itself under the field")
 	}
-	for range 4 { // past Options, Add setup and Add dev server
+	for range 5 { // past Code owner, Options, Add setup and Add dev server
 		m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	}
 	if m.repos.form.focus != fieldSave {
@@ -239,5 +239,39 @@ func TestButtonsHover(t *testing.T) {
 	}
 	if m = settle(m, tea.MouseMotionMsg{X: 0, Y: 0}); m.repos.hoverNew || m.repos.hoverField != -1 {
 		t.Error("moving away should clear the highlight")
+	}
+}
+
+func TestCodeOwnerField(t *testing.T) {
+	f := &fakeRepos{}
+	_, _ = f.Add(context.Background(), source.Repository{Name: "api", Path: "/src/api", BaseBranch: "main", CodeOwner: "@org/old"})
+	m := reposTab(t, f)
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !strings.Contains(plainView(m), "Code owner") || m.repos.form.value(fieldOwner) != "@org/old" {
+		t.Fatal("the form should show the repo's code owner")
+	}
+	for range 3 {
+		m = settle(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	}
+	if m.repos.form.focus != fieldOwner {
+		t.Fatalf("focus %d, want the code owner after the base branch", m.repos.form.focus)
+	}
+	m = typeText(m, "-x")
+	if !m.repos.form.dirty() || m.repos.form.repo().CodeOwner != "@org/old-x" {
+		t.Errorf("an edited code owner: dirty %v, %q", m.repos.form.dirty(), m.repos.form.repo().CodeOwner)
+	}
+}
+
+// In a short window the form scrolls to the question it asks.
+func TestPromptsScrollIntoView(t *testing.T) {
+	f := &fakeRepos{}
+	_, _ = f.Add(context.Background(), source.Repository{Name: "api", Path: "/src/api", BaseBranch: "main"})
+	m := reposTab(t, f)
+	m = settle(m, tea.WindowSizeMsg{Width: 120, Height: 30}, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = typeText(m, "-2")
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = press(t, m, "Cancel")
+	if m.repos.leaving != nil {
+		t.Fatal("Cancel on the unsaved-changes question wasn't reachable")
 	}
 }

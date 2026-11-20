@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/store"
 )
 
@@ -41,6 +42,7 @@ func (s Service) Suggest(ctx context.Context, path string) (Entry, error) {
 func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	r.Name = strings.TrimSpace(r.Name)
 	r.BaseBranch = strings.TrimSpace(r.BaseBranch)
+	r.CodeOwner = review.NormalOwner(r.CodeOwner)
 	if !validName(r.Name) {
 		return r, &FieldError{"name", fmt.Sprintf("Enter a name of up to %d characters.", maxName)}
 	}
@@ -56,6 +58,9 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 		return r, err
 	} else if !ok {
 		return r, &FieldError{"base", "No branch " + r.BaseBranch + " here or on origin."}
+	}
+	if strings.ContainsFunc(r.CodeOwner, unicode.IsSpace) {
+		return r, &FieldError{"owner", "Enter one code owner, such as @org/team, or leave it empty."}
 	}
 	return checkServers(r)
 }

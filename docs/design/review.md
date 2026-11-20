@@ -1,6 +1,6 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 7 are
+**Status:** being built, one PR per step under Order. Steps 1 to 8 are
 built.
 
 ## Problem
@@ -203,7 +203,9 @@ setup stays lazy, as now.
 ## Scope: a code owner's part
 
 `tracks review --owner <handle>`, and a **Code owner** field per repo on the
-Repositories tab that sets it by default (empty: the whole diff).
+Repositories tab that sets it by default (empty: the whole diff). The
+default applies to Review tracks only: a Work track's pre-push review checks
+its own whole change. `--all` reviews the whole change despite the field.
 
 - Tracks reads the repo's `CODEOWNERS` (`.github/`, the root, `docs/`, the
   first found) on the base branch, as GitHub does, so a branch can't change
@@ -302,6 +304,7 @@ Everything that needs the code read again goes back to the reviewer:
 | `tracks review` | Starts a reviewer session on the track's branch, ending one that's there, and prints its report |
 | `--brief <file>` | Adds the orchestrator's brief to the packet |
 | `--owner <handle>` | Reviews only the files `<handle>` owns |
+| `--all` | Reviews the whole change, despite the repo's Code owner |
 | `--ask <question>` | Asks the reviewer that's there, and prints its answer |
 | `--wait` | Waits for the report of the review that's running, or its answer to the last question |
 | `--base <ref>` | As now |
@@ -327,7 +330,7 @@ can be reviewed and merged while the next is built.
 7. The packet: changed files, PR intent, threads, checks, the moved-PR check,
    per-file limits. Built.
 8. Code-owner scope: `CODEOWNERS` matching, `--owner`, the repo field.
-   Built: the matching and `--owner`. To come: the repo field.
+   Built.
 9. Likelihood and confidence in the report (experiment 1).
 10. The verify pass (experiment 2).
 11. Structured findings and calibration (experiments 3 and 4).

@@ -327,3 +327,37 @@ func TestAskReview(t *testing.T) {
 		}
 	}
 }
+
+// A Review track narrows to its repo's Code owner; a Work track's
+// pre-push review checks its whole change.
+func TestReviewOwner(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	repos, err := f.store.Repos(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := repos[0]
+	api.CodeOwner = "@org/api"
+	if _, err := f.store.UpdateRepo(ctx, api); err != nil {
+		t.Fatal(err)
+	}
+	worktree := t.TempDir()
+	for _, tr := range []track.Track{
+		{ID: "rev", Kind: track.Review, Name: "rev", Engine: "claude", Repos: []track.Repo{{RepoID: api.ID, Name: "api", Worktree: worktree}}},
+		{ID: "work", Kind: track.Work, Name: "work", Engine: "claude", Repos: []track.Repo{{RepoID: api.ID, Name: "api", Worktree: worktree}}},
+	} {
+		if err := f.store.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if owner, err := f.svc.ReviewOwner(ctx, "rev", worktree); err != nil || owner != "@org/api" {
+		t.Errorf("a Review track: %q, %v; want its repo's Code owner", owner, err)
+	}
+	if owner, err := f.svc.ReviewOwner(ctx, "work", worktree); err != nil || owner != "" {
+		t.Errorf("a Work track: %q, %v; want none", owner, err)
+	}
+	if _, err := f.svc.ReviewOwner(ctx, "rev", t.TempDir()); err == nil {
+		t.Error("a folder outside the track's worktrees was answered")
+	}
+}
