@@ -1,5 +1,49 @@
 # Changelog
 
+## [3.4.0](https://github.com/bluegardenproject/tracks/compare/v3.3.0...v3.4.0) (2026-11-20)
+
+
+### Features
+
+* **agents:** ask the user before opening a pull request ([b702acc](https://github.com/bluegardenproject/tracks/commit/b702acc3e78527b92529463b4557ea3acc903440))
+* **cli:** let agents open a new track with tracks new ([f86e148](https://github.com/bluegardenproject/tracks/commit/f86e1489aefb136bef0aca6cebf7ee252baab555))
+* **footer:** close the track's reviewer from the footer ([f6628c5](https://github.com/bluegardenproject/tracks/commit/f6628c5aa695265213b05c6ba43965734a8bf280))
+* **footer:** open and hide the track's reviewer from the footer ([021a28d](https://github.com/bluegardenproject/tracks/commit/021a28d784ade4b7cdfd53be79c1a4ab434aa5e9))
+* **repos:** a Code owner per repo for Review tracks' reviews ([4271b9e](https://github.com/bluegardenproject/tracks/commit/4271b9eda597cf6868bc3eb6de27b4687ded2211))
+* **review:** ask the track's reviewer about its review ([a89cfb3](https://github.com/bluegardenproject/tracks/commit/a89cfb373c7a0af917123905410114eb2a8930e6))
+* **review:** bring the pull request into a Review track's packet ([3d0759d](https://github.com/bluegardenproject/tracks/commit/3d0759d68bfb97ead7b870f20620bcb6112d48af))
+* **review:** give the reviewer a packet of the change ([313f00b](https://github.com/bluegardenproject/tracks/commit/313f00ba5b5415e9d46678e1c724c1ad2e3fb72c))
+* **review:** orchestrators review through the track's reviewer pane ([92dc519](https://github.com/bluegardenproject/tracks/commit/92dc519e205dfb5fc1049ad281e1aec392e3f99c))
+* **review:** rate each finding's confidence and likelihood ([aaf8c65](https://github.com/bluegardenproject/tracks/commit/aaf8c65b9e3fb88efe3fd0237470890b274e8212))
+* **review:** review only a code owner's part ([c0091b3](https://github.com/bluegardenproject/tracks/commit/c0091b3853ea0980ef1f566ce556095f7493211f))
+* **review:** run the reviewer in a hidden pane of the track ([50fbb8e](https://github.com/bluegardenproject/tracks/commit/50fbb8e0518356631cd8678ca78919cefab19aef))
+* **review:** run tracks review on any engine and model ([ed122f0](https://github.com/bluegardenproject/tracks/commit/ed122f06463fb7a8e3a647142f62dc459a549c7c))
+* **review:** show a Claude reviewer stuck on its trust question ([eaded6d](https://github.com/bluegardenproject/tracks/commit/eaded6dfaccb539c83a222ad71d3e04ad17a87bd))
+* **tracksview:** pick the reviewer's agent and model in Settings → Agents ([67276ac](https://github.com/bluegardenproject/tracks/commit/67276acd3aa279a71307abfe601ffc2dc14c1239))
+* **trackwin:** keep a track's panes hidden, and show them on demand ([0d973da](https://github.com/bluegardenproject/tracks/commit/0d973da727e09fccc0fbe29b12efce9273c0ab22))
+
+
+### Bug Fixes
+
+* **review:** check the whole worktree, and hash files as streams ([738d284](https://github.com/bluegardenproject/tracks/commit/738d284a69fc6601b825880bbf05510f799533c2))
+* **review:** measure the trust window on the real clock ([77f1d1c](https://github.com/bluegardenproject/tracks/commit/77f1d1c8ae7aba6d88caefe391ad43bcd51a5473))
+* **review:** survive untracked symlinks and an unknown track engine ([ac3ddf4](https://github.com/bluegardenproject/tracks/commit/ac3ddf45c17037df3cb708db96106e8cd7adb20c))
+* **trackwin:** end hidden panes with their track, and the hidden session with them ([3c0c35d](https://github.com/bluegardenproject/tracks/commit/3c0c35d613a56b14ed5c74ee8265ac66507d7170))
+
+
+### Documentation
+
+* add the reviews design ([ec7242b](https://github.com/bluegardenproject/tracks/commit/ec7242b12f358e7902f49dc96deda44c44ce811c))
+* describe the Claude reviewer as built ([51119a5](https://github.com/bluegardenproject/tracks/commit/51119a5de0051de2780589ecfcc4a5eaf243f672))
+* move the reviewer into a hidden pane of its own ([cce999b](https://github.com/bluegardenproject/tracks/commit/cce999b16f591a1ce1c44f1981c60e1c71b20524))
+* say what the reviewer and each orchestrator may do ([9745d78](https://github.com/bluegardenproject/tracks/commit/9745d78d2b376922586c05422d1b086000d45b99))
+* settle follow-ups and local checks in the reviews design ([515f51d](https://github.com/bluegardenproject/tracks/commit/515f51d6caea3980953bdcb7d3808fb30ec70b5f))
+
+
+### Miscellaneous
+
+* **review:** small clean-ups after the reviewer steps ([8a99725](https://github.com/bluegardenproject/tracks/commit/8a997250e8980964e93b080944159911eebb46fc))
+
 ## [3.3.0](https://github.com/bluegardenproject/tracks/compare/v3.2.0...v3.3.0) (2026-11-18)
 
 
