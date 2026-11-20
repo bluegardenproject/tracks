@@ -30,12 +30,13 @@ func TestReposRoundTrip(t *testing.T) {
 	if added.ID == 0 || added.CreatedAt.IsZero() || !added.DraftPRs || added.BaseBranch != "main" {
 		t.Fatalf("added %+v", added)
 	}
-	added.Name, added.BaseBranch, added.DraftPRs = "web", "develop", false
+	added.Name, added.BaseBranch, added.DraftPRs, added.CodeOwner = "web", "develop", false, "@org/web"
 	updated, err := s.UpdateRepo(ctx, added)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Name != "web" || updated.BaseBranch != "develop" || updated.DraftPRs || updated.UpdatedAt.Before(updated.CreatedAt) {
+	if updated.Name != "web" || updated.BaseBranch != "develop" || updated.DraftPRs || updated.CodeOwner != "@org/web" ||
+		updated.UpdatedAt.Before(updated.CreatedAt) {
 		t.Errorf("updated %+v", updated)
 	}
 	if _, err := s.AddRepo(ctx, Repo{Name: "api", Path: "/src/api", BaseBranch: "main"}); err != nil {

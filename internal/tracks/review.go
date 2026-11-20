@@ -172,6 +172,41 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	return name, nil
 }
 
+// ReviewOwner is the code owner a review of dir, a worktree of track
+// id, narrows to by default: its repo's Code owner on a Review track,
+// "" for the whole change. A Work track's pre-push review checks its own
+// whole change.
+func (s *Service) ReviewOwner(ctx context.Context, id, dir string) (string, error) {
+	t, err := s.Store.Track(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", Problem("That track is gone.")
+	} else if err != nil || t.Kind != track.Review {
+		return "", err
+	}
+	worktree, ok := "", filepath.IsAbs(dir)
+	if ok {
+		worktree, ok = ownWorktree(t, dir)
+	}
+	if !ok {
+		return "", Problem("Run tracks review in one of the track's worktrees.")
+	}
+	repos, err := s.Store.Repos(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range t.Repos {
+		if r.Worktree != worktree || r.RepoID == 0 {
+			continue
+		}
+		for _, repo := range repos {
+			if repo.ID == r.RepoID {
+				return repo.CodeOwner, nil
+			}
+		}
+	}
+	return "", nil
+}
+
 // reviewerCommand runs script in the reviewer's pane: with the track's
 // ID, Tracks on PATH and the review marker, and nothing after it, so
 // the pane closes with the reviewer.

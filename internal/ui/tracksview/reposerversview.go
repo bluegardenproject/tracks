@@ -149,7 +149,8 @@ func (m Model) portModeRow(lines []string, hits []formHit, i, width int) ([]stri
 	return lines, hits
 }
 
-// scrollForm scrolls the form so the focused field shows.
+// scrollForm scrolls the form so the focused field shows, or the
+// question it asks: whether to keep unsaved changes, or to delete.
 func (m Model) scrollForm() Model {
 	rp := m.repoPanes()
 	visible := m.contentHeight() - 2
@@ -158,8 +159,15 @@ func (m Model) scrollForm() Model {
 	}
 	body, hits := m.repoForm(rp.formW-4, visible)
 	r := &m.repos
+	target, ok := r.form.focus, r.editing
+	switch {
+	case r.leaving != nil:
+		target, ok = fieldPromptCancel, true
+	case r.form.confirming:
+		target, ok = fieldCancelDelete, true
+	}
 	for _, h := range hits {
-		if h.field != r.form.focus || !r.editing {
+		if h.field != target || !ok {
 			continue
 		}
 		if h.row < r.formOffset {

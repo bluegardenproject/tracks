@@ -26,7 +26,7 @@ const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
 	var base, ask, brief, owner string
-	var wait, stale bool
+	var wait, stale, all bool
 	cmd := &cobra.Command{
 		Use:   "review",
 		Short: "review this track's branch with the track's reviewer",
@@ -35,7 +35,8 @@ func newReviewCmd() *cobra.Command {
 			"the track that stays hidden until it's shown with the footer's button. It only reads. A review " +
 			"ends the reviewer that's there and starts a fresh one. --ask asks the reviewer that's there about " +
 			"its review and prints its answer; --wait waits for the report of the one that's running, or its " +
-			"answer to the last question.",
+			"answer to the last question. On a Review track, a review narrows to the files the repo's Code owner " +
+			"owns by CODEOWNERS, when the Repositories tab sets one; --owner narrows to another, --all reviews all.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if os.Getenv(review.EnvMarker) != "" {
@@ -61,19 +62,40 @@ func newReviewCmd() *cobra.Command {
 				return errors.New("--wait and --ask can't go together")
 			case c.Flags().Changed("owner") && strings.TrimSpace(owner) == "":
 				return errors.New("--owner needs a code owner, such as @org/team")
-			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || c.Flags().Changed("owner") || stale):
-				return errors.New("--base, --brief, --owner and --stale are for a new review, not with --wait or --ask")
+			case all && c.Flags().Changed("owner"):
+				return errors.New("--all and --owner can't go together")
+			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || c.Flags().Changed("owner") || stale || all):
+				return errors.New("--base, --brief, --owner, --all and --stale are for a new review, not with --wait or --ask")
 			}
 			var packet review.Packet
 			if !wait && !asking {
+				tr := askTrack(c.Context(), client, id)
 				if base == "" {
-					base = reviewBase(c.Context(), dir, askTrack(c.Context(), client, id))
+					base = reviewBase(c.Context(), dir, tr)
 				}
 				if packet, err = gatherPacket(c.Context(), dir, base); err != nil {
 					return err
 				}
+				// Only a Review track has a default owner; a track the
+				// daemon couldn't name might be one.
+				fromRepo := false
+				if !all && !c.Flags().Changed("owner") && (tr.ID == "" || tr.Kind == track.Review) {
+					owner, err = defaultOwner(c.Context(), client, id, dir)
+					switch {
+					case err != nil && tr.Kind == track.Review:
+						return err
+					case err != nil:
+						progress("Couldn't ask for the repo's Code owner, so the whole change is reviewed: " + err.Error())
+					case owner != "":
+						fromRepo = true
+						progress("Reviewing only the files " + owner + " owns, the repo's Code owner: --all reviews the whole change.")
+					}
+				}
 				if strings.TrimSpace(owner) != "" {
 					if packet, err = ownedPacket(c.Context(), dir, packet, owner); err != nil {
+						if fromRepo {
+							return fmt.Errorf("the repo's Code owner is %s, but %w; --all reviews the whole change", owner, err)
+						}
 						return err
 					}
 				}
@@ -124,6 +146,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the report of the review that's running, or its answer to the last question")
 	cmd.Flags().StringVar(&brief, "brief", "", "a file, or - for stdin, with what the user asks of this review")
 	cmd.Flags().StringVar(&owner, "owner", "", "review only the files this code owner owns, by the repo's CODEOWNERS")
+	cmd.Flags().BoolVar(&all, "all", false, "review the whole change, not only the repo's Code owner's files")
 	cmd.Flags().BoolVar(&stale, "stale", false, "review a pull request's worktree that's behind the pull request")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
@@ -269,6 +292,18 @@ func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) 
 // can be, a/ and b/ prefixes, no renames, colours or external tools.
 var diffArgs = []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-textconv", "--no-color",
 	"--no-renames", "--src-prefix=a/", "--dst-prefix=b/"}
+
+// defaultOwner is the code owner a review of dir narrows to when none
+// is asked for: the repo's Code owner on a Review track.
+func defaultOwner(ctx context.Context, client rpc.Client, id, dir string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, askTimeout)
+	defer cancel()
+	owner, err := client.ReviewOwner(ctx, id, dir)
+	if err != nil {
+		return "", fmt.Errorf("ask the daemon for the repo's Code owner: %w", err)
+	}
+	return owner, nil
+}
 
 // ownedPacket narrows p to the files owner owns by the CODEOWNERS on
 // p's base, as GitHub reads it, so a branch can't change its own

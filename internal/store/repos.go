@@ -15,12 +15,15 @@ type Repo struct {
 	BaseBranch string
 	DraftPRs   bool
 	Setup      string // the command run once in a worktree before its dev servers
-	Servers    []DevServer
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// CodeOwner narrows a Review track's reviews to the files it owns by
+	// CODEOWNERS; "" for the whole change.
+	CodeOwner string
+	Servers   []DevServer
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-const repoColumns = "id, name, path, base_branch, draft_prs, setup, created_at, updated_at"
+const repoColumns = "id, name, path, base_branch, draft_prs, setup, code_owner, created_at, updated_at"
 
 // Repos lists the repos by name.
 func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
@@ -74,8 +77,8 @@ func (s *Store) AddRepo(ctx context.Context, r Repo) (Repo, error) {
 	defer func() { _ = tx.Rollback() }()
 	now := time.Now()
 	res, err := tx.ExecContext(ctx,
-		"INSERT INTO repos (name, path, base_branch, draft_prs, setup, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		r.Name, r.Path, r.BaseBranch, r.DraftPRs, r.Setup, now.UnixMilli(), now.UnixMilli())
+		"INSERT INTO repos (name, path, base_branch, draft_prs, setup, code_owner, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		r.Name, r.Path, r.BaseBranch, r.DraftPRs, r.Setup, r.CodeOwner, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return Repo{}, constraint(err)
 	}
@@ -101,8 +104,8 @@ func (s *Store) UpdateRepo(ctx context.Context, r Repo) (Repo, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 	res, err := tx.ExecContext(ctx,
-		"UPDATE repos SET name = ?, path = ?, base_branch = ?, draft_prs = ?, setup = ?, updated_at = ? WHERE id = ?",
-		r.Name, r.Path, r.BaseBranch, r.DraftPRs, r.Setup, time.Now().UnixMilli(), r.ID)
+		"UPDATE repos SET name = ?, path = ?, base_branch = ?, draft_prs = ?, setup = ?, code_owner = ?, updated_at = ? WHERE id = ?",
+		r.Name, r.Path, r.BaseBranch, r.DraftPRs, r.Setup, r.CodeOwner, time.Now().UnixMilli(), r.ID)
 	if err != nil {
 		return Repo{}, constraint(err)
 	}
@@ -139,7 +142,7 @@ type scanner interface{ Scan(dest ...any) error }
 func scanRepo(row scanner) (Repo, error) {
 	var r Repo
 	var created, updated int64
-	err := row.Scan(&r.ID, &r.Name, &r.Path, &r.BaseBranch, &r.DraftPRs, &r.Setup, &created, &updated)
+	err := row.Scan(&r.ID, &r.Name, &r.Path, &r.BaseBranch, &r.DraftPRs, &r.Setup, &r.CodeOwner, &created, &updated)
 	r.CreatedAt, r.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
 	return r, err
 }
