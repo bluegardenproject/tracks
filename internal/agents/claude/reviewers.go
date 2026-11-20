@@ -1,11 +1,8 @@
 package claude
 
-import (
-	"regexp"
-	"strings"
-)
+import "strings"
 
-// The reviewer subagents. Their text is checked against golden files
+// The reviewers' prompts. Their text is checked against golden files
 // in testdata.
 
 // candorSection is the candor contract shared by both reviewer agents.
@@ -44,28 +41,11 @@ isn't true". That is still within the register; losing it is not.
 
 `
 
-// reviewerAgent is the code reviewer's prompt. It was a subagent's
-// file; `tracks review` now gives its body, without the frontmatter, to
-// the reviewer it starts (ReviewerInstructions).
-//
-// The body is the reviewer's system prompt. It's intentionally
-// strict: read-only tools, no commits, no PRs, always end with a
-// `REVIEW OUTCOME:` line so callers can grep the verdict.
-const reviewerAgent = `---
-x-tracks-managed: "1"
-name: tracks-reviewer
-description: |
-  Code-review specialist. Use this agent BEFORE committing, pushing, or
-  opening a pull request — especially inside a ` + "`tracks`" + ` worktree. The
-  agent runs a strict, read-only review against the repository's own
-  review conventions and returns findings grouped by file, with a
-  severity each (block / warn / hint), ending with a clear pass/blocked
-  verdict. TRIGGER for any "review my changes" / "pre-push check" /
-  "audit my diff" intent inside a tracks session.
-tools: Bash, Read, Glob, Grep, WebFetch
----
-
-You are a code-review specialist. Your only job is to review the
+// reviewerAgent is the code reviewer's prompt, which tracks review
+// gives the reviewer it starts (ReviewerInstructions). It's
+// intentionally strict: read-only, no commits, no PRs, always end with
+// a `REVIEW OUTCOME:` line so callers can grep the verdict.
+const reviewerAgent = `You are a code-review specialist. Your only job is to review the
 changes the calling agent has made and report findings. You never
 commit, push, edit files, or run anything that modifies state.
 
@@ -572,12 +552,9 @@ counts exactly like one that came from a failed fact-check.
 - **Be brief.** This is read in a terminal pane.
 `
 
-// frontmatter matches the YAML block the agent definitions open with.
-var frontmatter = regexp.MustCompile(`(?s)\A---\n.*?\n---\n`)
-
-// ReviewerInstructions is the code reviewer's prompt without its
-// frontmatter, for `tracks review`, on every engine. It is the built-in
-// text: the subagent file earlier versions installed isn't read.
+// ReviewerInstructions is the code reviewer's prompt, for tracks review,
+// on every engine. It is the built-in text: the subagent file earlier
+// versions installed isn't read.
 func ReviewerInstructions() string {
-	return strings.TrimSpace(frontmatter.ReplaceAllString(reviewerAgent, ""))
+	return strings.TrimSpace(reviewerAgent)
 }

@@ -388,19 +388,33 @@ func (s *Service) syncReviewer(t track.Track, window string) {
 	if s.Reviewers == nil {
 		return
 	}
+	s.mu.Lock()
+	s.reviewerReads++
+	read := s.reviewerReads
+	s.mu.Unlock()
 	if r, err := s.Reviewers.Reviewer(t.ID, window); err == nil {
-		s.showReviewer(t, window, r)
+		s.showReviewer(t, window, r, read)
 	}
 }
 
 // showReviewer rewrites the buttons of t's window when its reviewer r
-// changed since they were last written. A failed write is kept as
-// unwritten, so the next tick writes it again.
-func (s *Service) showReviewer(t track.Track, window string, r ReviewerState) {
+// changed since they were last written. read numbers when r was read:
+// a tick that read the panes before a click shows its reviewer doesn't
+// undo what the click wrote. A failed write is kept as unwritten, so the
+// next tick writes it again.
+func (s *Service) showReviewer(t track.Track, window string, r ReviewerState, read uint64) {
 	s.mu.Lock()
 	if s.reviewers == nil {
 		s.reviewers = map[string]ReviewerState{}
 	}
+	if s.reviewerRead == nil {
+		s.reviewerRead = map[string]uint64{}
+	}
+	if read < s.reviewerRead[t.ID] {
+		s.mu.Unlock()
+		return
+	}
+	s.reviewerRead[t.ID] = read
 	was, written := s.reviewers[t.ID]
 	if written && was == r {
 		s.mu.Unlock()
