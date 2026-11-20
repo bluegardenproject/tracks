@@ -37,6 +37,11 @@ func newReviewStreamCmd() *cobra.Command {
 // comes, and writes its final text to out, whole: a turn that failed or
 // never ended writes nothing, and its hook says so.
 func followStream(in io.Reader, shown io.Writer, out string) error {
+	// An earlier turn's text, such as the last question's answer, must
+	// not pass for this one's.
+	if err := os.Remove(out); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	var s cursor.Stream
 	r := bufio.NewReaderSize(in, 64<<10)
 	for {
@@ -57,7 +62,11 @@ func followStream(in io.Reader, shown io.Writer, out string) error {
 	if err := os.WriteFile(out+".part", []byte(s.Result), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(out+".part", out)
+	if err := os.Rename(out+".part", out); err != nil {
+		_ = os.Remove(out + ".part")
+		return err
+	}
+	return nil
 }
 
 // readLine is the next line of r without its end, at most maxStreamLine

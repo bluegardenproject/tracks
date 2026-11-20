@@ -3,16 +3,25 @@ package cursor
 import (
 	"encoding/json"
 	"strings"
+	"unicode"
 )
 
 // Stream follows a print-mode turn's `--output-format stream-json
 // --stream-partial-output` events: what to show in a pane as they come,
 // and the turn's final text.
+//
+// Cursor writes a turn's text in pieces, and after each segment of it,
+// the text between two tool calls, repeats the whole segment once. A
+// piece that equals its segment so far is held back: dropped when a tool
+// call or the end comes next, shown when more text does.
 type Stream struct {
-	// text is what the assistant has written since the last tool call,
-	// so the full message Cursor repeats at the end isn't shown twice.
-	text strings.Builder
-	// Result is the turn's final text, once a result event came; Failed
+	// segment is the text since the last tool call; held is a piece
+	// that may be its repeat.
+	segment strings.Builder
+	held    string
+	// Result is the turn's final text once a result event came: its last
+	// segment, as Claude's reviewer hands over its last message, so text
+	// written before the last tool call isn't part of a report. Failed
 	// says the turn ended in an error.
 	Result string
 	Done   bool
@@ -24,8 +33,8 @@ type Stream struct {
 
 type streamEvent struct {
 	Type     string                     `json:"type"`
-	Cwd      string                     `json:"cwd"`
 	Subtype  string                     `json:"subtype"`
+	Cwd      string                     `json:"cwd"`
 	IsError  bool                       `json:"is_error"`
 	Result   string                     `json:"result"`
 	ToolCall map[string]json.RawMessage `json:"tool_call"`
@@ -37,12 +46,23 @@ type streamEvent struct {
 	} `json:"message"`
 }
 
+// maxOther bounds a line that isn't an event, shown as it is.
+const maxOther = 2000
+
 // Feed reads one line of the stream and returns what to show for it,
-// "" for nothing. A line that isn't an event, such as a warning the CLI
-// prints, is shown as it is.
+// "" for nothing, without terminal controls: the text comes from a model
+// that read untrusted code. A line that isn't an event, such as a warning
+// the CLI prints, is shown as it is, cut when long.
 func (s *Stream) Feed(line string) string {
+	return plain(s.feed(line))
+}
+
+func (s *Stream) feed(line string) string {
 	var e streamEvent
 	if json.Unmarshal([]byte(line), &e) != nil || e.Type == "" {
+		if len(line) > maxOther {
+			return "(a line of the stream too long to show)\n"
+		}
 		return line + "\n"
 	}
 	switch e.Type {
@@ -56,39 +76,57 @@ func (s *Stream) Feed(line string) string {
 			}
 		}
 		piece := b.String()
-		if piece == "" || s.text.Len() > 0 && piece == s.text.String() {
+		if piece == "" {
 			return ""
 		}
-		s.text.WriteString(piece)
-		return piece
+		out := s.release()
+		if s.segment.Len() > 0 && piece == s.segment.String() {
+			s.held = piece
+			return out
+		}
+		s.segment.WriteString(piece)
+		return out + piece
 	case "tool_call":
 		if e.Subtype != "started" {
 			return ""
 		}
 		out := "\n→ " + s.relative(toolLine(e.ToolCall)) + "\n"
-		if s.text.Len() == 0 {
+		if s.segment.Len() == 0 {
 			out = out[1:]
 		}
-		s.text.Reset()
+		s.held = ""
+		s.segment.Reset()
 		return out
 	case "result":
-		s.Done, s.Failed, s.Result = true, e.IsError, e.Result
+		s.held = ""
+		s.Done, s.Failed = true, e.IsError
+		s.Result = strings.TrimSpace(s.segment.String())
+		if s.Result == "" {
+			s.Result = e.Result
+		}
 		if s.Failed {
-			return "\nThe turn failed: " + e.Result + "\n"
+			return "\nThe turn failed: " + oneLine(e.Result, maxOther) + "\n"
 		}
 		return "\n"
 	}
 	return ""
 }
 
+// release shows a held piece once more text shows it wasn't a repeat.
+func (s *Stream) release() string {
+	held := s.held
+	s.held = ""
+	s.segment.WriteString(held)
+	return held
+}
+
 // relative is line with the turn's folder taken off its paths. macOS
 // names a temporary folder with /private in front or without.
 func (s *Stream) relative(line string) string {
-	if s.cwd == "" {
-		return line
-	}
 	for _, dir := range []string{s.cwd, strings.TrimPrefix(s.cwd, "/private")} {
-		line = strings.ReplaceAll(line, strings.TrimSuffix(dir, "/")+"/", "")
+		if dir = strings.TrimSuffix(dir, "/"); dir != "" {
+			line = strings.ReplaceAll(line, dir+"/", "")
+		}
 	}
 	return line
 }
@@ -121,4 +159,19 @@ func oneLine(s string, max int) string {
 		return string(r[:max]) + "…"
 	}
 	return s
+}
+
+// plain is s without control characters but line ends and tabs, and
+// without the format characters that reorder text: no escape sequence
+// reaches the pane.
+func plain(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
 }
