@@ -31,7 +31,7 @@ func (c Config) review(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	call.Progress("The reviewer, " + name + ", runs in a hidden pane of this track, which the footer's button shows. " +
 		"A review can take minutes. If this command is stopped, the reviewer runs on: tracks review --wait waits " +
-		"for its report. If it waits on a question, such as whether to trust the worktree, the user answers it there.")
+		"for its report. If it asks whether to trust the worktree, Tracks shows its pane for the user to answer.")
 	return c.waitReview(ctx, call, p.ID)
 }
 

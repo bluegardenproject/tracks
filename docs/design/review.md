@@ -112,8 +112,10 @@ pane of its own, hidden until the user opens it.
     the reviewer's hook command keeps a reply of an ended reviewer from
     counting for the new one.
 - **Questions it asks wait for the user.** A Claude reviewer on a worktree
-  Claude hasn't worked in, such as a Cursor track's, asks whether to trust it;
-  `tracks review` says to answer it in the pane.
+  Claude hasn't worked in, such as a Cursor track's, asks whether to trust it.
+  The footer's tick reads a hidden Claude reviewer's screen until its report
+  is in, and when the question is on it, shows the pane for the user to
+  answer: once a review, so a pane hidden again stays hidden.
 - **In Work tracks too.** The pane opens in the Work track's window and
   worktree, so a pre-push review sees what isn't committed yet. The pane
   route replaced the in-session `tracks-reviewer` subagent, which Tracks no

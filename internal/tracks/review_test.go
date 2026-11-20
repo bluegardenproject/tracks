@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,11 @@ type fakeReviewers struct {
 	state     ReviewerState
 	typed     []string
 	respawned []string
+	screen    string
+	showErr   error
 }
+
+func (f *fakeReviewers) CaptureReviewer(string) (string, error) { return f.screen, nil }
 
 func (f *fakeReviewers) TypeReviewer(pane, text string) error {
 	f.typed = append(f.typed, pane+" "+text)
@@ -57,6 +62,9 @@ func (f *fakeReviewers) Reviewers() (map[string]ReviewerState, error) {
 }
 
 func (f *fakeReviewers) ShowReviewer(_, pane string) error {
+	if f.showErr != nil {
+		return f.showErr
+	}
 	f.state.Shown = true
 	return nil
 }
@@ -359,5 +367,48 @@ func TestReviewOwner(t *testing.T) {
 	}
 	if _, err := f.svc.ReviewOwner(ctx, "rev", t.TempDir()); err == nil {
 		t.Error("a folder outside the track's worktrees was answered")
+	}
+}
+
+// A Claude reviewer stuck on its trust question is shown, once a run.
+func TestReviewerAsksTrustIsShown(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	worktree := t.TempDir()
+	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "r", Engine: "claude",
+		Repos: []track.Repo{{Name: "api", Worktree: worktree}}}); err != nil {
+		t.Fatal(err)
+	}
+	f.windows.windows = append(f.windows.windows, trackwin.Info{Window: "@r", Track: "r", Name: "r"})
+	panes := &fakeReviewers{}
+	f.svc.Reviewers = panes
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	tick := func() {
+		t.Helper()
+		if err := f.svc.SyncInfo(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tick()
+	if panes.state.Shown {
+		t.Fatal("a reviewer at work was shown")
+	}
+	panes.screen = " Quick safety check: Is this a project you created or one you trust?\n ❯ No, exit\n   Yes, I trust this folder"
+	panes.showErr = errors.New("the window is being swept")
+	tick()
+	if panes.state.Shown {
+		t.Fatal("a failed show counted as shown")
+	}
+	panes.showErr = nil
+	tick()
+	if !panes.state.Shown || f.windows.buttons["@r"] != actions.Reviewer(true) {
+		t.Fatalf("shown %v, buttons %q; want the reviewer shown, with Hide reviewer", panes.state.Shown, f.windows.buttons["@r"])
+	}
+	panes.state.Shown = false
+	tick()
+	if panes.state.Shown {
+		t.Error("a reviewer the user hid again was shown again in the same run")
 	}
 }

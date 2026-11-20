@@ -44,6 +44,8 @@ type ReviewerPanes interface {
 	// RespawnReviewer ends what the reviewer's pane runs and starts
 	// command in dir there.
 	RespawnReviewer(pane, dir, command string) error
+	// CaptureReviewer is what the reviewer's pane shows.
+	CaptureReviewer(pane string) (string, error)
 }
 
 // ReviewerState is a track's reviewer: its pane, "" for none, and
