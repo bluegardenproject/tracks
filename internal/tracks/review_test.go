@@ -391,6 +391,10 @@ func TestReviewerAsksTrustIsShown(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	recent := time.Now().Add(-trustWindow / 2)
+	if err := os.Chtimes(filepath.Join(f.svc.reviewDir("r"), "run"), recent, recent); err != nil {
+		t.Fatal(err)
+	}
 	tick()
 	if panes.state.Shown {
 		t.Fatal("a reviewer at work was shown")
@@ -417,7 +421,7 @@ func TestReviewerAsksTrustIsShown(t *testing.T) {
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	old := f.svc.now().Add(-2 * trustWindow)
+	old := time.Now().Add(-2 * trustWindow)
 	if err := os.Chtimes(filepath.Join(f.svc.reviewDir("r"), "run"), old, old); err != nil {
 		t.Fatal(err)
 	}
