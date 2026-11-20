@@ -51,12 +51,19 @@ func loadSession(dir string) (reviewSession, error) {
 // chat, interactively. answer marks a turn on a question.
 func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 	reply := r.Reply
+	name := agents.Cursor.Name
+	if r.Model != "" {
+		name += " (" + r.Model + ")"
+	}
+	status := name + " is reviewing the change. It shows nothing until it's done: then its report shows " +
+		"here, and you can ask it about it."
 	if answer {
 		reply += " --answer"
+		status = name + " is answering a question about its review. Its answer shows here when it's done."
 	}
 	return cursor.Reviewer{
 		Program: r.Program, Model: r.Model, Chat: r.Chat, Workspace: r.Workspace, Prompt: prompt,
-		Report: out, Reply: reply + " --reply-file " + shellx.Quote(out),
+		Report: out, Reply: reply + " --reply-file " + shellx.Quote(out), Status: status,
 	}.Script()
 }
 

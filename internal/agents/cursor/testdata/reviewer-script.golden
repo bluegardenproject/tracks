@@ -1,3 +1,4 @@
+printf '%s\n\n' 'Cursor (gpt-5) is reviewing the change. It'\''s done when its report shows here.'
 'agent' -p --resume 'c1' --mode 'ask' --trust --workspace '/w' --model 'gpt-5' 'Read your brief.' | tee '/r/report.md'
 'tracks' hook --engine cursor --track t1 --reviewer r1 --reply-file '/r/report.md'
 exec 'agent' --resume 'c1' --mode 'ask' --trust --workspace '/w' --model 'gpt-5'
