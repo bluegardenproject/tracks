@@ -184,6 +184,9 @@ type Service struct {
 	comments map[string]map[string]actions.Comments // by track, then PR URL
 	// reviewers is each track's reviewer as last seen, for its button.
 	reviewers map[string]ReviewerState
+	// trustShown is the review run, by track, whose reviewer the tick
+	// showed for Claude's trust question.
+	trustShown map[string]string
 	// info is what SyncInfo last showed, by window.
 	info map[string]string
 	// transcripts are the signatures of the open Claude tracks'
@@ -360,6 +363,8 @@ func (w TmuxWindows) HideReviewer(window, pane string) error {
 }
 
 func (w TmuxWindows) TypeReviewer(pane, text string) error { return trackwin.Type(w.Tmux, pane, text) }
+
+func (w TmuxWindows) CaptureReviewer(pane string) (string, error) { return w.Tmux.CapturePane(pane) }
 
 func (w TmuxWindows) RespawnReviewer(pane, dir, command string) error {
 	return w.Tmux.RespawnPane(pane, dir, command)

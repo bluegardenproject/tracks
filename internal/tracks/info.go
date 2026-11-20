@@ -36,7 +36,7 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 		// The reviewer's button follows its pane, which ends with the
 		// reviewer or a tracks close.
 		if reviewers != nil {
-			s.showReviewer(t, window, reviewers[t.ID])
+			s.showReviewer(t, window, s.showAsking(t.ID, window, reviewers[t.ID]))
 		}
 		text := Info(t)
 		s.mu.Lock()
@@ -52,6 +52,11 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.info = shown
+	for id := range s.trustShown {
+		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
+			delete(s.trustShown, id)
+		}
+	}
 	for id := range s.reviewers {
 		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
 			delete(s.reviewers, id)
