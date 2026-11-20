@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/agents/cursor"
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/spf13/cobra"
 )
 
 // maxStreamLine bounds one event of a reviewer's stream: a tool call's
-// result can hold a whole file.
-const maxStreamLine = 64 << 20
+// result can hold a whole file. A variable, for tests.
+var maxStreamLine = 64 << 20
 
 func newReviewStreamCmd() *cobra.Command {
 	var out string
@@ -59,7 +61,7 @@ func followStream(in io.Reader, shown io.Writer, out string) error {
 	if !s.Done || s.Failed {
 		return nil
 	}
-	if err := os.WriteFile(out+".part", []byte(s.Result), 0o600); err != nil {
+	if err := os.WriteFile(out+".part", []byte(turnText(s)), 0o600); err != nil {
 		return err
 	}
 	if err := os.Rename(out+".part", out); err != nil {
@@ -67,6 +69,23 @@ func followStream(in io.Reader, shown io.Writer, out string) error {
 		return err
 	}
 	return nil
+}
+
+// turnText is what a turn hands over, as Claude's reviewer hands over
+// its last message: its last segment, the text after its last tool
+// call, so what it wrote before isn't part of a report. A review's is
+// the last segment with its outcome line, so a closing line after one
+// more tool call doesn't replace the report.
+func turnText(s cursor.Stream) string {
+	for i := len(s.Segments) - 1; i >= 0; i-- {
+		if strings.Contains(s.Segments[i], review.Outcome) {
+			return s.Segments[i]
+		}
+	}
+	if len(s.Segments) > 0 {
+		return s.Segments[len(s.Segments)-1]
+	}
+	return s.Result
 }
 
 // readLine is the next line of r without its end, at most maxStreamLine

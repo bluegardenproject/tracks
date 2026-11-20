@@ -20,8 +20,8 @@ func TestStream(t *testing.T) {
 		shown.WriteString(s.Feed(line))
 	}
 	const answer = "Add is wrong: it returns `a - b` (subtraction), so it should be `return a + b`."
-	if !s.Done || s.Failed || s.Result != answer {
-		t.Errorf("done %v, failed %v, result %q", s.Done, s.Failed, s.Result)
+	if !s.Done || s.Failed || s.Result != answer || len(s.Segments) != 1 || s.Segments[0] != answer {
+		t.Errorf("done %v, failed %v, result %q, segments %q", s.Done, s.Failed, s.Result, s.Segments)
 	}
 	if got := shown.String(); got != "→ read x.go\n"+answer+"\n" {
 		t.Errorf("shown:\n%s", got)
@@ -61,8 +61,8 @@ func TestStreamSegments(t *testing.T) {
 	if shown.String() != want {
 		t.Errorf("shown:\n%s\nwant:\n%s", shown.String(), want)
 	}
-	if s.Result != verdict {
-		t.Errorf("result %q; want the last segment", s.Result)
+	if len(s.Segments) != 3 || s.Segments[2] != verdict {
+		t.Errorf("segments %q; want three, the verdict last", s.Segments)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestStreamPieces(t *testing.T) {
 	if shown.String() != "**bold**" {
 		t.Errorf("shown %q; a piece equal to the text so far, followed by more, was dropped", shown.String())
 	}
-	if got := (&Stream{}).Feed(piece("red \x1b[31mtext\x1b]0;title\x07 \u202e")); got != "red [31mtext]0;title " {
+	if got := (&Stream{}).Feed(piece("red \x1b[31mtext\x1b]0;title\x07 \u202e👩\u200d💻")); got != "red [31mtext]0;title 👩\u200d💻" {
 		t.Errorf("controls reached the pane: %q", got)
 	}
 	root := Stream{cwd: "/"}
