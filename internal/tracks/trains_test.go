@@ -83,8 +83,8 @@ func TestTrainsListTheReviewer(t *testing.T) {
 		t.Fatal(err)
 	}
 	panes.state = ReviewerState{}
-	if tr := oneTrain(t, f); tr.Status != track.Exited || tr.Outcome != train.Pass {
-		t.Errorf("pane gone: %s %s, want agent exited, pass", tr.Status.ID, tr.Outcome.ID)
+	if trains, err := f.svc.Trains(ctx, "r"); err != nil || len(trains) != 0 {
+		t.Errorf("pane gone: trains %+v, %v; want none", trains, err)
 	}
 	if _, err := f.svc.Trains(ctx, "gone"); err == nil {
 		t.Error("a track that's gone listed trains")
@@ -122,7 +122,9 @@ func TestEndTrain(t *testing.T) {
 	}
 }
 
-func TestTrainsGoWithTheTrack(t *testing.T) {
+// A review's run goes with its track's window, so tracks review --wait
+// doesn't wait on a reviewer that's gone.
+func TestReviewGoesWithTheTrack(t *testing.T) {
 	ctx := context.Background()
 	for _, end := range []struct {
 		name string
@@ -137,9 +139,8 @@ func TestTrainsGoWithTheTrack(t *testing.T) {
 		if err := end.do(f); err != nil {
 			t.Fatalf("%s: %v", end.name, err)
 		}
-		panes.state = ReviewerState{}
-		if trains, err := f.svc.Trains(ctx, "r"); err != nil || len(trains) != 0 {
-			t.Errorf("after %s: trains %+v, %v; want none", end.name, trains, err)
+		if exists(filepath.Join(f.svc.reviewDir("r"), "run")) {
+			t.Errorf("after %s the review's run is still there", end.name)
 		}
 	}
 }

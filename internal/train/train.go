@@ -60,9 +60,9 @@ var (
 
 // ReviewerFacts are what a reviewer's status is read from.
 type ReviewerFacts struct {
-	// Pane says the reviewer's pane is open; Run that its review's run
-	// is there, which ending the reviewer removes.
-	Pane, Run bool
+	// Pane says the reviewer's pane is open: it closes as the reviewer
+	// ends, by itself or not.
+	Pane bool
 	// Report is its report, "" before it's in.
 	Report string
 	// AsksTrust says its screen asks whether to trust the worktree.
@@ -72,14 +72,14 @@ type ReviewerFacts struct {
 }
 
 // ReviewerStatus is the status and outcome of a reviewer with facts f;
-// ok is false when there's no reviewer.
+// ok is false when there's no reviewer. Without its pane there's none:
+// what's left of a run doesn't say whether it ended or never started.
 func ReviewerStatus(f ReviewerFacts) (status, outcome track.Status, ok bool) {
+	if !f.Pane {
+		return track.Status{}, track.Status{}, false
+	}
 	outcome = OutcomeOf(f.Report)
 	switch {
-	case !f.Pane && !f.Run:
-		return track.Status{}, track.Status{}, false
-	case !f.Pane:
-		return track.Exited, outcome, true
 	case f.Asking:
 		return track.Active, outcome, true
 	case notRun(f.Report):

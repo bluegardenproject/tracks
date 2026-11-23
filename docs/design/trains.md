@@ -414,7 +414,9 @@ Each step a PR of its own.
 7. The overlay: a session per train in place of a window in
    `tracks-back` (`join-pane` moves a pane out of its session, so the two
    can't come apart), the popup, the header with Hide and End train,
-   `Ctrl+b Esc`. Today's reviewer UI goes: the footer's reviewer buttons,
+   `Ctrl+b Esc`. A train's pane stays after its agent exits, so the
+   Platform can show `agent exited`; until then a train is listed while
+   its pane is open. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
 8. Collect messages.
 9. Signals: the Relay Station and its overlay; the PR buttons moved in

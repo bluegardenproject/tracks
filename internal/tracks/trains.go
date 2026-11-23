@@ -14,7 +14,7 @@ import (
 )
 
 // Trains are track id's trains, with their status: its reviewer, while
-// it has a pane or a run.
+// its pane is open.
 func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) {
 	if _, err := s.Store.Track(ctx, id); errors.Is(err, store.ErrNotFound) {
 		return nil, Problem("That track is gone.")
@@ -34,7 +34,7 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 		return nil, err
 	}
 	dir := s.reviewDir(id)
-	f := train.ReviewerFacts{Pane: r.Pane != "", Run: exists(filepath.Join(dir, "run"))}
+	f := train.ReviewerFacts{Pane: r.Pane != ""}
 	if b, err := os.ReadFile(filepath.Join(dir, "report.md")); err == nil {
 		f.Report = string(b)
 	}
