@@ -401,16 +401,19 @@ Each step a PR of its own.
 
 1. `badge()` to `ui/widget`.
 2. Settings → Trains (agents): the rename.
-3. Trains: the migration, the daemon's trains, a session per train in
-   `tracks-back`, the Reviewer as the first, `tracks train list|end`, the
-   worktree check. Ending with the parent.
-4. The relay: the migration, handles and tokens, `tracks relay
+3. Trains: `internal/train` (handles, agents, status), the Reviewer as the
+   first, read from tmux and its run as now; `tracks train list|end`.
+   Ending with the parent, as hidden panes end now. No migration: trains
+   end on a restart, so tmux stays their record.
+4. The relay: the first migration, handles and tokens, `tracks relay
    send|read|show|wait|who`, join and end notices; the Reviewer on it, its
    `--ask` and `--wait` reading it.
 5. Delivery: the pointer, the blockers, the tick, the stall check,
    notifications.
 6. The Platform: the pane, the list, the badges; the Reviewer in it.
-7. The overlay: the popup, the header with Hide and End train,
+7. The overlay: a session per train in place of a window in
+   `tracks-back` (`join-pane` moves a pane out of its session, so the two
+   can't come apart), the popup, the header with Hide and End train,
    `Ctrl+b Esc`. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
 8. Collect messages.
@@ -420,7 +423,9 @@ Each step a PR of its own.
     comes).
 11. The "started from" note on independent tracks. Independent of the rest.
 12. The Investigator and the Watcher: their design (purpose, briefs,
-    commands, the Watcher's finish condition, Cursor), then a step each,
+    commands, the Watcher's finish condition, Cursor, the worktree check
+    for any train, which runs in the caller's sandbox as the reviewer's
+    does: the daemon runs no git), then a step each,
     with `tracks train new`, their Settings frames and the Trains paragraph
     of the track's prompt.
 

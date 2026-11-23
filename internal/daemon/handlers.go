@@ -123,6 +123,8 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.ReviewAsk:   c.reviewAsk,
 		rpc.ReviewOwner: c.reviewOwner,
 		rpc.ReviewReply: c.reviewReply,
+		rpc.TrainList:   c.trainList,
+		rpc.TrainEnd:    c.trainEnd,
 		rpc.Down:        c.down,
 		rpc.Logs:        c.logs,
 		rpc.Servers:     c.servers,
