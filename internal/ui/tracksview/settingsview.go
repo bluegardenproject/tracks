@@ -12,7 +12,7 @@ import (
 // The section list takes a quarter of the width, the section the rest;
 // narrower windows show whichever has focus.
 const (
-	settingsSideMin = 20
+	settingsSideMin = 21
 	themeFieldWidth = 32
 	keyWidth        = 14
 	aboutLabelWidth = 16
