@@ -73,8 +73,8 @@ pre-push review.
 
 ## Reviewer setting
 
-- Settings has an **Agents** section, after Tracks, for the agents Tracks
-  starts beside a track's own. Each has a frame of its own; **Reviewer** is
+- Settings has a **Trains (agents)** section, after Tracks, for the agents
+  Tracks starts beside a track's own. Each has a frame of its own; **Reviewer** is
   the first, with Agent and Model fields, stored as `agents.reviewer` in
   `settings.yaml`. Its agent can be *Same as the track*, the default; a model
   counts only with an agent.
