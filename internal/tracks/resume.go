@@ -73,8 +73,8 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 	}
 	removeWorktrees := func() { _ = s.Worktrees.RemoveWorktrees(undo, t.ID, made) }
 
-	// A review of the track's last run, ended without its window, as
-	// before reviews went with it, isn't a train of this one.
+	// A review of the track's last run, kept by a build from before
+	// reviews went with the window, would hold tracks review --wait.
 	if err := s.dropReview(t.ID); err != nil {
 		removeWorktrees()
 		return Created{}, err

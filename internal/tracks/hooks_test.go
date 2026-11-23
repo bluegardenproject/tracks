@@ -32,11 +32,22 @@ func TestTracksGetTheirHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.engine.spec = agents.Spec{}
+	// A review left by a build that kept it after the track ended.
+	run := filepath.Join(f.svc.reviewDir(id), "run")
+	if err := os.MkdirAll(filepath.Dir(run), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(run, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.svc.Resume(ctx, id, false, func(string) {}); err != nil {
 		t.Fatal(err)
 	}
 	if f.engine.spec.Hooks == "" {
 		t.Error("a resumed track starts without its hooks")
+	}
+	if exists(run) {
+		t.Error("a resumed track kept the review of its last run")
 	}
 
 	if err := f.svc.End(ctx, id); err != nil {

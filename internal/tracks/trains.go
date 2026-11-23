@@ -29,7 +29,7 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	// CloseReviewer change them together.
 	s.reviewMu.Lock()
 	r, err := s.Reviewers.Reviewer(id, window)
-	if err != nil {
+	if err != nil || r.Pane == "" {
 		s.reviewMu.Unlock()
 		return nil, err
 	}

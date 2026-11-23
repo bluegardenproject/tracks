@@ -134,7 +134,7 @@ func TestReviewGoesWithTheTrack(t *testing.T) {
 		{"Sweep", func(f *fixture) error { f.windows.windows = nil; return f.svc.Sweep(ctx) }},
 		{"Interrupt", func(f *fixture) error { f.windows.windows = nil; _, err := f.svc.Interrupt(ctx); return err }},
 	} {
-		f, panes, worktree := trainsFixture(t, "cursor")
+		f, _, worktree := trainsFixture(t, "cursor")
 		startReview(t, f, worktree)
 		if err := end.do(f); err != nil {
 			t.Fatalf("%s: %v", end.name, err)
