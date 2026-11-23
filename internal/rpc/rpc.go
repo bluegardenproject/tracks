@@ -26,7 +26,10 @@ const (
 	Derail    = "derail"
 	AddRepo   = "add-repo"
 	Promote   = "promote"
-	Restart   = "restart"
+	// FastReview opens a Review track on a pull request link, as
+	// Station's Fast Track does.
+	FastReview = "fast-review"
+	Restart    = "restart"
 	// Draft returns a draft's request; DiscardDraft deletes it.
 	Draft        = "draft"
 	DiscardDraft = "discard-draft"
@@ -154,6 +157,8 @@ type CreateResult struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Window string `json:"window"`
+	// Title is the name it's shown under, when that isn't Name.
+	Title string `json:"title,omitempty"`
 }
 
 // ListParams asks for Station's list: under its filter, when one is on.
@@ -209,6 +214,11 @@ type ResumeParams struct {
 }
 
 // PromoteParams names the Ask or Plan track to promote.
+// FastReviewParams is the pull request link a Fast Review opens on.
+type FastReviewParams struct {
+	URL string `json:"url"`
+}
+
 type PromoteParams struct {
 	ID string `json:"id"`
 }

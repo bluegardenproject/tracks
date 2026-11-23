@@ -20,6 +20,14 @@ type fakeGitHub struct {
 	head        string
 	reviewNotes []string
 	reviewErr   error
+	// PRTitle's answer, or titleErr.
+	title    string
+	titleErr error
+}
+
+func (g *fakeGitHub) PRTitle(_ context.Context, pr track.PR) (string, error) {
+	g.asked = append(g.asked, "title "+pr.URL)
+	return g.title, g.titleErr
 }
 
 func (g *fakeGitHub) ReviewPR(_ context.Context, pr track.PR) (review.PR, string, []string, error) {

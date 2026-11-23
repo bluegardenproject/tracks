@@ -236,13 +236,6 @@ func (m Model) fastTrackHeight(detailsLines int) int {
 	return fastTrackRows
 }
 
-// fastTrack is the Fast Track frame's body, width cells wide.
-func (m Model) fastTrack(width int) []string {
-	about := m.fg(theme.TextMuted).Width(width).Render(
-		"Templates that preset repos, type, engine and setup commands, so a new track only needs a slug and a prompt.")
-	return append(strings.Split(about, "\n"), "", m.fg(theme.TextFaint).Render("Coming soon."))
-}
-
 // buttonRows lays buttons out from line top, wrapping at width.
 func (m Model) buttonRows(buttons []action, t source.Track, width, top int) ([]string, []hit) {
 	var rows []string

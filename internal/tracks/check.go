@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -15,6 +16,9 @@ import (
 type Request struct {
 	Kind track.Kind `json:"kind"`
 	Name string     `json:"name,omitempty"`
+	// Title is the name the track is shown under when it isn't Name,
+	// such as a Fast Review's; its window is named from the rest.
+	Title string `json:"title,omitempty"`
 	// Repos are the repos' names, in the order picked.
 	Repos     []string `json:"repos,omitempty"`
 	ReviewRef string   `json:"review_ref,omitempty"`
@@ -44,7 +48,7 @@ type Request struct {
 // It also returns the repos that open draft pull requests.
 func (s *Service) check(ctx context.Context, req Request) (track.Track, []string, error) {
 	t := track.Track{
-		Kind: req.Kind, Name: strings.TrimSpace(req.Name), Title: strings.TrimSpace(req.Name), Prompt: req.Prompt,
+		Kind: req.Kind, Name: strings.TrimSpace(req.Name), Title: cmp.Or(strings.TrimSpace(req.Title), strings.TrimSpace(req.Name)), Prompt: req.Prompt,
 		Opinion: true, ClaimCheck: true,
 	}
 	if !t.Kind.Valid() {

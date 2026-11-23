@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"strconv"
 
@@ -84,6 +85,14 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				},
 				SetFilter: func(f track.Filter) error {
 					return daemon.do(cmd.Context(), func(client rpc.Client) error { return client.SetFilter(cmd.Context(), f) })
+				},
+				FastReview: func(link string, progress func(string)) (name string, err error) {
+					err = daemon.do(cmd.Context(), func(client rpc.Client) error {
+						r, err := client.FastReview(cmd.Context(), rpc.FastReviewParams{URL: link}, progress)
+						name = cmp.Or(r.Title, r.Name)
+						return err
+					})
+					return name, err
 				},
 				NewTrack:   func() error { return formHere(c, paths, "") },
 				StartDraft: func(id string) error { return formHere(c, paths, id) },

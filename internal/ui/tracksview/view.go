@@ -117,6 +117,8 @@ func (m Model) hints() string {
 	var keys []keyHelp
 	s := m.settings
 	switch {
+	case m.tab == tabStation && m.station.fast.Focused():
+		return "  " + joinKeys(key, text, fastKeys)
 	case m.tab == tabStation && m.station.rename != nil:
 		return "  " + joinKeys(key, text, renameKeys)
 	case m.tab == tabStation && m.station.asking != nil:

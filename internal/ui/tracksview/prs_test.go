@@ -35,7 +35,12 @@ func TestPRStatus(t *testing.T) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}
 	}
+	listEnd := m.panes().listX + m.panes().listWidth
 	for _, line := range strings.Split(view, "\n") {
+		// The list's part of the line: the details beside it are another track's.
+		if r := []rune(line); len(r) > listEnd {
+			line = string(r[:listEnd])
+		}
 		if strings.Contains(line, "no-pr") && strings.Contains(line, "PR") {
 			t.Errorf("a track without PRs shows no PR status: %q", line)
 		}
