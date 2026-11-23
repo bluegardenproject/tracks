@@ -13,7 +13,7 @@ type TrackTypes interface {
 	Save(settings.Tracks) error
 }
 
-// Agents keeps Settings → Agents: the agents Tracks starts beside a
+// Agents keeps Settings → Trains (agents): the agents Tracks starts beside a
 // track's own, such as the reviewer.
 type Agents interface {
 	Load() (settings.Agents, error)
