@@ -66,7 +66,8 @@ the v2.0.0 release; git history keeps them.
 - **Resuming an archived track,** behind a setting.
 - **An event timeline** per track.
 - **History:** search, filters and paging.
-- **Track actions** (the footer's top row): more buttons beside "open
+- **Track actions** (the PR comment buttons, moving to the sidebar's
+  Signals with [trains](design/trains.md)): more buttons beside "open
   comments", such as failing CI; the prompts they send editable in Settings,
   and a setting for whether review fixes are amended (force-pushed) or added
   as new commits; a key to run them without the mouse. Now and then an
