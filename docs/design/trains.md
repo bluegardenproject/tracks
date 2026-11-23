@@ -46,6 +46,12 @@ The rest of this document is about trains.
 - **Pinning a train beside the agent** (`join-pane`, as the reviewer pane
   does now). The overlay only, at first.
 - **A cap.** None at first; a setting if trying it shows the need.
+- **Token use and cost.** Trains add nothing to it. The engines' own apps
+  and dashboards show what was spent.
+- **Surviving a restart.** Trains end when Tracks or its daemon restarts;
+  their messages stay in the relay.
+- **A train's last message on the Platform.** The badge is enough; the
+  Relay Station shows the messages.
 
 ## Trains (agents)
 
@@ -80,8 +86,21 @@ run tests, `gh`, `curl`, read logs.
 - Tracks checks the worktree before and after, as it does for a review:
   tracked files, and untracked files that aren't ignored. Build output that
   is ignored is fine. A change is an `error` on the train and in its report.
-- Cursor's ask mode runs no commands (`agents/cursor/reviewer.go`). How a
-  Cursor Investigator runs commands but no edits is open (see Open).
+
+### Commands it may run
+
+A train in a hidden pane that asks "allow this command?" for each command
+would sit in `action required` most of its time.
+
+- **Each agent has a fixed set of allowed commands**, in its brief and its
+  engine's flags: `git` that only reads, `gh`, the repo's test runners,
+  `curl`. The spike finds how far Claude's permission flags go.
+- **Anything else is asked as now:** the train is `action required`, the
+  user is notified and answers in the overlay.
+- **Cursor:** ask mode runs no commands (`agents/cursor/reviewer.go`), and
+  the other modes edit. The spike looks for a Cursor permission config that
+  allows the commands and denies edits. Without one, the Investigator and
+  the Watcher run on Claude only in v1, and their Settings frames say so.
 
 ## Lifetime
 
@@ -93,12 +112,18 @@ run tests, `gh`, `curl`, read logs.
 - **It ends** with the parent, with **End train**, or with
   `tracks train end <name>`. A finished Investigator stays until then, so
   the parent and the user can still ask it.
+- **A Watcher's finish condition is in its task**, with a time limit, two
+  hours unless the task says otherwise. It reports when the condition is
+  met or the time is up.
+- **A restart ends trains.** When Tracks or its daemon restarts, the
+  track's trains are ended; their messages stay readable.
 
 ## The Platform
 
 A narrow pane on the left of the track's window, a small Tracks program
-built from the Tracks window's parts: `widget.Frame` titled **Platform**,
-the theme's tokens, the Station's status badges.
+built from the Tracks window's parts: `widget.Frame`, the theme's tokens,
+the Station's status badges. It holds two frames: **Platform**, the trains,
+and below it **Signals**, the Relay Station.
 
 ```
 ╭─ Platform ────────────────╮
@@ -109,6 +134,9 @@ the theme's tokens, the Station's status badges.
 │ watch-ci · Watcher        │
 │  action required          │
 │  [ Collect messages ]     │
+╰───────────────────────────╯
+╭─ Signals ─────────────────╮
+│ Relay Station · 2 new     │
 ╰───────────────────────────╯
 ```
 
@@ -124,6 +152,22 @@ the theme's tokens, the Station's status badges.
 - `badge()` moves from `ui/tracksview` to `ui/widget`, so the Station and
   the Platform draw the same badge.
 
+### Signals: the Relay Station
+
+The Signals frame has one entry, **Relay Station**, with the count of
+messages the user hasn't seen. A click opens the track's relay in an
+overlay, as a train's opens:
+
+- A Tracks program in the popup, not an agent: the track's messages, oldest
+  first, each with its time, sender, addressee and kind, the join and end
+  notices among them. Long messages fold to their first lines and open on
+  Enter.
+- A message still waiting for its pointer is marked "not delivered".
+- Read only: the user doesn't post (see Not in scope).
+- **Hide** and `Ctrl+b Esc` close it, as a train's overlay. Opening it
+  marks the messages seen by the user; it doesn't mark them read for any
+  agent.
+
 ### Status
 
 The Station's badges, no new tokens:
@@ -138,6 +182,11 @@ The Station's badges, no new tokens:
 
 Two new values, on existing badge kinds, carry the Reviewer's outcome:
 `pass` (info) and `blocked` (danger).
+
+**A question a train asks the user**, Claude's trust prompt among them,
+doesn't open its overlay by itself, as the reviewer's pane is shown now.
+The train shows `action required` and the user is notified; they open the
+overlay to answer.
 
 ### The overlay
 
@@ -197,7 +246,11 @@ by Tracks. A relay station more than a chat.
   fenced with its sender and kind, as the train's words, never
   instructions: the rule the reviewer's GitHub text follows. Long ones show
   their first lines; `tracks relay show <id>` prints one whole.
-- **The user reads it**, in the Platform or the overlay; they don't post.
+- **The user reads it** in the Relay Station; they don't post.
+- **A train that ends its turn without a report** gets a fixed pointer, as
+  any delivery: "Send your report with `tracks relay send --to <track>
+  --kind report`." A train that exits without one leaves the track a
+  notice: "@detective exited without a report".
 
 ### Delivery
 
@@ -218,6 +271,10 @@ Tracks holds the pointer while anything blocks it:
 | A question on its screen (`action required`) | It's answered |
 | The user is typing in its pane or overlay | No key for a few seconds (`client_activity`) |
 | Text in its input | The input line is empty, read from the screen as the markers are |
+
+If the spike finds the input line can't be read reliably on an engine,
+that engine's agents go without the last check: not typing, and Collect
+messages, cover it.
 
 - **Retried on the footer's tick**; messages waiting for one agent go as one
   pointer.
@@ -265,8 +322,9 @@ Each step a PR of its own.
 0. **Spike**, not merged: the reviewer in an overlay. Keys and mouse in a
    nested client on Tracks' socket; Claude and Cursor redrawing at popup
    size; the header row; `client_activity` changing on keys only; reading
-   an empty input line on both engines; a Cursor mode that runs commands
-   but doesn't edit.
+   an empty input line on both engines; how far Claude's permission flags
+   let a train run its commands unasked; a Cursor permission config that
+   runs commands but doesn't edit.
 1. `badge()` to `ui/widget`.
 2. Settings → Trains (agents): the rename, the Investigator and Watcher
    frames.
@@ -282,9 +340,10 @@ Each step a PR of its own.
 7. The overlay: the popup, the header with Hide and End train,
    `Ctrl+b Esc`.
 8. Collect messages.
-9. The Watcher: events, its finish condition.
-10. The track's prompt: the Trains paragraph.
-11. The "started from" note on independent tracks. Independent of the rest.
+9. Signals: the Relay Station and its overlay.
+10. The Watcher: events, its finish condition and time limit.
+11. The track's prompt: the Trains paragraph.
+12. The "started from" note on independent tracks. Independent of the rest.
 
 Later: the Reviewer on the relay (its `--ask` and `--wait` with it), a cap
 setting, user-defined agents, pinning beside, trains that write.
@@ -301,9 +360,5 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Open
 
-- A Cursor Investigator or Watcher: running commands without edits, since
-  ask mode runs none.
-- Reading an empty input line reliably on each engine's screen.
-- The Watcher's finish condition: given in the task, or a fixed set (CI
-  green or red, a PR merged, a time limit).
-- Whether the Platform shows a train's last relay message under it.
+Nothing for v1 beyond what the spike (step 0) settles: the allowed
+commands on each engine, and the input-line check.
