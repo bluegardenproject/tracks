@@ -76,13 +76,14 @@ func TestSettingsFramesStartWithABlankLine(t *testing.T) {
 func TestSectionTitlesFitTheNarrowestSideBySide(t *testing.T) {
 	m := New(Config{Version: "test", Theme: theme.Default(), Themes: newFakeThemes(), ThemesDir: "/cfg/themes"})
 	m = settle(m, tea.WindowSizeMsg{Width: 4*settingsSideMin + 2*stationLeft, Height: 40}, shiftTabKey)
-	if p := m.settingsPanes(); !p.side || !p.section || p.sideW != settingsSideMin {
+	p := m.settingsPanes()
+	if !p.side || !p.section || p.sideW != settingsSideMin {
 		t.Fatalf("panes %+v, want both side by side with the list %d wide", p, settingsSideMin)
 	}
-	view := plainView(m)
+	list := escapes.ReplaceAllString(strings.Join(m.sectionList(p.sideW-4), "\n"), "")
 	for _, title := range sectionTitles {
-		if !strings.Contains(view, title) {
-			t.Errorf("%q isn't whole in the section list:\n%s", title, view)
+		if !strings.Contains(list, title) {
+			t.Errorf("%q isn't whole in the section list:\n%s", title, list)
 		}
 	}
 }
