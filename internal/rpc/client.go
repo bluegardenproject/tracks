@@ -140,6 +140,13 @@ func (c Client) Resume(ctx context.Context, p ResumeParams, progress func(string
 	return r, c.Call(ctx, Resume, p, &r, progress)
 }
 
+// FastReview opens a Review track on the pull request at p.URL, in
+// the background.
+func (c Client) FastReview(ctx context.Context, p FastReviewParams, progress func(string)) (CreateResult, error) {
+	var r CreateResult
+	return r, c.Call(ctx, FastReview, p, &r, progress)
+}
+
 // Promote makes an Ask or Plan track a Work track with its own
 // worktrees.
 func (c Client) Promote(ctx context.Context, p PromoteParams, progress func(string)) (CreateResult, error) {

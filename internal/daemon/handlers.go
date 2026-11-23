@@ -96,6 +96,20 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.Derail:  c.derail,
 		rpc.AddRepo: c.addRepo,
 		rpc.Promote: c.promote,
+		rpc.FastReview: func(ctx context.Context, call *rpc.Call) (any, error) {
+			var p rpc.FastReviewParams
+			if err := call.Decode(&p); err != nil {
+				return nil, err
+			}
+			created, err := c.Tracks.FastReview(ctx, p.URL, call.Progress)
+			if err != nil {
+				c.Log.Printf("a Fast Review failed: %v", err)
+				return nil, err
+			}
+			c.Log.Printf("created %s, %s, a Fast Review", created.Track.ID, created.Track.Name)
+			return rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID,
+				Title: created.Track.Title}, nil
+		},
 		rpc.Restart: c.restart,
 		rpc.Draft: func(ctx context.Context, call *rpc.Call) (any, error) {
 			var p rpc.DraftParams

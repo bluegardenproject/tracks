@@ -56,6 +56,8 @@ type Config struct {
 	// Station under a filter, the zero Filter clearing it.
 	Unarchive func(id string) error
 	SetFilter func(track.Filter) error
+	// FastReview opens a Review track on a pull request link.
+	FastReview FastReviewFunc
 	// NewTrack opens the New track form and returns once it closes;
 	// StartDraft opens it filled with a draft, DiscardDraft deletes one.
 	NewTrack     func() error
@@ -105,6 +107,7 @@ type Model struct {
 	setTitle        func(id, title string) error
 	setFilter       func(track.Filter) error
 	newTrack        func() error
+	fastReview      FastReviewFunc
 	startDraft      func(id string) error
 	discardDraft    func(id string) error
 	proxySource     source.Proxy
@@ -139,7 +142,7 @@ type Model struct {
 // New returns the Tracks window for c.
 func New(c Config) Model {
 	m := Model{version: c.Version, palette: style.New(c.Theme), source: c.Tracks,
-		station: station{hover: -1, hoverButton: -1}, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
+		station: station{hover: -1, hoverButton: -1, fast: newFastInput()}, fastReview: c.FastReview, open: c.Open, end: c.End, newTrack: c.NewTrack, startDraft: c.StartDraft, discardDraft: c.DiscardDraft,
 		resume: c.Resume, promote: c.Promote, restart: c.Restart, archiveFn: c.Archive, derailFn: c.Derail, lostFn: c.Lost, unarchive: c.Unarchive, dismissFailures: c.DismissFailures, setTitle: c.SetTitle, setFilter: c.SetFilter,
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
@@ -298,6 +301,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.PasteMsg:
 		switch {
+		case m.tab == tabStation:
+			return m.fastPaste(msg)
 		case m.tab == tabProxy:
 			return m.proxyPaste(msg)
 		case m.tab == tabRepositories:
@@ -335,6 +340,12 @@ func (m Model) creatorFocused() bool {
 
 func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.tab {
+	case tabStation:
+		if m.station.fast.Focused() && m.fastShown() {
+			m.station.notice = notice{}
+			return m.fastKey(msg)
+		}
+		m.station.fast.Blur()
 	case tabProxy:
 		m.proxy.notice = notice{}
 		if m.proxy.adding {
@@ -430,7 +441,7 @@ func (m Model) click(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 func (m Model) hover(mouse tea.Mouse) Model {
 	m.station.hover, m.repos.hover = -1, -1
 	m.station.hoverButton, m.repos.hoverField, m.repos.hoverNew = -1, -1, false
-	m.station.hoverAdd, m.station.hoverClear = false, false
+	m.station.hoverAdd, m.station.hoverClear, m.station.hoverFast = false, false, false
 	m.engines.hover = engineControl{}
 	switch m.tab {
 	case tabStation:
@@ -442,6 +453,7 @@ func (m Model) hover(mouse tea.Mouse) Model {
 		}
 		m.station.hoverAdd = m.onAddTrack(mouse.X, mouse.Y)
 		m.station.hoverClear = m.onClearFilter(mouse.X, mouse.Y)
+		m.station.hoverFast = m.onFastButton(mouse.X, mouse.Y)
 	case tabProxy:
 		return m.proxyHover(mouse.X, mouse.Y)
 	case tabRepositories:

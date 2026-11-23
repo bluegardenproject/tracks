@@ -39,6 +39,12 @@ func NewInput(limit int, placeholder string) textinput.Model {
 // colours.
 func Input(p style.Palette, in textinput.Model, width int, bracket theme.Token) string {
 	b := lipgloss.NewStyle().Foreground(p.Color(bracket))
+	return b.Render("[") + InputText(p, in, width) + b.Render("]")
+}
+
+// InputText draws in as Input does, without the brackets: width cells
+// on input.bg.
+func InputText(p style.Palette, in textinput.Model, width int) string {
 	bg := lipgloss.NewStyle().Background(p.Color(theme.InputBg))
 	var text string
 	switch {
@@ -55,5 +61,5 @@ func Input(p style.Palette, in textinput.Model, width int, bracket theme.Token) 
 		text = bg.Foreground(p.Color(theme.TextMuted)).Render(tail(in.Value(), width))
 	}
 	text = lipgloss.NewStyle().MaxWidth(width).Render(text)
-	return b.Render("[") + text + bg.Render(strings.Repeat(" ", max(0, width-lipgloss.Width(text)))) + b.Render("]")
+	return text + bg.Render(strings.Repeat(" ", max(0, width-lipgloss.Width(text))))
 }

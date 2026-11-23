@@ -69,7 +69,7 @@ func TestFastTrackGivesWayToDetails(t *testing.T) {
 	for _, size := range []struct {
 		h         int
 		fastTrack bool
-	}{{50, true}, {30, false}} {
+	}{{50, true}, {29, false}} {
 		m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: size.h}, tracksMsg{tracks: demoTracks(3)})
 		out := escapes.ReplaceAllString(m.View().Content, "")
 		if got := strings.Contains(out, "Fast Track"); got != size.fastTrack {

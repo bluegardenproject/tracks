@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/agents"
@@ -26,7 +27,7 @@ const (
 	// the list alone.
 	detailsMin = 34
 	// fastTrackRows is the Fast Track frame's height, above the details.
-	fastTrackRows = 10
+	fastTrackRows = 3
 )
 
 type (
@@ -60,6 +61,10 @@ type station struct {
 	hoverClear  bool // the mouse is on Clear filter
 	notice      notice
 	offline     bool // the daemon's change stream broke
+	// fast is Fast Review's input, in the Fast Track frame.
+	fast textinput.Model
+	// hoverFast is the mouse on Fast Review's Review button.
+	hoverFast bool
 }
 
 // question is what Station asks before ending, archiving or derailing a
@@ -177,6 +182,9 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 		}
 	}
 	switch {
+	case key == "f" && m.fastReview != nil && m.fastShown():
+		next, cmd := m.focusFast()
+		return next, cmd, true
 	case key == "x" && m.station.filter.On():
 		return m, m.clearFilter(), true
 	case key == "up" || key == "k":
@@ -205,6 +213,13 @@ func (m Model) stationKey(key string) (_ Model, _ tea.Cmd, ok bool) {
 // click on a row soon after the first opens its track.
 func (m Model) stationClick(x, y int) (Model, tea.Cmd) {
 	m.station.notice = notice{}
+	if m.onFastInput(x, y) {
+		return m.focusFast()
+	}
+	if m.onFastButton(x, y) {
+		return m.startFastReview()
+	}
+	m.station.fast.Blur()
 	if m.onAddTrack(x, y) {
 		return m, m.openNewTrack()
 	}

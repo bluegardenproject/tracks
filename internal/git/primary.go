@@ -295,3 +295,13 @@ func isTransientNetwork(err error) bool {
 	}
 	return false
 }
+
+// Origin is the URL of the primary's origin remote, read from its
+// config: nothing is fetched and HEAD doesn't move.
+func (c *PrimaryRepoClient) Origin(ctx context.Context) (string, error) {
+	out, _, err := c.Runner.Run(ctx, "remote", "get-url", "origin")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}

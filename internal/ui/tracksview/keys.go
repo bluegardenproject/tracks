@@ -81,7 +81,7 @@ func keyGroups() []keyGroup {
 	for _, a := range slices.Concat(openActions, endedActions[:3], archivedActions[:1]) {
 		station = append(station, keyHelp{a.key, strings.ToLower(a.label[:1]) + a.label[1:]})
 	}
-	station = append(station, keyHelp{"x", "clear the filter"})
+	station = append(station, keyHelp{"x", "clear the filter"}, keyHelp{"f", "paste a link into Fast Review"})
 	return []keyGroup{
 		{"Tracks window", tabKeys},
 		{"Station", station},

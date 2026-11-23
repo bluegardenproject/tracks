@@ -29,6 +29,8 @@ type GitHub interface {
 	// ReviewPR is what a review of pr is given from GitHub, the commit
 	// its head is at, and notes on what else couldn't be fetched.
 	ReviewPR(ctx context.Context, pr track.PR) (review.PR, string, []string, error)
+	// PRTitle is pr's title.
+	PRTitle(ctx context.Context, pr track.PR) (string, error)
 }
 
 // ErrNoGH means gh isn't installed, so no PR is checked.

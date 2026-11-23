@@ -49,8 +49,10 @@ the v2.0.0 release; git history keeps them.
 ## Features
 
 - **Fast Tracks** (the Settings section is a placeholder): templates that preset
-  repos, kind, engine and setup commands, stored in the database. How to start
-  one is open.
+  repos, kind, engine and setup commands, stored in the database. Station's
+  Fast Track frame has the first one built in, Fast Review: a pull request
+  link pasted there opens a Review track on it. How to start the others is
+  open.
 - **Quick switcher** popup (`Ctrl+b s`), and more Quick Access entries.
 - **Each repo's own MCP servers** (`.mcp.json`, `.cursor/mcp.json`) on the
   Engines tab.
