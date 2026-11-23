@@ -14,8 +14,9 @@ the v2.0.0 release; git history keeps them.
   built by Tracks, code-owner scope, likelihood and confidence per finding.
   Open: the verify pass (step 10) and calibration (step 11).
 - **Trains** ([docs/design/trains.md](design/trains.md)): read-only agents a
-  track hands tasks to (Reviewer, Investigator, Watcher), on the track's
-  Platform, talking through Tracks' relay. Not built; step 0 is a spike.
+  track hands tasks to, on the track's Platform, talking through Tracks'
+  relay. The spike is done; v1 makes the Reviewer the first train, the
+  Investigator and the Watcher come last.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
