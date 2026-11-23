@@ -47,7 +47,7 @@ track's repo, the candor level, the guards.
 | Role | Model | Does |
 |---|---|---|
 | Orchestrator | The track's own, can be a smaller one | Takes the user's brief, resolves links it can open (a ticket, a doc), writes the brief, runs `tracks review`, presents the report, answers questions the report already answers |
-| Reviewer | The Reviewer agent's (Settings → Agents) | Reviews in a session of its own, in the reviewer pane; answers questions about its review |
+| Reviewer | The Reviewer agent's (Settings → Trains (agents)) | Reviews in a session of its own, in the reviewer pane; answers questions about its review |
 
 The orchestrator never reviews itself; when `tracks review` fails it says so
 and stops. On a Work track the working agent is the orchestrator for its

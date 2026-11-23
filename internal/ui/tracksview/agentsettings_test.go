@@ -18,7 +18,7 @@ func (f *fakeAgents) Save(a settings.Agents) error {
 	return nil
 }
 
-// openAgents shows Settings → Agents, on Claude Code with opus.
+// openAgents shows Settings → Trains (agents), on Claude Code with opus.
 func openAgents(t *testing.T) (Model, *fakeAgents) {
 	t.Helper()
 	engines := &fakeEngines{saved: settings.Engines{Claude: &settings.Engine{Model: "opus"}}}
@@ -42,10 +42,10 @@ func clickOn(t *testing.T, m Model, text string) Model {
 func TestReviewerSettings(t *testing.T) {
 	m, a := openAgents(t)
 	if m.settings.section != sectionAgents {
-		t.Fatalf("section %d, want Agents after Tracks", m.settings.section)
+		t.Fatalf("section %d, want Trains (agents) after Tracks", m.settings.section)
 	}
 	view := plainView(m)
-	for _, want := range []string{" Agents ", "─ Reviewer ─", sameAsTrack, "The track's", "It only reads"} {
+	for _, want := range []string{" Trains (agents) ", "─ Reviewer ─", sameAsTrack, "The track's", "It only reads"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}

@@ -10,8 +10,9 @@ import (
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
-// agentsState is Settings → Agents: the agents Tracks starts beside a
-// track's own, each in a frame of its own. The reviewer is the first.
+// agentsState is Settings → Trains (agents): the agents Tracks starts
+// beside a track's own, each in a frame of its own. The reviewer is the
+// first.
 type agentsState struct {
 	agents  settings.Agents
 	loadErr error
@@ -218,7 +219,7 @@ func (m Model) agentsClick(bx, by int) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// agentsKey handles a key while the Agents section has focus.
+// agentsKey handles a key while the Trains (agents) section has focus.
 func (m Model) agentsKey(key string) (Model, tea.Cmd) {
 	a := &m.settings.agents
 	last := reviewerModel

@@ -31,7 +31,7 @@ func newReviewCmd() *cobra.Command {
 		Use:   "review",
 		Short: "review this track's branch with the track's reviewer",
 		Long: "Starts the track's reviewer on the branch's diff and waits for its report. The reviewer is a " +
-			"session of its own, on the agent and model picked under Settings → Agents → Reviewer, in a pane of " +
+			"session of its own, on the agent and model picked under Settings → Trains (agents) → Reviewer, in a pane of " +
 			"the track that stays hidden until it's shown with the footer's button. It only reads. A review " +
 			"ends the reviewer that's there and starts a fresh one. --ask asks the reviewer that's there about " +
 			"its review and prints its answer; --wait waits for the report of the one that's running, or its " +

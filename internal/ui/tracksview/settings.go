@@ -22,7 +22,7 @@ const (
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Tracks", "Agents", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Tracks", "Trains (agents)", "Fast Tracks", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
