@@ -7,8 +7,8 @@ import (
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 )
 
-// BadgeTokens are the background and text tokens s's badge is drawn in.
-func BadgeTokens(s track.Status) (bg, text theme.Token) {
+// badgeTokens are the background and text tokens s's badge is drawn in.
+func badgeTokens(s track.Status) (bg, text theme.Token) {
 	return theme.Token("state." + s.Badge + ".bg"), theme.Token("state." + s.Badge + ".text")
 }
 
@@ -18,6 +18,6 @@ func Badge(p style.Palette, s track.Status) string {
 	if s.Label == "" {
 		return ""
 	}
-	bg, text := BadgeTokens(s)
+	bg, text := badgeTokens(s)
 	return lipgloss.NewStyle().Background(p.Color(bg)).Foreground(p.Color(text)).Render(" " + s.Label + " ")
 }
