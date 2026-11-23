@@ -137,8 +137,8 @@ Tracks doesn't promise more than the engines can enforce.
 A narrow pane on the left of the track's window, a small Tracks program
 built from the Tracks window's parts: `widget.Frame`, the theme's tokens,
 the Station's status badges. It holds two frames: **Platform**, the trains,
-and below it **Signals**, the Relay Station. (The sketch shows later agents
-beside the Reviewer.)
+and below it **Signals**: the Relay Station and the PRs' open comments.
+(The sketch shows later agents beside the Reviewer.)
 
 ```
 ╭─ Platform ────────────────╮
@@ -152,19 +152,22 @@ beside the Reviewer.)
 ╰───────────────────────────╯
 ╭─ Signals ─────────────────╮
 │ Relay Station · 2 new     │
+│ PR #12                    │
+│  [ solve 3 comments ]     │
 ╰───────────────────────────╯
 ```
 
-- **Shown only while the track has a train.** It opens with the first and
-  closes with the last; a track without trains looks as it does now.
+- **Shown only while it has something to show:** a train, or a PR with
+  open comments. Each frame shows only with its entries: a track with open
+  comments and no train has Signals alone. A track with neither has no
+  sidebar.
 - **No icons** at first. A train's name and agent, its status badge, and for
   the Reviewer its outcome as a second badge, as the Station shows a PR's.
 - **Width:** "action required" and the frame need about 22–24 columns. A
-  setting hides the Platform; the track's info then says "2 trains · 1 needs
-  you".
+  setting hides the sidebar; the track's info then says "2 trains · 1 needs
+  you", and the PR buttons go back to the footer's top row.
 - **The reviewer moves here, and today's reviewer UI goes:**
-  - the footer's Open/Hide reviewer and Close reviewer buttons; the top row
-    keeps the track's info and the PR buttons;
+  - the footer's Open/Hide reviewer and Close reviewer buttons;
   - moving its pane into the track's right column (`join-pane`) and back;
     it is seen only in the overlay;
   - showing its pane by itself for Claude's trust question (see Status);
@@ -188,6 +191,21 @@ overlay, as a train's opens:
 - **Hide** and `Ctrl+b Esc` close it, as a train's overlay. Opening it
   marks the messages seen by the user; it doesn't mark them read for any
   agent.
+
+### Signals: the PRs' comments
+
+The footer's PR buttons ("PR #12 · solve 3 comments") move into Signals,
+one entry per PR with open comments: the PR's label on one line, the
+**solve** button under it, so a repo's name (multi-repo tracks) fits the
+width.
+
+- They work as now: a click sends the agent the prompt to answer the
+  comments; once sent, the entry reads "sent to the agent", muted, until
+  new comments come. The click is the user's, so it goes straight in, as
+  Collect messages does.
+- They keep the variants they take now (1 to 4, in turn).
+- **The footer's top row is the track's info alone, centred again**, as
+  before the reviewer's buttons took its sides.
 
 ### Status
 
@@ -396,7 +414,8 @@ Each step a PR of its own.
    `Ctrl+b Esc`. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
 8. Collect messages.
-9. Signals: the Relay Station and its overlay.
+9. Signals: the Relay Station and its overlay; the PR buttons moved in
+   from the footer, the track's info centred again.
 10. The track's prompt: the relay paragraph (reading messages when a pointer
     comes).
 11. The "started from" note on independent tracks. Independent of the rest.
