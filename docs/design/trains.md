@@ -176,7 +176,16 @@ by Tracks. A relay station more than a chat.
   the reviewer's run ID; the daemon maps it to the handle. Nobody sends as
   another.
 - **Star layout.** A train sends only to its track; the track sends to its
-  trains. Trains don't talk to each other.
+  trains. Trains don't talk to each other in v1; addressing by handle
+  leaves room for it later (see Later).
+- **Who's on the platform.** `tracks relay who` lists the track's handles:
+  each one's agent, the first line of its task and its status. Each train's
+  brief says other trains may be there and how to list them.
+- **Join notices.** When a train starts, Tracks adds a notice for the
+  track's other trains and the track: "@watch-ci joined: Watcher, <first
+  line of its task>". It sends no pointer: a notice wakes no one, and comes
+  with the reader's next `relay read`. A notice that a train ended comes the
+  same way.
 - **Addressed with a flag**, never found in the text:
   `tracks relay send --to big-boss --kind report` with the message on stdin.
   Reports quote code (`@Override`), PR comments (`@someone`) and handles
@@ -242,6 +251,7 @@ nothing into the orchestrating agent; it waits and reads.
 | `tracks relay read` | Prints the caller's unread messages, marks them read |
 | `tracks relay show <id>` | Prints one message whole |
 | `tracks relay wait` | Blocks until a message for the caller comes |
+| `tracks relay who` | The track's handles: agent, task's first line, status |
 | `tracks review …` | As now |
 
 The track's prompt gains a Trains paragraph: when to start one, which
@@ -264,7 +274,7 @@ Each step a PR of its own.
    `tracks-back`, `tracks train new|list|end`, the briefs, the worktree
    check. Ending with the parent.
 4. The relay: the migration, handles and tokens, `tracks relay
-   send|read|show|wait`.
+   send|read|show|wait|who`, join and end notices.
 5. Delivery: the pointer, the blockers, the tick, the stall check,
    notifications.
 6. The Platform: the pane, the list, the badges; the Reviewer in it, its
@@ -278,6 +288,16 @@ Each step a PR of its own.
 
 Later: the Reviewer on the relay (its `--ask` and `--wait` with it), a cap
 setting, user-defined agents, pinning beside, trains that write.
+
+Trains talking to each other, if a case needs it, with these rules:
+
+- Only `question` and `answer` between trains; reports and tasks still go
+  through the track.
+- The track sees every message between trains in its `relay read`, without
+  a pointer for them.
+- A limit per pair of trains, say 5 messages; after it Tracks refuses, and
+  they go through the track.
+- Messages stay data, fenced with their sender.
 
 ## Open
 
