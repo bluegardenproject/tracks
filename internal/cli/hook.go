@@ -141,7 +141,7 @@ func replyFileText(text string, answer bool) string {
 		text = strings.TrimSpace(text) + "\n\n"
 	}
 	return text + "The reviewer's turn ended without a report: its pane, which the footer's button shows, says why.\n\n" +
-		review.Outcome + " not run"
+		review.Outcome + " " + review.NotRun
 }
 
 func appendLog(path, line string) error {

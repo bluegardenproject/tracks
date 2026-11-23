@@ -81,6 +81,9 @@ func (s *Service) End(ctx context.Context, id string) error {
 			}
 		}
 	}
+	if err := s.dropReview(id); err != nil {
+		return err
+	}
 	return s.Report(ctx, id, track.Ended)
 }
 
@@ -116,6 +119,9 @@ func (s *Service) Sweep(ctx context.Context) error {
 			// A window closed some other way than Close leaves the
 			// track's hidden panes, such as its reviewer, running.
 			if err := s.Windows.EndHidden(t.ID); err != nil {
+				return err
+			}
+			if err := s.dropReview(t.ID); err != nil {
 				return err
 			}
 		}

@@ -73,6 +73,12 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 	}
 	removeWorktrees := func() { _ = s.Worktrees.RemoveWorktrees(undo, t.ID, made) }
 
+	// A review of the track's last run, ended without its window, as
+	// before reviews went with it, isn't a train of this one.
+	if err := s.dropReview(t.ID); err != nil {
+		removeWorktrees()
+		return Created{}, err
+	}
 	hooks, err := s.installHooks(t)
 	if err != nil {
 		removeWorktrees()

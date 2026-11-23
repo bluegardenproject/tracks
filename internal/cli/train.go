@@ -6,7 +6,6 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/spf13/cobra"
@@ -29,7 +28,7 @@ func newTrainListCmd() *cobra.Command {
 		Short: "list this track's trains, their agents and status",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			client, id, err := trainClient("train list")
+			client, id, err := trackClient("train list")
 			if err != nil {
 				return err
 			}
@@ -52,7 +51,7 @@ func newTrainEndCmd() *cobra.Command {
 			if os.Getenv(review.EnvMarker) != "" {
 				return fmt.Errorf("%w: a train doesn't end trains", review.ErrAlreadyReviewing)
 			}
-			client, id, err := trainClient("train end")
+			client, id, err := trackClient("train end")
 			if err != nil {
 				return err
 			}
@@ -63,19 +62,6 @@ func newTrainEndCmd() *cobra.Command {
 			return err
 		},
 	}
-}
-
-// trainClient is a daemon client and the track $TRACKS_ID, for command.
-func trainClient(command string) (rpc.Client, string, error) {
-	id := os.Getenv("TRACKS_ID")
-	if id == "" {
-		return rpc.Client{}, "", errNoTrack(command)
-	}
-	paths, err := platform.Resolve()
-	if err != nil {
-		return rpc.Client{}, "", err
-	}
-	return rpc.Client{Socket: paths.Socket}, id, nil
 }
 
 // printTrains writes trains as a table: name, agent, what it runs on,

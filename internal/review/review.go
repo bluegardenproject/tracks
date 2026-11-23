@@ -23,6 +23,10 @@ var ErrAlreadyReviewing = errors.New("already inside a review")
 // the review's report, one without it an answer to a question.
 const Outcome = "REVIEW OUTCOME:"
 
+// NotRun is the outcome of a review whose reviewer gave no report, as
+// when a Cursor reviewer's turn failed.
+const NotRun = "not run"
+
 // Brief is the file a reviewer is pointed at: the reviewer instructions,
 // what it may do in its pane, the track's candor level and the packet.
 func Brief(instructions string, candor int, p Packet) string {

@@ -32,6 +32,10 @@ func (s *Service) Interrupt(ctx context.Context) ([]string, error) {
 		if err := s.Report(ctx, t.ID, track.Interrupted); err != nil {
 			return names, err
 		}
+		// Its reviewer went with the tmux server.
+		if err := s.dropReview(t.ID); err != nil {
+			return names, err
+		}
 		names = append(names, t.Name)
 	}
 	return names, nil
