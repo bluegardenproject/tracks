@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
+	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
 // draftActions are a draft's buttons: Enter starts it again.
@@ -29,7 +30,7 @@ func (m Model) draftDetails(t source.Track, width int) ([]string, []hit) {
 		return strings.Split(m.fg(c).Width(max(1, width)).Render(s), "\n")
 	}
 
-	about := muted(t.Kind+"  ") + m.badge(t.Status)
+	about := muted(t.Kind+"  ") + widget.Badge(m.palette, t.Status)
 	name := m.fg(theme.TextDefault).Bold(true).Render(cut(t.Shown(), max(1, width-lipgloss.Width(about)-1)))
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	lines := []string{name + strings.Repeat(" ", gap) + about, ""}
