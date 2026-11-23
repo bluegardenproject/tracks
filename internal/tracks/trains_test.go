@@ -72,6 +72,16 @@ func TestTrainsListTheReviewer(t *testing.T) {
 	if tr := oneTrain(t, f); tr.Status != track.Done || tr.Outcome != train.Pass {
 		t.Errorf("report in: %s %s, want done pass", tr.Status.ID, tr.Outcome.ID)
 	}
+	question := filepath.Join(f.svc.reviewDir("r"), "question.md")
+	if err := os.WriteFile(question, []byte("Why?"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if tr := oneTrain(t, f); tr.Status != track.Active || tr.Outcome != train.Pass {
+		t.Errorf("asked a question: %s %s, want active pass", tr.Status.ID, tr.Outcome.ID)
+	}
+	if err := os.Remove(question); err != nil {
+		t.Fatal(err)
+	}
 	panes.state = ReviewerState{}
 	if tr := oneTrain(t, f); tr.Status != track.Exited || tr.Outcome != train.Pass {
 		t.Errorf("pane gone: %s %s, want agent exited, pass", tr.Status.ID, tr.Outcome.ID)
@@ -109,5 +119,27 @@ func TestEndTrain(t *testing.T) {
 	}
 	if trains, err := f.svc.Trains(ctx, "r"); err != nil || len(trains) != 0 {
 		t.Errorf("trains %+v, %v after the reviewer ended; want none", trains, err)
+	}
+}
+
+func TestTrainsGoWithTheTrack(t *testing.T) {
+	ctx := context.Background()
+	for _, end := range []struct {
+		name string
+		do   func(f *fixture) error
+	}{
+		{"End", func(f *fixture) error { return f.svc.End(ctx, "r") }},
+		{"Sweep", func(f *fixture) error { f.windows.windows = nil; return f.svc.Sweep(ctx) }},
+		{"Interrupt", func(f *fixture) error { f.windows.windows = nil; _, err := f.svc.Interrupt(ctx); return err }},
+	} {
+		f, panes, worktree := trainsFixture(t, "cursor")
+		startReview(t, f, worktree)
+		if err := end.do(f); err != nil {
+			t.Fatalf("%s: %v", end.name, err)
+		}
+		panes.state = ReviewerState{}
+		if trains, err := f.svc.Trains(ctx, "r"); err != nil || len(trains) != 0 {
+			t.Errorf("after %s: trains %+v, %v; want none", end.name, trains, err)
+		}
 	}
 }

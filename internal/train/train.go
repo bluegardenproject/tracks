@@ -67,6 +67,8 @@ type ReviewerFacts struct {
 	Report string
 	// AsksTrust says its screen asks whether to trust the worktree.
 	AsksTrust bool
+	// Asking says a question to it waits for its answer.
+	Asking bool
 }
 
 // ReviewerStatus is the status and outcome of a reviewer with facts f;
@@ -78,12 +80,22 @@ func ReviewerStatus(f ReviewerFacts) (status, outcome track.Status, ok bool) {
 		return track.Status{}, track.Status{}, false
 	case !f.Pane:
 		return track.Exited, outcome, true
-	case f.AsksTrust:
-		return track.ActionRequired, outcome, true
+	case f.Asking:
+		return track.Active, outcome, true
+	case notRun(f.Report):
+		return track.Error, outcome, true
 	case f.Report != "":
 		return track.Done, outcome, true
+	case f.AsksTrust:
+		return track.ActionRequired, outcome, true
 	}
 	return track.Active, outcome, true
+}
+
+// notRun says report is the stand-in of a review that gave none.
+func notRun(report string) bool {
+	lines := strings.Split(strings.TrimSpace(report), "\n")
+	return strings.TrimSpace(lines[len(lines)-1]) == review.Outcome+" "+review.NotRun
 }
 
 // OutcomeOf is report's outcome, Pass or Blocked from its last outcome
