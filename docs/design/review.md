@@ -1,7 +1,8 @@
 # Reviews
 
 **Status:** being built, one PR per step under Order. Steps 1 to 9 are
-built.
+built. The reviewer pane, its button and showing it for the trust question
+give way to the Platform and the overlay of [trains.md](trains.md).
 
 ## Problem
 

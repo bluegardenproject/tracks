@@ -1,6 +1,7 @@
 # Trains
 
-**Status:** agreed in discussion, not built. One PR per step under Order.
+**Status:** agreed in discussion; the spike (step 0) is done, see Spike.
+Not built. One PR per step under Order.
 
 ## Problem
 
@@ -42,7 +43,10 @@ The rest of this document is about trains.
 - **Nesting.** Trains open neither trains nor tracks.
 - **The user posting to the relay.** The user reads it; they talk to a train
   in its overlay.
-- **User-defined agents.** Later; the three below come first.
+- **User-defined agents.** Later.
+- **The Investigator and the Watcher in v1.** v1 builds trains with the
+  Reviewer as the only one. The other two are defined in a design of their
+  own at the end of Order.
 - **Pinning a train beside the agent** (`join-pane`, as the reviewer pane
   does now). The overlay only, at first.
 - **A cap.** None at first; a setting if trying it shows the need.
@@ -60,61 +64,71 @@ writes the task; it can't make up an agent, or change its engine, model or
 permissions. That keeps cost, permissions, prompts and the report's form
 known.
 
+**v1 has one: the Reviewer.** The Investigator and the Watcher below are the
+candidates that come next; what each is for, its brief, its commands and how
+the Watcher finishes are settled in their own design (Order, step 12).
+
 | Agent | For | May | Reports |
 |---|---|---|---|
 | **Reviewer** | Reviewing the diff, answering questions on it | Read; no commands | `REVIEW OUTCOME:` through the hooks, as now |
-| **Investigator** | A failing test or CI job, research in the code, pulling data, reproducing a bug, a second opinion on a plan | Read, run commands; never edit | One report through the relay |
-| **Watcher** | CI, PR comments, a dev server's logs | Read, run commands; never edit; runs long | An event through the relay each time something happens; a report when its condition is met |
+| **Investigator** (later) | A failing test or CI job, research in the code, pulling data, reproducing a bug, a second opinion on a plan | Read, run commands; never edit | One report through the relay |
+| **Watcher** (later) | CI, PR comments, a dev server's logs | Read, run commands; never edit; runs long | An event through the relay each time something happens; a report when its condition is met |
 
 - **Settings → Trains (agents)** is today's Settings → Agents, renamed. A
-  frame per agent, each with Agent and Model, as the Reviewer's. The keys
-  stay under `agents` in `settings.yaml` (`agents.reviewer`,
-  `agents.investigator`, `agents.watcher`), so existing settings keep
+  frame per agent, each with Agent and Model; v1 has the Reviewer's. The
+  keys stay under `agents` in `settings.yaml` (`agents.reviewer`, later
+  `agents.investigator` and `agents.watcher`), so existing settings keep
   working.
 - **Each agent has a fixed brief**, golden-checked; the parent's task is
   added to it, marked as the task.
 - `tracks review` stays the Reviewer's command. It is a train on the
-  Platform, but keeps its route through the hooks until a later step moves
-  it to the relay.
+  Platform and on the relay (see The Reviewer on the relay).
 
-### Never edits
+### Never edits: prevented where the engine can, detected everywhere
 
-"Read only" can't mean plan mode for the Investigator and the Watcher: they
-run tests, `gh`, `curl`, read logs.
+Tracks doesn't promise more than the engines can enforce.
 
-- Edit tools are denied, as the reviewer's are.
-- Tracks checks the worktree before and after, as it does for a review:
-  tracked files, and untracked files that aren't ignored. Build output that
-  is ignored is fine. A change is an `error` on the train and in its report.
-
-### Commands it may run
-
-A train in a hidden pane that asks "allow this command?" for each command
-would sit in `action required` most of its time.
-
-- **Each agent has a fixed set of allowed commands**, in its brief and its
-  engine's flags: `git` that only reads, `gh`, the repo's test runners,
-  `curl`. The spike finds how far Claude's permission flags go.
-- **Anything else is asked as now:** the train is `action required`, the
-  user is notified and answers in the overlay.
-- **Cursor:** ask mode runs no commands (`agents/cursor/reviewer.go`), and
-  the other modes edit. The spike looks for a Cursor permission config that
-  allows the commands and denies edits. Without one, the Investigator and
-  the Watcher run on Claude only in v1, and their Settings frames say so.
+- **Detected, on every engine.** The brief says never to edit, the edit
+  tools are denied, and Tracks checks the worktree before and after, as it
+  does for a review: tracked files, and untracked files that aren't ignored.
+  Ignored build output is fine. A change is an `error` on the train and in
+  its report.
+- **Prevented, where the engine allows it:**
+  - **The Reviewer** runs no commands: Claude in plan mode with the edit
+    tools denied, Cursor in ask mode. Nothing to prevent beyond that.
+  - **Claude running commands** (the spike): the train's own sandbox, with
+    writes to the worktree denied (`sandbox.filesystem.denyWrite`, or an
+    `Edit(<worktree>/**)` deny rule, through `--settings`), and
+    `--permission-mode dontAsk`. Every command runs in the sandbox; a write
+    to the worktree fails with "Operation not permitted"; a command outside
+    the sandbox is refused without a question. An allowlist of commands
+    alone isn't enough: managed settings that auto-allow sandboxed commands
+    override it.
+  - **Cursor running commands:** its CLI can't run commands while denying
+    writes. Ask mode runs none, an allowlist asks the user for every other
+    command, `--force` runs everything. Its permissions live only in a
+    config file, the user's global one or one in the worktree. Detection
+    covers it; whether a Cursor Investigator also asks for its commands is
+    for that agent's design.
 
 ## Lifetime
 
-- **Started by Tracks, not the parent.** `tracks train new` asks the
-  daemon, which opens the train's pane through tmux, as for the reviewer:
-  the parent's sandbox doesn't apply, and no way around it opens.
+- **Started by Tracks, not the parent.** `tracks review` (later also
+  `tracks train new`) asks the daemon, which opens the train's pane through
+  tmux, as for the reviewer now: the parent's sandbox doesn't apply, and no
+  way around it opens.
+- **Its own mode, always.** An agent started plainly takes the user's
+  default permission mode (the spike's Claude started in auto mode), so a
+  train always sets its mode. It still loads the user's global
+  instructions, hooks, skills and MCP servers; the run ID keeps Tracks'
+  hooks from mixing it up with the track, as for the reviewer now.
 - **A session of its own in `tracks-back`**, a window in it. The overlay
-  attaches a client to that session, so it needs one per train.
+  attaches a client to that session, so it needs one per train. It is
+  never moved into the track's window: today's route, `join-pane` into the
+  right column and `break-pane` back, goes (see The Platform).
 - **It ends** with the parent, with **End train**, or with
-  `tracks train end <name>`. A finished Investigator stays until then, so
-  the parent and the user can still ask it.
-- **A Watcher's finish condition is in its task**, with a time limit, two
-  hours unless the task says otherwise. It reports when the condition is
-  met or the time is up.
+  `tracks train end <name>`. A finished train stays until then, so the
+  parent and the user can still ask it.
 - **A restart ends trains.** When Tracks or its daemon restarts, the
   track's trains are ended; their messages stay readable.
 
@@ -123,7 +137,8 @@ would sit in `action required` most of its time.
 A narrow pane on the left of the track's window, a small Tracks program
 built from the Tracks window's parts: `widget.Frame`, the theme's tokens,
 the Station's status badges. It holds two frames: **Platform**, the trains,
-and below it **Signals**, the Relay Station.
+and below it **Signals**, the Relay Station. (The sketch shows later agents
+beside the Reviewer.)
 
 ```
 ╭─ Platform ────────────────╮
@@ -147,8 +162,14 @@ and below it **Signals**, the Relay Station.
 - **Width:** "action required" and the frame need about 22–24 columns. A
   setting hides the Platform; the track's info then says "2 trains · 1 needs
   you".
-- **The reviewer moves here.** The footer's Open/Hide and Close reviewer
-  buttons go; the top row keeps the track's info and the PR buttons.
+- **The reviewer moves here, and today's reviewer UI goes:**
+  - the footer's Open/Hide reviewer and Close reviewer buttons; the top row
+    keeps the track's info and the PR buttons;
+  - moving its pane into the track's right column (`join-pane`) and back;
+    it is seen only in the overlay;
+  - showing its pane by itself for Claude's trust question (see Status);
+  - `button.variant6`, which only Open/Hide reviewer uses. `button.variant5`
+    stays, for End train.
 - `badge()` moves from `ui/tracksview` to `ui/widget`, so the Station and
   the Platform draw the same badge.
 
@@ -250,7 +271,25 @@ by Tracks. A relay station more than a chat.
 - **A train that ends its turn without a report** gets a fixed pointer, as
   any delivery: "Send your report with `tracks relay send --to <track>
   --kind report`." A train that exits without one leaves the track a
-  notice: "@detective exited without a report".
+  notice: "@detective exited without a report". (Not the Reviewer: its
+  report comes through the hooks.)
+
+### The Reviewer on the relay
+
+The Reviewer runs no commands, so it can't `relay send` or `relay read`.
+Tracks speaks for it:
+
+- **Its report and answers go on the relay** as @reviewer's, kind `report`
+  or `answer`, taken from the hooks as now (Claude's Stop hook; Cursor's
+  print-mode turn). The track gets a pointer, as for any message.
+- **A question for it** is `tracks review --ask`, or `tracks relay send --to
+  reviewer --kind question`. Tracks types the question itself into the
+  reviewer's session, behind the fixed lead-in `--ask` uses now: it comes
+  from the track, never from another train (the star layout). The delivery
+  blockers apply.
+- **`tracks review --wait` and `--ask`** read the relay underneath and print
+  as now, so the prompts that use them don't change.
+- The Relay Station shows the reviews and the questions and answers.
 
 ### Delivery
 
@@ -272,9 +311,17 @@ Tracks holds the pointer while anything blocks it:
 | The user is typing in its pane or overlay | No key for a few seconds (`client_activity`) |
 | Text in its input | The input line is empty, read from the screen as the markers are |
 
-If the spike finds the input line can't be read reliably on an engine,
-that engine's agents go without the last check: not typing, and Collect
-messages, cover it.
+From the spike:
+
+- **Typing:** `client_activity` changes on keystrokes only, not on output
+  or a resize, in whole seconds. It is per client: the check covers every
+  client on the target's session, an overlay's among them.
+- **An empty input:** on both engines the placeholder is drawn dim
+  (`ESC[2m`) after the prompt marker (`❯` for Claude, `→` for Cursor), and a
+  draft in normal text. Read with `capture-pane -e`: the input is empty
+  when everything after the marker is dim or blank, whatever the
+  placeholder says. Claude's input can span several lines: all lines
+  between its two rules count.
 
 - **Retried on the footer's tick**; messages waiting for one agent go as one
   pointer.
@@ -301,7 +348,7 @@ nothing into the orchestrating agent; it waits and reads.
 
 | Command | Does |
 |---|---|
-| `tracks train new <agent> --task <text>` | Starts a train; `--name` sets its handle, `--task-file -` reads the task |
+| `tracks train new <agent> --task <text>` | Later, with the Investigator: starts a train; `--name` sets its handle, `--task-file -` reads the task |
 | `tracks train list` | The track's trains, their agent, handle and status |
 | `tracks train end <name>` | Ends one and closes its pane |
 | `tracks relay send --to <handle> --kind <kind>` | Sends stdin as a message |
@@ -315,38 +362,51 @@ The track's prompt gains a Trains paragraph: when to start one, which
 agent, the relay commands. Prompts are golden-checked; its wording is agreed
 first.
 
+## Spike
+
+Step 0, run on a throwaway tmux server and the real agent CLIs:
+
+| Check | Result |
+|---|---|
+| A popup with a nested client on the train's session | Works: typing reaches the train, not the track |
+| Hide in the header (a status-line range) | Detaches the popup's client; the train runs on |
+| `Ctrl+b Esc` | Reaches the popup's client and hides it |
+| Claude and Cursor at popup size | Claude redraws cleanly; Cursor draws inline and leaves old lines above, harmless in the overlay |
+| `client_activity` | Keystrokes only (see Delivery) |
+| An empty input | The dim placeholder (see Delivery) |
+| Claude: commands without edits | Its sandbox with the worktree denied, and `dontAsk` (see Never edits) |
+| Cursor: commands without edits | Not possible with its CLI (see Never edits) |
+
 ## Order
 
 Each step a PR of its own.
 
-0. **Spike**, not merged: the reviewer in an overlay. Keys and mouse in a
-   nested client on Tracks' socket; Claude and Cursor redrawing at popup
-   size; the header row; `client_activity` changing on keys only; reading
-   an empty input line on both engines; how far Claude's permission flags
-   let a train run its commands unasked; a Cursor permission config that
-   runs commands but doesn't edit.
 1. `badge()` to `ui/widget`.
-2. Settings → Trains (agents): the rename, the Investigator and Watcher
-   frames.
+2. Settings → Trains (agents): the rename.
 3. Trains: the migration, the daemon's trains, a session per train in
-   `tracks-back`, `tracks train new|list|end`, the briefs, the worktree
-   check. Ending with the parent.
+   `tracks-back`, the Reviewer as the first, `tracks train list|end`, the
+   worktree check. Ending with the parent.
 4. The relay: the migration, handles and tokens, `tracks relay
-   send|read|show|wait|who`, join and end notices.
+   send|read|show|wait|who`, join and end notices; the Reviewer on it, its
+   `--ask` and `--wait` reading it.
 5. Delivery: the pointer, the blockers, the tick, the stall check,
    notifications.
-6. The Platform: the pane, the list, the badges; the Reviewer in it, its
-   footer buttons gone.
+6. The Platform: the pane, the list, the badges; the Reviewer in it.
 7. The overlay: the popup, the header with Hide and End train,
-   `Ctrl+b Esc`.
+   `Ctrl+b Esc`. Today's reviewer UI goes: the footer's reviewer buttons,
+   `join-pane`, the pane shown for the trust question, `button.variant6`.
 8. Collect messages.
 9. Signals: the Relay Station and its overlay.
-10. The Watcher: events, its finish condition and time limit.
-11. The track's prompt: the Trains paragraph.
-12. The "started from" note on independent tracks. Independent of the rest.
+10. The track's prompt: the relay paragraph (reading messages when a pointer
+    comes).
+11. The "started from" note on independent tracks. Independent of the rest.
+12. The Investigator and the Watcher: their design (purpose, briefs,
+    commands, the Watcher's finish condition, Cursor), then a step each,
+    with `tracks train new`, their Settings frames and the Trains paragraph
+    of the track's prompt.
 
-Later: the Reviewer on the relay (its `--ask` and `--wait` with it), a cap
-setting, user-defined agents, pinning beside, trains that write.
+Later: a cap setting, user-defined agents, pinning beside, trains that
+write.
 
 Trains talking to each other, if a case needs it, with these rules:
 
@@ -360,5 +420,8 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Open
 
-Nothing for v1 beyond what the spike (step 0) settles: the allowed
-commands on each engine, and the input-line check.
+- Claude on a machine without managed settings: the train switches its
+  sandbox on and auto-allows it itself, through `--settings`; to confirm
+  in step 12.
+- The hosts a command-running train's sandbox lets it reach (`gh`, `curl`).
+- The Investigator's and the Watcher's design (step 12).
