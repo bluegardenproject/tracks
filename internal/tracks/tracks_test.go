@@ -168,6 +168,9 @@ type fakeWindows struct {
 	// pasted what Paste pasted, after its window.
 	lastKeys map[string]time.Time
 	pasted   []string
+	// whilePasting runs inside Paste, which then fails with pasteErr.
+	whilePasting func()
+	pasteErr     error
 	// buttons is each window's buttons; prompts the lines typed into the
 	// agents, as "<window> <text>".
 	buttons map[string]string
@@ -207,7 +210,10 @@ func (w *fakeWindows) LastKey(window string) (time.Time, error) { return w.lastK
 
 func (w *fakeWindows) Paste(window, text string) error {
 	w.pasted = append(w.pasted, window+" "+text)
-	return nil
+	if w.whilePasting != nil {
+		w.whilePasting()
+	}
+	return w.pasteErr
 }
 
 func (w *fakeWindows) List() ([]trackwin.Info, error) { return w.windows, nil }

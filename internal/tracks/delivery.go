@@ -35,6 +35,10 @@ func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 		s.turns = map[string]bool{}
 	}
 	s.turns[id] = turn == hooks.TurnStart
+	if turn == hooks.TurnStart {
+		// A pointer waiting for a turn was taken, however short the turn.
+		delete(s.pointing, id)
+	}
 }
 
 // forgetTurn forgets what track id's agent's hooks told of its turns,
@@ -85,11 +89,13 @@ const (
 )
 
 // pointing is a pointer typed into a track's agent, waiting for the
-// turn it starts: sent when, and how far the track was pointed to
-// before it.
+// turn it starts: sent when, how far the track was pointed to before
+// it, and which pointer it is, so a paste that ends late touches only
+// its own.
 type pointing struct {
 	at     time.Time
 	before int64
+	gen    uint64
 }
 
 // Deliver types a pointer into each open track's agent for the relay
@@ -98,9 +104,18 @@ type pointing struct {
 // one the agent didn't take, by not starting a turn within
 // pointerStall, goes again after pointerRetry.
 func (s *Service) Deliver(ctx context.Context) error {
-	windows, err := s.trackWindows()
+	infos, err := s.Windows.List()
 	if err != nil {
 		return err
+	}
+	// A window whose agent exited holds a shell, where a pointer would
+	// run as a command: it's skipped by its own mark, before the store
+	// hears of the exit.
+	windows := map[string]string{}
+	for _, in := range infos {
+		if in.Exit == "" {
+			windows[in.Track] = in.Window
+		}
 	}
 	open, err := s.Store.OpenTracks(ctx)
 	if err != nil {
@@ -109,7 +124,7 @@ func (s *Service) Deliver(ctx context.Context) error {
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
-		if !ok || t.Exit != "" {
+		if !ok || t.Exit != "" || s.isBusy(t.ID) {
 			continue
 		}
 		if err := s.deliver(ctx, t, window); err != nil {
@@ -131,9 +146,6 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	}
 	p, waiting := s.pointing[t.ID]
 	switch {
-	case waiting && s.turns[t.ID]:
-		// It took the pointer.
-		delete(s.pointing, t.ID)
 	case waiting && now.Sub(p.at) >= pointerStall:
 		// It didn't: it's as idle as it was when the pointer went.
 		delete(s.pointing, t.ID)
@@ -163,15 +175,33 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	if len(due) == 0 || s.blockers(t, window).Why() != "" {
 		return nil
 	}
-	if err := s.Windows.Paste(window, relay.Pointer(due)); err != nil {
-		return err
-	}
+	// Recorded before the paste, so a turn's start or a new agent
+	// arriving meanwhile changes it, rather than the paste's end undoing
+	// them. The pointer starts the agent's turn: none is known until its
+	// hooks say so.
+	s.mu.Lock()
+	s.pointerGen++
+	gen := s.pointerGen
+	s.pointing[t.ID] = pointing{at: now, before: pointed, gen: gen}
+	s.pointed[t.ID] = due[len(due)-1].ID
+	delete(s.turns, t.ID)
+	s.mu.Unlock()
+
+	err = s.Windows.Paste(window, relay.Pointer(due))
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pointing[t.ID] = pointing{at: s.now(), before: pointed}
-	s.pointed[t.ID] = due[len(due)-1].ID
-	// The pointer starts the agent's turn: none is known until its hooks
-	// say so.
-	delete(s.turns, t.ID)
+	p, ours := s.pointing[t.ID]
+	if !ours || p.gen != gen {
+		return err
+	}
+	if err != nil {
+		delete(s.pointing, t.ID)
+		s.pointed[t.ID] = p.before
+		s.turns[t.ID] = false
+		return err
+	}
+	// The stall's wait starts once the pointer is in.
+	p.at = s.now()
+	s.pointing[t.ID] = p
 	return nil
 }

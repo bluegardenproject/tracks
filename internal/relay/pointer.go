@@ -2,6 +2,7 @@ package relay
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ func Pointer(msgs []Message) string {
 	var from []string
 	for _, m := range msgs {
 		h := "@" + m.From
-		if !contains(from, h) {
+		if !slices.Contains(from, h) {
 			from = append(from, h)
 		}
 	}
@@ -26,15 +27,6 @@ func Pointer(msgs []Message) string {
 		return count + " from " + from[0] + " on the relay: run `tracks relay read`."
 	}
 	return count + " on the relay, from " + and(from) + ": run `tracks relay read`."
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // and lists items as people do: a, b and c.
