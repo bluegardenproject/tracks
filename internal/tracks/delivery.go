@@ -134,11 +134,13 @@ func (s *Service) Deliver(ctx context.Context) error {
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
-		if ok && t.Exit != "" {
-			// No agent to point: nothing to collect either.
-			s.setHeld(t.ID, nil)
+		if s.isBusy(t.ID) {
+			continue
 		}
-		if !ok || t.Exit != "" || s.isBusy(t.ID) {
+		if !ok || t.Exit != "" {
+			// No agent to point (its window, if any, holds the shell it
+			// exited to): nothing to collect either.
+			s.setHeld(t.ID, nil)
 			continue
 		}
 		if err := s.deliver(ctx, t, window); err != nil {
@@ -278,6 +280,7 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 		delete(s.turns, id)
 	}
 	delete(s.retryAt, id)
+	held := s.held[id]
 	delete(s.held, id)
 	s.mu.Unlock()
 	// The messages count as pointed to from here, as the Relay Station
@@ -292,10 +295,13 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	case err != nil:
 		delete(s.pointing, id)
 		s.pointed[id] = p.before
-		if known {
-			s.turns[id] = in
-		} else {
-			delete(s.turns, id)
+		if len(held) > 0 {
+			s.held[id] = held
+		}
+		// A collected pointer left the turn as it was; a delivered one
+		// went to an idle agent.
+		if !collected {
+			s.turns[id] = false
 		}
 		s.mu.Unlock()
 		s.Changes.Notify()
