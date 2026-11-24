@@ -502,8 +502,8 @@ Each step a PR of its own.
    Platform can show `agent exited`; until then a train is listed while
    its pane is open. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
-   Built: `tracks train show`; the trust question is told under "A track
-   needs you"; a theme file that still sets `button.variant6` loads, the
+   Built: `tracks train show`, which a click on a train in the Platform
+   runs; the trust question is told under "A track needs you"; a theme file that still sets `button.variant6` loads, the
    token skipped.
 8. Collect messages. Built: delivery notes whose messages a held pointer
    waits for and tells the change feed; `relay-collect` sends it.

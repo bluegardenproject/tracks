@@ -324,8 +324,8 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", Problem(fmt.Sprintf("No %s after %s. The reviewer still runs: "+
-					"the user can look at it in its overlay (tracks train show reviewer).", what, reviewWait))
+				return "", Problem(fmt.Sprintf("No %s after %s. tracks train list says whether the reviewer still "+
+					"runs or its agent exited; the user can look at it in its overlay (tracks train show reviewer).", what, reviewWait))
 			}
 			return "", ctx.Err()
 		case <-time.After(reviewPoll):

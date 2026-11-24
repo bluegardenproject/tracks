@@ -1,7 +1,7 @@
 // Package platform is the Platform: the pane on a track window's left
 // that lists the track's trains, each with the Station's status badges
 // (see docs/design/trains.md). It reads them from the daemon, again on
-// each change the daemon tells of.
+// each change the daemon tells of. A click on a train opens its overlay.
 package platform
 
 import (
@@ -48,6 +48,8 @@ type Config struct {
 	// Collect sends the track's agent the pointer to its waiting
 	// messages now: Collect messages.
 	Collect func() error
+	// Open opens train handle's overlay; it returns once it closes.
+	Open func(handle string)
 }
 
 // Model is the Platform.
@@ -65,6 +67,10 @@ type Model struct {
 	// a click's call on its way, which other clicks wait for.
 	notice     string
 	collecting bool
+	open       func(handle string)
+	// opening says an overlay is being opened: clicks on trains wait
+	// for it.
+	opening bool
 }
 
 type (
@@ -78,11 +84,12 @@ type (
 		err   error
 	}
 	collectedMsg struct{ err error }
+	openedMsg    struct{}
 )
 
 // New is the Platform for c.
 func New(c Config) Model {
-	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme, collect: c.Collect}
+	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme, collect: c.Collect, open: c.Open}
 	if c.Watch != nil {
 		m.changes = make(chan struct{}, 1)
 	}
@@ -114,6 +121,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice, m.collecting = "Collecting…", true
 			return m, func() tea.Msg { return collectedMsg{collect()} }
 		}
+		if i, ok := m.trainAt(msg.Y); ok && msg.Button == tea.MouseLeft && !m.opening && m.open != nil {
+			open, handle := m.open, m.trains[i].Handle
+			m.opening = true
+			return m, func() tea.Msg { open(handle); return openedMsg{} }
+		}
+	case openedMsg:
+		m.opening = false
 	case collectedMsg:
 		m.notice, m.collecting = "", false
 		if msg.err != nil {
@@ -151,7 +165,7 @@ func (m Model) lines() []string {
 	if m.width < 6 || m.height < 3 {
 		return nil
 	}
-	body, _ := m.body()
+	body, _, _ := m.body()
 	return widget.Frame(m.palette, "Platform", body, m.width, m.height, theme.BorderDefault)
 }
 
@@ -162,7 +176,7 @@ func (m Model) collectAt(x, y int) bool {
 	if m.width < 6 || m.height < 3 || y >= m.height-1 {
 		return false
 	}
-	_, buttons := m.body()
+	_, buttons, _ := m.body()
 	width := widget.NewButton("Collect messages", widget.ButtonAccent).Width()
 	for _, row := range buttons {
 		if y == row+1 && x >= 3 && x < min(3+width, m.width-2) {
@@ -170,6 +184,21 @@ func (m Model) collectAt(x, y int) bool {
 		}
 	}
 	return false
+}
+
+// trainAt is the train on row y of the pane, its handle's row or its
+// badges'; false for none. The frame's top border is row 0.
+func (m Model) trainAt(y int) (int, bool) {
+	if m.width < 6 || m.height < 3 || y >= m.height-1 {
+		return 0, false
+	}
+	_, _, names := m.body()
+	for i, row := range names {
+		if y == row+1 || y == row+2 {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // anyHeld reports whether a train's messages wait for a held pointer.
@@ -182,9 +211,9 @@ func (m Model) anyHeld() bool {
 	return false
 }
 
-// body is the frame's inside, and the rows of its Collect messages
-// buttons.
-func (m Model) body() (body []string, buttons []int) {
+// body is the frame's inside, the rows of its Collect messages buttons,
+// and the row of each train's handle, its badges below it.
+func (m Model) body() (body []string, buttons, names []int) {
 	inner := m.width - 4
 	for _, t := range m.trains {
 		handle := t.Handle
@@ -192,6 +221,7 @@ func (m Model) body() (body []string, buttons []int) {
 			handle = string(r[:inner-1]) + "…"
 		}
 		name := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(handle)
+		names = append(names, len(body))
 		body = append(body, name)
 		badges := widget.Badge(m.palette, t.Status)
 		if t.Outcome.Label != "" {
@@ -213,7 +243,7 @@ func (m Model) body() (body []string, buttons []int) {
 	if m.notice != "" {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
-	return body, buttons
+	return body, buttons, names
 }
 
 // muted is text in muted colour, wrapped to width.

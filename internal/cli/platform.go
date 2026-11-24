@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 
 	tea "charm.land/bubbletea/v2"
@@ -39,6 +40,7 @@ func newPlatformCmd(version string) *cobra.Command {
 				Watch:     daemon.watch,
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
 				Collect:   func() error { return client.RelayCollect(cmd.Context(), id) },
+				Open:      func(handle string) { openFromPlatform(cmd.Context(), daemon.tmux, client, paths, id, handle) },
 			})
 			_, err = tea.NewProgram(m, tea.WithContext(cmd.Context()), tea.WithColorProfile(style.Profile())).Run()
 			if cmd.Context().Err() != nil {
@@ -60,4 +62,18 @@ func platformEntries(trains []rpc.Train, err error) ([]uiplatform.Entry, error) 
 		out[i] = uiplatform.Entry{Handle: t.Handle, Status: train.StatusOf(t.StatusID), Outcome: train.StatusOf(t.OutcomeID), Held: t.Held}
 	}
 	return out, nil
+}
+
+// openFromPlatform opens track id's train handle in its overlay over the
+// client showing the Platform, and says over it what went wrong.
+func openFromPlatform(ctx context.Context, t *tmux.Client, daemon rpc.Client, paths platform.Paths, id, handle string) {
+	client, err := t.ClientOf(ownPane(paths))
+	if err != nil {
+		_ = t.DisplayMessage("Couldn't open " + handle + ": " + err.Error())
+		return
+	}
+	th, _ := loadTheme(paths)
+	if err := showTrain(ctx, t, daemon, th, id, handle, client); err != nil {
+		_ = t.Tell(client, "Couldn't open "+handle+": "+err.Error())
+	}
 }
