@@ -124,6 +124,11 @@ type Windows interface {
 	// Scrolled reports whether window's agent pane is in a mode, such as
 	// copy mode while the user scrolls back.
 	Scrolled(window string) (bool, error)
+	// Platform is window's Platform pane, "" for none; OpenPlatform opens
+	// it running command, ClosePlatform closes it.
+	Platform(window string) (string, error)
+	OpenPlatform(window, command string) error
+	ClosePlatform(window string) error
 }
 
 // Service creates, lists and ends tracks.
@@ -219,6 +224,8 @@ type Service struct {
 	pointed    map[string]int64
 	retryAt    map[string]time.Time
 	pointerGen uint64
+	// trainsSeen is, by track, what SyncTrains last saw of its trains.
+	trainsSeen map[string]string
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string
@@ -461,6 +468,23 @@ func (w TmuxWindows) agentScreen(window string, capture func(pane string) (strin
 func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }
 
 func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }
+
+func (w TmuxWindows) Platform(window string) (string, error) {
+	return trackwin.Platform(w.Tmux, window)
+}
+
+func (w TmuxWindows) OpenPlatform(window, command string) error {
+	_, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
+	return err
+}
+
+func (w TmuxWindows) ClosePlatform(window string) error {
+	pane, err := trackwin.Platform(w.Tmux, window)
+	if err != nil || pane == "" {
+		return err
+	}
+	return w.Tmux.KillPane(pane)
+}
 
 func (w TmuxWindows) Scrolled(window string) (bool, error) {
 	panes, err := w.Tmux.ListPanes(window)

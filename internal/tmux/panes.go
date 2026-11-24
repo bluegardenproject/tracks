@@ -137,6 +137,19 @@ func (c *Client) NewSessionAt(name, window, dir, command string) error {
 	return err
 }
 
+// SplitLeft opens a pane cols wide on the left of target's window, full
+// height, running command in cwd, without selecting it.
+func (c *Client) SplitLeft(target string, cols int, cwd, command string) (string, error) {
+	args := []string{"split-window", "-d", "-h", "-b", "-f", "-l", strconv.Itoa(cols), "-t", target, "-P", "-F", "#{pane_id}"}
+	if cwd != "" {
+		args = append(args, "-c", cwd)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	return c.run(args...)
+}
+
 // JoinPane moves pane src into target's window, beside or below
 // target, without selecting it; percent is its share, 0 for half.
 func (c *Client) JoinPane(src, target string, dir Split, percent int) error {

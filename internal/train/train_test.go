@@ -63,3 +63,14 @@ func TestAgentName(t *testing.T) {
 		t.Errorf("Reviewer.Name() = %q", got)
 	}
 }
+
+func TestStatusOf(t *testing.T) {
+	for _, s := range []track.Status{track.Active, track.ActionRequired, track.Done, track.Exited, track.Error, Pass, Blocked} {
+		if got := StatusOf(s.ID); got != s {
+			t.Errorf("StatusOf(%q) = %+v", s.ID, got)
+		}
+	}
+	if got := StatusOf("nope"); got != (track.Status{}) {
+		t.Errorf("an unknown ID: %+v", got)
+	}
+}

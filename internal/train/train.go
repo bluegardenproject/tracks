@@ -127,3 +127,14 @@ func OutcomeOf(report string) track.Status {
 	}
 	return track.Status{}
 }
+
+// StatusOf is the train status or outcome whose ID is id: a Station
+// status, or Pass or Blocked; none for an ID it doesn't know.
+func StatusOf(id string) track.Status {
+	for _, s := range append([]track.Status{Pass, Blocked}, track.Statuses...) {
+		if s.ID == id {
+			return s
+		}
+	}
+	return track.Status{}
+}
