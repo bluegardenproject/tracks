@@ -15,17 +15,20 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
+	"github.com/bluegardenproject/tracks/internal/train"
 )
 
 type fakeReviewers struct {
 	opened    []trackwin.Process
+	specs     []trackwin.TrainSpec
 	dirs      []string
 	closed    []string
 	state     ReviewerState
 	typed     []string
 	respawned []string
 	screen    string
-	showErr   error
+	badges    map[string]string
+	badgeErr  error
 	openErr   error
 }
 
@@ -41,40 +44,40 @@ func (f *fakeReviewers) RespawnReviewer(pane, dir, command string) error {
 	return nil
 }
 
-func (f *fakeReviewers) OpenReviewer(_, dir string, p trackwin.Process) error {
+func (f *fakeReviewers) OpenReviewer(s trackwin.TrainSpec) error {
 	if f.openErr != nil {
 		return f.openErr
 	}
-	f.opened, f.dirs = append(f.opened, p), append(f.dirs, dir)
-	f.state = ReviewerState{Pane: "%9"}
+	f.opened, f.dirs, f.specs = append(f.opened, s.Process), append(f.dirs, s.Dir), append(f.specs, s)
+	f.state = ReviewerState{Pane: "%9", Session: trackwin.TrainSession(s.Track, s.Handle)}
 	return nil
 }
 
-func (f *fakeReviewers) CloseReviewer(track, window string) error {
-	f.closed = append(f.closed, track+" "+window)
+func (f *fakeReviewers) CloseReviewer(track string) error {
+	f.closed = append(f.closed, track)
 	f.state = ReviewerState{}
 	return nil
 }
 
-func (f *fakeReviewers) Reviewer(string, string) (ReviewerState, error) { return f.state, nil }
+func (f *fakeReviewers) Reviewer(string) (ReviewerState, error) { return f.state, nil }
 
 func (f *fakeReviewers) Reviewers() (map[string]ReviewerState, error) {
 	if f.state.Pane == "" {
 		return map[string]ReviewerState{}, nil
 	}
-	return map[string]ReviewerState{"r": f.state}, nil
+	r := f.state
+	r.Attached = false
+	return map[string]ReviewerState{"r": r}, nil
 }
 
-func (f *fakeReviewers) ShowReviewer(_, pane string) error {
-	if f.showErr != nil {
-		return f.showErr
+func (f *fakeReviewers) TrainBadge(session, badges string) error {
+	if f.badgeErr != nil {
+		return f.badgeErr
 	}
-	f.state.Shown = true
-	return nil
-}
-
-func (f *fakeReviewers) HideReviewer(_, pane string) error {
-	f.state.Shown = false
+	if f.badges == nil {
+		f.badges = map[string]string{}
+	}
+	f.badges[session] = badges
 	return nil
 }
 
@@ -101,7 +104,7 @@ func TestReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "Cursor (gpt-5)" || len(panes.opened) != 1 || panes.dirs[0] != worktree || len(panes.closed) != 1 || panes.closed[0] != "r @r" {
+	if name != "Cursor (gpt-5)" || len(panes.opened) != 1 || panes.dirs[0] != worktree || len(panes.closed) != 1 || panes.closed[0] != "r" {
 		t.Fatalf("name %q, opened %+v in %v, closed %v; want Cursor's reviewer in the worktree, after the one there", name, panes.opened, panes.dirs, panes.closed)
 	}
 	cmd := panes.opened[0].Command
@@ -158,7 +161,7 @@ func TestReview(t *testing.T) {
 	}
 	defer func(d time.Duration) { reviewWait = d }(reviewWait)
 	reviewWait = time.Second
-	if _, err := f.svc.WaitReview(ctx, "r"); err == nil || !strings.Contains(err.Error(), "still runs in its pane") {
+	if _, err := f.svc.WaitReview(ctx, "r"); err == nil || !strings.Contains(err.Error(), "still runs") {
 		t.Errorf("a new review returned the old report, or waited on: %v", err)
 	}
 	if _, err := f.svc.WaitReview(ctx, "../x"); err == nil {
@@ -188,9 +191,9 @@ func TestReview(t *testing.T) {
 	}
 }
 
-// The reviewer's button follows its pane: Open while hidden, Hide while
-// shown, gone with the reviewer.
-func TestReviewerButton(t *testing.T) {
+// A reviewer runs in a train's session with a header of its own, whose
+// badge follows its status; End train ends it.
+func TestReviewerTrain(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	worktree := t.TempDir()
@@ -201,59 +204,60 @@ func TestReviewerButton(t *testing.T) {
 	f.windows.windows = append(f.windows.windows, trackwin.Info{Window: "@r", Track: "r", Name: "r"})
 	panes := &fakeReviewers{}
 	f.svc.Reviewers = panes
-
-	if _, err := f.svc.RunAction(ctx, "r", actions.ReviewerRange); err == nil {
-		t.Error("toggling a reviewer that isn't there worked")
-	}
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(false) {
-		t.Errorf("buttons %q after a review started, want Open reviewer", b)
+	handle := reviewHandle(f.svc.reviewDir("r"))
+	spec := panes.specs[0]
+	if spec.Track != "r" || spec.Handle != handle || spec.Role != trackwin.RoleReviewer ||
+		spec.Header != actions.TrainHeader(handle, "Reviewer", trackwin.TrainBadgeOption) {
+		t.Errorf("spec %+v; want the reviewer's train, %s, with its header", spec, handle)
 	}
-	if _, err := f.svc.RunAction(ctx, "r", actions.ReviewerRange); err != nil {
-		t.Fatal(err)
-	}
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(true) || !panes.state.Shown {
-		t.Errorf("buttons %q, shown %v after a click, want Hide reviewer", b, panes.state.Shown)
-	}
-	if _, err := f.svc.RunAction(ctx, "r", actions.ReviewerRange); err != nil {
-		t.Fatal(err)
-	}
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(false) || panes.state.Shown {
-		t.Errorf("buttons %q after a second click, want Open reviewer", b)
-	}
-
-	if _, err := f.svc.RunAction(ctx, "r", actions.CloseReviewerRange); err != nil {
-		t.Fatal(err)
-	}
-	if b := f.windows.buttons["@r"]; b != "" || panes.state.Pane != "" || len(panes.closed) != 2 {
-		t.Errorf("buttons %q, reviewer %+v after Close reviewer; want it ended, and no buttons", b, panes.state)
-	}
-	if _, err := os.Stat(f.svc.reviewDir("r")); !os.IsNotExist(err) {
-		t.Errorf("the closed reviewer's run is left: %v", err)
-	}
-
-	// A reviewer back, as the footer's tick finds it, then gone.
-	panes.state = ReviewerState{Pane: "%9"}
-	if err := f.svc.SyncInfo(ctx); err != nil {
-		t.Fatal(err)
-	}
-	panes.state = ReviewerState{}
-	if err := f.svc.SyncInfo(ctx); err != nil {
-		t.Fatal(err)
+	session := panes.state.Session
+	if got := panes.badges[session]; got != actions.Badges(track.Active) {
+		t.Errorf("badge %q as it starts, want active", got)
 	}
 	if b := f.windows.buttons["@r"]; b != "" {
-		t.Errorf("buttons %q once the reviewer ended, want none", b)
+		t.Errorf("buttons %q; the footer has no reviewer buttons any more", b)
+	}
+	run, _ := os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
+	if err := f.svc.ReviewReply(ctx, "r", string(run), "Report.\nREVIEW OUTCOME: pass"); err != nil {
+		t.Fatal(err)
+	}
+	panes.badgeErr = errors.New("the session is starting")
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	panes.badgeErr = nil
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := panes.badges[session]; got != actions.Badges(track.Done, train.Pass) {
+		t.Errorf("badge %q once the report is in, want done and pass, written again after a failed write", got)
+	}
+	panes.state.Exited = true
+	trains, err := f.svc.Trains(ctx, "r")
+	if err != nil || len(trains) != 1 || trains[0].Status != track.Done {
+		t.Errorf("trains %+v, %v; a reviewer that exited after its report is done", trains, err)
+	}
+
+	if _, err := f.svc.EndTrain(ctx, "r", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	if panes.state.Pane != "" || len(panes.closed) != 2 {
+		t.Errorf("reviewer %+v after End train; want it ended", panes.state)
+	}
+	if _, err := os.Stat(f.svc.reviewDir("r")); !os.IsNotExist(err) {
+		t.Errorf("the ended reviewer's run is left: %v", err)
 	}
 }
 
 func TestReviewerStates(t *testing.T) {
-	shown := []tmux.Pane{{ID: "%1", Role: trackwin.RoleAgent}, {ID: "%2", Role: trackwin.RoleReviewer, Track: "a"}}
-	hidden := []tmux.Pane{{ID: "%3"}, {ID: "%4", Role: trackwin.RoleReviewer, Track: "b"}, {ID: "%5", Role: trackwin.RoleReviewer}}
-	got := reviewerStates(shown, hidden)
-	if len(got) != 2 || got["a"] != (ReviewerState{Pane: "%2", Shown: true}) || got["b"] != (ReviewerState{Pane: "%4"}) {
-		t.Errorf("reviewerStates = %+v; want a's shown and b's hidden", got)
+	panes := []tmux.Pane{{ID: "%3"}, {ID: "%4", Role: trackwin.RoleReviewer, Track: "b", Session: "s", Dead: true},
+		{ID: "%5", Role: trackwin.RoleReviewer}}
+	got := reviewerStates(panes)
+	if len(got) != 1 || got["b"] != (ReviewerState{Pane: "%4", Session: "s", Exited: true}) {
+		t.Errorf("reviewerStates = %+v; want b's", got)
 	}
 }
 
@@ -295,11 +299,16 @@ func TestAskReview(t *testing.T) {
 			t.Errorf("question %q was asked", bad)
 		}
 	}
-	panes.state.Shown = true
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "pane is open") {
-		t.Errorf("a shown reviewer was asked: %v", err)
+	panes.state.Attached = true
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "overlay open") {
+		t.Errorf("a reviewer in an open overlay was asked: %v", err)
 	}
-	panes.state.Shown = false
+	panes.state.Attached = false
+	panes.state.Exited = true
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "exited") {
+		t.Errorf("a reviewer whose agent exited was asked: %v", err)
+	}
+	panes.state.Exited = false
 	if err := f.svc.AskReview(ctx, "r", "  Is finding 1 real?  "); err != nil {
 		t.Fatal(err)
 	}
@@ -374,95 +383,52 @@ func TestReviewOwner(t *testing.T) {
 	}
 }
 
-// A Claude reviewer stuck on its trust question is shown, once a run.
-func TestReviewerAsksTrustIsShown(t *testing.T) {
+// A Claude reviewer stuck on its trust question is action required, and
+// the user is told, once a run.
+func TestReviewerAsksTrustIsTold(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	worktree := t.TempDir()
-	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "r", Engine: "claude",
+	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "rate-bug", Engine: "claude",
 		Repos: []track.Repo{{Name: "api", Worktree: worktree}}}); err != nil {
 		t.Fatal(err)
 	}
 	f.windows.windows = append(f.windows.windows, trackwin.Info{Window: "@r", Track: "r", Name: "r"})
 	panes := &fakeReviewers{}
 	f.svc.Reviewers = panes
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
-		t.Fatal(err)
-	}
-	tick := func() {
+	var told []Notice
+	f.svc.Notify = func(n Notice) { told = append(told, n) }
+	start := func() {
 		t.Helper()
-		if err := f.svc.SyncInfo(ctx); err != nil {
+		if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	recent := time.Now().Add(-trustWindow / 2)
-	if err := os.Chtimes(filepath.Join(f.svc.reviewDir("r"), "run"), recent, recent); err != nil {
-		t.Fatal(err)
+	tick := func() {
+		t.Helper()
+		if err := f.svc.SyncTrains(ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
+	start()
 	tick()
-	if panes.state.Shown {
-		t.Fatal("a reviewer at work was shown")
+	if len(told) != 0 {
+		t.Fatalf("told %+v about a reviewer at work", told)
 	}
 	panes.screen = " Quick safety check: Is this a project you created or one you trust?\n ❯ No, exit\n   Yes, I trust this folder"
-	panes.showErr = errors.New("the window is being swept")
 	tick()
-	if panes.state.Shown {
-		t.Fatal("a failed show counted as shown")
-	}
-	panes.showErr = nil
 	tick()
-	if !panes.state.Shown || f.windows.buttons["@r"] != actions.Reviewer(true) {
-		t.Fatalf("shown %v, buttons %q; want the reviewer shown, with Hide reviewer", panes.state.Shown, f.windows.buttons["@r"])
+	handle := reviewHandle(f.svc.reviewDir("r"))
+	if len(told) != 1 || told[0].Event != settings.NotifyActionRequired || !strings.Contains(told[0].Title, "@"+handle) ||
+		!strings.Contains(told[0].Title, "rate-bug") {
+		t.Fatalf("told %+v; want the track needing the user once, naming the reviewer", told)
 	}
-	panes.state.Shown = false
+	if got := panes.badges[panes.state.Session]; got != actions.Badges(track.ActionRequired) {
+		t.Errorf("badge %q, want action required", got)
+	}
+	start()
 	tick()
-	if panes.state.Shown {
-		t.Error("a reviewer the user hid again was shown again in the same run")
-	}
-
-	// Past its first minute, a reviewer isn't looked at: Claude asks as
-	// it starts.
-	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
-		t.Fatal(err)
-	}
-	old := time.Now().Add(-2 * trustWindow)
-	if err := os.Chtimes(filepath.Join(f.svc.reviewDir("r"), "run"), old, old); err != nil {
-		t.Fatal(err)
-	}
-	tick()
-	if panes.state.Shown {
-		t.Error("a reviewer past its first minute was looked at")
-	}
-}
-
-// A tick that read the panes before a click doesn't undo the click's
-// buttons.
-func TestReviewerButtonKeepsTheClick(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t)
-	if err := f.store.AddTrack(ctx, track.Track{ID: "r", Kind: track.Work, Name: "r", Engine: "claude"}); err != nil {
-		t.Fatal(err)
-	}
-	tr, err := f.store.Track(ctx, "r")
-	if err != nil {
-		t.Fatal(err)
-	}
-	panes := &fakeReviewers{state: ReviewerState{Pane: "%9"}}
-	f.svc.Reviewers = panes
-	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, 0)
-	tickRead := f.svc.reviewerReads // a tick reads the panes: hidden
-
-	panes.state.Shown = true // the click shows the reviewer
-	f.svc.syncReviewer(tr, "@r")
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(true) {
-		t.Fatalf("buttons %q after the click, want Hide reviewer", b)
-	}
-	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, tickRead) // the tick goes on
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(true) {
-		t.Errorf("buttons %q: the tick's older read undid the click", b)
-	}
-	f.svc.showReviewer(tr, "@r", ReviewerState{Pane: "%9"}, f.svc.reviewerReads) // a later tick
-	if b := f.windows.buttons["@r"]; b != actions.Reviewer(false) {
-		t.Errorf("buttons %q: a later read wasn't shown", b)
+	if len(told) != 2 {
+		t.Errorf("told %d times; a new review asking again is told again", len(told))
 	}
 }

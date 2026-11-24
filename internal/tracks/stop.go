@@ -113,8 +113,10 @@ func (w TmuxWindows) AddDevServer(window, dir string, p trackwin.Process, key st
 // started from a terminal running. The pane's first process, an
 // interactive shell that ignores SIGTERM, ends with the pane, and the
 // caller's own group is spared so that closing its own pane finishes.
+// A dead pane's terminal is closed, and may be another pane's by now:
+// nothing is signalled.
 func (w TmuxWindows) EndPane(p tmux.Pane) error {
-	if tty := strings.TrimPrefix(p.TTY, "/dev/"); tty != "" {
+	if tty := strings.TrimPrefix(p.TTY, "/dev/"); tty != "" && !p.Dead {
 		out, err := exec.Command("ps", "-t", tty, "-o", "pgid=").Output()
 		if err == nil {
 			groups := groupsToEnd(ttyGroups(string(out)), p.PID, syscall.Getpgrp())

@@ -29,9 +29,10 @@ func (c Config) review(ctx context.Context, call *rpc.Call) (any, error) {
 		c.Log.Printf("starting the reviewer of %s: %v", p.ID, err)
 		return nil, err
 	}
-	call.Progress("The reviewer, " + name + ", runs in a hidden pane of this track, which the footer's button shows. " +
-		"A review can take minutes. If this command is stopped, the reviewer runs on: tracks review --wait waits " +
-		"for its report. If it asks whether to trust the worktree, Tracks shows its pane for the user to answer.")
+	call.Progress("The reviewer, " + name + ", runs in a session of its own, which the user opens in an " +
+		"overlay (tracks train show reviewer). A review can take minutes. If this command is stopped, the reviewer " +
+		"runs on: tracks review --wait waits for its report. If it asks whether to trust the worktree, Tracks tells " +
+		"the user, who answers in its overlay.")
 	return c.waitReview(ctx, call, p.ID)
 }
 

@@ -2,7 +2,8 @@
 // row, each for the track whose window is shown, that send its agent a
 // prompt. Today there's one per pull request with open review comments.
 // It says what a button reads, what it sends and when a sent one may be
-// sent again; the daemon and the footer do the rest.
+// sent again; the daemon and the footer do the rest. A train's overlay
+// header, with its Hide and End train buttons, is drawn here too.
 package actions
 
 import (
@@ -130,33 +131,4 @@ func Render(buttons []Button, multiRepo bool) string {
 			label+"#[norange default]")
 	}
 	return strings.Join(parts, " ")
-}
-
-// ReviewerRange and CloseReviewerRange name the click ranges of the
-// reviewer's buttons.
-const (
-	ReviewerRange      = "reviewer"
-	CloseReviewerRange = "close-reviewer"
-)
-
-// ReviewerVariant and CloseReviewerVariant are the colour variants of
-// the reviewer's buttons: their own, outside the rotation, so they
-// always look the same.
-const (
-	ReviewerVariant      = 6
-	CloseReviewerVariant = 5
-)
-
-// Reviewer is the tmux format of a track's reviewer buttons: Open
-// reviewer while its pane is hidden, Hide reviewer while it's shown,
-// and Close reviewer beside it.
-func Reviewer(shown bool) string {
-	label := " Open reviewer "
-	if shown {
-		label = " Hide reviewer "
-	}
-	return "#[range=user|" + ReviewerRange + "]" + style("bg", VariantBg(ReviewerVariant)) +
-		style("fg", VariantText(ReviewerVariant)) + label + "#[norange default] " +
-		"#[range=user|" + CloseReviewerRange + "]" + style("bg", VariantBg(CloseReviewerVariant)) +
-		style("fg", VariantText(CloseReviewerVariant)) + " Close reviewer #[norange default]"
 }

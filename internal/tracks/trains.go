@@ -10,11 +10,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/store"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
 // Trains are track id's trains, with their status: its reviewer, while
-// its pane is open.
+// its session is open.
 func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) {
 	if _, err := s.Store.Track(ctx, id); errors.Is(err, store.ErrNotFound) {
 		return nil, Problem("That track is gone.")
@@ -24,11 +25,10 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	if s.Reviewers == nil || s.HooksDir == "" {
 		return nil, nil
 	}
-	window, _ := s.windowOf(id)
 	// The pane and the run are read together, as StartReview and
 	// CloseReviewer change them together.
 	s.reviewMu.Lock()
-	r, err := s.Reviewers.Reviewer(id, window)
+	r, err := s.Reviewers.Reviewer(id)
 	if err != nil {
 		s.reviewMu.Unlock()
 		return nil, err
@@ -44,16 +44,27 @@ type reviewerRunState struct {
 	sess    reviewSession
 	sessErr error
 	handle  string
+	// run names the review run, for telling a train waiting on the
+	// user once a run.
+	run string
 }
 
 // reviewerRun reads the run of track id's reviewer, whose pane is r's.
-// The caller holds s.reviewMu.
+// It reads none, so there's no train, when r is the pane of another
+// review than the one in its folder, read before a review started or
+// ended. The caller holds s.reviewMu.
 func (s *Service) reviewerRun(id string, r ReviewerState) reviewerRunState {
 	if r.Pane == "" {
 		return reviewerRunState{}
 	}
 	dir := s.reviewDir(id)
-	run := reviewerRunState{facts: train.ReviewerFacts{Pane: true}, handle: reviewHandle(dir)}
+	run := reviewerRunState{facts: train.ReviewerFacts{Pane: true, Exited: r.Exited}, handle: reviewHandle(dir)}
+	if b, err := os.ReadFile(filepath.Join(dir, "run")); err == nil {
+		run.run = string(b)
+	}
+	if run.run == "" || r.Session != trackwin.TrainSession(id, run.handle) {
+		return reviewerRunState{}
+	}
 	if b, err := os.ReadFile(filepath.Join(dir, "report.md")); err == nil {
 		run.facts.Report = string(b)
 	}
@@ -63,12 +74,12 @@ func (s *Service) reviewerRun(id string, r ReviewerState) reviewerRunState {
 }
 
 // reviewerTrains are track id's trains from its reviewer r and run:
-// the reviewer, while its pane is open.
+// the reviewer, while its session is open.
 func (s *Service) reviewerTrains(id string, r ReviewerState, run reviewerRunState) []train.Train {
 	f := run.facts
 	// Claude asks for trust as it starts, before any report: a report
 	// that quotes the question isn't one.
-	if r.Pane != "" && f.Report == "" && run.sessErr == nil && run.sess.Engine == agents.Claude.ID {
+	if f.Pane && !r.Exited && f.Report == "" && run.sessErr == nil && run.sess.Engine == agents.Claude.ID {
 		if screen, err := s.Reviewers.CaptureReviewer(r.Pane); err == nil {
 			f.AsksTrust = claude.AsksTrust(screen)
 		}

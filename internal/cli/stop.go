@@ -24,7 +24,7 @@ func newStopCmd() *cobra.Command {
 				return err
 			}
 			server := tmux.New(paths.TmuxSocket)
-			if !server.HasSession(sessionName) && !server.HasSession(trackwin.BackSession) {
+			if trains, _ := trackwin.Trains(server, ""); !server.HasSession(sessionName) && len(trains) == 0 {
 				_, err := fmt.Fprintf(c.OutOrStdout(), "%s isn't running.\n", name)
 				return err
 			}

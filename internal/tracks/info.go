@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"slices"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/agents"
@@ -22,24 +21,12 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var reviewers map[string]ReviewerState
-	s.mu.Lock()
-	read := s.reviewerReads
-	s.mu.Unlock()
-	if s.Reviewers != nil {
-		reviewers, _ = s.Reviewers.Reviewers()
-	}
 	shown := map[string]string{}
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
 		if !ok {
 			continue
-		}
-		// The reviewer's button follows its pane, which ends with the
-		// reviewer or a tracks close.
-		if reviewers != nil {
-			s.showReviewer(t, window, s.showAsking(t.ID, window, reviewers[t.ID]), read)
 		}
 		text := Info(t)
 		s.mu.Lock()
@@ -55,21 +42,6 @@ func (s *Service) SyncInfo(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.info = shown
-	for id := range s.reviewerRead {
-		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
-			delete(s.reviewerRead, id)
-		}
-	}
-	for id := range s.trustShown {
-		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
-			delete(s.trustShown, id)
-		}
-	}
-	for id := range s.reviewers {
-		if !slices.ContainsFunc(open, func(t track.Track) bool { return t.ID == id }) {
-			delete(s.reviewers, id)
-		}
-	}
 	s.mu.Unlock()
 	return errors.Join(errs...)
 }

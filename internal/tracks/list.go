@@ -117,7 +117,7 @@ func (s *Service) Sweep(ctx context.Context) error {
 				return err
 			}
 			// A window closed some other way than Close leaves the
-			// track's hidden panes, such as its reviewer, running.
+			// track's trains, such as its reviewer, running.
 			if err := s.Windows.EndHidden(t.ID); err != nil {
 				return err
 			}

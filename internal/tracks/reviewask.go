@@ -75,8 +75,9 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 }
 
 // AskReview asks track id's reviewer question, about its review, once
-// it has reported and while its pane is hidden: a user who shows it
-// talks to it there, and a reply of theirs would pass for the answer.
+// it has reported and while no overlay is attached to it: a user who
+// opened it talks to it there, and a reply of theirs would pass for the
+// answer.
 // WaitReview then waits for the answer. A Claude reviewer gets it typed
 // into its pane, behind questionLead. A Cursor reviewer's hooks don't
 // carry its replies when it runs interactively, so its pane is started
@@ -110,8 +111,7 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
 	dir := s.reviewDir(id)
-	window, _ := s.windowOf(id)
-	r, err := s.Reviewers.Reviewer(id, window)
+	r, err := s.Reviewers.Reviewer(id)
 	if err != nil {
 		return relay.Message{}, err
 	}
@@ -119,9 +119,11 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 	switch {
 	case r.Pane == "" || sessErr != nil:
 		return relay.Message{}, Problem(t.Name + " has no reviewer: tracks review starts one.")
-	case r.Shown:
-		return relay.Message{}, Problem("The reviewer's pane is open, so the user may be talking to it: ask there, or hide it " +
-			"with the footer's button and ask again.")
+	case r.Exited:
+		return relay.Message{}, Problem("The reviewer's agent has exited: tracks review starts a new one.")
+	case r.Attached:
+		return relay.Message{}, Problem("The user has the reviewer's overlay open, so they may be talking to it: " +
+			"ask again once they've closed it.")
 	case !exists(filepath.Join(dir, "report.md")):
 		return relay.Message{}, Problem("The reviewer hasn't reported yet: tracks review --wait waits for its report.")
 	case s.asking(id):

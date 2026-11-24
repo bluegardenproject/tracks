@@ -72,6 +72,10 @@ func builtin(id string) (Theme, bool) {
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// retired are tokens Tracks no longer uses. A theme file written while
+// they were in use still loads; they're skipped.
+var retired = []string{"button.variant6.bg", "button.variant6.text"}
+
 // Parse reads a theme file. It fails unless every token has a valid
 // value and no unknown token appears.
 func Parse(data []byte) (Theme, error) { return parse(data, nil) }
@@ -88,6 +92,9 @@ func parse(data []byte, base *Theme) (Theme, error) {
 	t := Theme{DisplayName: file.Name, values: make(map[Token]string, len(All))}
 	for name, v := range file.Tokens {
 		token := Token(name)
+		if slices.Contains(retired, name) {
+			continue
+		}
 		if !slices.Contains(All, token) {
 			return Theme{}, fmt.Errorf("unknown token %q", name)
 		}

@@ -19,27 +19,27 @@ import (
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/store"
-	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
+	"github.com/bluegardenproject/tracks/internal/train"
 )
 
-// ReviewerPanes runs a track's reviewer in a pane of its own, hidden
-// until the user shows it.
+// ReviewerPanes runs a track's reviewer in a train's session of its
+// own, which the user sees in its overlay.
 type ReviewerPanes interface {
-	// OpenReviewer starts p in dir as track's reviewer, hidden.
-	OpenReviewer(track, dir string, p trackwin.Process) error
-	// CloseReviewer ends track's reviewer, shown in window or hidden.
-	CloseReviewer(track, window string) error
-	// Reviewer is track's reviewer: whether there's one, and shown in
-	// window.
-	Reviewer(track, window string) (ReviewerState, error)
-	// Reviewers are every track's reviewers, by track, read at once.
+	// OpenReviewer starts s as a track's reviewer.
+	OpenReviewer(s trackwin.TrainSpec) error
+	// CloseReviewer ends track's reviewer and its session.
+	CloseReviewer(track string) error
+	// Reviewer is track's reviewer: its pane, "" for none, and whether
+	// an overlay is attached to it.
+	Reviewer(track string) (ReviewerState, error)
+	// Reviewers are every track's reviewers, by track, read at once,
+	// without whether an overlay is attached.
 	Reviewers() (map[string]ReviewerState, error)
-	// ShowReviewer and HideReviewer move the reviewer's pane into
-	// window's right column and back, running on.
-	ShowReviewer(window, pane string) error
-	HideReviewer(window, pane string) error
+	// TrainBadge sets the badges in the header of the train in session,
+	// a tmux format, and redraws its overlay's header.
+	TrainBadge(session, badges string) error
 	// TypeReviewer types text into the reviewer's pane and sends it.
 	TypeReviewer(pane, text string) error
 	// RespawnReviewer ends what the reviewer's pane runs and starts
@@ -49,11 +49,12 @@ type ReviewerPanes interface {
 	CaptureReviewer(pane string) (string, error)
 }
 
-// ReviewerState is a track's reviewer: its pane, "" for none, and
-// whether it's shown.
+// ReviewerState is a track's reviewer: its pane, "" for none, and its
+// session; whether an overlay is attached to it, and whether its agent
+// exited, its pane left.
 type ReviewerState struct {
-	Pane  string
-	Shown bool
+	Pane, Session    string
+	Attached, Exited bool
 }
 
 // ReviewRequest is a review of the changes in Dir, a worktree of track
@@ -75,7 +76,7 @@ const reviewPoll = 500 * time.Millisecond
 // It sits with the track's hooks, which go when the track ends.
 func (s *Service) reviewDir(id string) string { return filepath.Join(s.HooksDir, id, "review") }
 
-// StartReview starts a reviewer of req's diff in a hidden pane of track
+// StartReview starts a reviewer of req's diff in a train's session of track
 // req.ID, on the agent and model the settings pick, ending one that's
 // there: a new review starts fresh. It returns the reviewer's name for
 // people.
@@ -113,10 +114,9 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	window, _ := s.windowOf(t.ID)
 	dir := s.reviewDir(t.ID)
 	oldHandle := reviewHandle(dir)
-	if err := s.Reviewers.CloseReviewer(t.ID, window); err != nil {
+	if err := s.Reviewers.CloseReviewer(t.ID); err != nil {
 		return "", fmt.Errorf("end the reviewer that's there: %w", err)
 	}
 	if err := s.leftNotice(ctx, t.ID, dir, "a new review replaces it"); err != nil {
@@ -174,17 +174,17 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	if model != "" {
 		name += " (" + model + ")"
 	}
-	p := trackwin.Process{Title: "reviewer: " + name, Command: s.reviewerCommand(t.ID, script)}
-	if err := s.Reviewers.OpenReviewer(t.ID, worktree, p); err != nil {
+	spec := trackwin.TrainSpec{Track: t.ID, Handle: handle, Role: trackwin.RoleReviewer, Dir: worktree,
+		Process: trackwin.Process{Title: "reviewer: " + name, Command: s.reviewerCommand(t.ID, script)},
+		Header:  actions.TrainHeader(handle, train.Reviewer.Name(), trackwin.TrainBadgeOption)}
+	if err := s.Reviewers.OpenReviewer(spec); err != nil {
 		return "", err
 	}
+	s.showBadge(trackwin.TrainSession(t.ID, handle), actions.Badges(track.Active))
 	// Kept once it runs, as joined is posted: a left notice goes with
 	// the handle, so the two pair up.
 	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
 		return "", err
-	}
-	if window != "" {
-		s.syncReviewer(t, window)
 	}
 	if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
 		return "", err
@@ -228,8 +228,8 @@ func (s *Service) ReviewOwner(ctx context.Context, id, dir string) (string, erro
 }
 
 // reviewerCommand runs script in the reviewer's pane: with the track's
-// ID, Tracks on PATH and the review marker, and nothing after it, so
-// the pane closes with the reviewer.
+// ID, Tracks on PATH and the review marker, and nothing after it. The
+// pane stays when the reviewer exits, so it's listed as exited.
 func (s *Service) reviewerCommand(id, script string) string {
 	env := "TRACKS_ID=" + shellx.Quote(id) + " TRACKS_SOCKET_DIR=" + shellx.Quote(s.SocketDir) + " " + review.EnvMarker + "=1"
 	if s.BinDir != "" {
@@ -324,8 +324,8 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", Problem(fmt.Sprintf("No %s after %s. The reviewer still runs in its pane: "+
-					"the footer's button shows it.", what, reviewWait))
+				return "", Problem(fmt.Sprintf("No %s after %s. The reviewer still runs: "+
+					"the user can look at it in its overlay (tracks train show reviewer).", what, reviewWait))
 			}
 			return "", ctx.Err()
 		case <-time.After(reviewPoll):
@@ -367,38 +367,8 @@ func resolvedPath(path string) string {
 	return filepath.Clean(path)
 }
 
-// ToggleReviewer shows track id's reviewer in its window, or hides it
-// again: what its button does. It returns the track's name.
-func (s *Service) ToggleReviewer(ctx context.Context, id string) (string, error) {
-	if s.Reviewers == nil {
-		return "", errors.New("reviews need tmux")
-	}
-	t, err := s.Store.Track(ctx, id)
-	if err != nil {
-		return "", err
-	}
-	window, err := s.windowOf(id)
-	if err != nil {
-		return t.Name, err
-	}
-	r, err := s.Reviewers.Reviewer(id, window)
-	switch {
-	case err != nil:
-		return t.Name, err
-	case r.Pane == "":
-		s.syncReviewer(t, window)
-		return t.Name, Problem(t.Name + " has no reviewer: tracks review starts one.")
-	case r.Shown:
-		err = s.Reviewers.HideReviewer(window, r.Pane)
-	default:
-		err = s.Reviewers.ShowReviewer(window, r.Pane)
-	}
-	s.syncReviewer(t, window)
-	return t.Name, err
-}
-
-// CloseReviewer ends track id's reviewer and closes its pane: what its
-// Close button does. A tracks review --wait on it stops, since its run is
+// CloseReviewer ends track id's reviewer and closes its session: what
+// End train does. A tracks review --wait on it stops, since its run is
 // gone. It returns the track's name.
 func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) {
 	if s.Reviewers == nil {
@@ -409,94 +379,15 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 		return "", err
 	}
 	s.reviewMu.Lock()
-	window, _ := s.windowOf(id)
+	defer s.reviewMu.Unlock()
 	// The run goes whatever tmux says: the user asked for the review
 	// to end.
-	closeErr := s.Reviewers.CloseReviewer(id, window)
-	err = errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
-	s.reviewMu.Unlock()
-	if window != "" {
-		s.syncReviewer(t, window)
-	}
-	return t.Name, err
+	closeErr := s.Reviewers.CloseReviewer(id)
+	return t.Name, errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
 }
 
-// syncReviewer reads t's reviewer and shows its button.
-func (s *Service) syncReviewer(t track.Track, window string) {
-	if s.Reviewers == nil {
-		return
-	}
-	s.mu.Lock()
-	s.reviewerReads++
-	read := s.reviewerReads
-	s.mu.Unlock()
-	if r, err := s.Reviewers.Reviewer(t.ID, window); err == nil {
-		s.showReviewer(t, window, r, read)
-	}
-}
-
-// showReviewer rewrites the buttons of t's window when its reviewer r
-// changed since they were last written. read numbers when r was read:
-// a tick that read the panes before a click shows its reviewer doesn't
-// undo what the click wrote. A failed write is kept as unwritten, so the
-// next tick writes it again.
-func (s *Service) showReviewer(t track.Track, window string, r ReviewerState, read uint64) {
-	s.mu.Lock()
-	if s.reviewers == nil {
-		s.reviewers = map[string]ReviewerState{}
-	}
-	if s.reviewerRead == nil {
-		s.reviewerRead = map[string]uint64{}
-	}
-	if read < s.reviewerRead[t.ID] {
-		s.mu.Unlock()
-		return
-	}
-	s.reviewerRead[t.ID] = read
-	was, written := s.reviewers[t.ID]
-	if written && was == r {
-		s.mu.Unlock()
-		return
-	}
-	s.reviewers[t.ID] = r
-	buttons := s.buttons(t)
-	s.mu.Unlock()
-	if err := s.Windows.Buttons(window, buttons); err != nil {
-		s.mu.Lock()
-		if s.reviewers[t.ID] == r {
-			delete(s.reviewers, t.ID)
-		}
-		s.mu.Unlock()
-	}
-}
-
-// buttons are t's footer buttons: its PRs' with open comments, then its
-// reviewer's. The caller holds s.mu.
+// buttons are t's footer buttons: its PRs' with open comments. The
+// caller holds s.mu.
 func (s *Service) buttons(t track.Track) string {
-	b := renderButtons(t, s.comments[t.ID])
-	r := s.reviewers[t.ID]
-	if r.Pane == "" {
-		return b
-	}
-	if b != "" {
-		b += " "
-	}
-	return b + actions.Reviewer(r.Shown)
-}
-
-// reviewerStates are the tracks' reviewers among the panes of the Tracks
-// session, shown, and of the hidden panes' session.
-func reviewerStates(shown, hidden []tmux.Pane) map[string]ReviewerState {
-	out := map[string]ReviewerState{}
-	for _, list := range []struct {
-		panes []tmux.Pane
-		shown bool
-	}{{hidden, false}, {shown, true}} {
-		for _, p := range list.panes {
-			if p.Role == trackwin.RoleReviewer && p.Track != "" {
-				out[p.Track] = ReviewerState{Pane: p.ID, Shown: list.shown}
-			}
-		}
-	}
-	return out
+	return renderButtons(t, s.comments[t.ID])
 }

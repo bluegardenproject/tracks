@@ -34,6 +34,10 @@ func TestReviewerStatus(t *testing.T) {
 		{"pane gone, not run", ReviewerFacts{Report: "REVIEW OUTCOME: not run"}, track.Status{}, track.Status{}, false},
 		{"answering a question", ReviewerFacts{Pane: true, Report: report, Asking: true}, track.Active, Blocked, true},
 		{"not run", ReviewerFacts{Pane: true, Report: "The turn failed.\nREVIEW OUTCOME: not run\n"}, track.Error, track.Status{}, true},
+		{"exited without a report", ReviewerFacts{Pane: true, Exited: true}, track.Exited, track.Status{}, true},
+		{"exited after its report", ReviewerFacts{Pane: true, Exited: true, Report: report}, track.Done, Blocked, true},
+		{"exited on a question", ReviewerFacts{Pane: true, Exited: true, Report: report, Asking: true}, track.Exited, Blocked, true},
+		{"exited, not run", ReviewerFacts{Pane: true, Exited: true, Report: "REVIEW OUTCOME: not run"}, track.Error, track.Status{}, true},
 		{"report quotes the trust question", ReviewerFacts{Pane: true, Report: report, AsksTrust: true}, track.Done, Blocked, true},
 	} {
 		status, outcome, ok := ReviewerStatus(tc.f)

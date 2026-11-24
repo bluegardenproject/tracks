@@ -16,6 +16,10 @@ type Notice struct {
 	Track, Name string // the track's ID and name
 	Event       string // a settings.Notify* event
 	Title, Body string
+	// Train says a train of the track waits on the user: its overlay
+	// isn't on screen when the track is, so it's told even then, and
+	// it's told once a run already, so no quiet time holds it back.
+	Train bool
 }
 
 // statusNotice is the notice for a track named name whose status went
@@ -79,6 +83,14 @@ func trainNotice(id, name string, m relay.Message) (Notice, bool) {
 	}
 	return Notice{Track: id, Name: name, Event: settings.NotifyTrainReported,
 		Title: "Tracks: @" + m.From + " " + did + " on " + name, Body: first}, true
+}
+
+// trainWaitingNotice is the notice that train handle of the track named
+// name waits on the user, as on Claude's trust question, which only its
+// overlay shows. It counts as the track needing them.
+func trainWaitingNotice(id, name, handle string) (Notice, bool) {
+	return Notice{Track: id, Name: name, Event: settings.NotifyActionRequired,
+		Title: "Tracks: @" + handle + " on " + name + " needs you", Body: "It's waiting for an answer in its overlay.", Train: true}, true
 }
 
 // notify hands n to Notify, if there's one.

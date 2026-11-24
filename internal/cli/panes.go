@@ -236,16 +236,16 @@ func endReviewer(ctx context.Context, id string) error {
 	return errors.New("the daemon knows no reviewer of this track")
 }
 
-// trackPanes are the panes beside w's agent, and its reviewer while
-// it's hidden, last: closing it ends the reviewer too.
+// trackPanes are the panes beside w's agent, and its reviewer, in a
+// session of its own, last: closing it ends the reviewer too.
 func trackPanes(t *tmux.Client, w trackwin.Info) ([]tmux.Pane, error) {
 	column, err := trackwin.Column(t, w.Window)
 	if err != nil {
 		return nil, err
 	}
-	reviewer, shown, err := trackwin.Hidden(t, w.Track, w.Window, trackwin.RoleReviewer)
+	reviewer, err := trackwin.FindTrain(t, w.Track, trackwin.RoleReviewer)
 	switch {
-	case errors.Is(err, trackwin.ErrNoHidden), err == nil && shown:
+	case errors.Is(err, trackwin.ErrNoTrain):
 		return column, nil
 	case err != nil:
 		return nil, err
@@ -265,12 +265,12 @@ func paneLabel(p tmux.Pane) string {
 }
 
 // printPanes prints a line per pane: its number, role and what runs. A
-// pane outside window, such as a hidden reviewer, says so.
+// pane outside window, such as a reviewer, says so.
 func printPanes(out io.Writer, window string, column []tmux.Pane, snap procs.Snapshot) error {
 	for _, p := range column {
 		label := paneLabel(p)
 		if p.Window != "" && p.Window != window {
-			label += ", hidden"
+			label += ", a train"
 		}
 		if _, err := fmt.Fprintf(out, "%s  %s: %s\n", paneNumber(p), label, paneActivity(p, snap)); err != nil {
 			return err
@@ -295,6 +295,8 @@ func paneActivity(p tmux.Pane, snap procs.Snapshot) string {
 		parts = append(parts, "stopped ("+p.State+")")
 	case p.Role == trackwin.RoleDevServer:
 		parts = append(parts, "running")
+	case p.Dead:
+		parts = append(parts, "agent exited")
 	default:
 		cmds := programs(snap, p.PID)
 		if len(cmds) == 0 {
@@ -306,6 +308,9 @@ func paneActivity(p tmux.Pane, snap procs.Snapshot) string {
 			}
 			parts = append(parts, c)
 		}
+	}
+	if p.Dead {
+		return strings.Join(parts, "; ")
 	}
 	var ports []string
 	for _, l := range snap.Below(p.PID) {

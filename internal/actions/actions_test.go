@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/golden"
+	"github.com/bluegardenproject/tracks/internal/track"
 )
 
 func TestPromptsMatchGolden(t *testing.T) {
@@ -125,17 +126,23 @@ func TestRenderTakesVariantsInTurn(t *testing.T) {
 	}
 }
 
-func TestReviewer(t *testing.T) {
-	const closeButton = "#[range=user|close-reviewer]#[bg=#{@tracks_button5_bg}]#[fg=#{@tracks_button5_text}] Close reviewer #[norange default]"
-	for shown, want := range map[bool]string{
-		false: "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Open reviewer #[norange default] " + closeButton,
-		true:  "#[range=user|reviewer]#[bg=#{@tracks_button6_bg}]#[fg=#{@tracks_button6_text}] Hide reviewer #[norange default] " + closeButton,
-	} {
-		if got := Reviewer(shown); got != want {
-			t.Errorf("Reviewer(%v) = %s", shown, got)
-		}
+func TestTrainHeader(t *testing.T) {
+	want := "#[align=left] reviewer-1 · Reviewer  #{E:@b}#[align=right]" +
+		"#[range=user|train-hide]#[bg=#{@tracks_button1_bg}]#[fg=#{@tracks_button1_text}] Hide #[norange default] " +
+		"#[range=user|train-end]#[bg=#{@tracks_button5_bg}]#[fg=#{@tracks_button5_text}] End train #[norange default] "
+	if got := TrainHeader("reviewer-1", "Reviewer", "@b"); got != want {
+		t.Errorf("TrainHeader = %s", got)
 	}
-	if len(ReviewerRange) > 15 || len(CloseReviewerRange) > 15 {
+	if len(HideTrainRange) > 15 || len(EndTrainRange) > 15 {
 		t.Error("tmux cuts a range's name at 15 bytes")
+	}
+}
+
+func TestBadges(t *testing.T) {
+	want := "#[bg=#{@tracks_badge_info_bg}]#[fg=#{@tracks_badge_info_text}] done #[default] " +
+		"#[bg=#{@tracks_badge_danger_bg}]#[fg=#{@tracks_badge_danger_text}] blocked #[default]"
+	blocked := track.Status{ID: "blocked", Label: "blocked", Badge: track.BadgeDanger}
+	if got := Badges(track.Done, track.Status{}, blocked); got != want {
+		t.Errorf("Badges = %s", got)
 	}
 }

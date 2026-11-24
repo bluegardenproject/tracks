@@ -130,7 +130,7 @@ func sendReplyFile(ctx context.Context, path, id, run string, answer bool,
 func replyFileText(text string, answer bool) string {
 	if answer {
 		if strings.TrimSpace(text) == "" {
-			return "The reviewer's turn ended without an answer: its pane, which the footer's button shows, says why."
+			return "The reviewer's turn ended without an answer: its overlay (tracks train show reviewer) says why."
 		}
 		return text
 	}
@@ -140,7 +140,7 @@ func replyFileText(text string, answer bool) string {
 	if strings.TrimSpace(text) != "" {
 		text = strings.TrimSpace(text) + "\n\n"
 	}
-	return text + "The reviewer's turn ended without a report: its pane, which the footer's button shows, says why.\n\n" +
+	return text + "The reviewer's turn ended without a report: its overlay (tracks train show reviewer) says why.\n\n" +
 		review.Outcome + " " + review.NotRun
 }
 
