@@ -84,10 +84,22 @@ func cells(line string) []cell {
 			out = append(out, cell{rs[i], dim})
 			continue
 		}
-		if i+1 >= len(rs) || rs[i+1] != '[' {
-			// Not a CSI sequence, such as OSC: skip to its end.
-			for i++; i < len(rs) && rs[i] != '\a' && rs[i] != '\\'; i++ {
+		if i+1 >= len(rs) {
+			break
+		}
+		switch rs[i+1] {
+		case '[':
+		case ']', 'P', 'X', '^', '_':
+			// A string, such as OSC: skip to its BEL or ST.
+			for i += 2; i < len(rs) && rs[i] != '\a' && rs[i] != '\\'; i++ {
 			}
+			continue
+		case '(', ')', '*', '+':
+			// A charset's designation: ESC, the kind and the set.
+			i += 2
+			continue
+		default:
+			i++
 			continue
 		}
 		start := i + 2
