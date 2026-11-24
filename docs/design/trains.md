@@ -344,6 +344,7 @@ Tracks holds the pointer while anything blocks it:
 | A question on its screen (`action required`) | It's answered |
 | The user is typing in its pane or overlay | No key for a few seconds (`client_activity`) |
 | Text in its input | The input line is empty, read from the screen as the markers are |
+| The user scrolls back in its pane (copy mode) | They leave the scrollback (`#{pane_in_mode}`) |
 
 A turn starts with a prompt (Claude's `UserPromptSubmit`, Cursor's
 `beforeSubmitPrompt`) and ends as the agent stops (`Stop`, `StopFailure`,
