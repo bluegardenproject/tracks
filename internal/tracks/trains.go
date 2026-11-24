@@ -83,13 +83,20 @@ func (s *Service) EndTrain(ctx context.Context, id, handle string) (string, erro
 
 // dropReview removes track id's review: its run, report and brief, once
 // its reviewer has gone with the track's window or the tmux server.
-func (s *Service) dropReview(id string) error {
+// A review there says on the relay that its reviewer left, and why.
+func (s *Service) dropReview(ctx context.Context, id, why string) error {
 	if s.HooksDir == "" {
 		return nil
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	return os.RemoveAll(s.reviewDir(id))
+	dir := s.reviewDir(id)
+	if _, err := os.Stat(filepath.Join(dir, "handle")); err == nil {
+		if err := s.notice(context.WithoutCancel(ctx), id, "@"+reviewHandle(dir)+" left: "+why+"."); err != nil {
+			return err
+		}
+	}
+	return os.RemoveAll(dir)
 }
 
 // engineName is the agent and model a reviewer session runs on, for

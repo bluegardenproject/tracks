@@ -81,7 +81,7 @@ func (s *Service) End(ctx context.Context, id string) error {
 			}
 		}
 	}
-	if err := s.dropReview(id); err != nil {
+	if err := s.dropReview(ctx, id, "its track ended"); err != nil {
 		return err
 	}
 	return s.Report(ctx, id, track.Ended)
@@ -121,7 +121,7 @@ func (s *Service) Sweep(ctx context.Context) error {
 			if err := s.Windows.EndHidden(t.ID); err != nil {
 				return err
 			}
-			if err := s.dropReview(t.ID); err != nil {
+			if err := s.dropReview(ctx, t.ID, "its track's window closed"); err != nil {
 				return err
 			}
 		}

@@ -71,8 +71,8 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if last := msgs[len(msgs)-1]; last.From != handle || last.Kind != relay.Answer || last.Body != "Because it's hot." {
 		t.Errorf("the answer as posted: %+v", last)
 	}
-	if unread, _ := f.svc.RelayRead(ctx, "r", relay.TrackHandle); len(unread) != 0 {
-		t.Errorf("the printed answer is still unread: %+v", unread)
+	if unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle); err != nil || len(unread) != 0 {
+		t.Errorf("the printed answer is still unread: %+v, %v", unread, err)
 	}
 
 	if err := f.svc.AskReview(ctx, "r", "And the lock?"); err != nil {
@@ -87,8 +87,8 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if answer, err := f.svc.WaitReview(ctx, "r"); err != nil || answer != "It's held briefly." {
 		t.Fatalf("the second answer: %q, %v", answer, err)
 	}
-	if unread, _ := f.svc.RelayRead(ctx, "r", relay.TrackHandle); len(unread) != 0 {
-		t.Errorf("the second printed answer is still unread: %+v", unread)
+	if unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle); err != nil || len(unread) != 0 {
+		t.Errorf("the second printed answer is still unread: %+v, %v", unread, err)
 	}
 
 	run2 := startReview(t, f, worktree)
