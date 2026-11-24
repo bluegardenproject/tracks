@@ -62,8 +62,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		if atEnd {
 			m.top = m.maxTop()
+		} else {
+			m.top = min(m.top, m.maxTop())
 		}
-		m.top = min(m.top, m.maxTop())
 	case Loaded:
 		return m.load(msg), nil
 	case tea.KeyPressMsg:
@@ -109,8 +110,9 @@ func (m Model) load(l Loaded) Model {
 	}
 	if follow {
 		m.top = m.maxTop()
+	} else {
+		m.top = min(m.top, m.maxTop())
 	}
-	m.top = min(m.top, m.maxTop())
 	return m
 }
 
@@ -180,6 +182,9 @@ func (m Model) reveal() Model {
 
 // messageAt is the message drawn on row y of the popup, -1 for none.
 func (m Model) messageAt(y int) int {
+	if m.err != "" {
+		return -1
+	}
 	line := y - 1 + m.top
 	l := m.layout()
 	if y < 1 || y > m.rows() || line >= len(l.owner) {

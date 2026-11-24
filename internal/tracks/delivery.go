@@ -208,23 +208,27 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	s.pointed[t.ID] = due[len(due)-1].ID
 	delete(s.turns, t.ID)
 	s.mu.Unlock()
+	// The messages count as pointed to from here, as the Relay Station
+	// shows.
+	s.Changes.Notify()
 
 	err = s.Windows.Paste(window, relay.Pointer(due))
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	p, ours := s.pointing[t.ID]
-	if !ours || p.gen != gen {
-		return err
-	}
-	if err != nil {
+	switch {
+	case !ours || p.gen != gen:
+	case err != nil:
 		delete(s.pointing, t.ID)
 		s.pointed[t.ID] = p.before
 		s.turns[t.ID] = false
+		s.mu.Unlock()
+		s.Changes.Notify()
 		return err
+	default:
+		// The stall's wait starts once the pointer is in.
+		p.at = s.now()
+		s.pointing[t.ID] = p
 	}
-	// The stall's wait starts once the pointer is in.
-	p.at = s.now()
-	s.pointing[t.ID] = p
-	defer s.Changes.Notify()
-	return nil
+	s.mu.Unlock()
+	return err
 }

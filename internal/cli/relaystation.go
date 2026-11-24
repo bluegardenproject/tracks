@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -19,6 +20,10 @@ import (
 // relayStationSize is the Relay Station popup's share of the client,
 // as a train's overlay.
 const relayStationSize = "80%"
+
+// relayStationReconnect is how long the Relay Station waits to follow
+// the daemon again once its change stream broke.
+const relayStationReconnect = time.Second
 
 func newRelayStationCmd(version string) *cobra.Command {
 	var id string
@@ -94,12 +99,22 @@ func runRelayStation(ctx context.Context, version, id string) error {
 	p := tea.NewProgram(relaystation.New(t, time.Now), tea.WithContext(ctx), tea.WithColorProfile(style.Profile()))
 	daemon := daemonCalls{tmux: tmux.New(paths.TmuxSocket), paths: paths, version: version}
 	go func() {
-		err := daemon.watch(ctx, func() {
-			r, err := rpc.Client{Socket: paths.Socket}.RelayStation(ctx, id)
-			p.Send(relaystation.Loaded{Messages: r.Messages, Waiting: r.Waiting, Err: err})
-		})
-		if err != nil && ctx.Err() == nil {
+		for ctx.Err() == nil {
+			err := daemon.watch(ctx, func() {
+				r, err := rpc.Client{Socket: paths.Socket}.RelayStation(ctx, id)
+				p.Send(relaystation.Loaded{Messages: r.Messages, Waiting: r.Waiting, Err: err})
+			})
+			if ctx.Err() != nil {
+				return
+			}
+			if err == nil {
+				err = errors.New("the daemon stopped; connecting again")
+			}
 			p.Send(relaystation.Loaded{Err: err})
+			select {
+			case <-ctx.Done():
+			case <-time.After(relayStationReconnect):
+			}
 		}
 	}()
 	_, err = p.Run()

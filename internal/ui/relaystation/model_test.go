@@ -163,6 +163,16 @@ func TestStates(t *testing.T) {
 	if out := plain(run(60, 10, Loaded{Err: errors.New("daemon gone")})); !strings.Contains(out, "daemon gone") {
 		t.Errorf("an error:\n%s", out)
 	}
+	broken := run(80, 30, relayLog, tea.KeyPressMsg{Code: tea.KeyHome}, Loaded{Err: errors.New("daemon gone")})
+	if out := plain(broken); strings.Contains(out, "4 messages") {
+		t.Errorf("an error still counts the old messages:\n%s", out)
+	}
+	if broken.messageAt(1) != -1 {
+		t.Error("a click under an error reaches a message it hides")
+	}
+	if out := plain(run(60, 10, Loaded{Messages: relayLog.Messages[:1]})); !strings.Contains(out, "Relay Station · 1 message ") {
+		t.Errorf("one message:\n%s", out)
+	}
 	if out := plain(run(60, 10, Loaded{Messages: []relay.Message{{ID: 1, From: "x-1", To: "track", Kind: relay.Event,
 		Body: "red\x1b[2J\x1b]0;title\x07\ttab", At: now}}})); strings.Contains(out, "\x1b") || !strings.Contains(out, "red[2J]0;title    tab") {
 		t.Errorf("a message's control characters reach the screen:\n%q", out)
