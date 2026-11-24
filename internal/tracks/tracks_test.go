@@ -168,9 +168,11 @@ type fakeWindows struct {
 	// pasted what Paste pasted, after its window.
 	lastKeys map[string]time.Time
 	pasted   []string
-	// whilePasting runs inside Paste, which then fails with pasteErr.
-	whilePasting func()
-	pasteErr     error
+	// whilePasting runs inside Paste, which then fails with pasteErr;
+	// whileChecking inside LastKey.
+	whilePasting  func()
+	whileChecking func()
+	pasteErr      error
 	// buttons is each window's buttons; prompts the lines typed into the
 	// agents, as "<window> <text>".
 	buttons map[string]string
@@ -206,7 +208,12 @@ func (w *fakeWindows) Screen(window string) (string, error) { return w.screens[w
 
 func (w *fakeWindows) StyledScreen(window string) (string, error) { return w.screens[window], nil }
 
-func (w *fakeWindows) LastKey(window string) (time.Time, error) { return w.lastKeys[window], nil }
+func (w *fakeWindows) LastKey(window string) (time.Time, error) {
+	if w.whileChecking != nil {
+		w.whileChecking()
+	}
+	return w.lastKeys[window], nil
+}
 
 func (w *fakeWindows) Paste(window, text string) error {
 	w.pasted = append(w.pasted, window+" "+text)
