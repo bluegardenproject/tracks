@@ -274,3 +274,16 @@ func TestAClickWhileOpeningIsDropped(t *testing.T) {
 		t.Errorf("after the overlay closed: a click opens again (%v), opened %d", again != nil, opened)
 	}
 }
+
+// A Signals click's notice shows under Signals, not in the Platform's
+// frame above it.
+func TestASignalsNoticeShowsInSignals(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default(), OpenRelayStation: func() error { return errors.New("no client") }}), size,
+		loadedMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
+	m, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Relay Station"), Button: tea.MouseLeft})
+	m = update(t, m, cmd())
+	v := view(m)
+	if strings.Index(v, "no client") < strings.Index(v, "Signals") {
+		t.Errorf("the Relay Station's notice shows above Signals:\n%s", v)
+	}
+}

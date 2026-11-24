@@ -432,8 +432,14 @@ func TestAFailedCollectKeepsItHeld(t *testing.T) {
 	}
 	f.windows.pasteErr, f.windows.whilePasting = nil, nil
 	f.windows.scrollErr = errors.New("tmux can't tell")
-	if _, err := f.svc.CollectMessages(ctx, "a"); err == nil || len(f.windows.pasted) != 1 {
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.Is(err, f.windows.scrollErr) || len(f.windows.pasted) != 1 {
 		t.Errorf("collect pasted %v into a pane whose mode it couldn't tell: %v", f.windows.pasted, err)
+	}
+	// The failed collect, and the turn's start during it, left the
+	// messages to collect.
+	f.windows.scrollErr = nil
+	if _, err := f.svc.CollectMessages(ctx, "a"); err != nil || len(f.windows.pasted) != 2 {
+		t.Errorf("collect after the failures: %v, pasted %v", err, f.windows.pasted)
 	}
 }
 

@@ -8,10 +8,10 @@ import (
 
 // actionsRow holds the shown track's buttons, read from its window's
 // options, so it changes with the track. Without buttons, the track's
-// info is centred, muted like the version; with some, such as a
-// reviewer's, which last as long as the track, it sits on the left and
-// the buttons centred beside it. A PR's comments are on the Platform's
-// Signals. The daemon writes the buttons as a format, expanded here so
+// info is centred, muted like the version; with some it sits on the left
+// and the buttons centred beside it. A PR's comments are on the
+// Platform's Signals; the setting that hides the sidebar will bring them
+// back here. The daemon writes the buttons as a format, expanded here so
 // the theme's colours fill in.
 func actionsRow(p palette) string {
 	info := p.fg(theme.FooterMuted) + " #{" + trackwin.InfoOption + "}#[default]"
