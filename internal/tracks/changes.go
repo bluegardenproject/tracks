@@ -115,10 +115,6 @@ func (w watched) SetTitle(ctx context.Context, id, title string) error {
 	return w.notify(w.Store.SetTitle(ctx, id, title))
 }
 
-func (w watched) SetCost(ctx context.Context, id string, cost float64) error {
-	return w.notify(w.Store.SetCost(ctx, id, cost))
-}
-
 func (w watched) AddTrackError(ctx context.Context, id string, e track.Failure) error {
 	return w.notify(w.Store.AddTrackError(ctx, id, e))
 }

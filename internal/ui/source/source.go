@@ -34,7 +34,6 @@ type Track struct {
 	// Engine is the agent CLI, Model its model; Session is the agent's
 	// session ID, which resumes it.
 	Engine, Model, Session string
-	Cost                   float64 // in US dollars, 0 when unknown
 	Created                time.Time
 	PRs                    []PR // in the order they were found
 	// PRStatus is where the PRs are; track.NoPRs without any.
@@ -138,7 +137,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		}
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
-			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs),
+			Engine: engine, Model: l.Model, Session: l.Session, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs),
 			Failures: l.Failures, FailureStatus: track.FailureStatus(l.Failures), Parent: l.ParentName}
 		if l.Draft != nil {
 			out[i].Draft = &Draft{Error: l.Draft.Error, Prompt: l.Draft.Request.Prompt}

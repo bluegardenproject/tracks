@@ -32,7 +32,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `train/` the trains a track hands tasks to: handles, agents, status (the reviewer is the first; see `docs/design/trains.md`) · `relay/` the messages between a track and its trains: kinds, who may send to whom, how they're shown
 - `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client · `proxy/` the output ports forwarding to dev servers
 - `ui/widget/` UI pieces more than one screen uses · `golden/` golden-file comparisons for tests
-- Shared leaf packages: `git`, `notify`, `procs` (processes and the ports they listen on), `shellx`, `update` (`tracks update`), `usage` (token use and cost)
+- Shared leaf packages: `git`, `notify`, `procs` (processes and the ports they listen on), `shellx`, `update` (`tracks update`)
 - Imports point downwards. Add packages here when they land.
 
 ## Build and test

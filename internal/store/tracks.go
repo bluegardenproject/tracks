@@ -9,7 +9,7 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, cost, agent_exit, interrupted, parent_id"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, agent_exit, interrupted, parent_id"
 
 // parentName is the name a track's parent is shown under, read with it.
 const parentName = "(SELECT COALESCE(NULLIF(p.title, ''), p.name) FROM tracks p WHERE p.id = tracks.parent_id)"
@@ -22,9 +22,9 @@ func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM tracks WHERE id = ?))",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM tracks WHERE id = ?))",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Cost, t.Exit, t.Interrupted, t.Parent)
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Exit, t.Interrupted, t.Parent)
 	if err != nil {
 		return err
 	}
@@ -92,11 +92,6 @@ func (s *Store) Rename(ctx context.Context, id, name string) error {
 // the slug.
 func (s *Store) SetTitle(ctx context.Context, id, title string) error {
 	return s.updateTrack(ctx, id, "UPDATE tracks SET title = ? WHERE id = ?", title, id)
-}
-
-// SetCost records what id has cost so far.
-func (s *Store) SetCost(ctx context.Context, id string, cost float64) error {
-	return s.updateTrack(ctx, id, "UPDATE tracks SET cost = ? WHERE id = ?", cost, id)
 }
 
 // SetBranch records that track id's repo at position is on branch.
@@ -249,7 +244,7 @@ func scanTrack(row scanner) (track.Track, error) {
 	var closed, cleaned, archived sql.NullInt64
 	var parent, parentName sql.NullString
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
-		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Cost, &t.Exit, &t.Interrupted,
+		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Exit, &t.Interrupted,
 		&parent, &parentName)
 	t.Parent, t.ParentName = parent.String, parentName.String
 	t.Kind = track.Kind(kind)

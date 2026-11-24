@@ -33,9 +33,6 @@ the v2.0.0 release; git history keeps them.
 
 ## Follow-ups
 
-- Drop the Station's Cost column: it counts Claude only, and inaccurately;
-  the engines' own apps and dashboards show what was spent.
-
 - Renaming a repo that tracks use.
 - The model a track actually ran, including what Cursor's "auto" picked.
 - The folder trust prompt for Ask and Plan tracks without repos.

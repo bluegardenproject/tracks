@@ -48,7 +48,6 @@ type Store interface {
 	DeleteTrack(ctx context.Context, id string) error
 	Rename(ctx context.Context, id, name string) error
 	SetTitle(ctx context.Context, id, title string) error
-	SetCost(ctx context.Context, id string, cost float64) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error
 	AddTrackError(ctx context.Context, id string, e track.Failure) error
@@ -231,9 +230,6 @@ type Service struct {
 	held map[string]map[string]bool
 	// trainsSeen is, by track, what SyncTrains last saw of its trains.
 	trainsSeen map[string]string
-	// transcripts are the signatures of the open Claude tracks'
-	// transcripts the last Costs read; only Costs uses them.
-	transcripts map[string]string
 }
 
 // ended is how many ended tracks List returns, the most recent ones.
