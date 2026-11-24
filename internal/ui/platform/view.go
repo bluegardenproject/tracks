@@ -99,7 +99,7 @@ func (m Model) platformBody() ([]string, []item) {
 	if m.err != nil {
 		body = append(body, m.muted("Couldn't read the trains: "+m.err.Error(), inner)...)
 	}
-	if m.notice != "" {
+	if m.notice != "" && m.noticeFor == targetCollect {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
 	return body, items
@@ -118,7 +118,7 @@ func (m Model) signalsBody() ([]string, []item) {
 	}
 	body := []string{line, ""}
 	// The whole line opens it, from the body's first column.
-	items := []item{{row: 0, width: lipgloss.Width(line) + 1, kind: targetRelayStation, from: 2}}
+	items := []item{{row: 0, width: lipgloss.Width(line), kind: targetRelayStation, from: 2}}
 	for _, pr := range m.signals.PRs {
 		body = append(body, m.bold(cutTo(pr.PR, inner)))
 		if pr.Sent {
@@ -130,7 +130,10 @@ func (m Model) signalsBody() ([]string, []item) {
 		}
 		body = append(body, "")
 	}
-	if len(m.trains) == 0 && m.err == nil && m.notice != "" {
+	// A notice of Signals' own clicks shows here; Collect messages' too
+	// while the Platform's frame isn't shown.
+	ownNotice := m.noticeFor != targetCollect || len(m.trains) == 0 && m.err == nil
+	if m.notice != "" && ownNotice {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
 	return body, items

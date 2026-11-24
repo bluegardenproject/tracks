@@ -1,8 +1,7 @@
 # Trains
 
 **Status:** agreed in discussion; the spike (step 0) is done, see Spike.
-Being built, one PR per step under Order: steps 1 to 8, 9a, 10 and 11
-are built.
+Being built, one PR per step under Order: steps 1 to 11 are built.
 
 ## Problem
 

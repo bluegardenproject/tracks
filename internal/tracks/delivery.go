@@ -316,6 +316,7 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 		// button, and its notice, while the paste may still fail.
 		delete(s.pointing, id)
 		delete(s.held, id)
+		defer s.Changes.Notify()
 	default:
 		// The stall's wait starts once the pointer is in.
 		p.at = s.now()
