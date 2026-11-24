@@ -1,7 +1,7 @@
 // Package review holds what a track's reviewer is given, whichever
 // engine runs it: its brief, the diff's limit, and the marker that tells
 // a process it runs inside a review. The reviewer itself runs in a
-// hidden pane of the track (see docs/design/review.md).
+// train's tmux session (see docs/design/trains.md).
 package review
 
 import (

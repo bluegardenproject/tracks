@@ -124,4 +124,8 @@ func TestPopupArgs(t *testing.T) {
 	if got, want := popupArgs(p), []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "36", "-h", "7", "-B", "-s", "bg=#101010", "tracks popup"}; !slices.Equal(got, want) {
 		t.Errorf("popupArgs = %q, want %q", got, want)
 	}
+	p = Popup{Client: "/dev/ttys001", Width: "90%", Height: "90%", Command: "tmux attach", Border: "#202020"}
+	if got, want := popupArgs(p), []string{"display-popup", "-E", "-c", "/dev/ttys001", "-w", "90%", "-h", "90%", "-b", "rounded", "-S", "fg=#202020", "tmux attach"}; !slices.Equal(got, want) {
+		t.Errorf("popupArgs with a border = %q, want %q", got, want)
+	}
 }

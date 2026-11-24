@@ -50,7 +50,7 @@ type Notifier struct {
 
 // Send sends n on each channel that's on, unless its event is off, the
 // track's window is on screen, or the track was told it needs the user
-// less than Quiet ago.
+// less than Quiet ago. A train's notice goes whatever the window.
 func (n *Notifier) Send(no tracks.Notice) {
 	s, err := n.Settings()
 	if err != nil {
@@ -66,7 +66,7 @@ func (n *Notifier) Send(no tracks.Notice) {
 	if err != nil {
 		n.log("notify: %s's window: %v", no.Name, err)
 	}
-	if shown || no.Event == settings.NotifyActionRequired && !n.tell(no.Track) {
+	if !no.Train && (shown || no.Event == settings.NotifyActionRequired && !n.tell(no.Track)) {
 		return
 	}
 	if macOS {
@@ -95,19 +95,17 @@ func (n *Notifier) window(id string) (tty string, shown bool, err error) {
 	if err != nil {
 		return "", false, err
 	}
-	if slices.Contains(on, window) {
-		return "", true, nil
-	}
+	shown = slices.Contains(on, window)
 	panes, err := n.Tmux.ListPanes(window)
 	if err != nil {
-		return "", false, err
+		return "", shown, err
 	}
 	for _, p := range panes {
 		if p.Role == trackwin.RoleAgent {
-			return p.TTY, false, nil
+			return p.TTY, shown, nil
 		}
 	}
-	return "", false, nil
+	return "", shown, nil
 }
 
 // tell reports whether track id may be told it needs the user now, and

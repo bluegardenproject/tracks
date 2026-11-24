@@ -39,6 +39,9 @@ var Bindings = func() []Binding {
 		{Keys: []string{"t"}, Help: "add a terminal to the track", args: func(string) string {
 			return "trackwin add-terminal '#{window_id}'"
 		}},
+		{Keys: []string{"Escape"}, Label: "Esc", Help: "hide a train's overlay", args: func(string) string {
+			return "trackwin hide '#{client_name}' '#{session_name}'"
+		}},
 	}
 }()
 

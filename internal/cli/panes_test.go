@@ -60,6 +60,7 @@ func TestPaneActivity(t *testing.T) {
 	}{
 		{tmux.Pane{Role: trackwin.RoleTerminal, PID: 10}, "pnpm dev; listening on 5173"},
 		{tmux.Pane{Role: trackwin.RoleTerminal, PID: 20}, "idle shell"},
+		{tmux.Pane{Role: trackwin.RoleReviewer, PID: 12, Dead: true}, "agent exited"},
 		{tmux.Pane{Role: trackwin.RoleDevServer, PID: 30, State: "exited 1"}, "stopped (exited 1)"},
 		{tmux.Pane{Role: trackwin.RoleDevServer, PID: 30}, "running"},
 		{tmux.Pane{Role: trackwin.RoleSetup, PID: 30, State: "running"}, "setup running"},

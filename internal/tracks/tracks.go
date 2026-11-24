@@ -101,8 +101,8 @@ type Windows interface {
 	List() ([]trackwin.Info, error)
 	Open(s trackwin.Spec) (trackwin.Window, error)
 	Close(window string) error
-	// EndHidden closes track's hidden panes, such as its reviewer, once
-	// its window is gone some other way than Close.
+	// EndHidden closes track's trains, such as its reviewer, once its
+	// window is gone some other way than Close.
 	EndHidden(track string) error
 	// Attention marks window as needing the user, or not.
 	Attention(window string, on bool) error
@@ -208,16 +208,12 @@ type Service struct {
 	// comments are the open tracks' review threads, as CountComments
 	// last counted them and RunAction sent them.
 	comments map[string]map[string]actions.Comments // by track, then PR URL
-	// reviewers is each track's reviewer as last seen, for its button.
-	reviewers map[string]ReviewerState
-	// reviewerReads numbers the clicks' reads of a reviewer, across all
-	// tracks; reviewerRead is, by track, the number its buttons were
-	// last written at, so a tick's older read doesn't undo a click's.
-	reviewerReads uint64
-	reviewerRead  map[string]uint64
-	// trustShown is the review run, by track, whose reviewer the tick
-	// showed for Claude's trust question.
-	trustShown map[string]string
+	// badges are the badges last written into each train's overlay
+	// header, by session.
+	badges map[string]string
+	// trainTold is the review run, by track, whose reviewer the user
+	// was told waits on them.
+	trainTold map[string]string
 	// info is what SyncInfo last showed, by window.
 	info map[string]string
 	// turns says, by track, whether its agent is in a turn, from its
@@ -343,7 +339,10 @@ func reviewLabel(ref string) string {
 // TmuxWindows are the track windows of a tmux session.
 type TmuxWindows struct {
 	Tmux interface {
-		trackwin.HiddenTmux
+		trackwin.TrainTmux
+		RefreshStatus(client string) error
+		ListSessionPanes(session string) ([]tmux.Pane, error)
+		KillPane(pane string) error
 		KillWindow(window string) error
 		CapturePane(pane string) (string, error)
 		CapturePaneStyled(pane string) (string, error)
@@ -362,54 +361,54 @@ func (w TmuxWindows) Open(s trackwin.Spec) (trackwin.Window, error) {
 }
 
 // Close stops window's dev servers, then closes it and the track's
-// hidden panes, such as its reviewer, even when a server wouldn't stop.
+// trains, such as its reviewer, even when a server wouldn't stop.
 func (w TmuxWindows) Close(window string) error {
 	stopped := w.StopServers(window)
-	id, hidden := trackwin.TrackOf(w.Tmux, window)
+	id, trains := trackwin.TrackOf(w.Tmux, window)
 	if id != "" {
-		hidden = trackwin.CloseHidden(w.Tmux, id, "", "")
+		trains = trackwin.CloseTrains(w.Tmux, id, "")
 	}
-	return errors.Join(stopped, w.Tmux.KillWindow(window), hidden)
+	return errors.Join(stopped, w.Tmux.KillWindow(window), trains)
 }
 
-// EndHidden closes track's hidden panes, its window gone.
+// EndHidden closes track's trains, its window gone.
 func (w TmuxWindows) EndHidden(track string) error {
-	return trackwin.CloseHidden(w.Tmux, track, "", "")
+	return trackwin.CloseTrains(w.Tmux, track, "")
 }
 
-func (w TmuxWindows) OpenReviewer(track, dir string, p trackwin.Process) error {
-	_, err := trackwin.OpenHidden(w.Tmux, track, trackwin.RoleReviewer, dir, p)
+func (w TmuxWindows) OpenReviewer(s trackwin.TrainSpec) error {
+	_, err := trackwin.OpenTrain(w.Tmux, s)
 	return err
 }
 
-func (w TmuxWindows) Reviewer(track, window string) (ReviewerState, error) {
-	p, shown, err := trackwin.Hidden(w.Tmux, track, window, trackwin.RoleReviewer)
-	if errors.Is(err, trackwin.ErrNoHidden) {
+func (w TmuxWindows) Reviewer(track string) (ReviewerState, error) {
+	p, err := trackwin.FindTrain(w.Tmux, track, trackwin.RoleReviewer)
+	if errors.Is(err, trackwin.ErrNoTrain) {
 		return ReviewerState{}, nil
+	} else if err != nil {
+		return ReviewerState{}, err
 	}
-	return ReviewerState{Pane: p.ID, Shown: shown}, err
+	attached, err := trackwin.Attached(w.Tmux, p.Session)
+	return ReviewerState{Pane: p.ID, Session: p.Session, Exited: p.Dead, Attached: attached}, err
 }
 
 func (w TmuxWindows) Reviewers() (map[string]ReviewerState, error) {
-	shown, err := w.Tmux.ListSessionPanes(w.Session)
+	panes, err := trackwin.Trains(w.Tmux, "")
 	if err != nil {
 		return nil, err
 	}
-	var hidden []tmux.Pane
-	if w.Tmux.HasSession(trackwin.BackSession) {
-		if hidden, err = w.Tmux.ListSessionPanes(trackwin.BackSession); err != nil {
-			return nil, err
-		}
+	return reviewerStates(panes), nil
+}
+
+func (w TmuxWindows) TrainBadge(session, badges string) error {
+	if err := w.Tmux.SetSessionOption(session, trackwin.TrainBadgeOption, badges); err != nil {
+		return err
 	}
-	return reviewerStates(shown, hidden), nil
-}
-
-func (w TmuxWindows) ShowReviewer(window, pane string) error {
-	return trackwin.Show(w.Tmux, window, pane)
-}
-
-func (w TmuxWindows) HideReviewer(window, pane string) error {
-	return trackwin.Hide(w.Tmux, window, pane)
+	clients, err := w.Tmux.SessionClients(session)
+	for _, c := range clients {
+		err = errors.Join(err, w.Tmux.RefreshStatus(c))
+	}
+	return err
 }
 
 func (w TmuxWindows) TypeReviewer(pane, text string) error { return trackwin.Type(w.Tmux, pane, text) }
@@ -420,8 +419,19 @@ func (w TmuxWindows) RespawnReviewer(pane, dir, command string) error {
 	return w.Tmux.RespawnPane(pane, dir, command)
 }
 
-func (w TmuxWindows) CloseReviewer(track, window string) error {
-	return trackwin.CloseHidden(w.Tmux, track, window, trackwin.RoleReviewer)
+func (w TmuxWindows) CloseReviewer(track string) error {
+	return trackwin.CloseTrains(w.Tmux, track, trackwin.RoleReviewer)
+}
+
+// reviewerStates are the tracks' reviewers among the trains' panes.
+func reviewerStates(panes []tmux.Pane) map[string]ReviewerState {
+	out := map[string]ReviewerState{}
+	for _, p := range panes {
+		if p.Role == trackwin.RoleReviewer && p.Track != "" {
+			out[p.Track] = ReviewerState{Pane: p.ID, Session: p.Session, Exited: p.Dead}
+		}
+	}
+	return out
 }
 
 func (w TmuxWindows) Panes(window string) ([]tmux.Pane, error) { return w.Tmux.ListPanes(window) }

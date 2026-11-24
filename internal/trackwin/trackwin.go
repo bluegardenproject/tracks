@@ -22,8 +22,7 @@ const (
 	RoleTerminal  = "terminal"
 	RoleDevServer = "dev-server"
 	RoleSetup     = "setup"
-	// RoleReviewer is a track's reviewer, hidden in BackSession until
-	// shown in the right column.
+	// RoleReviewer is a track's reviewer, in a train's session.
 	RoleReviewer = "reviewer"
 )
 

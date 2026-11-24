@@ -56,14 +56,28 @@ func newTrackwinCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:  "action <button> <window-id>",
-		Args: cobra.ExactArgs(2),
+		Use:  "action <button> <window-id> [client]",
+		Args: cobra.RangeArgs(2, 3),
 		RunE: func(c *cobra.Command, args []string) error {
 			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}
 			t := tmux.New(paths.TmuxSocket)
+			if args[0] == actions.HideTrainRange || args[0] == actions.EndTrainRange {
+				client := ""
+				if len(args) == 3 {
+					client = args[2]
+				}
+				msg := trainAction(c.Context(), t, rpc.Client{Socket: paths.Socket}, args[0], args[1], client)
+				switch {
+				case msg == "":
+					return nil
+				case client == "":
+					return t.DisplayMessage(msg)
+				}
+				return t.Tell(client, msg)
+			}
 			msg := runAction(c.Context(), t, rpc.Client{Socket: paths.Socket}, args[0], args[1])
 			if msg == "" {
 				return nil
@@ -71,7 +85,48 @@ func newTrackwinCmd() *cobra.Command {
 			return t.DisplayMessage(msg)
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:  "hide <client> <session>",
+		Args: cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			paths, err := platform.Resolve()
+			if err != nil {
+				return err
+			}
+			if !trackwin.IsTrainSession(args[1]) {
+				return nil
+			}
+			return tmux.New(paths.TmuxSocket).DetachClient(args[0])
+		},
+	})
 	return cmd
+}
+
+// trainAction runs button, Hide or End train, of the overlay header of
+// the train whose window is window, for client, and words how it went;
+// "" when it went well or window isn't a train's.
+func trainAction(ctx context.Context, t interface {
+	trackwin.Tmux
+	DetachClient(client string) error
+}, daemon interface {
+	TrainEnd(ctx context.Context, id, name string) error
+}, button, window, client string) string {
+	track, handle, err := trackwin.TrainOf(t, window)
+	switch {
+	case err != nil:
+		return "Couldn't run the action: " + err.Error()
+	case track == "":
+		return ""
+	case button == actions.HideTrainRange && client != "":
+		if err := t.DetachClient(client); err != nil {
+			return "Couldn't hide " + handle + ": " + err.Error()
+		}
+	case button == actions.EndTrainRange:
+		if err := daemon.TrainEnd(ctx, track, handle); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
 }
 
 // runAction runs the footer button named button in the track of window
@@ -80,8 +135,7 @@ func newTrackwinCmd() *cobra.Command {
 func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 	Action(ctx context.Context, id, action string) (string, error)
 }, button, window string) string {
-	_, pr := actions.ParseRange(button)
-	if !pr && button != actions.ReviewerRange && button != actions.CloseReviewerRange {
+	if _, pr := actions.ParseRange(button); !pr {
 		return ""
 	}
 	windows, err := trackwin.List(t, sessionName)
@@ -93,11 +147,8 @@ func runAction(ctx context.Context, t trackwin.Tmux, daemon interface {
 			continue
 		}
 		name, err := daemon.Action(ctx, w.Track, button)
-		switch {
-		case err != nil:
+		if err != nil {
 			return err.Error()
-		case !pr:
-			return ""
 		}
 		return "Sent " + name + "'s open comments to its agent."
 	}

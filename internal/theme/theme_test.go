@@ -35,6 +35,9 @@ func TestParseRejects(t *testing.T) {
 	if _, err := Parse([]byte(complete)); err != nil {
 		t.Fatalf("complete theme rejected: %v", err)
 	}
+	if _, err := Parse([]byte(complete + `  button.variant6.bg: "#000000"` + "\n")); err != nil {
+		t.Errorf("a theme with a retired token rejected: %v", err)
+	}
 	tests := map[string]string{
 		"missing token": strings.Replace(complete, "  text.accent:", "  # text.accent:", 1),
 		"unknown token": complete + `  text.shiny: "#000000"` + "\n",

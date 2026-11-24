@@ -63,10 +63,11 @@ source-file -q "{{.OverrideFile}}"
 
 // StatusClick binds a click on the footer: on a track's slot it switches
 // there, anywhere else it hands the clicked range, a button's or none,
-// to the track's actions.
+// to the track's actions. A train's overlay header is a status line
+// too: its client comes along, for Hide.
 func (c Conf) StatusClick() string {
 	nav := `select-window -t = ; run-shell -b "` + c.Command + ` trackwin nav '#{window_index}' '#{window_index}'"`
-	action := `run-shell -b "` + c.Command + ` trackwin action '#{mouse_status_range}' '#{window_id}'"`
+	action := `run-shell -b "` + c.Command + ` trackwin action '#{mouse_status_range}' '#{window_id}' '#{client_name}'"`
 	return `bind-key -n MouseDown1Status if-shell -F "#{==:#{mouse_status_range},window}" { ` + nav + ` } { ` + action + ` }`
 }
 

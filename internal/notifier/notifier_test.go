@@ -86,6 +86,13 @@ func TestSend(t *testing.T) {
 	if got := r.send("a", settings.NotifyPROpened); len(got) != 0 {
 		t.Errorf("for the track on screen sent %q, want nothing", got)
 	}
+	r.sent = nil
+	train := tracks.Notice{Track: "a", Name: "rate-bug", Event: settings.NotifyActionRequired, Title: "T", Body: "B", Train: true}
+	r.n.Send(train)
+	r.n.Send(train)
+	if want := []string{"macos T: B", "bell /dev/ttys001", "macos T: B", "bell /dev/ttys001"}; !slices.Equal(r.sent, want) {
+		t.Errorf("a train waiting, its track on screen, sent %q, want %q: its overlay isn't on screen, and no quiet time", r.sent, want)
+	}
 	if len(r.logs) != 0 {
 		t.Errorf("logged %q", r.logs)
 	}

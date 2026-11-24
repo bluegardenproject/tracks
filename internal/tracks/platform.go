@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/shellx"
+	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
@@ -16,7 +18,9 @@ import (
 // open while it has one, closed when it has none. A train's status
 // comes from tmux and its run, not the store, so SyncTrains also tells
 // Changes when a track's trains changed since it last looked, for the
-// Platforms to read them again. It reads the windows, their Platforms
+// Platforms to read them again, brings the trains' overlay headers up
+// to their status, and tells the user when one waits on them, as on
+// Claude's trust question, which only its overlay shows. It reads the windows, their Platforms
 // and the reviewers once each, whatever the number of tracks.
 func (s *Service) SyncTrains(ctx context.Context) error {
 	infos, err := s.Windows.List()
@@ -50,11 +54,13 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	last := s.trainsSeen
 	s.mu.Unlock()
 	seen := map[string]string{}
+	live, windowed := map[string]bool{}, map[string]bool{}
 	var errs []error
 	for _, in := range infos {
 		if in.Track == "" {
 			continue
 		}
+		windowed[in.Track] = true
 		// A busy track, being restarted or promoted, keeps what was seen
 		// of it: its Platform is left as it is meanwhile.
 		if s.isBusy(in.Track) {
@@ -68,6 +74,14 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		trains := s.reviewerTrains(in.Track, reviewers[in.Track], runs[in.Track])
 		if len(trains) > 0 {
 			seen[in.Track] = trainsKey(trains)
+		}
+		for _, tr := range trains {
+			session := reviewers[in.Track].Session
+			live[session] = true
+			s.showBadge(session, actions.Badges(tr.Status, tr.Outcome))
+			if tr.Status == track.ActionRequired {
+				s.tellWaiting(ctx, in.Track, tr, runs[in.Track].run)
+			}
 		}
 		pane := platforms[in.Window]
 		switch {
@@ -85,6 +99,16 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		}
 	}
 	s.trainsSeen = seen
+	for session := range s.badges {
+		if !live[session] {
+			delete(s.badges, session)
+		}
+	}
+	for id := range s.trainTold {
+		if !windowed[id] {
+			delete(s.trainTold, id)
+		}
+	}
 	s.mu.Unlock()
 	if changed && s.Changes != nil {
 		s.Changes.Notify()

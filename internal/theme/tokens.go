@@ -94,12 +94,10 @@ const (
 	ButtonVariant3Text Token = "button.variant3.text"
 	ButtonVariant4Bg   Token = "button.variant4.bg"
 	ButtonVariant4Text Token = "button.variant4.text"
-	// Variants of one button each, outside the rotation: 5 is kept for
-	// ending a track's reviewer, 6 is the reviewer's Open/Hide button.
+	// A variant of one button, outside the rotation: End train, in a
+	// train's overlay header.
 	ButtonVariant5Bg   Token = "button.variant5.bg"
 	ButtonVariant5Text Token = "button.variant5.text"
-	ButtonVariant6Bg   Token = "button.variant6.bg"
-	ButtonVariant6Text Token = "button.variant6.text"
 
 	// List items, such as the Settings sidebar's sections: the one
 	// under the mouse (hover) and the chosen one (active).
@@ -139,15 +137,15 @@ var All = []Token{
 	ButtonTextDefault, ButtonTextDanger, ButtonTextAccent,
 	ButtonVariant1Bg, ButtonVariant1Text, ButtonVariant2Bg, ButtonVariant2Text,
 	ButtonVariant3Bg, ButtonVariant3Text, ButtonVariant4Bg, ButtonVariant4Text,
-	ButtonVariant5Bg, ButtonVariant5Text, ButtonVariant6Bg, ButtonVariant6Text,
+	ButtonVariant5Bg, ButtonVariant5Text,
 	ListItemBgDefault, ListItemTextDefault, ListItemBgHover, ListItemTextHover, ListItemBgActive, ListItemTextActive,
 	OverlayBg, OverlayBgSelected, OverlayBgHover, OverlayBorder, OverlayBorderFocus,
 	OverlayTextDefault, OverlayTextMuted, OverlayTextFaint,
 }
 
 // ButtonVariants are the footer buttons' colours, background and text,
-// in the order buttons take them. Variants 5 and 6 belong to one button
-// each, so they aren't among them.
+// in the order buttons take them. Variant 5 belongs to one button, so
+// it isn't among them.
 var ButtonVariants = [][2]Token{
 	{ButtonVariant1Bg, ButtonVariant1Text},
 	{ButtonVariant2Bg, ButtonVariant2Text},

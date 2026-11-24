@@ -66,6 +66,7 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	reviewer := panes.state
 	panes.state = ReviewerState{}
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 		t.Errorf("a busy track's Platform was touched (%v) or a change told", f.windows.platforms)
 	}
 	release()
-	panes.state = ReviewerState{Pane: "%9"}
+	panes.state = reviewer
 
 	// The track's agent exits; its window and its reviewer run on.
 	f.windows.windows[0].Exit = "0"
