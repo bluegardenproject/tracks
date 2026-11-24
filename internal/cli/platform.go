@@ -8,6 +8,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/tmux"
+	"github.com/bluegardenproject/tracks/internal/train"
 	uiplatform "github.com/bluegardenproject/tracks/internal/ui/platform"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 	"github.com/spf13/cobra"
@@ -34,7 +35,7 @@ func newPlatformCmd(version string) *cobra.Command {
 			daemon := daemonCalls{tmux: tmux.New(paths.TmuxSocket), paths: paths, version: version}
 			m := uiplatform.New(uiplatform.Config{
 				Theme:     t,
-				Trains:    func() ([]rpc.Train, error) { return client.TrainList(cmd.Context(), id) },
+				Trains:    func() ([]uiplatform.Entry, error) { return platformEntries(client.TrainList(cmd.Context(), id)) },
 				Watch:     daemon.watch,
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
 			})
@@ -45,4 +46,17 @@ func newPlatformCmd(version string) *cobra.Command {
 			return err
 		},
 	}
+}
+
+// platformEntries are trains, from the daemon, as the Platform shows
+// them.
+func platformEntries(trains []rpc.Train, err error) ([]uiplatform.Entry, error) {
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uiplatform.Entry, len(trains))
+	for i, t := range trains {
+		out[i] = uiplatform.Entry{Handle: t.Handle, Status: train.StatusOf(t.StatusID), Outcome: train.StatusOf(t.OutcomeID)}
+	}
+	return out, nil
 }

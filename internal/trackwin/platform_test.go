@@ -1,6 +1,7 @@
 package trackwin_test
 
 import (
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -52,5 +53,43 @@ func TestPlatform(t *testing.T) {
 	}
 	if column, _ := trackwin.Column(c, w.ID); len(column) != 2 {
 		t.Errorf("a terminal added beside the Platform: column %+v", column)
+	}
+}
+
+// The right column's first pane splits the agent pane, not the window:
+// the Platform keeps its width.
+func TestTheRightColumnLeavesThePlatformItsWidth(t *testing.T) {
+	socket := tmuxtest.Socket(t)
+	c := tmux.New(socket)
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	w, err := trackwin.Open(c, "tracks", trackwin.Spec{
+		Name: "api", Dir: dir, Agent: trackwin.Process{Title: "agent", Command: "sleep 60"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wide, where a split of the whole window took the most from it.
+	if out, err := exec.Command("tmux", "-L", socket, "resize-window", "-t", w.ID, "-x", "200", "-y", "50").CombinedOutput(); err != nil {
+		t.Fatalf("resize: %v %s", err, out)
+	}
+	if _, err := trackwin.OpenPlatform(c, w.ID, dir, trackwin.Process{Title: "trains", Command: "sleep 60"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := trackwin.AddTerminal(c, w.ID); err != nil {
+		t.Fatal(err)
+	}
+	panes := mustPanes(t, c, w.ID)
+	if p := byRole(panes, trackwin.RolePlatform); p.Width != trackwin.PlatformWidth || p.Left != 0 {
+		t.Errorf("the Platform is %+v after the column opened, want %d wide on the left", p, trackwin.PlatformWidth)
+	}
+	if term := byRole(panes, trackwin.RoleTerminal); term.Left <= byRole(panes, trackwin.RoleAgent).Left {
+		t.Errorf("the terminal %+v isn't right of the agent", term)
 	}
 }

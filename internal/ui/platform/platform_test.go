@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/theme"
+	"github.com/bluegardenproject/tracks/internal/track"
+	"github.com/bluegardenproject/tracks/internal/train"
 )
 
 var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*[a-zA-Z]`)
@@ -24,9 +25,9 @@ func shown(t *testing.T, m Model, msgs ...tea.Msg) string {
 
 func TestPlatformShowsTheTrains(t *testing.T) {
 	m := New(Config{Theme: theme.Default()})
-	view := shown(t, m, trainsMsg{trains: []rpc.Train{
-		{Handle: "reviewer-527192", Agent: "Reviewer", StatusID: "done", OutcomeID: "blocked"},
-		{Handle: "watch-000001", Agent: "Watcher", StatusID: "action_required"},
+	view := shown(t, m, trainsMsg{trains: []Entry{
+		{Handle: "reviewer-527192", Status: track.Done, Outcome: train.Blocked},
+		{Handle: "watch-000001", Status: track.ActionRequired},
 	}})
 	for _, want := range []string{"╭─ Platform ", "reviewer-527192", " done   blocked ", "watch-000001", " action required "} {
 		if !strings.Contains(view, want) {
@@ -56,7 +57,7 @@ func TestPlatformWithoutTrains(t *testing.T) {
 
 func TestPlatformReadsAgainOnAChange(t *testing.T) {
 	calls := 0
-	m := New(Config{Theme: theme.Default(), Trains: func() ([]rpc.Train, error) { calls++; return nil, nil }})
+	m := New(Config{Theme: theme.Default(), Trains: func() ([]Entry, error) { calls++; return nil, nil }})
 	_, cmd := m.Update(changedMsg{})
 	if cmd == nil {
 		t.Fatal("a change read nothing")
@@ -69,8 +70,9 @@ func TestPlatformReadsAgainOnAChange(t *testing.T) {
 	t.Errorf("a change read the trains %d times, want once", calls)
 }
 
-// collect runs cmd and the commands of a batch, without waiting on the
-// ones that block.
+// collect runs cmd and the commands of a batch. A command that blocks,
+// such as waiting for a change with a Watch, blocks it too: the tests
+// give the Model none.
 func collect(cmd tea.Cmd) []tea.Msg {
 	msg := cmd()
 	if batch, ok := msg.(tea.BatchMsg); ok {
@@ -86,7 +88,7 @@ func collect(cmd tea.Cmd) []tea.Msg {
 }
 
 func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
-	m := New(Config{Theme: theme.Default()})
+	m := New(Config{Theme: theme.Default(), LoadTheme: func() (theme.Theme, error) { return theme.Default(), nil }})
 	var light theme.Theme
 	for _, b := range theme.BuiltIns() {
 		if b.ID != theme.Default().ID {
@@ -97,7 +99,9 @@ func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
 	if tm.(Model).palette.Theme().ID != light.ID {
 		t.Error("a theme read again wasn't taken")
 	}
-	_ = cmd
+	if cmd == nil {
+		t.Error("the theme isn't read again after a read")
+	}
 	if _, cmd := tm.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
 		if _, quit := cmd().(tea.QuitMsg); quit {
 			t.Error("ctrl+c quit the Platform, which the daemon would only open again")

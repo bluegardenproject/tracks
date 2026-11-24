@@ -27,3 +27,10 @@ func TestPrintTrains(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
 }
+
+func TestPlatformEntries(t *testing.T) {
+	got, err := platformEntries([]rpc.Train{{Handle: "reviewer-1", StatusID: "done", OutcomeID: "pass"}, {Handle: "w-1", StatusID: "active"}}, nil)
+	if err != nil || len(got) != 2 || got[0].Status.ID != "done" || got[0].Outcome.ID != "pass" || got[1].Outcome.Label != "" {
+		t.Errorf("entries %+v, %v", got, err)
+	}
+}
