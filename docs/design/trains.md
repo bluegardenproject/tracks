@@ -382,8 +382,12 @@ From the spike:
   restart, a promote) is pointed to the unread messages again.
 - **Trains get pointers too:** a question from the track to a train is
   delivered the same way, with the same blockers.
-- **The user is notified** when a train reports or needs them, through the
-  notification channels; not for the track they're looking at.
+- **The user is notified** when a train reports, answers, asks or sees
+  something, through the notification channels, under Settings → General
+  → Notifications → "A train reports or answers": the train's handle, the
+  track, and the message's first line. Not for the track they're looking
+  at, as every notice. A train needing them (its trust question) tells
+  them with step 7, when its pane no longer shows by itself.
 - **Waiting is still there.** `tracks relay wait` blocks until a message
   for the caller comes. A Claude parent can run it in the background; a
   train can end its task on it, to be there for questions.

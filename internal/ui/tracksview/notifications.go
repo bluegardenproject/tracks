@@ -26,6 +26,7 @@ var notifyRows = []struct{ key, label string }{
 	{settings.NotifyError, "A track's agent fails"},
 	{settings.NotifyPROpened, "A track opens a PR"},
 	{settings.NotifyPRSettled, "A track's PR is merged or closed"},
+	{settings.NotifyTrainReported, "A train reports or answers"},
 }
 
 const notifyChannels = 2
