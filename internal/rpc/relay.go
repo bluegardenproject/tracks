@@ -18,6 +18,9 @@ const (
 	RelayWho     = "relay-who"
 	RelayStation = "relay-station"
 	RelayNew     = "relay-new"
+	// RelayCollect sends a track's agent the pointer to its waiting
+	// messages now, past what holds it back: Collect messages.
+	RelayCollect = "relay-collect"
 )
 
 // RelayIDParams names the track whose relay to read, wait on or list.
@@ -120,4 +123,10 @@ func (c Client) RelayStation(ctx context.Context, id string) (RelayStationResult
 func (c Client) RelayNew(ctx context.Context, id string) (int, error) {
 	var r RelayNewResult
 	return r.New, c.Call(ctx, RelayNew, RelayIDParams{ID: id}, &r, nil)
+}
+
+// RelayCollect sends track id's agent the pointer to its waiting
+// messages now.
+func (c Client) RelayCollect(ctx context.Context, id string) error {
+	return c.Call(ctx, RelayCollect, RelayIDParams{ID: id}, nil, nil)
 }

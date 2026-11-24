@@ -378,7 +378,10 @@ From the spike:
   pointer.
 - **Collect messages.** While a pointer is held, the sending train's entry
   on the Platform shows **[ Collect messages ]**. A click sends it now,
-  whatever blocks it: the user vouches for the input. It stops the retries.
+  past the turn, the typing, a draft or a retry's wait: the user vouches
+  for the input. A question on the agent's screen still holds it, since
+  the pointer would answer it; a pane scrolled back leaves its scrollback
+  first, so the Enter submits. It stops the retries.
 - **Only what waited:** a message is pointed to once it's 3 s old and
   still unread, so a `tracks review` that prints it marks it read first;
   notices never are. A pointer goes once per message.
@@ -471,7 +474,8 @@ Each step a PR of its own.
    Platform can show `agent exited`; until then a train is listed while
    its pane is open. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
-8. Collect messages.
+8. Collect messages. Built: delivery notes whose messages a held pointer
+   waits for and tells the change feed; `relay-collect` sends it.
 9. Signals, in two PRs:
    - 9a: the Relay Station: the program, "not delivered", the user's
      mark and the count of new messages, the popup. Done.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/hooks"
@@ -141,12 +142,7 @@ func (s *Service) Deliver(ctx context.Context) error {
 func (s *Service) deliver(ctx context.Context, t track.Track, window string) error {
 	now := s.now()
 	s.mu.Lock()
-	if s.pointing == nil {
-		s.pointing, s.pointed, s.retryAt = map[string]pointing{}, map[string]int64{}, map[string]time.Time{}
-	}
-	if s.turns == nil {
-		s.turns = map[string]bool{}
-	}
+	s.deliveryMaps()
 	p, waiting := s.pointing[t.ID]
 	stalled := waiting && now.Sub(p.at) >= pointerStall
 	switch {
@@ -167,68 +163,182 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 		// shows.
 		s.Changes.Notify()
 	}
-	// The turn and a dialog hold the pointer back without asking the
-	// store or tmux anything.
-	if now.Before(retry) || t.Waiting || s.inTurn(t.ID) {
+
+	due, err := s.dueMessages(ctx, t.ID, pointed, now, pointerGrace)
+	if err != nil || len(due) == 0 {
+		s.setHeld(t.ID, nil)
+		return err
+	}
+	// The turn and a dialog hold the pointer back without asking tmux
+	// anything. Held, its messages offer Collect messages on the
+	// Platform.
+	if now.Before(retry) || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+		s.setHeld(t.ID, due)
 		return nil
 	}
+	s.setHeld(t.ID, nil)
+	return s.point(t.ID, window, due, pointed, false)
+}
 
-	unread, err := s.Store.RelayUnread(ctx, t.ID, relay.TrackHandle)
+// deliveryMaps makes delivery's maps. The caller holds s.mu.
+func (s *Service) deliveryMaps() {
+	if s.pointing == nil {
+		s.pointing, s.pointed, s.retryAt = map[string]pointing{}, map[string]int64{}, map[string]time.Time{}
+	}
+	if s.turns == nil {
+		s.turns = map[string]bool{}
+	}
+	if s.held == nil {
+		s.held = map[string]map[string]bool{}
+	}
+}
+
+// dueMessages are track id's unread messages a pointer goes for: past
+// pointed, not a notice, and at least grace old.
+func (s *Service) dueMessages(ctx context.Context, id string, pointed int64, now time.Time, grace time.Duration) ([]relay.Message, error) {
+	unread, err := s.Store.RelayUnread(ctx, id, relay.TrackHandle)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var due []relay.Message
 	for _, m := range unread {
-		if m.Kind != relay.Notice && m.ID > pointed && now.Sub(m.At) >= pointerGrace {
+		if m.Kind != relay.Notice && m.ID > pointed && now.Sub(m.At) >= grace {
 			due = append(due, m)
 		}
 	}
-	if len(due) == 0 || s.blockers(t, window).Why() != "" {
-		return nil
+	return due, nil
+}
+
+// setHeld notes whose messages wait while their pointer is held back,
+// nil for none, and tells the change feed when that changed: the
+// Platform offers Collect messages under them.
+func (s *Service) setHeld(id string, due []relay.Message) {
+	from := map[string]bool{}
+	for _, m := range due {
+		from[m.From] = true
 	}
+	s.mu.Lock()
+	s.deliveryMaps()
+	changed := !maps.Equal(s.held[id], from)
+	if len(from) == 0 {
+		delete(s.held, id)
+	} else {
+		s.held[id] = from
+	}
+	s.mu.Unlock()
+	if changed {
+		s.Changes.Notify()
+	}
+}
+
+// heldFrom reports whether a message from handle waits for track id's
+// pointer, held back.
+func (s *Service) heldFrom(id, handle string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.held[id][handle]
+}
+
+// point pastes the pointer to due into track id's agent, in window, and
+// keeps its state. collected says the user sent it with Collect
+// messages, past what holds it back: a turn on, unknown, doesn't stop it.
+func (s *Service) point(id, window string, due []relay.Message, pointed int64, collected bool) error {
+	now := s.now()
 	// Recorded before the paste, so a turn's start or a new agent
 	// arriving meanwhile changes it, rather than the paste's end undoing
 	// them. The pointer starts the agent's turn: none is known until its
 	// hooks say so.
 	s.mu.Lock()
-	// Again, under the lock: the checks above asked tmux, unlocked, and
+	// Again, under the lock: the checks before asked tmux, unlocked, and
 	// a turn may have started, a pointer gone or the track turned busy
 	// meanwhile.
-	if in, known := s.turns[t.ID]; !known || in || s.busy[t.ID] || s.pointed[t.ID] != pointed {
-		s.mu.Unlock()
-		return nil
-	}
-	if _, waiting := s.pointing[t.ID]; waiting {
+	in, known := s.turns[id]
+	_, waiting := s.pointing[id]
+	if s.busy[id] || s.pointed[id] != pointed || waiting || !collected && (!known || in) {
 		s.mu.Unlock()
 		return nil
 	}
 	s.pointerGen++
 	gen := s.pointerGen
-	s.pointing[t.ID] = pointing{at: now, before: pointed, gen: gen}
-	s.pointed[t.ID] = due[len(due)-1].ID
-	delete(s.turns, t.ID)
+	s.pointing[id] = pointing{at: now, before: pointed, gen: gen}
+	s.pointed[id] = due[len(due)-1].ID
+	delete(s.turns, id)
+	delete(s.retryAt, id)
 	s.mu.Unlock()
 	// The messages count as pointed to from here, as the Relay Station
 	// shows.
 	s.Changes.Notify()
 
-	err = s.Windows.Paste(window, relay.Pointer(due))
+	err := s.Windows.Paste(window, relay.Pointer(due))
 	s.mu.Lock()
-	p, ours := s.pointing[t.ID]
+	p, ours := s.pointing[id]
 	switch {
 	case !ours || p.gen != gen:
 	case err != nil:
-		delete(s.pointing, t.ID)
-		s.pointed[t.ID] = p.before
-		s.turns[t.ID] = false
+		delete(s.pointing, id)
+		s.pointed[id] = p.before
+		s.turns[id] = false
 		s.mu.Unlock()
 		s.Changes.Notify()
 		return err
 	default:
 		// The stall's wait starts once the pointer is in.
 		p.at = s.now()
-		s.pointing[t.ID] = p
+		s.pointing[id] = p
 	}
 	s.mu.Unlock()
 	return err
+}
+
+// CollectMessages sends track id's agent the pointer to the messages
+// that wait for one, now, past what holds it back: the user asked for
+// it, and vouches for the agent's input. A question on its screen still
+// holds it, which the pointer would answer; a pane scrolled back leaves
+// its scrollback first, so the Enter submits. It returns the track's
+// name.
+func (s *Service) CollectMessages(ctx context.Context, id string) (string, error) {
+	t, err := s.relayTrack(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	infos, err := s.Windows.List()
+	if err != nil {
+		return t.Name, err
+	}
+	window := ""
+	for _, in := range infos {
+		if in.Track == id && in.Exit == "" {
+			window = in.Window
+		}
+	}
+	switch {
+	case window == "" || t.Exit != "":
+		return t.Name, Problem(t.Name + "'s agent isn't running.")
+	case s.isBusy(id):
+		return t.Name, Problem(t.Name + " is busy.")
+	case t.Waiting:
+		return t.Name, Problem(t.Name + "'s agent asks you something: answer it first.")
+	}
+	s.mu.Lock()
+	s.deliveryMaps()
+	_, waiting := s.pointing[id]
+	pointed := s.pointed[id]
+	s.mu.Unlock()
+	if waiting {
+		return t.Name, Problem("A pointer to " + t.Name + "'s messages is on its way.")
+	}
+	due, err := s.dueMessages(ctx, id, pointed, s.now(), 0)
+	if err != nil {
+		return t.Name, err
+	}
+	if len(due) == 0 {
+		return t.Name, Problem("No messages wait for " + t.Name + ".")
+	}
+	if scrolled, err := s.Windows.Scrolled(window); err == nil && scrolled {
+		if err := s.Windows.LeaveScroll(window); err != nil {
+			return t.Name, err
+		}
+	}
+	s.setHeld(id, nil)
+	return t.Name, s.point(id, window, due, pointed, true)
 }

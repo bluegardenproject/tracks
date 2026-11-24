@@ -144,6 +144,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.RelayShow:    c.relayShow,
 		rpc.RelayWait:    c.relayWait,
 		rpc.RelayWho:     c.relayWho,
+		rpc.RelayCollect: c.relayCollect,
 		rpc.RelayStation: c.relayStation,
 		rpc.RelayNew:     c.relayNew,
 		rpc.Down:         c.down,

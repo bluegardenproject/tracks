@@ -96,7 +96,7 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 func trainsKey(trains []train.Train) string {
 	var b strings.Builder
 	for _, t := range trains {
-		fmt.Fprintf(&b, "%s %s %s %s|", t.Handle, t.Engine, t.Status.ID, t.Outcome.ID)
+		fmt.Fprintf(&b, "%s %s %s %s %v|", t.Handle, t.Engine, t.Status.ID, t.Outcome.ID, t.Held)
 	}
 	return b.String()
 }
