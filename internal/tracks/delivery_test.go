@@ -295,3 +295,43 @@ func TestAFailedPasteIsTriedAgain(t *testing.T) {
 		t.Errorf("pasted %v after a failed paste, want the pointer again", got)
 	}
 }
+
+func TestATurnDuringTheChecksHolds(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.whileChecking = func() { f.svc.SetTurn(ctx, "a", hooks.TurnStart) }
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a pointer went into a turn that started while tmux was asked: %v", got)
+	}
+	f.windows.whileChecking = nil
+	if !f.svc.inTurn("a") {
+		t.Error("the turn that started during the checks was lost")
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 1 {
+		t.Errorf("pasted %v once the turn ended, want the pointer", got)
+	}
+}
+
+func TestPromoteForgetsTheTurn(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	made, err := f.svc.Create(ctx, Request{Kind: track.Plan, Repos: []string{"api"}, Prompt: "Plan the cache"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.engine.replies = map[string]string{made.Track.Session: "1. Warm the cache"}
+	id := made.Track.ID
+	f.svc.SetTurn(ctx, id, hooks.TurnEnd)
+	if f.svc.inTurn(id) {
+		t.Fatal("the plan's agent should be idle")
+	}
+	if _, err := f.svc.Promote(ctx, id, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !f.svc.inTurn(id) {
+		t.Error("the old agent's ended turn holds for the promoted one")
+	}
+}

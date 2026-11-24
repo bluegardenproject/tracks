@@ -172,7 +172,9 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 			due = append(due, m)
 		}
 	}
-	if len(due) == 0 || s.blockers(t, window).Why() != "" {
+	// The turn and a dialog first: they hold the pointer back without
+	// asking tmux anything.
+	if len(due) == 0 || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
 		return nil
 	}
 	// Recorded before the paste, so a turn's start or a new agent
@@ -180,6 +182,17 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	// them. The pointer starts the agent's turn: none is known until its
 	// hooks say so.
 	s.mu.Lock()
+	// Again, under the lock: the checks above asked tmux, unlocked, and
+	// a turn may have started, a pointer gone or the track turned busy
+	// meanwhile.
+	if in, known := s.turns[t.ID]; !known || in || s.busy[t.ID] {
+		s.mu.Unlock()
+		return nil
+	}
+	if _, waiting := s.pointing[t.ID]; waiting {
+		s.mu.Unlock()
+		return nil
+	}
 	s.pointerGen++
 	gen := s.pointerGen
 	s.pointing[t.ID] = pointing{at: now, before: pointed, gen: gen}

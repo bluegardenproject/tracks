@@ -16,6 +16,9 @@ func TestPointer(t *testing.T) {
 		lines = append(lines, Pointer(msgs))
 	}
 	golden.Check(t, "testdata/pointer.golden", strings.Join(lines, "\n")+"\n")
+	if got := Pointer(nil); got != "" {
+		t.Errorf("no messages gave a pointer: %q", got)
+	}
 	for _, l := range lines {
 		if l[0] < '1' || l[0] > '9' {
 			t.Errorf("%q doesn't start with a digit", l)

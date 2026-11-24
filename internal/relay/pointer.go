@@ -10,8 +10,11 @@ import (
 // for it: how many, from whom, and the command that reads them, never
 // the messages themselves. It starts with a digit, so it can't switch
 // an agent's input to a shell or slash command, and holds nothing but a
-// count and handles.
+// count and handles. No messages need no pointer: "".
 func Pointer(msgs []Message) string {
+	if len(msgs) == 0 {
+		return ""
+	}
 	var from []string
 	for _, m := range msgs {
 		h := "@" + m.From
