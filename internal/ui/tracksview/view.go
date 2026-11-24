@@ -168,6 +168,9 @@ func (m Model) hints() string {
 		case sectionTracks:
 			return "  " + joinKeys(key, text, typeKeys)
 		case sectionAgents:
+			if s.agents.editingPrefix {
+				return "  " + joinKeys(key, text, prefixEditKeys)
+			}
 			return "  " + joinKeys(key, text, agentKeys)
 		}
 		return "  " + joinKeys(key, text, scrollKeys)

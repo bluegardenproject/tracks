@@ -306,7 +306,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.enginesPaste(msg)
 		case m.creatorFocused():
 			return m.creatorMsg(msg)
-		case m.tab == tabSettings && m.settings.section == sectionAgents && m.settings.agents.editingPrefix:
+		case m.editingPrefix():
 			return m.agentsPaste(msg)
 		}
 	case tea.KeyPressMsg:
@@ -321,6 +321,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.repoPaste(msg)
 		case m.tab == tabEngines:
 			return m.enginesPaste(msg)
+		case m.editingPrefix():
+			return m.agentsPaste(msg)
 		}
 	}
 	return m, nil
@@ -462,6 +464,7 @@ func (m Model) hover(mouse tea.Mouse) Model {
 // running tracks may have changed, Engines looks for the CLIs, and
 // Settings reads the theme files.
 func (m Model) switchTab(i int) (Model, tea.Cmd) {
+	m = m.stopPrefix()
 	m.tab = i
 	switch i {
 	case tabProxy:
