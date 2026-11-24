@@ -191,12 +191,14 @@ type EndParams struct {
 }
 
 // ReportParams says event happened to the track, one of track.Event's
-// values, and that its agent opened the pull requests at PRs. Either
-// may be empty.
+// values, that its agent opened the pull requests at PRs, and that its
+// turn started or ended (hooks.TurnStart, hooks.TurnEnd). Any may be
+// empty.
 type ReportParams struct {
 	ID    string   `json:"id"`
 	Event string   `json:"event,omitempty"`
 	PRs   []string `json:"prs,omitempty"`
+	Turn  string   `json:"turn,omitempty"`
 }
 
 // ResumeParams names the track to resume. Recreate re-creates its

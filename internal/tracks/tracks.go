@@ -114,6 +114,11 @@ type Windows interface {
 	Prompt(window, text string) error
 	// Info shows text on window, for the footer's top row.
 	Info(window, text string) error
+	// LastKey is when a client showing window last had a key, the zero
+	// time when none shows it.
+	LastKey(window string) (time.Time, error)
+	// StyledScreen is what window's agent pane shows, with its styles.
+	StyledScreen(window string) (string, error)
 }
 
 // Service creates, lists and ends tracks.
@@ -199,6 +204,9 @@ type Service struct {
 	trustShown map[string]string
 	// info is what SyncInfo last showed, by window.
 	info map[string]string
+	// turns says, by track, whether its agent is in a turn, from its
+	// hooks; a track it hasn't heard of may be.
+	turns map[string]bool
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string
@@ -310,6 +318,8 @@ type TmuxWindows struct {
 		trackwin.HiddenTmux
 		KillWindow(window string) error
 		CapturePane(pane string) (string, error)
+		CapturePaneStyled(pane string) (string, error)
+		LastKey(window string) (time.Time, error)
 		CaptureHistory(pane string, lines int) (string, error)
 	}
 	Session string
@@ -414,14 +424,25 @@ func (w TmuxWindows) Prompt(window, text string) error {
 }
 
 func (w TmuxWindows) Screen(window string) (string, error) {
+	return w.agentScreen(window, w.Tmux.CapturePane)
+}
+
+func (w TmuxWindows) StyledScreen(window string) (string, error) {
+	return w.agentScreen(window, w.Tmux.CapturePaneStyled)
+}
+
+// agentScreen is window's agent pane as capture captures it.
+func (w TmuxWindows) agentScreen(window string, capture func(pane string) (string, error)) (string, error) {
 	panes, err := w.Tmux.ListPanes(window)
 	if err != nil {
 		return "", err
 	}
 	for _, p := range panes {
 		if p.Role == trackwin.RoleAgent {
-			return w.Tmux.CapturePane(p.ID)
+			return capture(p.ID)
 		}
 	}
 	return "", fmt.Errorf("window %s has no agent pane", window)
 }
+
+func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }

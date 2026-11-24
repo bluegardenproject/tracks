@@ -90,3 +90,17 @@ func TestFormatAll(t *testing.T) {
 		t.Errorf("all: %q", got)
 	}
 }
+
+func TestBlockersWhy(t *testing.T) {
+	if (Blockers{}).Why() != "" {
+		t.Error("nothing holds a pointer back")
+	}
+	if got := (Blockers{InTurn: true, Asking: true, Draft: true}).Why(); got != "it asks the user something" {
+		t.Errorf("a question comes first: %q", got)
+	}
+	for _, b := range []Blockers{{InTurn: true}, {Typing: true}, {Draft: true}} {
+		if b.Why() == "" {
+			t.Errorf("%+v says nothing", b)
+		}
+	}
+}

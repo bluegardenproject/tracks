@@ -70,8 +70,8 @@ func runHook(ctx context.Context, in io.Reader, out io.Writer, engine, id string
 		return
 	}
 	e, _ := hooks.Event(engine, p)
-	params := rpc.ReportParams{ID: id, Event: string(e), PRs: hooks.PRs(engine, p)}
-	if params.Event == "" && len(params.PRs) == 0 {
+	params := rpc.ReportParams{ID: id, Event: string(e), PRs: hooks.PRs(engine, p), Turn: hooks.Turn(engine, p)}
+	if params.Event == "" && len(params.PRs) == 0 && params.Turn == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, hookWait)

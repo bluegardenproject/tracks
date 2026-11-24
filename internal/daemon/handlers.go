@@ -185,6 +185,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 					return nil, err
 				}
 			}
+			c.Tracks.SetTurn(p.ID, p.Turn)
 			return nil, c.Tracks.SeePRs(ctx, p.ID, p.PRs)
 		},
 	}

@@ -345,6 +345,12 @@ Tracks holds the pointer while anything blocks it:
 | The user is typing in its pane or overlay | No key for a few seconds (`client_activity`) |
 | Text in its input | The input line is empty, read from the screen as the markers are |
 
+A turn starts with a prompt (Claude's `UserPromptSubmit`, Cursor's
+`beforeSubmitPrompt`) and ends as the agent stops (`Stop`, `StopFailure`,
+`stop`); a subagent's hooks are its turn going on. Tracks keeps it in
+memory: after a restart it doesn't know, and counts the agent as in a
+turn until its next one ends, or Collect messages sends the pointer.
+
 From the spike:
 
 - **Typing:** `client_activity` changes on keystrokes only, not on output

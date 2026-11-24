@@ -89,3 +89,25 @@ func knownKind(k Kind) bool {
 func CanRead(reader string, m Message) bool {
 	return reader == TrackHandle || m.To == "" || m.To == reader || m.From == reader
 }
+
+// Blockers are what holds a pointer back from an agent: typed into its
+// pane then, it would land in its turn, a dialog, the user's typing or
+// a draft of theirs.
+type Blockers struct {
+	InTurn, Asking, Typing, Draft bool
+}
+
+// Why is what holds the pointer back, "" when nothing does.
+func (b Blockers) Why() string {
+	switch {
+	case b.Asking:
+		return "it asks the user something"
+	case b.InTurn:
+		return "it's in a turn"
+	case b.Typing:
+		return "the user is typing in its pane"
+	case b.Draft:
+		return "its input holds a draft"
+	}
+	return ""
+}
