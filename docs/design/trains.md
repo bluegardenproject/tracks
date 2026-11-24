@@ -28,8 +28,8 @@ Not built. One PR per step under Order.
 | Control by the parent | None | Messages through the relay; it can end it |
 
 The independent track stays as it is. It only gains a note on its details,
-"started from <track>", so the user sees where it came from. It needs a
-migration.
+"Started from <track>", so the user sees where it came from. It needs a
+migration. When that track is deleted (derailed), the note goes with it.
 
 The rest of this document is about trains.
 
@@ -462,6 +462,7 @@ Each step a PR of its own.
 10. The track's prompt: the relay paragraph (reading messages when a pointer
     comes).
 11. The "started from" note on independent tracks. Independent of the rest.
+    Done: `parent_id` on `tracks`; a parent that's deleted leaves no note.
 12. The Investigator and the Watcher: their design (purpose, briefs,
     commands, the Watcher's finish condition, Cursor, the worktree check
     for any train, which runs in the caller's sandbox as the reviewer's

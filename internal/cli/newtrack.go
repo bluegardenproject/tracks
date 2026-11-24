@@ -37,7 +37,7 @@ func newNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			req, err := newRequest(args[0], f, prompt)
+			req, err := newRequest(args[0], f, prompt, os.Getenv("TRACKS_ID"))
 			if err != nil {
 				return err
 			}
@@ -83,10 +83,10 @@ func readPrompt(stdin io.Reader, f newTrackFlags) (string, error) {
 	return f.prompt, nil
 }
 
-// newRequest is the request tracks new sends for kind. The daemon checks
-// it as it checks the form's; this catches what only the command line
-// gets wrong.
-func newRequest(kind string, f newTrackFlags, prompt string) (tracks.Request, error) {
+// newRequest is the request tracks new sends for kind, run in the track
+// parent ("" outside one). The daemon checks it as it checks the form's;
+// this catches what only the command line gets wrong.
+func newRequest(kind string, f newTrackFlags, prompt, parent string) (tracks.Request, error) {
 	k := track.Kind(strings.ToLower(strings.TrimSpace(kind)))
 	if !k.Valid() {
 		return tracks.Request{}, fmt.Errorf("there's no track type %q: use work, plan, ask, review or doc", kind)
@@ -100,6 +100,7 @@ func newRequest(kind string, f newTrackFlags, prompt string) (tracks.Request, er
 	req := tracks.Request{
 		Kind: k, Name: f.name, Repos: f.repos, Prompt: strings.TrimSpace(prompt),
 		ReviewRef: f.ref, Candor: f.candor, Engine: f.engine, Model: f.model, NoDraft: true,
+		Parent: strings.TrimSpace(parent),
 	}
 	if k == track.Doc {
 		req.Opinion, req.ClaimCheck = !f.noOpinion, !f.noClaimCheck

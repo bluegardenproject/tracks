@@ -54,10 +54,14 @@ type Track struct {
 	Candor              int    // Review, Doc
 	Opinion, ClaimCheck bool   // Doc's optional sections
 	Terminal            bool
-	Repos               []Repo
-	PRs                 []PR      // in the order they were found
-	Failures            []Failure // its server and setup errors, until cleared
-	CreatedAt           time.Time
+	// Parent is the ID of the track this one was started from with
+	// tracks new, "" for none or once that track is deleted; ParentName
+	// is that track's name as shown, read with it.
+	Parent, ParentName string
+	Repos              []Repo
+	PRs                []PR      // in the order they were found
+	Failures           []Failure // its server and setup errors, until cleared
+	CreatedAt          time.Time
 	State
 }
 

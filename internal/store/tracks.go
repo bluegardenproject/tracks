@@ -9,18 +9,22 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, cost, agent_exit, interrupted"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, cost, agent_exit, interrupted, parent_id"
 
-// AddTrack stores t and its repos in one transaction.
+// parentName is the name a track's parent is shown under, read with it.
+const parentName = "(SELECT COALESCE(NULLIF(p.title, ''), p.name) FROM tracks p WHERE p.id = tracks.parent_id)"
+
+// AddTrack stores t and its repos in one transaction. A t.Parent that
+// isn't a track's is stored as none.
 func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM tracks WHERE id = ?))",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Cost, t.Exit, t.Interrupted)
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Cost, t.Exit, t.Interrupted, t.Parent)
 	if err != nil {
 		return err
 	}
@@ -171,7 +175,7 @@ func (s *Store) updateTrack(ctx context.Context, id, query string, args ...any) 
 // tracks runs a query on tracks with where, then reads their repos in
 // one more query.
 func (s *Store) tracks(ctx context.Context, where string, args ...any) ([]track.Track, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+trackColumns+" FROM tracks "+where, args...)
+	rows, err := s.db.QueryContext(ctx, "SELECT "+trackColumns+", "+parentName+" FROM tracks "+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,8 +247,11 @@ func scanTrack(row scanner) (track.Track, error) {
 	var kind string
 	var created int64
 	var closed, cleaned, archived sql.NullInt64
+	var parent, parentName sql.NullString
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
-		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Cost, &t.Exit, &t.Interrupted)
+		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Cost, &t.Exit, &t.Interrupted,
+		&parent, &parentName)
+	t.Parent, t.ParentName = parent.String, parentName.String
 	t.Kind = track.Kind(kind)
 	t.CreatedAt = time.UnixMilli(created)
 	if closed.Valid {

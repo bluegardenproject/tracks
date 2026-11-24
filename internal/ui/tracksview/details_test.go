@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
+	"github.com/bluegardenproject/tracks/internal/track"
+	"github.com/bluegardenproject/tracks/internal/ui/source"
 )
 
 // clickButton clicks the details button showing label.
@@ -98,5 +100,20 @@ func TestDetailsShowWhenCreated(t *testing.T) {
 	}
 	if view := plainView(settle(m, tea.KeyPressMsg{Code: tea.KeyDown})); !strings.Contains(view, "Created   unknown") {
 		t.Errorf("details of a track without a creation time:\n%s", view)
+	}
+}
+
+func TestDetailsShowWhereATrackStarted(t *testing.T) {
+	tracks := []source.Track{
+		{ID: "a", Number: 1, Name: "station-bug", Title: "Station bug", Kind: "work", Status: track.Active},
+		{ID: "b", Number: 2, Name: "theme-idea", Kind: "plan", Status: track.Active, Parent: "Station bug"},
+	}
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: tracks})
+	if view := plainView(m); strings.Contains(view, "Started from") {
+		t.Errorf("a track started by the user shows where it started:\n%s", view)
+	}
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if view := plainView(m); !strings.Contains(view, "Started from Station bug") {
+		t.Errorf("details lack the track theme-idea was started from:\n%s", view)
 	}
 }

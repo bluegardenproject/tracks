@@ -163,7 +163,11 @@ func (m Model) details(width int) ([]string, []hit) {
 	if !t.Created.IsZero() {
 		created = value(t.Created.Local().Format(createdLayout))
 	}
-	lines := []string{name + strings.Repeat(" ", gap) + about, "", label("Slug") + value(t.Name), label("ID") + number, label("Created") + created}
+	lines := []string{name + strings.Repeat(" ", gap) + about}
+	if t.Parent != "" {
+		lines = append(lines, muted("Started from ")+value(cut(t.Parent, width-len("Started from "))))
+	}
+	lines = append(lines, "", label("Slug")+value(t.Name), label("ID")+number, label("Created")+created)
 
 	for i, r := range t.Repos {
 		l := label("")
