@@ -45,9 +45,10 @@ var Bindings = func() []Binding {
 	}
 }()
 
-// nav switches tracks; it lands on the track's agent pane.
+// nav switches tracks; it lands on the track's agent pane. The session
+// tells a train's overlay, where it does nothing.
 func nav(move string) func(string) string {
-	return func(string) string { return "trackwin nav " + move + " '#{window_index}'" }
+	return func(string) string { return "trackwin nav " + move + " '#{window_index}' '#{session_name}'" }
 }
 
 // Binds are the config's bind-key lines for Bindings.
