@@ -31,15 +31,16 @@ The independent track stays as it is. It only gains a note on its details,
 "Started from <track>", so the user sees where it came from. It needs a
 migration. When that track is deleted (derailed), the note goes with it.
 
-The rest of this document is about trains.
+A third kind, the **side track**, is a track a main track orchestrates:
+see Phase 2. The rest of this document, up to it, is about trains.
 
 ## Not in scope
 
 - **Trains that write.** Only the track's own agent edits, commits and
   pushes. Two agents writing one worktree lose edits, see each other's
-  half-done changes in builds and tests, and mix their commits. A writing
-  train would need a worktree and a merge of its own; it waits until a real
-  need shows.
+  half-done changes in builds and tests, and mix their commits. Work that
+  writes in parallel goes to side tracks (Phase 2), each with a worktree
+  of its own.
 - **Nesting.** Trains open neither trains nor tracks.
 - **The user posting to the relay.** The user reads it; they talk to a train
   in its overlay.
@@ -488,8 +489,8 @@ Each step a PR of its own.
     with `tracks train new`, their Settings frames and the Trains paragraph
     of the track's prompt.
 
-Later: a cap setting, user-defined agents, pinning beside, trains that
-write.
+Later: a cap setting, user-defined agents, pinning beside. Writing in
+parallel is Phase 2, side tracks.
 
 Trains talking to each other, if a case needs it, with these rules:
 
@@ -500,6 +501,108 @@ Trains talking to each other, if a case needs it, with these rules:
 - A limit per pair of trains, say 5 messages; after it Tracks refuses, and
   they go through the track.
 - Messages stay data, fenced with their sender.
+
+## Phase 2: Side tracks
+
+**Status:** agreed in discussion, not built; after the train steps above.
+
+Tracks running side by side, each on its own worktree and branch with its
+own review and PR, while one track plans, checks for overlaps and merges,
+works well when the user drives it by hand. Phase 2 lets a track drive it:
+a **main track** orchestrates **side tracks** that write code in parallel,
+and they talk through its relay so the main track keeps track of the work,
+the PRs and the conflicts.
+
+| | Train | Side track |
+|---|---|---|
+| What | An agent that reads and reports: the reviewer, an investigator | A track that builds: code, commits, a PR |
+| Runs in | A hidden pane of its track, shown in the overlay | A track window of its own |
+| Worktree | Its track's, read only | Its own, on a branch of its own |
+| Review and PR | None | Its own `tracks review`, its own PR |
+| In the Station | No | Yes, under its main track |
+| On the main track's Platform | Yes, as a train | Yes, under "Side tracks"; a click switches to its window |
+| On the relay | Yes | Yes, with a handle, `side-000123` by default |
+
+A **main track** is any track with a side track; there's no kind of its
+own. "Side track" is always two words: "sidetracked" means something else.
+
+### A side track
+
+- **Started by its main track**: `tracks side new --task <text>` (or
+  `--task-file -`), a Work track with the main track's repos by default
+  and `--repo` to pick others; the task is its prompt. `tracks side list`
+  lists them with their status and their PR.
+- **A track like any other**: its own worktree, branch, window, agent,
+  pre-push review, PR, comments and CI status, as Tracks has for every
+  track. Its parent is the main track, the link step 11 added ("Started
+  from"), and it joins the main track's relay.
+- **It reports through the relay**: "PR #231 is ready, review passed",
+  "blocked on …", questions. The main track gets the pointer, checks the
+  PR against the task it gave, and tells the user.
+- **Lifetime**: its own. It doesn't end when the main track pauses; it's
+  ended or archived with the main track, and its PR stays open as any
+  track's does.
+- **No nesting**: a side track starts no side tracks of its own.
+
+### Pull requests
+
+- **One PR per side track**, opened as the track rules say (after its
+  review passes).
+- **Stacked when the work builds up**: a side track can be based on the
+  main track's branch or on an earlier side track's, its PR on that
+  branch, so GitHub's stacked pull requests carry the order and retarget
+  each PR as the one below it merges. `tracks side new --on <side track>`
+  stacks; without it, a side track branches from the repo's base.
+- The main track sees its side tracks' PRs on its Platform, with their
+  state, as a track's own PRs show in the Station.
+
+### Conflicts
+
+- **Tracks spots them**, no model involved: it compares the side tracks'
+  changed files (`git diff --name-only` against their base, run in a
+  caller's sandbox, as the reviewer's checks are: the daemon runs no git)
+  and posts a notice to the side tracks that overlap and to the main
+  track: "@side-000123 and @side-000456 both change internal/relay/
+  relay.go".
+- **Side tracks talk to each other** to settle them, under the rules
+  parked for trains above: only questions and answers between them, the
+  main track sees every message, at most 5 messages a pair, messages stay
+  data fenced with their sender. Tasks and reports go through the main
+  track.
+
+### The Station
+
+Side tracks are grouped under their main track, indented, with a corner
+line before each:
+
+```
+api-cache            Work    active     PR open
+└ side: relay-store  Work    active
+└ side: relay-cli    Work    done       PR open
+docs-fix             Work    done
+```
+
+Filters and sorting keep a side track with its main track; a side track
+whose main track is filtered out shows on its own with "side track of
+<name>" in its details.
+
+### Order
+
+1. The model: a side track is a track with a main track (the step 11
+   link) on its main track's relay; `tracks side new|list`; no nesting.
+2. The Platform's "Side tracks" list; a click switches to the window.
+3. The Station's grouping.
+4. Stacking: `--on`, the PR's base.
+5. Overlap notices.
+6. Side tracks talking to each other.
+7. The main track's prompt: a "Side tracks" paragraph, its wording agreed
+   with the user first, as every prompt.
+
+### Open
+
+- Whether a side track's PR is opened directly or as a draft the main
+  track promotes once it has checked it.
+- The default number of side tracks running at once, if any.
 
 ## Open
 
