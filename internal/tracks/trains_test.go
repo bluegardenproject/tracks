@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -142,6 +143,10 @@ func TestReviewGoesWithTheTrack(t *testing.T) {
 		}
 		if exists(filepath.Join(f.svc.reviewDir("r"), "run")) {
 			t.Errorf("after %s the review's run is still there", end.name)
+		}
+		msgs := relayOf(t, f)
+		if last := msgs[len(msgs)-1]; last.Kind != relay.Notice || !strings.Contains(last.Body, " left: ") {
+			t.Errorf("after %s the relay ends with %+v, want the reviewer's left notice", end.name, last)
 		}
 	}
 }

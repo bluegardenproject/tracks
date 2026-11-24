@@ -148,7 +148,8 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 		_ = os.Remove(filepath.Join(dir, "question.md"))
 		return relay.Message{}, fmt.Errorf("ask the reviewer: %w", err)
 	}
-	return s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.TrackHandle, To: reviewHandle(dir),
+	// Posted whatever the caller does now: it's typed in already.
+	return s.Store.AddRelayMessage(context.WithoutCancel(ctx), id, relay.Message{From: relay.TrackHandle, To: reviewHandle(dir),
 		Kind: relay.Question, Body: asked, At: s.now()})
 }
 

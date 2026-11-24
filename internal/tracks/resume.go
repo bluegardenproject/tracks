@@ -75,7 +75,7 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 
 	// A review of the track's last run, kept by a build from before
 	// reviews went with the window, would hold tracks review --wait.
-	if err := s.dropReview(t.ID); err != nil {
+	if err := s.dropReview(ctx, t.ID, "its track ended"); err != nil {
 		removeWorktrees()
 		return Created{}, err
 	}
