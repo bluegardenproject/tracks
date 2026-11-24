@@ -4,8 +4,24 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 )
+
+func TestReadMessage(t *testing.T) {
+	for in, ok := range map[string]bool{
+		"Why?":                               true,
+		"héllo ✓":                            true,
+		strings.Repeat("a", relay.MaxBody):   true,
+		strings.Repeat("a", relay.MaxBody+1): false,
+		"bad \xff byte":                      false,
+	} {
+		got, err := readMessage(strings.NewReader(in))
+		if (err == nil) != ok || (ok && got != in) {
+			t.Errorf("readMessage(%.20q) = %.20q, %v; want ok %v", in, got, err, ok)
+		}
+	}
+}
 
 func TestPrintMembers(t *testing.T) {
 	var out strings.Builder

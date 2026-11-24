@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"text/tabwriter"
+	"unicode/utf8"
 
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/review"
@@ -44,11 +46,11 @@ func newRelaySendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body, err := io.ReadAll(io.LimitReader(c.InOrStdin(), relay.MaxBody+1))
+			body, err := readMessage(c.InOrStdin())
 			if err != nil {
 				return err
 			}
-			m, err := client.RelaySend(c.Context(), id, to, relay.Kind(kind), string(body))
+			m, err := client.RelaySend(c.Context(), id, to, relay.Kind(kind), body)
 			if err != nil {
 				return err
 			}
@@ -144,6 +146,21 @@ func newRelayWhoCmd() *cobra.Command {
 			return printMembers(c.OutOrStdout(), members)
 		},
 	}
+}
+
+// readMessage is a message from r, checked here for its size and for
+// being UTF-8: JSON would make any text valid on its way to the daemon.
+func readMessage(r io.Reader) (string, error) {
+	body, err := io.ReadAll(io.LimitReader(r, relay.MaxBody+1))
+	switch {
+	case err != nil:
+		return "", err
+	case len(body) > relay.MaxBody:
+		return "", fmt.Errorf("the message is longer than the %d bytes a message may have", relay.MaxBody)
+	case !utf8.Valid(body):
+		return "", errors.New("the message isn't UTF-8 text")
+	}
+	return string(body), nil
 }
 
 // printMembers writes who's on a relay as a table.

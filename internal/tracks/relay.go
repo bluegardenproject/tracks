@@ -82,14 +82,18 @@ func (s *Service) RelayShow(ctx context.Context, id, reader string, msg int64) (
 func (s *Service) RelayWait(ctx context.Context, id, reader string) ([]relay.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, relayWait)
 	defer cancel()
+	timedOut := func() bool { return errors.Is(ctx.Err(), context.DeadlineExceeded) }
 	for {
 		msgs, err := s.RelayRead(ctx, id, reader)
-		if err != nil || len(msgs) > 0 {
+		switch {
+		case err != nil && timedOut():
+			return nil, Problem(fmt.Sprintf("No message after %s.", relayWait))
+		case err != nil || len(msgs) > 0:
 			return msgs, err
 		}
 		select {
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			if timedOut() {
 				return nil, Problem(fmt.Sprintf("No message after %s.", relayWait))
 			}
 			return nil, ctx.Err()

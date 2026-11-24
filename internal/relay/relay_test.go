@@ -17,6 +17,8 @@ func TestCheckSend(t *testing.T) {
 		{"reviewer-1", "track", Report, "Fine.", true},
 		{"reviewer-1", "track", Answer, "Because.", true},
 		{"track", "track", Question, "Me?", false},
+		{"track", "", Question, "To everyone", false},
+		{"", "track", Report, "From no one", false},
 		{"reviewer-1", "watch-2", Question, "Train to train", false},
 		{"track", "reviewer-1", Notice, "Pretending", false},
 		{"tracks", "track", Report, "Pretending", false},
