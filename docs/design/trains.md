@@ -1,7 +1,8 @@
 # Trains
 
 **Status:** agreed in discussion; the spike (step 0) is done, see Spike.
-Not built. One PR per step under Order.
+Being built, one PR per step under Order: steps 1 to 8, 9a, 10 and 11
+are built.
 
 ## Problem
 
@@ -123,13 +124,19 @@ Tracks doesn't promise more than the engines can enforce.
   train always sets its mode. It still loads the user's global
   instructions, hooks, skills and MCP servers; the run ID keeps Tracks'
   hooks from mixing it up with the track, as for the reviewer now.
-- **A session of its own in `tracks-back`**, a window in it. The overlay
-  attaches a client to that session, so it needs one per train. It is
-  never moved into the track's window: today's route, `join-pane` into the
-  right column and `break-pane` back, goes (see The Platform).
+- **A tmux session of its own**, `tracks-train-<track>-<handle>`, one
+  window and one pane. The overlay attaches a client to that session, so
+  it needs one per train. It is never moved into the track's window: the
+  reviewer's old route, `join-pane` into the right column and
+  `break-pane` back, is gone (`join-pane` moves a pane out of its
+  session). The window carries the track and the handle
+  (`@tracks_train_track`, `@tracks_train`), for the header's buttons.
+- **Its pane stays after its agent exits** (`remain-on-exit`), so the
+  train is listed as `agent exited` until it's ended; a train that
+  reported before it exited stays `done`.
 - **It ends** with the parent, with **End train**, or with
-  `tracks train end <name>`. A finished train stays until then, so the
-  parent and the user can still ask it.
+  `tracks train end <name>`, which close its session. A finished train
+  stays until then, so the parent and the user can still ask it.
 - **A restart ends trains.** When Tracks or its daemon restarts, the
   track's trains are ended; their messages stay readable.
 
@@ -167,7 +174,7 @@ and below it **Signals**: the Relay Station and the PRs' open comments.
 - **Width:** "action required" and the frame need about 22–24 columns. A
   setting hides the sidebar; the track's info then says "2 trains · 1 needs
   you", and the PR buttons go back to the footer's top row.
-- **The reviewer moves here, and today's reviewer UI goes:**
+- **The reviewer moves here, and its old UI went with step 7:**
   - the footer's Open/Hide reviewer and Close reviewer buttons;
   - moving its pane into the track's right column (`join-pane`) and back;
     it is seen only in the overlay;
@@ -234,15 +241,24 @@ Two new values, on existing badge kinds, carry the Reviewer's outcome:
 `pass` (info) and `blocked` (danger).
 
 **A question a train asks the user**, Claude's trust prompt among them,
-doesn't open its overlay by itself, as the reviewer's pane is shown now.
-The train shows `action required` and the user is notified; they open the
-overlay to answer.
+doesn't open its overlay by itself, as the reviewer's pane was shown
+before step 7. The train shows `action required` and the user is
+notified, once per run, under Settings → General → Notifications → "A
+track needs you": "Tracks: @reviewer-527192 on <track> needs you". Unlike
+other notices it goes even while the track is on screen, since the
+overlay isn't, and the notifier's quiet time per track doesn't hold it
+back. They open the overlay to answer.
 
 ### The overlay
 
-A click on a train's name opens it over the track: `display-popup` running a
-tmux client attached to the train's session. It is the train's own session,
-interactive: the user answers its questions, asks it things, scrolls.
+A click on a train's name opens it over the track: `tracks train show
+<name>` (a handle, or a prefix only one train has), which runs
+`display-popup -E` with `env -u TMUX tmux -L <socket> attach-session` on
+the train's session, 90% of the client's size, with a rounded border in
+`overlay.border`. It is the train's own session, interactive: the user
+answers its questions, asks it things, scrolls. Closing it only detaches;
+the train runs on. `--track` and `--client` let the Platform, which runs
+outside the agent's environment, name the track and the client.
 
 ```
 ╭───────────────────────────────────────────────────────────────╮
@@ -252,16 +268,26 @@ interactive: the user answers its questions, asks it things, scrolls.
 ╰───────────────────────────────────────────────────────────────╯
 ```
 
-- **A header row** is the inner client's status line: the train, its badge,
-  updated live, and two buttons, ranges handled by the footer's
-  `MouseDown1Status` binding.
-  - **Hide** detaches the client: the popup closes, the train runs on.
-  - **End train** ends it, in `button.variant5`, as Close reviewer now.
-- **`Ctrl+b Esc`** hides it too. A bare Esc stays the agent's (it
-  interrupts); `Ctrl+b x` would kill the pane. It does nothing outside an
-  overlay.
+- **A header row** is the inner client's status line, set on the train's
+  session (`status on`, `status-position top`, `status-format[0]`): the
+  train's handle and agent, its badges, and two buttons, ranges handled by
+  the footer's `MouseDown1Status` binding, which now passes the clicking
+  client too.
+  - **The badges** (status, and the Reviewer's outcome) are a session
+    option, `@tracks_train_badge`, that the daemon's tick rewrites when they
+    change, redrawing the attached clients' status lines. Their colours are
+    global options set from the `state.*` tokens, as the buttons' are.
+  - **Hide** (`button.variant1`) detaches the client: the popup closes, the
+    train runs on.
+  - **End train** ends it, in `button.variant5`, as Close reviewer did.
+- **`Ctrl+b Esc`** hides it too: a prefix binding that runs `tracks
+  trackwin hide <client> <session>`, which detaches the client only when
+  its session is a train's. A bare Esc stays the agent's (it interrupts);
+  `Ctrl+b x` would kill the pane. It does nothing outside an overlay.
 - **No asking a train while it's attached.** A reply to the user would pass
-  for the answer; tmux says whether a session has a client.
+  for the answer; tmux says whether a session has a client. `tracks review
+  --ask` and a `question` through the relay both refuse then, and refuse a
+  train whose agent exited.
 
 ## The relay
 
@@ -401,7 +427,7 @@ From the spike:
   → Notifications → "A train reports or answers": the train's handle, the
   track, and the message's first line. Not for the track they're looking
   at, as every notice. A train needing them (its trust question) tells
-  them with step 7, when its pane no longer shows by itself.
+  them under "A track needs you" (see Status).
 - **Waiting is still there.** `tracks relay wait` blocks until a message
   for the caller comes. A Claude parent can run it in the background; a
   train can end its task on it, to be there for questions.
@@ -416,7 +442,8 @@ nothing into the orchestrating agent; it waits and reads.
 |---|---|
 | `tracks train new <agent> --task <text>` | Later, with the Investigator: starts a train; `--name` sets its handle, `--task-file -` reads the task |
 | `tracks train list` | The track's trains, their agent, handle and status |
-| `tracks train end <name>` | Ends one and closes its pane |
+| `tracks train show <name>` | Opens one in its overlay, over the client; returns once it closes |
+| `tracks train end <name>` | Ends one and closes its session |
 | `tracks relay send --to <handle> --kind <kind>` | Sends stdin as a message |
 | `tracks relay read` | Prints the caller's unread messages, marks them read |
 | `tracks relay show <id>` | Prints one message whole |
@@ -475,6 +502,9 @@ Each step a PR of its own.
    Platform can show `agent exited`; until then a train is listed while
    its pane is open. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
+   Built: `tracks train show`; the trust question is told under "A track
+   needs you"; a theme file that still sets `button.variant6` loads, the
+   token skipped.
 8. Collect messages. Built: delivery notes whose messages a held pointer
    waits for and tells the change feed; `relay-collect` sends it.
 9. Signals, in two PRs:

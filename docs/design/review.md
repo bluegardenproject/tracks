@@ -1,8 +1,9 @@
 # Reviews
 
 **Status:** being built, one PR per step under Order. Steps 1 to 9 are
-built. The reviewer pane, its button and showing it for the trust question
-give way to the Platform and the overlay of [trains.md](trains.md).
+built. The reviewer is a train ([trains.md](trains.md)): since its step 7
+it runs in a tmux session of its own, seen in its overlay; its footer
+buttons and showing it for the trust question are gone.
 
 ## Problem
 
@@ -47,7 +48,7 @@ track's repo, the candor level, the guards.
 | Role | Model | Does |
 |---|---|---|
 | Orchestrator | The track's own, can be a smaller one | Takes the user's brief, resolves links it can open (a ticket, a doc), writes the brief, runs `tracks review`, presents the report, answers questions the report already answers |
-| Reviewer | The Reviewer agent's (Settings → Trains (agents)) | Reviews in a session of its own, in the reviewer pane; answers questions about its review |
+| Reviewer | The Reviewer agent's (Settings → Trains (agents)) | Reviews in a session of its own, a train; answers questions about its review |
 
 The orchestrator never reviews itself; when `tracks review` fails it says so
 and stops. On a Work track the working agent is the orchestrator for its
@@ -88,15 +89,20 @@ pre-push review.
 ## The reviewer pane
 
 The reviewer is an interactive session of the Reviewer agent and model, in a
-pane of its own, hidden until the user opens it.
+pane of its own, which the user sees only in its overlay.
 
 - **Started by Tracks, not the orchestrator.** `tracks review` asks the daemon,
   which opens the pane through tmux. Its process is tmux's, not the
   orchestrator's: the orchestrator's sandbox doesn't apply, and no new way
   around it opens either. The reviewer runs as any track's agent does, with
   its engine's own permissions and sandbox for its commands.
-- **Hidden.** Hidden panes live in a background tmux session of Tracks', a
-  window per track, so they never show among the tracks.
+- **A train's session.** Its pane is the one pane of a tmux session of its
+  own, `tracks-train-<track>-<handle>`, so it never shows among the tracks.
+  `tracks train show reviewer` opens it in an overlay over the track, with
+  a header (its handle, its badges, Hide and End train); Hide or `Ctrl+b
+  Esc` closes the overlay and the reviewer runs on (see The overlay in
+  [trains.md](trains.md)). The pane stays when the agent exits, so the
+  train is listed as `agent exited` until it's ended.
 - **Read-only.** Claude starts in plan mode with `Edit`, `Write` and
   `NotebookEdit` denied; Cursor with `--mode ask`. `tracks review` also
   checks the worktree before and after, in the orchestrator's own sandbox.
@@ -104,7 +110,7 @@ pane of its own, hidden until the user opens it.
   prints it to the orchestrator; the reviewer never runs a command.
   - **Claude:** its `Stop` hook carries its reply. Its brief comes in with
     `--append-system-prompt-file`, which Claude Code reads itself: a folder
-    given with `--add-dir` makes it ask, in the hidden pane, whether to trust
+    given with `--add-dir` makes it ask, in its pane, whether to trust
     it, on every review.
   - **Cursor:** its interactive CLI's hooks carry no reply text, and their
     transcript path is empty (checked live). So the review is one turn in
@@ -120,43 +126,32 @@ pane of its own, hidden until the user opens it.
     counting for the new one.
 - **Questions it asks wait for the user.** A Claude reviewer on a worktree
   Claude hasn't worked in, such as a Cursor track's, asks whether to trust it.
-  Claude asks as it starts, so the footer's tick reads a hidden Claude
-  reviewer's screen in its review's first minute only, and when the question
-  is on it, shows the pane for the user to answer: once a review, so a pane
-  hidden again stays hidden.
+  The daemon's tick reads a Claude reviewer's screen until its report is in;
+  with the question on it, the reviewer shows `action required`, and the
+  user is told once a review, under "A track needs you". They answer in its
+  overlay.
 - **In Work tracks too.** The pane opens in the Work track's window and
   worktree, so a pre-push review sees what isn't committed yet. The pane
   route replaced the in-session `tracks-reviewer` subagent, which Tracks no
   longer installs and removes where it installed it.
 
-### The button
+### The button (gone)
 
-While a track has a reviewer, the footer's top row shows a green
-**Open reviewer** button. It moves the hidden pane into the track's right
-column, as a dev-server pane sits, running on as it was (`join-pane`); the
-button becomes **Hide reviewer**, which moves it back. Beside it, a magenta
-**Close reviewer** ends the reviewer, closes its pane and drops its run, so a
-`tracks review --wait` on it stops. The track's info (name · status ·
-engine) stays on the row's left, beside the buttons: the reviewer's buttons
-last as long as the reviewer, often the track, so they can't take the
-info's place as the comment buttons did.
-
-Two button variants are added. They aren't part of the rotation the footer's
-other buttons take (variants 1 to 4); each belongs to one button:
-
-| Variant | Use | Default (dark) | Default light |
-|---|---|---|---|
-| `button.variant5` | Close reviewer | bg `#700c50`, text `#ffb5e7` | bg `#ffd9f1`, text `#700c50` |
-| `button.variant6` | Open reviewer / Hide reviewer | bg `#00916f`, text `#c9fff0` | bg `#c9fff0`, text `#00664f` |
+Until trains' step 7, the footer's top row had an **Open reviewer** /
+**Hide reviewer** button, which moved the pane into the track's right
+column (`join-pane`) and back, in `button.variant6`, and **Close
+reviewer** beside it, in `button.variant5`. The overlay replaced both:
+its header's **End train** keeps `button.variant5`; `button.variant6` is
+retired, and a theme file that still sets it loads, the token skipped.
 
 ### Lifetime
 
-- **One reviewer per track.** It stays, hidden or shown, until the track ends
-  or the user clicks **Close reviewer**.
+- **One reviewer per track.** It stays until the track ends, the user clicks
+  **End train** in its overlay, or `tracks train end reviewer` ends it.
 - **A new review starts fresh.** `tracks review` ends a reviewer that's there
   and starts a new session, after the branch changed or for another scope.
 - **Closing its pane ends it**, such as the orchestrator running
-  `tracks close` when the user asks.
+  `tracks close` when the user asks, which ends it as End train does.
 - **Interaction is limited.** The reviewer answers questions about its review
   and the code it reviewed. It takes no new tasks, doesn't plan or build, and
   points anything else back to the orchestrator: it is not a second track.
@@ -292,13 +287,14 @@ add findings or change their severity, likelihood or confidence.
 Everything that needs the code read again goes back to the reviewer:
 
 - **A question about a finding** ("is finding 3 a false positive?", "look
-  deeper at the cache"): the user asks in the reviewer pane, or the
+  deeper at the cache"): the user asks in its overlay, or the
   orchestrator runs `tracks review --ask "<question>"`, which types it into
   the reviewer's session and returns its answer. The reviewer's first reply
   after the question is the answer; `tracks review --wait` then waits for it
   instead of the report. One question at a time, only once the report is
-  in, and only while the pane is hidden: a user who shows it talks to the
-  reviewer there, and a reply of theirs would pass for the answer. The
+  in, and only while no overlay is attached to it: a user who opened it
+  talks to the reviewer there, and a reply of theirs would pass for the
+  answer. The
   question goes in behind a fixed lead-in, on one line, so it can't switch
   Claude's input to a shell (`!`) or slash command. Cursor's hooks don't
   carry its replies in the interactive CLI, so a Cursor reviewer's pane is
