@@ -61,8 +61,10 @@ type Model struct {
 	changes       chan struct{}
 	loadTheme     func() (theme.Theme, error)
 	collect       func() error
-	// notice says what a click did, or why it couldn't.
-	notice string
+	// notice says what a click did, or why it couldn't; collecting is
+	// a click's call on its way, which other clicks wait for.
+	notice     string
+	collecting bool
 }
 
 type (
@@ -95,6 +97,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case trainsMsg:
 		m.trains, m.err = msg.trains, msg.err
+		if !m.collecting && !m.anyHeld() {
+			// What it said was of a button that's gone.
+			m.notice = ""
+		}
 	case changedMsg:
 		return m, tea.Batch(m.load(), m.next())
 	case themeMsg:
@@ -103,13 +109,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.nextTheme()
 	case tea.MouseClickMsg:
-		if msg.Button == tea.MouseLeft && m.collectAt(msg.Y) && m.collect != nil {
+		if msg.Button == tea.MouseLeft && !m.collecting && m.collectAt(msg.X, msg.Y) && m.collect != nil {
 			collect := m.collect
-			m.notice = "Collecting…"
+			m.notice, m.collecting = "Collecting…", true
 			return m, func() tea.Msg { return collectedMsg{collect()} }
 		}
 	case collectedMsg:
-		m.notice = ""
+		m.notice, m.collecting = "", false
 		if msg.err != nil {
 			m.notice = msg.err.Error()
 		}
@@ -149,12 +155,27 @@ func (m Model) lines() []string {
 	return widget.Frame(m.palette, "Platform", body, m.width, m.height, theme.BorderDefault)
 }
 
-// collectAt reports whether row y of the pane is a Collect messages
-// button: the frame's top border is row 0.
-func (m Model) collectAt(y int) bool {
+// collectAt reports whether cell x, y of the pane is on a Collect
+// messages button: the frame's top border is row 0, its left border and
+// padding columns 0 and 1, and the button starts a cell in.
+func (m Model) collectAt(x, y int) bool {
+	if m.width < 6 || m.height < 3 || y >= m.height-1 {
+		return false
+	}
 	_, buttons := m.body()
+	width := widget.NewButton("Collect messages", widget.ButtonAccent).Width()
 	for _, row := range buttons {
-		if y == row+1 {
+		if y == row+1 && x >= 3 && x < 3+width {
+			return true
+		}
+	}
+	return false
+}
+
+// anyHeld reports whether a train's messages wait for a held pointer.
+func (m Model) anyHeld() bool {
+	for _, t := range m.trains {
+		if t.Held {
 			return true
 		}
 	}

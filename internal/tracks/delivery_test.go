@@ -402,3 +402,38 @@ func TestCollectRefuses(t *testing.T) {
 		t.Errorf("the user collected in a turn: %v, pasted %v; want the pointer, as they asked", err, f.windows.pasted)
 	}
 }
+
+func TestACollectedPointerIsntRetried(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	if _, err := f.svc.CollectMessages(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(pointerStall + pointerRetry + pointerGrace)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Errorf("a collected pointer went again after the stall's wait: %v", got)
+	}
+	if !f.svc.inTurn("a") {
+		t.Error("collecting in a turn marked the agent idle")
+	}
+}
+
+func TestHeldGoesWithTheAgent(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	deliver(t, f)
+	if !f.svc.heldFrom("a", "reviewer-1") {
+		t.Fatal("not held")
+	}
+	if err := f.svc.Report(ctx, "a", track.AgentExited); err != nil {
+		t.Fatal(err)
+	}
+	if f.svc.heldFrom("a", "reviewer-1") {
+		t.Error("Collect messages stayed after the agent exited")
+	}
+}

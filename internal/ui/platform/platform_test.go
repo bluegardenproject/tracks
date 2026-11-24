@@ -145,3 +145,31 @@ func TestCollectMessages(t *testing.T) {
 		t.Error("a click on the train's name collected")
 	}
 }
+
+func TestCollectClicksAreSafe(t *testing.T) {
+	calls := 0
+	m := New(Config{Theme: theme.Default(), Collect: func() error { calls++; return nil }})
+	var tm tea.Model = m
+	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}}})
+	if _, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click before the pane's size is known collected")
+	}
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 4, Height: 12})
+	tm.Update(tea.MouseClickMsg{X: 1, Y: 3, Button: tea.MouseLeft})
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 26, Height: 12})
+	tm, first := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
+	if first == nil {
+		t.Fatal("a click on the button did nothing")
+	}
+	if _, again := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); again != nil {
+		t.Error("a second click while the first is on its way collected again")
+	}
+	if _, off := tm.Update(tea.MouseClickMsg{X: 24, Y: 3, Button: tea.MouseLeft}); off != nil {
+		t.Error("a click right of the button collected")
+	}
+	tm, _ = tm.Update(collectedMsg{err: errors.New("answer it first")})
+	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
+	if strings.Contains(escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), ""), "answer it first") {
+		t.Error("the notice of a button that's gone stayed")
+	}
+}

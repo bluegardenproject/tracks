@@ -48,11 +48,17 @@ func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 // its unread messages are pointed to again.
 func (s *Service) forgetTurn(id string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	delete(s.turns, id)
 	delete(s.pointing, id)
 	delete(s.pointed, id)
 	delete(s.retryAt, id)
+	_, held := s.held[id]
+	delete(s.held, id)
+	s.mu.Unlock()
+	if held {
+		// Collect messages goes from the Platform.
+		s.Changes.Notify()
+	}
 }
 
 // inTurn reports whether track id's agent may be in a turn: one Tracks
@@ -128,6 +134,10 @@ func (s *Service) Deliver(ctx context.Context) error {
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
+		if ok && t.Exit != "" {
+			// No agent to point: nothing to collect either.
+			s.setHeld(t.ID, nil)
+		}
 		if !ok || t.Exit != "" || s.isBusy(t.ID) {
 			continue
 		}
@@ -176,7 +186,6 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 		s.setHeld(t.ID, due)
 		return nil
 	}
-	s.setHeld(t.ID, nil)
 	return s.point(t.ID, window, due, pointed, false)
 }
 
@@ -241,7 +250,10 @@ func (s *Service) heldFrom(id, handle string) bool {
 
 // point pastes the pointer to due into track id's agent, in window, and
 // keeps its state. collected says the user sent it with Collect
-// messages, past what holds it back: a turn on, unknown, doesn't stop it.
+// messages, past what holds it back: a turn on, unknown, doesn't stop it,
+// and it isn't waited for as a turn's start, which an agent in a turn
+// gives only after it, so it's done once pasted and the turn stays as
+// it was.
 func (s *Service) point(id, window string, due []relay.Message, pointed int64, collected bool) error {
 	now := s.now()
 	// Recorded before the paste, so a turn's start or a new agent
@@ -262,8 +274,11 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	gen := s.pointerGen
 	s.pointing[id] = pointing{at: now, before: pointed, gen: gen}
 	s.pointed[id] = due[len(due)-1].ID
-	delete(s.turns, id)
+	if !collected {
+		delete(s.turns, id)
+	}
 	delete(s.retryAt, id)
+	delete(s.held, id)
 	s.mu.Unlock()
 	// The messages count as pointed to from here, as the Relay Station
 	// shows.
@@ -277,10 +292,16 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	case err != nil:
 		delete(s.pointing, id)
 		s.pointed[id] = p.before
-		s.turns[id] = false
+		if known {
+			s.turns[id] = in
+		} else {
+			delete(s.turns, id)
+		}
 		s.mu.Unlock()
 		s.Changes.Notify()
 		return err
+	case collected:
+		delete(s.pointing, id)
 	default:
 		// The stall's wait starts once the pointer is in.
 		p.at = s.now()
@@ -339,6 +360,5 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 			return t.Name, err
 		}
 	}
-	s.setHeld(id, nil)
 	return t.Name, s.point(id, window, due, pointed, true)
 }
