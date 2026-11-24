@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
@@ -116,6 +117,12 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		{"SaveDraft", func() error { return w.SaveDraft(ctx, store.Draft{ID: "d", Request: "{}", FailedAt: now}) }, true},
 		{"DeleteDraft", func() error { _, err := w.DeleteDraft(ctx, "d"); return err }, true},
 		{"DeleteDraft", func() error { _, err := w.DeleteDraft(ctx, "d"); return err }, false},
+		{"AddRelayMessage", func() error {
+			_, err := w.AddRelayMessage(ctx, "a", relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine."})
+			return err
+		}, true},
+		{"MarkRelayRead", func() error { _, err := w.MarkRelayRead(ctx, "a", relay.UserHandle, 1); return err }, true},
+		{"MarkRelayRead", func() error { _, err := w.MarkRelayRead(ctx, "a", relay.UserHandle, 1); return err }, false},
 		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, true},
 		{"DeleteTrack", func() error { return w.DeleteTrack(ctx, "a") }, false},
 	}
@@ -133,10 +140,9 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
 		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "ProxyPorts": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
-		"RelayUnread": true, "RelayMessage": true,
-		// Writes no screen shows, so they needn't notify; the relay's
-		// until the Relay Station shows it.
-		"ClaimPorts": true, "AddRelayMessage": true, "MarkRelayRead": true}
+		"RelayUnread": true, "RelayMessage": true, "RelayLog": true, "RelayUnseen": true,
+		// A write no screen shows, so it needn't notify.
+		"ClaimPorts": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {

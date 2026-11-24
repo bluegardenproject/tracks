@@ -69,7 +69,8 @@ func (s *Service) RelayRead(ctx context.Context, id, reader string) ([]relay.Mes
 	if err != nil || len(msgs) == 0 {
 		return nil, err
 	}
-	return msgs, s.Store.MarkRelayRead(ctx, id, reader, msgs[len(msgs)-1].ID)
+	_, err = s.Store.MarkRelayRead(ctx, id, reader, msgs[len(msgs)-1].ID)
+	return msgs, err
 }
 
 // RelayShow is message msg of track id's relay, if reader may read it.

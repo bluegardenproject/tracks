@@ -315,7 +315,8 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 			if msg == 0 {
 				return string(b), nil
 			}
-			return string(b), s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, msg)
+			_, err := s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, msg)
+			return string(b), err
 		}
 		if _, err := os.Stat(filepath.Join(s.reviewDir(id), "run")); err != nil {
 			return "", Problem("This track has no review running: start one with tracks review.")

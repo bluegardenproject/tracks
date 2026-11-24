@@ -165,7 +165,7 @@ func TestDeliverPointsOnceNothingHoldsItBack(t *testing.T) {
 
 	answer := post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Answer, Body: "Because.", At: *now})
 	*now = now.Add(pointerGrace)
-	if err := f.store.MarkRelayRead(ctx, "a", relay.TrackHandle, answer.ID); err != nil {
+	if _, err := f.store.MarkRelayRead(ctx, "a", relay.TrackHandle, answer.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := deliver(t, f); len(got) != 0 {

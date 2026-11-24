@@ -116,3 +116,20 @@ func (b Blockers) Why() string {
 	}
 	return ""
 }
+
+// UserHandle reads a relay for the user, in the Relay Station: a reader
+// of its own, never any agent's. It sends nothing.
+const UserHandle = "user"
+
+// Waiting are the IDs of the messages in unread, the track's unread
+// ones, still waiting for a pointer: past pointed, the last one its
+// agent was pointed to, and not a notice, which wakes no one.
+func Waiting(unread []Message, pointed int64) []int64 {
+	var out []int64
+	for _, m := range unread {
+		if m.Kind != Notice && m.ID > pointed {
+			out = append(out, m.ID)
+		}
+	}
+	return out
+}

@@ -7,13 +7,17 @@ import (
 )
 
 // The relay's calls, for the track's agent: send to a train, read what
-// came, show one message, wait for messages, and list who's there.
+// came, show one message, wait for messages, and list who's there. For
+// the user: RelayStation is the whole relay, now seen; RelayNew counts
+// what they haven't seen.
 const (
-	RelaySend = "relay-send"
-	RelayRead = "relay-read"
-	RelayShow = "relay-show"
-	RelayWait = "relay-wait"
-	RelayWho  = "relay-who"
+	RelaySend    = "relay-send"
+	RelayRead    = "relay-read"
+	RelayShow    = "relay-show"
+	RelayWait    = "relay-wait"
+	RelayWho     = "relay-who"
+	RelayStation = "relay-station"
+	RelayNew     = "relay-new"
 )
 
 // RelayIDParams names the track whose relay to read, wait on or list.
@@ -38,6 +42,18 @@ type RelayShowParams struct {
 // RelayMessages are messages from a relay.
 type RelayMessages struct {
 	Messages []relay.Message `json:"messages"`
+}
+
+// RelayStationResult is a track's whole relay, oldest first, and the
+// IDs of the messages still waiting for their pointer.
+type RelayStationResult struct {
+	Messages []relay.Message `json:"messages"`
+	Waiting  []int64         `json:"waiting,omitempty"`
+}
+
+// RelayNewResult counts the messages the user hasn't seen.
+type RelayNewResult struct {
+	New int `json:"new"`
 }
 
 // Member is one of those on a track's relay; Status and Outcome are
@@ -92,4 +108,16 @@ func (c Client) RelayWait(ctx context.Context, id string) ([]relay.Message, erro
 func (c Client) RelayWho(ctx context.Context, id string) ([]Member, error) {
 	var r RelayWhoResult
 	return r.Members, c.Call(ctx, RelayWho, RelayIDParams{ID: id}, &r, nil)
+}
+
+// RelayStation is track id's whole relay, now seen by the user.
+func (c Client) RelayStation(ctx context.Context, id string) (RelayStationResult, error) {
+	var r RelayStationResult
+	return r, c.Call(ctx, RelayStation, RelayIDParams{ID: id}, &r, nil)
+}
+
+// RelayNew counts the messages on track id's relay the user hasn't seen.
+func (c Client) RelayNew(ctx context.Context, id string) (int, error) {
+	var r RelayNewResult
+	return r.New, c.Call(ctx, RelayNew, RelayIDParams{ID: id}, &r, nil)
 }

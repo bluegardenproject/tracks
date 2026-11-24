@@ -50,13 +50,47 @@ func (s *Store) RelayUnread(ctx context.Context, id, reader string) ([]relay.Mes
 }
 
 // MarkRelayRead records that reader read track id's relay up to message
-// upTo; a reader never goes back.
-func (s *Store) MarkRelayRead(ctx context.Context, id, reader string, upTo int64) error {
-	_, err := s.db.ExecContext(ctx,
+// upTo; a reader never goes back. It reports whether the cursor moved.
+func (s *Store) MarkRelayRead(ctx context.Context, id, reader string, upTo int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
 		"INSERT INTO relay_cursors (track_id, reader, last_id) VALUES (?, ?, ?) "+
-			"ON CONFLICT (track_id, reader) DO UPDATE SET last_id = max(last_id, excluded.last_id)",
+			"ON CONFLICT (track_id, reader) DO UPDATE SET last_id = excluded.last_id WHERE excluded.last_id > last_id",
 		id, reader, upTo)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// RelayLog is every message on track id's relay, oldest first.
+func (s *Store) RelayLog(ctx context.Context, id string) ([]relay.Message, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, sender, recipient, kind, body, at FROM relay_messages WHERE track_id = ? ORDER BY id", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []relay.Message
+	for rows.Next() {
+		m, err := scanRelay(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// RelayUnseen counts the messages on track id's relay past reader's
+// cursor, whoever they're for.
+func (s *Store) RelayUnseen(ctx context.Context, id, reader string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM relay_messages WHERE track_id = ? "+
+			"AND id > COALESCE((SELECT last_id FROM relay_cursors WHERE track_id = ? AND reader = ?), 0)",
+		id, id, reader).Scan(&n)
+	return n, err
 }
 
 // RelayMessage is message msg of track id's relay; ErrNotFound when it

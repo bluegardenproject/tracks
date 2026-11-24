@@ -21,6 +21,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `footer/` the footer's tmux status rows · `actions/` the track actions: the footer's buttons and the prompts they send · `sysinfo/` LAN, WAN, CPU and memory for the footer
 - `ui/tracksview/` the Tracks window (window 0) · `ui/themecreator/` theme editor, a pane of the Settings tab
 - `ui/platform/` the Platform, a track window's left pane listing its trains
+- `ui/relaystation/` the Relay Station: a track's relay, read only, in a popup
 - `ui/quickaccess/` the Quick Access popup (`Ctrl+b q`) · `ui/addtrack/` the New track form popup · `ui/tracksfilter/` the Tracks filter popup · `ui/confirm/` the confirm popup
 - `ui/source/` the data screens read (tracks, repos, themes, engines); tracks come from the daemon
 - `store/` SQLite: schema, migrations (`migrations/*.sql`, one per change), queries · `repos/` rules for adding, changing and removing repos

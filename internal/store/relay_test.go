@@ -55,17 +55,45 @@ func TestRelay(t *testing.T) {
 		t.Errorf("the reviewer's unread: %v, want its question and the notice", got)
 	}
 
-	if err := s.MarkRelayRead(ctx, "a", "track", notice.ID); err != nil {
-		t.Fatal(err)
+	if moved, err := s.MarkRelayRead(ctx, "a", "track", notice.ID); err != nil || !moved {
+		t.Fatalf("marking the notice read: moved %v, %v", moved, err)
 	}
 	if got := ids("track"); len(got) != 1 || got[0] != report.ID {
 		t.Errorf("after reading the notice: %v, want the report", got)
 	}
-	if err := s.MarkRelayRead(ctx, "a", "track", question.ID); err != nil {
-		t.Fatal(err)
+	if moved, err := s.MarkRelayRead(ctx, "a", "track", question.ID); err != nil || moved {
+		t.Fatalf("marking an earlier message read: moved %v, %v", moved, err)
 	}
 	if got := ids("track"); len(got) != 1 {
 		t.Errorf("a reader went back: %v", got)
+	}
+	if moved, _ := s.MarkRelayRead(ctx, "a", "track", notice.ID); moved {
+		t.Error("marking the same message read again moved the cursor")
+	}
+
+	log, err := s.RelayLog(ctx, "a")
+	if err != nil || len(log) != 4 || log[0].ID != question.ID || log[3].Body != "Green yet?" {
+		t.Errorf("RelayLog = %+v, %v; want a's four messages, oldest first", log, err)
+	}
+	unseen := func(reader string) int {
+		t.Helper()
+		n, err := s.RelayUnseen(ctx, "a", reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := unseen(relay.UserHandle); n != 4 {
+		t.Errorf("the user hasn't seen %d messages, want all 4", n)
+	}
+	if _, err := s.MarkRelayRead(ctx, "a", relay.UserHandle, report.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := unseen(relay.UserHandle); n != 1 {
+		t.Errorf("after seeing up to the report, %d unseen; want 1", n)
+	}
+	if n := unseen("track"); n != 2 {
+		t.Errorf("the user's mark moved the track's: %d past its cursor, want 2", n)
 	}
 
 	got, err := s.RelayMessage(ctx, "a", report.ID)

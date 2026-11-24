@@ -55,6 +55,7 @@ func newRoot(version string) *cobra.Command {
 		newReviewCmd(),
 		newTrainCmd(),
 		newRelayCmd(),
+		newRelayStationCmd(version),
 		newAddRepoCmd(),
 		newPromoteCmd(),
 		newRestartCmd(),
