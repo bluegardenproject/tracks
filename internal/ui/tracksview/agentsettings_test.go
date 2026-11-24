@@ -107,7 +107,7 @@ func TestReviewerPrefix(t *testing.T) {
 	if !strings.Contains(plainView(m), "Enter save") {
 		t.Errorf("the hints should say how to save the prefix:\n%s", plainView(m))
 	}
-	m = settle(m, tea.PasteMsg{Content: "Bad Prefix"}, enterKey)
+	m = settle(m, tea.PasteMsg{Content: "Bad Prefix"}, enterKey, tea.MouseReleaseMsg{Button: tea.MouseLeft})
 	if !m.settings.agents.editingPrefix || !strings.Contains(plainView(m), "isn't a prefix for trains") || a.saved.Reviewer != nil {
 		t.Fatalf("a bad prefix should be refused, still editing, nothing saved (%+v):\n%s", a.saved.Reviewer, plainView(m))
 	}
@@ -160,18 +160,24 @@ func TestLeavingThePrefixDropsItsEdit(t *testing.T) {
 	if m.settings.agents.editingPrefix {
 		t.Fatal("clicking the Agent field should end the prefix's edit")
 	}
-	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEsc}, enterKey)
-	if a.saved.Reviewer != nil {
-		t.Errorf("an abandoned prefix was saved: %+v", a.saved.Reviewer)
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEsc}, enterKey, tea.KeyPressMsg{Code: tea.KeyEsc})
+	if a.saved.Reviewer != nil || m.picker != nil {
+		t.Fatalf("an abandoned prefix was saved (%+v), or a picker is open", a.saved.Reviewer)
 	}
 
 	m = clickOn(t, m, "reviewer (its name)")
+	if !m.settings.agents.editingPrefix {
+		t.Fatal("clicking the prefix should edit it")
+	}
 	m = m.showSection(sectionGeneral)
 	if m.settings.agents.editingPrefix || m.settings.agents.prefix.Focused() {
 		t.Error("leaving the section should end the prefix's edit")
 	}
 	m = clickOn(t, m, "Trains (agents)")
 	m = clickOn(t, m, "reviewer (its name)")
+	if !m.settings.agents.editingPrefix {
+		t.Fatal("clicking the prefix again should edit it")
+	}
 	m, _ = m.switchTab(tabEngines)
 	if m.settings.agents.editingPrefix {
 		t.Error("leaving the tab should end the prefix's edit")
