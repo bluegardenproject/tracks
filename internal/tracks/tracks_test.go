@@ -221,7 +221,13 @@ func (w *fakeWindows) LastKey(window string) (time.Time, error) {
 
 func (w *fakeWindows) Scrolled(window string) (bool, error) { return w.scrolled[window], nil }
 
-func (w *fakeWindows) Platform(window string) (string, error) { return w.platforms[window], nil }
+func (w *fakeWindows) Platforms() (map[string]string, error) {
+	out := map[string]string{}
+	for window := range w.platforms {
+		out[window] = "%p" + window
+	}
+	return out, nil
+}
 
 func (w *fakeWindows) OpenPlatform(window, command string) error {
 	if w.platforms == nil {

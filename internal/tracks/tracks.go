@@ -124,9 +124,10 @@ type Windows interface {
 	// Scrolled reports whether window's agent pane is in a mode, such as
 	// copy mode while the user scrolls back.
 	Scrolled(window string) (bool, error)
-	// Platform is window's Platform pane, "" for none; OpenPlatform opens
-	// it running command, ClosePlatform closes it.
-	Platform(window string) (string, error)
+	// Platforms are the track windows' Platform panes, by window;
+	// OpenPlatform opens window's running command, ClosePlatform closes
+	// it.
+	Platforms() (map[string]string, error)
 	OpenPlatform(window, command string) error
 	ClosePlatform(window string) error
 }
@@ -469,12 +470,28 @@ func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.L
 
 func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }
 
-func (w TmuxWindows) Platform(window string) (string, error) {
-	return trackwin.Platform(w.Tmux, window)
+func (w TmuxWindows) Platforms() (map[string]string, error) {
+	panes, err := w.Tmux.ListSessionPanes(w.Session)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, p := range panes {
+		if p.Role == trackwin.RolePlatform {
+			out[p.Window] = p.ID
+		}
+	}
+	return out, nil
 }
 
+// OpenPlatform kills a pane it opened but couldn't label: unlabelled,
+// it wouldn't be found as the Platform, and the next tick would open
+// another.
 func (w TmuxWindows) OpenPlatform(window, command string) error {
-	_, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
+	pane, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
+	if err != nil && pane != "" {
+		_ = w.Tmux.KillPane(pane)
+	}
 	return err
 }
 

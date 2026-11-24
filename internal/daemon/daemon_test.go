@@ -33,14 +33,14 @@ func (t *fakeTmux) Tell(string, string) error { return nil }
 
 type noWindows struct{}
 
-func (noWindows) List() ([]trackwin.Info, error)      { return nil, nil }
-func (noWindows) LastKey(string) (time.Time, error)   { return time.Time{}, nil }
-func (noWindows) StyledScreen(string) (string, error) { return "", nil }
-func (noWindows) Paste(string, string) error          { return nil }
-func (noWindows) Scrolled(string) (bool, error)       { return false, nil }
-func (noWindows) Platform(string) (string, error)     { return "", nil }
-func (noWindows) OpenPlatform(string, string) error   { return nil }
-func (noWindows) ClosePlatform(string) error          { return nil }
+func (noWindows) List() ([]trackwin.Info, error)        { return nil, nil }
+func (noWindows) LastKey(string) (time.Time, error)     { return time.Time{}, nil }
+func (noWindows) StyledScreen(string) (string, error)   { return "", nil }
+func (noWindows) Paste(string, string) error            { return nil }
+func (noWindows) Scrolled(string) (bool, error)         { return false, nil }
+func (noWindows) Platforms() (map[string]string, error) { return nil, nil }
+func (noWindows) OpenPlatform(string, string) error     { return nil }
+func (noWindows) ClosePlatform(string) error            { return nil }
 func (noWindows) Open(trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no windows")
 }

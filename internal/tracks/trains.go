@@ -29,32 +29,56 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	// CloseReviewer change them together.
 	s.reviewMu.Lock()
 	r, err := s.Reviewers.Reviewer(id, window)
-	if err != nil || r.Pane == "" {
+	if err != nil {
 		s.reviewMu.Unlock()
 		return nil, err
 	}
-	dir := s.reviewDir(id)
-	f := train.ReviewerFacts{Pane: r.Pane != ""}
-	if b, err := os.ReadFile(filepath.Join(dir, "report.md")); err == nil {
-		f.Report = string(b)
-	}
-	f.Asking = s.asking(id)
-	sess, sessErr := loadSession(dir)
-	handle := reviewHandle(dir)
+	run := s.reviewerRun(id, r)
 	s.reviewMu.Unlock()
+	return s.reviewerTrains(id, r, run), nil
+}
+
+// reviewerRunState is what a reviewer's run says of it.
+type reviewerRunState struct {
+	facts   train.ReviewerFacts
+	sess    reviewSession
+	sessErr error
+	handle  string
+}
+
+// reviewerRun reads the run of track id's reviewer, whose pane is r's.
+// The caller holds s.reviewMu.
+func (s *Service) reviewerRun(id string, r ReviewerState) reviewerRunState {
+	if r.Pane == "" {
+		return reviewerRunState{}
+	}
+	dir := s.reviewDir(id)
+	run := reviewerRunState{facts: train.ReviewerFacts{Pane: true}, handle: reviewHandle(dir)}
+	if b, err := os.ReadFile(filepath.Join(dir, "report.md")); err == nil {
+		run.facts.Report = string(b)
+	}
+	run.facts.Asking = s.asking(id)
+	run.sess, run.sessErr = loadSession(dir)
+	return run
+}
+
+// reviewerTrains are track id's trains from its reviewer r and run:
+// the reviewer, while its pane is open.
+func (s *Service) reviewerTrains(id string, r ReviewerState, run reviewerRunState) []train.Train {
+	f := run.facts
 	// Claude asks for trust as it starts, before any report: a report
 	// that quotes the question isn't one.
-	if r.Pane != "" && f.Report == "" && sessErr == nil && sess.Engine == agents.Claude.ID {
+	if r.Pane != "" && f.Report == "" && run.sessErr == nil && run.sess.Engine == agents.Claude.ID {
 		if screen, err := s.Reviewers.CaptureReviewer(r.Pane); err == nil {
 			f.AsksTrust = claude.AsksTrust(screen)
 		}
 	}
 	status, outcome, ok := train.ReviewerStatus(f)
 	if !ok {
-		return nil, nil
+		return nil
 	}
-	return []train.Train{{Track: id, Handle: handle, Agent: train.Reviewer,
-		Engine: engineName(sess), Status: status, Outcome: outcome}}, nil
+	return []train.Train{{Track: id, Handle: run.handle, Agent: train.Reviewer,
+		Engine: engineName(run.sess), Status: status, Outcome: outcome}}
 }
 
 // EndTrain ends track id's train handle and closes its pane, as its End

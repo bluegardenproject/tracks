@@ -84,3 +84,23 @@ func collect(cmd tea.Cmd) []tea.Msg {
 	}
 	return []tea.Msg{msg}
 }
+
+func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
+	m := New(Config{Theme: theme.Default()})
+	var light theme.Theme
+	for _, b := range theme.BuiltIns() {
+		if b.ID != theme.Default().ID {
+			light = b
+		}
+	}
+	tm, cmd := m.Update(themeMsg{theme: light})
+	if tm.(Model).palette.Theme().ID != light.ID {
+		t.Error("a theme read again wasn't taken")
+	}
+	_ = cmd
+	if _, cmd := tm.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
+		if _, quit := cmd().(tea.QuitMsg); quit {
+			t.Error("ctrl+c quit the Platform, which the daemon would only open again")
+		}
+	}
+}

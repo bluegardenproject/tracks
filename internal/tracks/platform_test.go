@@ -29,7 +29,9 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 	if len(f.windows.platforms) != 0 {
 		t.Fatalf("a track without trains got a Platform: %v", f.windows.platforms)
 	}
-	heardChange()
+	if heardChange() {
+		t.Error("a track without trains was told as a change")
+	}
 
 	run := startReview(t, f, worktree)
 	if err := f.svc.SyncTrains(ctx); err != nil {
@@ -58,11 +60,22 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 		t.Error("the reviewer's report changed its status, yet no change was told")
 	}
 
+	// The track's agent exits; its window and its reviewer run on.
+	f.windows.windows[0].Exit = "0"
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.windows.platforms) != 1 {
+		t.Errorf("the Platform of a track whose agent exited closed: %v", f.windows.platforms)
+	}
 	panes.state = ReviewerState{}
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.windows.platforms) != 0 {
 		t.Errorf("the Platform stayed after the last train went: %v", f.windows.platforms)
+	}
+	if !heardChange() {
+		t.Error("the last train going wasn't told as a change")
 	}
 }
