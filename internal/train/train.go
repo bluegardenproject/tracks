@@ -60,6 +60,9 @@ type Train struct {
 	// Status is a Station status; Outcome a second badge, such as a
 	// review's, or none.
 	Status, Outcome track.Status
+	// Held says a message of its waits for the track's pointer, held
+	// back: the Platform offers Collect messages under it.
+	Held bool
 }
 
 // A review's outcome, a second badge beside the reviewer's status.

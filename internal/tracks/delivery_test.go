@@ -350,3 +350,55 @@ func TestNoPointerWhileTheUserScrollsBack(t *testing.T) {
 		t.Errorf("pasted %v once the user left the scrollback, want the pointer", got)
 	}
 }
+
+func TestAHeldPointerIsShownAndCollected(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pointed while the user typed: %v", got)
+	}
+	if !f.svc.heldFrom("a", "reviewer-1") {
+		t.Fatal("a pointer held back by typing isn't shown as held")
+	}
+	f.windows.scrolled = map[string]bool{"@a": true}
+	name, err := f.svc.CollectMessages(ctx, "a")
+	if err != nil || name != "a" {
+		t.Fatalf("collect: %q, %v", name, err)
+	}
+	if len(f.windows.pasted) != 1 || f.windows.scrolled["@a"] {
+		t.Fatalf("pasted %v, scrolled %v; want the pointer, out of the scrollback", f.windows.pasted, f.windows.scrolled)
+	}
+	if f.svc.heldFrom("a", "reviewer-1") {
+		t.Error("a collected pointer is still shown as held")
+	}
+	var problem Problem
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) {
+		t.Errorf("collecting with a pointer on its way: %v, want a Problem", err)
+	}
+}
+
+func TestCollectRefuses(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	var problem Problem
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) || !strings.Contains(err.Error(), "No messages") {
+		t.Errorf("nothing to collect: %v", err)
+	}
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	if err := f.svc.Report(ctx, "a", track.AgentWaiting); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) || !strings.Contains(err.Error(), "answer it first") {
+		t.Errorf("a question on screen: %v", err)
+	}
+	if err := f.svc.Report(ctx, "a", track.AgentWorking); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	if _, err := f.svc.CollectMessages(ctx, "a"); err != nil || len(f.windows.pasted) != 1 {
+		t.Errorf("the user collected in a turn: %v, pasted %v; want the pointer, as they asked", err, f.windows.pasted)
+	}
+}

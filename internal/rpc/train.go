@@ -25,6 +25,9 @@ type Train struct {
 	Outcome   string `json:"outcome,omitempty"`
 	StatusID  string `json:"status_id,omitempty"`
 	OutcomeID string `json:"outcome_id,omitempty"`
+	// Held says a message of its waits for the track's pointer, held
+	// back.
+	Held bool `json:"held,omitempty"`
 }
 
 // TrainListResult is a track's trains.

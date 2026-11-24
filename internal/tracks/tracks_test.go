@@ -221,6 +221,11 @@ func (w *fakeWindows) LastKey(window string) (time.Time, error) {
 
 func (w *fakeWindows) Scrolled(window string) (bool, error) { return w.scrolled[window], nil }
 
+func (w *fakeWindows) LeaveScroll(window string) error {
+	delete(w.scrolled, window)
+	return nil
+}
+
 func (w *fakeWindows) Platforms() (map[string]string, error) {
 	out := map[string]string{}
 	for window := range w.platforms {

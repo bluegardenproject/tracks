@@ -38,6 +38,7 @@ func newPlatformCmd(version string) *cobra.Command {
 				Trains:    func() ([]uiplatform.Entry, error) { return platformEntries(client.TrainList(cmd.Context(), id)) },
 				Watch:     daemon.watch,
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
+				Collect:   func() error { return client.RelayCollect(cmd.Context(), id) },
 			})
 			_, err = tea.NewProgram(m, tea.WithContext(cmd.Context()), tea.WithColorProfile(style.Profile())).Run()
 			if cmd.Context().Err() != nil {
@@ -56,7 +57,7 @@ func platformEntries(trains []rpc.Train, err error) ([]uiplatform.Entry, error) 
 	}
 	out := make([]uiplatform.Entry, len(trains))
 	for i, t := range trains {
-		out[i] = uiplatform.Entry{Handle: t.Handle, Status: train.StatusOf(t.StatusID), Outcome: train.StatusOf(t.OutcomeID)}
+		out[i] = uiplatform.Entry{Handle: t.Handle, Status: train.StatusOf(t.StatusID), Outcome: train.StatusOf(t.OutcomeID), Held: t.Held}
 	}
 	return out, nil
 }

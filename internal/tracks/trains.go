@@ -78,7 +78,7 @@ func (s *Service) reviewerTrains(id string, r ReviewerState, run reviewerRunStat
 		return nil
 	}
 	return []train.Train{{Track: id, Handle: run.handle, Agent: train.Reviewer,
-		Engine: engineName(run.sess), Status: status, Outcome: outcome}}
+		Engine: engineName(run.sess), Status: status, Outcome: outcome, Held: s.heldFrom(id, run.handle)}}
 }
 
 // EndTrain ends track id's train handle and closes its pane, as its End

@@ -30,6 +30,9 @@ const (
 type Entry struct {
 	Handle          string
 	Status, Outcome track.Status
+	// Held says a message of its waits for the track's pointer, held
+	// back: Collect messages sends it now.
+	Held bool
 }
 
 // Config is what the Platform reads and how.
@@ -42,6 +45,9 @@ type Config struct {
 	Watch func(ctx context.Context, changed func()) error
 	// LoadTheme reads the theme the user chose, now.
 	LoadTheme func() (theme.Theme, error)
+	// Collect sends the track's agent the pointer to its waiting
+	// messages now: Collect messages.
+	Collect func() error
 }
 
 // Model is the Platform.
@@ -54,6 +60,9 @@ type Model struct {
 	watchFn       func(ctx context.Context, changed func()) error
 	changes       chan struct{}
 	loadTheme     func() (theme.Theme, error)
+	collect       func() error
+	// notice says what a click did, or why it couldn't.
+	notice string
 }
 
 type (
@@ -66,11 +75,12 @@ type (
 		theme theme.Theme
 		err   error
 	}
+	collectedMsg struct{ err error }
 )
 
 // New is the Platform for c.
 func New(c Config) Model {
-	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme}
+	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme, collect: c.Collect}
 	if c.Watch != nil {
 		m.changes = make(chan struct{}, 1)
 	}
@@ -92,6 +102,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.palette = style.New(msg.theme)
 		}
 		return m, m.nextTheme()
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft && m.collectAt(msg.Y) && m.collect != nil {
+			collect := m.collect
+			m.notice = "Collecting…"
+			return m, func() tea.Msg { return collectedMsg{collect()} }
+		}
+	case collectedMsg:
+		m.notice = ""
+		if msg.err != nil {
+			m.notice = msg.err.Error()
+		}
+		return m, m.load()
 	}
 	// No key quits it: the daemon keeps it open while the track has a
 	// train, and would only open it again.
@@ -113,6 +135,7 @@ func (m Model) nextTheme() tea.Cmd {
 func (m Model) View() tea.View {
 	v := tea.NewView(strings.Join(m.lines(), "\n"))
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -122,8 +145,26 @@ func (m Model) lines() []string {
 	if m.width < 6 || m.height < 3 {
 		return nil
 	}
+	body, _ := m.body()
+	return widget.Frame(m.palette, "Platform", body, m.width, m.height, theme.BorderDefault)
+}
+
+// collectAt reports whether row y of the pane is a Collect messages
+// button: the frame's top border is row 0.
+func (m Model) collectAt(y int) bool {
+	_, buttons := m.body()
+	for _, row := range buttons {
+		if y == row+1 {
+			return true
+		}
+	}
+	return false
+}
+
+// body is the frame's inside, and the rows of its Collect messages
+// buttons.
+func (m Model) body() (body []string, buttons []int) {
 	inner := m.width - 4
-	var body []string
 	for _, t := range m.trains {
 		handle := t.Handle
 		if r := []rune(handle); len(r) > inner {
@@ -135,7 +176,12 @@ func (m Model) lines() []string {
 		if t.Outcome.Label != "" {
 			badges += " " + widget.Badge(m.palette, t.Outcome)
 		}
-		body = append(body, " "+badges, "")
+		body = append(body, " "+badges)
+		if t.Held {
+			buttons = append(buttons, len(body))
+			body = append(body, " "+widget.NewButton("Collect messages", widget.ButtonAccent).View(m.palette))
+		}
+		body = append(body, "")
 	}
 	switch {
 	case m.err != nil:
@@ -143,7 +189,10 @@ func (m Model) lines() []string {
 	case len(m.trains) == 0:
 		body = append(body, m.muted("No trains.", inner)...)
 	}
-	return widget.Frame(m.palette, "Platform", body, m.width, m.height, theme.BorderDefault)
+	if m.notice != "" {
+		body = append(body, m.muted(m.notice, inner)...)
+	}
+	return body, buttons
 }
 
 // muted is text in muted colour, wrapped to width.

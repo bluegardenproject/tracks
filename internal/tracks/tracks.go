@@ -126,6 +126,9 @@ type Windows interface {
 	// Scrolled reports whether window's agent pane is in a mode, such as
 	// copy mode while the user scrolls back.
 	Scrolled(window string) (bool, error)
+	// LeaveScroll takes window's agent pane out of its mode, such as
+	// copy mode.
+	LeaveScroll(window string) error
 	// Platforms are the track windows' Platform panes, by window;
 	// OpenPlatform opens window's running command, ClosePlatform closes
 	// it.
@@ -227,6 +230,9 @@ type Service struct {
 	pointed    map[string]int64
 	retryAt    map[string]time.Time
 	pointerGen uint64
+	// held is, by track, whose messages wait while its pointer is held
+	// back.
+	held map[string]map[string]bool
 	// trainsSeen is, by track, what SyncTrains last saw of its trains.
 	trainsSeen map[string]string
 	// transcripts are the signatures of the open Claude tracks'
@@ -343,6 +349,7 @@ type TmuxWindows struct {
 		CapturePaneStyled(pane string) (string, error)
 		LastKey(window string) (time.Time, error)
 		InMode(pane string) (bool, error)
+		CancelMode(pane string) error
 		CaptureHistory(pane string, lines int) (string, error)
 	}
 	Session string
@@ -471,6 +478,28 @@ func (w TmuxWindows) agentScreen(window string, capture func(pane string) (strin
 func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }
 
 func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }
+
+func (w TmuxWindows) LeaveScroll(window string) error {
+	pane, err := w.agentPane(window)
+	if err != nil {
+		return err
+	}
+	return w.Tmux.CancelMode(pane)
+}
+
+// agentPane is window's agent pane.
+func (w TmuxWindows) agentPane(window string) (string, error) {
+	panes, err := w.Tmux.ListPanes(window)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range panes {
+		if p.Role == trackwin.RoleAgent {
+			return p.ID, nil
+		}
+	}
+	return "", fmt.Errorf("window %s has no agent pane", window)
+}
 
 func (w TmuxWindows) Scrolled(window string) (bool, error) {
 	panes, err := w.Tmux.ListPanes(window)

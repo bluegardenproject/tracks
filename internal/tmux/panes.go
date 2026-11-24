@@ -236,6 +236,13 @@ func (c *Client) InMode(pane string) (bool, error) {
 	return out == "1", err
 }
 
+// CancelMode takes pane out of its mode, such as copy mode, as the
+// user's q would.
+func (c *Client) CancelMode(pane string) error {
+	_, err := c.run("send-keys", "-X", "-t", pane, "cancel")
+	return err
+}
+
 // PasteText pastes text into pane at once, as one bracketed paste when
 // the program there asked for them: keys typed meanwhile can't land
 // inside it. A buffer of its own carries it and goes after.

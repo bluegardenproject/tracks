@@ -116,3 +116,32 @@ func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
 		}
 	}
 }
+
+func TestCollectMessages(t *testing.T) {
+	collected := 0
+	m := New(Config{Theme: theme.Default(), Collect: func() error { collected++; return errors.New("nothing waits") }})
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 26, Height: 12})
+	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}}})
+	view := escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), "")
+	if !strings.Contains(view, "Collect messages") {
+		t.Fatalf("a held train has no Collect messages:\n%s", view)
+	}
+	row := -1
+	for i, l := range strings.Split(view, "\n") {
+		if strings.Contains(l, "Collect messages") {
+			row = i
+		}
+	}
+	tm, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: row, Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("a click on Collect messages did nothing")
+	}
+	tm, _ = tm.Update(cmd())
+	if collected != 1 || !strings.Contains(escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), ""), "nothing waits") {
+		t.Errorf("collected %d times; the notice should say why it couldn't", collected)
+	}
+	if _, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: 1, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click on the train's name collected")
+	}
+}

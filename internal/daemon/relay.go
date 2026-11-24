@@ -100,3 +100,17 @@ func (c Config) relayNew(ctx context.Context, call *rpc.Call) (any, error) {
 	n, err := c.Tracks.RelayNew(ctx, p.ID)
 	return rpc.RelayNewResult{New: n}, err
 }
+
+// relayCollect sends a track's agent its pointer now: the Platform's
+// Collect messages.
+func (c Config) relayCollect(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.RelayIDParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	name, err := c.Tracks.CollectMessages(ctx, p.ID)
+	if err == nil {
+		c.Log.Printf("collected the messages of %s", name)
+	}
+	return nil, err
+}

@@ -74,6 +74,12 @@ func TestPromptAndComments(t *testing.T) {
 	if scrolled, err := c.InMode(w.Agent); err != nil || !scrolled {
 		t.Errorf("a pane in copy mode reads as not: %v, %v", scrolled, err)
 	}
+	if err := c.CancelMode(w.Agent); err != nil {
+		t.Fatal(err)
+	}
+	if scrolled, err := c.InMode(w.Agent); err != nil || scrolled {
+		t.Errorf("a pane taken out of copy mode reads as in it: %v, %v", scrolled, err)
+	}
 
 	if err := trackwin.SetInfo(c, w.ID, "fix #12"); err != nil {
 		t.Fatal(err)
