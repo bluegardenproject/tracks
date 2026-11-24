@@ -75,6 +75,22 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Errorf("the printed answer is still unread: %+v", unread)
 	}
 
+	if err := f.svc.AskReview(ctx, "r", "And the lock?"); err != nil {
+		t.Fatal(err)
+	}
+	if last := relayOf(t, f)[len(relayOf(t, f))-1]; last.Kind != relay.Question || last.Body != "And the lock?" || last.To != handle {
+		t.Errorf("tracks review --ask didn't post its question: %+v", last)
+	}
+	if err := f.svc.ReviewReply(ctx, "r", run, "It's held briefly."); err != nil {
+		t.Fatal(err)
+	}
+	if answer, err := f.svc.WaitReview(ctx, "r"); err != nil || answer != "It's held briefly." {
+		t.Fatalf("the second answer: %q, %v", answer, err)
+	}
+	if unread, _ := f.svc.RelayRead(ctx, "r", relay.TrackHandle); len(unread) != 0 {
+		t.Errorf("the second printed answer is still unread: %+v", unread)
+	}
+
 	run2 := startReview(t, f, worktree)
 	second := oneTrain(t, f).Handle
 	if second == handle || run2 == run {
@@ -92,5 +108,11 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	msgs = relayOf(t, f)
 	if last := msgs[len(msgs)-1]; last.Body != "@"+second+" left: it was ended." || last.Kind != relay.Notice {
 		t.Errorf("ending it: %+v", last)
+	}
+	if _, err := f.svc.CloseReviewer(ctx, "r"); err != nil {
+		t.Fatal(err)
+	}
+	if again := relayOf(t, f); len(again) != len(msgs) {
+		t.Errorf("closing a reviewer that isn't there posted %+v", again[len(msgs):])
 	}
 }

@@ -132,7 +132,7 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 	if err := writeWhole(filepath.Join(dir, "question.md"), question); err != nil {
 		return relay.Message{}, err
 	}
-	for _, old := range []string{"answer.md", "answer.out"} {
+	for _, old := range []string{"answer.md", "answer.out", "answer.msg"} {
 		if err := os.Remove(filepath.Join(dir, old)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return relay.Message{}, err
 		}

@@ -123,8 +123,10 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	if err := s.Reviewers.CloseReviewer(t.ID, window); err != nil {
 		return "", fmt.Errorf("end the reviewer that's there: %w", err)
 	}
+	// The notices follow what tmux did, so a caller hanging up doesn't
+	// stop them.
 	if old.Pane != "" {
-		if err := s.notice(ctx, t.ID, "@"+oldHandle+" left: a new review replaces it."); err != nil {
+		if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+oldHandle+" left: a new review replaces it."); err != nil {
 			return "", err
 		}
 	}
@@ -190,7 +192,7 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	if window != "" {
 		s.syncReviewer(t, window)
 	}
-	if err := s.notice(ctx, t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
+	if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -410,7 +412,7 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	// to end.
 	err = errors.Join(s.Reviewers.CloseReviewer(id, window), os.RemoveAll(s.reviewDir(id)))
 	if rErr == nil && r.Pane != "" {
-		err = errors.Join(err, s.notice(ctx, id, "@"+handle+" left: it was ended."))
+		err = errors.Join(err, s.notice(context.WithoutCancel(ctx), id, "@"+handle+" left: it was ended."))
 	}
 	s.reviewMu.Unlock()
 	if window != "" {
