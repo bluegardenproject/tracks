@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 	"unicode/utf8"
 
@@ -87,11 +88,11 @@ func newRelayReadCmd() *cobra.Command {
 
 func newRelayShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <id>",
+		Use:   "show <number>",
 		Short: "print one message whole",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			msg, err := strconv.ParseInt(args[0], 10, 64)
+			msg, err := strconv.ParseInt(strings.TrimPrefix(args[0], "#"), 10, 64)
 			if err != nil {
 				return fmt.Errorf("%q isn't a message's number", args[0])
 			}

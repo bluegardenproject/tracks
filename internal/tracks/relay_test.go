@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,14 +23,16 @@ func TestRelaySend(t *testing.T) {
 	for _, tc := range []struct {
 		to   string
 		kind relay.Kind
+		why  string
 	}{
-		{"reviewer", relay.Question}, // doesn't read the relay yet
-		{"detective", relay.Question},
-		{"track", relay.Question},
-		{"reviewer", relay.Notice},
+		{"reviewer", relay.Question, "doesn't read the relay yet"},
+		{"detective", relay.Question, `no train called "detective"`},
+		{"track", relay.Question, `no train called "track"`},
+		{"reviewer", relay.Notice, "isn't a kind of message"},
 	} {
-		if _, err := f.svc.RelaySend(ctx, "r", tc.to, tc.kind, "Why?"); !errors.As(err, &problem) {
-			t.Errorf("sending %s to %s: %v, want a Problem", tc.kind, tc.to, err)
+		_, err := f.svc.RelaySend(ctx, "r", tc.to, tc.kind, "Why?")
+		if !errors.As(err, &problem) || !strings.Contains(err.Error(), tc.why) {
+			t.Errorf("sending %s to %s: %v, want a Problem saying %q", tc.kind, tc.to, err, tc.why)
 		}
 	}
 	if msgs, err := f.store.RelayUnread(ctx, "r", train.ReviewerHandle); err != nil || len(msgs) != 0 {
