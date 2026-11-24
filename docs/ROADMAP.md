@@ -16,7 +16,9 @@ the v2.0.0 release; git history keeps them.
 - **Trains** ([docs/design/trains.md](design/trains.md)): read-only agents a
   track hands tasks to, on the track's Platform, talking through Tracks'
   relay. The spike is done; v1 makes the Reviewer the first train, the
-  Investigator and the Watcher come last.
+  Investigator and the Watcher come last. Phase 2: side tracks, child
+  tracks a main track orchestrates to write code in parallel, on its relay,
+  grouped under it in the Station.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
