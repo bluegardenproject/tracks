@@ -385,9 +385,3 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	closeErr := s.Reviewers.CloseReviewer(id)
 	return t.Name, errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
 }
-
-// buttons are t's footer buttons: its PRs' with open comments. The
-// caller holds s.mu.
-func (s *Service) buttons(t track.Track) string {
-	return renderButtons(t, s.comments[t.ID])
-}

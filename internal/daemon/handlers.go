@@ -139,6 +139,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.ReviewReply:  c.reviewReply,
 		rpc.TrainList:    c.trainList,
 		rpc.TrainEnd:     c.trainEnd,
+		rpc.Signals:      c.signals,
 		rpc.RelaySend:    c.relaySend,
 		rpc.RelayRead:    c.relayRead,
 		rpc.RelayShow:    c.relayShow,

@@ -14,29 +14,51 @@ import (
 
 var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*[a-zA-Z]`)
 
-func shown(t *testing.T, m Model, msgs ...tea.Msg) string {
+func update(t *testing.T, m tea.Model, msgs ...tea.Msg) tea.Model {
 	t.Helper()
-	var tm tea.Model = m
-	for _, msg := range append([]tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}}, msgs...) {
-		tm, _ = tm.Update(msg)
+	for _, msg := range msgs {
+		m, _ = m.Update(msg)
 	}
-	return escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), "")
+	return m
 }
 
-func TestPlatformShowsTheTrains(t *testing.T) {
-	m := New(Config{Theme: theme.Default()})
-	view := shown(t, m, trainsMsg{trains: []Entry{
-		{Handle: "reviewer-527192", Status: track.Done, Outcome: train.Blocked},
-		{Handle: "watch-000001", Status: track.ActionRequired},
-	}})
-	for _, want := range []string{"╭─ Platform ", "reviewer-527192", " done   blocked ", "watch-000001", " action required "} {
-		if !strings.Contains(view, want) {
-			t.Errorf("missing %q:\n%s", want, view)
+func view(m tea.Model) string {
+	lines, _ := m.(Model).layout()
+	return escapes.ReplaceAllString(strings.Join(lines, "\n"), "")
+}
+
+// rowOf is the first row showing text.
+func rowOf(t *testing.T, m tea.Model, text string) int {
+	t.Helper()
+	for i, l := range strings.Split(view(m), "\n") {
+		if strings.Contains(l, text) {
+			return i
 		}
 	}
-	lines := strings.Split(view, "\n")
-	if len(lines) != 12 {
-		t.Errorf("%d lines, want the pane's 12", len(lines))
+	t.Fatalf("%q not shown:\n%s", text, view(m))
+	return -1
+}
+
+var size = tea.WindowSizeMsg{Width: 26, Height: 20}
+
+func TestPlatformShowsTheTrainsAndSignals(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{
+		trains: []Entry{
+			{Handle: "reviewer-527192", Status: track.Done, Outcome: train.Blocked},
+			{Handle: "watch-000001", Status: track.ActionRequired},
+		},
+		signals: Signals{RelayNew: 2, PRs: []PR{{Index: 0, PR: "PR #12", Action: "solve 3 comments"}, {Index: 1, PR: "PR #13", Action: "sent to the agent", Sent: true}}},
+	})
+	v := view(m)
+	for _, want := range []string{"╭─ Platform ", "reviewer-527192", " done   blocked ", " action required ",
+		"╭─ Signals ", "Relay Station · 2 new", "PR #12", " solve 3 comments ", "PR #13", "sent to the agent"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("missing %q:\n%s", want, v)
+		}
+	}
+	lines := strings.Split(v, "\n")
+	if len(lines) != 20 {
+		t.Errorf("%d lines, want the pane's 20", len(lines))
 	}
 	for i, l := range lines {
 		if w := len([]rune(l)); w != 26 {
@@ -45,21 +67,91 @@ func TestPlatformShowsTheTrains(t *testing.T) {
 	}
 }
 
-func TestALongHandleEndsInAnEllipsis(t *testing.T) {
-	m := New(Config{Theme: theme.Default()})
-	view := shown(t, m, trainsMsg{trains: []Entry{{Handle: "a-very-long-prefix-for-trains-123456", Status: track.Active}}})
-	if !strings.Contains(view, "a-very-long-prefix-fo…") {
-		t.Errorf("a long handle:\n%s", view)
+func TestSignalsAloneWithoutTrains(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{signals: Signals{PRs: []PR{{PR: "PR #12", Action: "solve 1 comment"}}}})
+	v := view(m)
+	if strings.Contains(v, "Platform") || !strings.HasPrefix(v, "╭─ Signals ") {
+		t.Errorf("without trains, Signals alone:\n%s", v)
+	}
+	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read") {
+		t.Errorf("an error:\n%s", e)
 	}
 }
 
-func TestPlatformWithoutTrains(t *testing.T) {
-	m := New(Config{Theme: theme.Default()})
-	if view := shown(t, m, trainsMsg{}); !strings.Contains(view, "No trains.") {
-		t.Errorf("no trains:\n%s", view)
+func TestClicks(t *testing.T) {
+	var did []string
+	c := Config{
+		Theme:            theme.Default(),
+		Collect:          func() error { did = append(did, "collect"); return errors.New("answer it first") },
+		OpenRelayStation: func() error { did = append(did, "station"); return nil },
+		Solve:            func(i int) error { did = append(did, "solve "+string(rune('0'+i))); return nil },
 	}
-	if view := shown(t, m, trainsMsg{err: errors.New("the daemon is gone")}); !strings.Contains(view, "Couldn't read") {
-		t.Errorf("an error:\n%s", view)
+	m := update(t, New(c), size, loadedMsg{
+		trains:  []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}},
+		signals: Signals{PRs: []PR{{Index: 1, PR: "PR #12", Action: "solve 3 comments"}}},
+	})
+	click := func(x int, text string) tea.Cmd {
+		t.Helper()
+		_, cmd := m.Update(tea.MouseClickMsg{X: x, Y: rowOf(t, m, text), Button: tea.MouseLeft})
+		return cmd
+	}
+	for _, tc := range []struct {
+		text string
+		want string
+	}{{"Collect messages", "collect"}, {"Relay Station", "station"}, {"solve 3 comments", "solve 1"}} {
+		did = nil
+		cmd := click(4, tc.text)
+		if cmd == nil {
+			t.Fatalf("a click on %q did nothing", tc.text)
+		}
+		m = update(t, m, cmd())
+		if len(did) != 1 || did[0] != tc.want {
+			t.Errorf("a click on %q did %v, want %s", tc.text, did, tc.want)
+		}
+	}
+	for _, x := range []int{1, 24} {
+		if click(x, "Collect messages") != nil {
+			t.Errorf("a click at x=%d, beside the button, did something", x)
+		}
+	}
+	if click(4, "reviewer-1") != nil {
+		t.Error("a click on the train's name did something")
+	}
+}
+
+func TestClicksAreSafe(t *testing.T) {
+	calls := 0
+	m := update(t, New(Config{Theme: theme.Default(), Collect: func() error { calls++; return nil }}),
+		loadedMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}}})
+	if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click before the pane's size is known did something")
+	}
+	if _, cmd := update(t, m, tea.WindowSizeMsg{Width: 4, Height: 12}).Update(tea.MouseClickMsg{X: 1, Y: 3, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click in a pane too small to draw did something")
+	}
+	m = update(t, m, size)
+	row := rowOf(t, m, "Collect messages")
+	m, first := m.Update(tea.MouseClickMsg{X: 4, Y: row, Button: tea.MouseLeft})
+	if first == nil {
+		t.Fatal("a click on the button did nothing")
+	}
+	if _, again := m.Update(tea.MouseClickMsg{X: 4, Y: row, Button: tea.MouseLeft}); again != nil {
+		t.Error("a second click while the first is on its way did something")
+	}
+	m = update(t, m, actedMsg{err: errors.New("answer it first")})
+	if !strings.Contains(view(m), "answer it first") {
+		t.Error("why a click couldn't isn't shown")
+	}
+	m = update(t, m, loadedMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
+	if strings.Contains(view(m), "answer it first") {
+		t.Error("the notice of a button that's gone stayed")
+	}
+}
+
+func TestALongHandleEndsInAnEllipsis(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{trains: []Entry{{Handle: "a-very-long-prefix-for-trains-123456", Status: track.Active}}})
+	if !strings.Contains(view(m), "a-very-long-prefix-fo…") {
+		t.Errorf("a long handle:\n%s", view(m))
 	}
 }
 
@@ -70,29 +162,17 @@ func TestPlatformReadsAgainOnAChange(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("a change read nothing")
 	}
-	for _, msg := range collect(cmd) {
-		if _, ok := msg.(trainsMsg); ok && calls == 1 {
-			return
-		}
-	}
-	t.Errorf("a change read the trains %d times, want once", calls)
-}
-
-// collect runs cmd and the commands of a batch. A command that blocks,
-// such as waiting for a change with a Watch, blocks it too: the tests
-// give the Model none.
-func collect(cmd tea.Cmd) []tea.Msg {
 	msg := cmd()
 	if batch, ok := msg.(tea.BatchMsg); ok {
-		var out []tea.Msg
 		for _, c := range batch {
 			if c != nil {
-				out = append(out, c())
+				c()
 			}
 		}
-		return out
 	}
-	return []tea.Msg{msg}
+	if calls != 1 {
+		t.Errorf("a change read the trains %d times, want once", calls)
+	}
 }
 
 func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
@@ -117,64 +197,24 @@ func TestPlatformTakesANewThemeAndNoQuit(t *testing.T) {
 	}
 }
 
-func TestCollectMessages(t *testing.T) {
-	collected := 0
-	m := New(Config{Theme: theme.Default(), Collect: func() error { collected++; return errors.New("nothing waits") }})
-	var tm tea.Model = m
-	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 26, Height: 12})
-	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}}})
-	view := escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), "")
-	if !strings.Contains(view, "Collect messages") {
-		t.Fatalf("a held train has no Collect messages:\n%s", view)
-	}
-	row := -1
-	for i, l := range strings.Split(view, "\n") {
-		if strings.Contains(l, "Collect messages") {
-			row = i
+func TestTheRelayStationLine(t *testing.T) {
+	for n, want := range map[int]string{0: "│ Relay Station", 12: "│ Relay Station · 12 new", 150: "│ Relay Station · 99+"} {
+		m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{signals: Signals{RelayNew: n}})
+		if !strings.Contains(view(m), want+" ") {
+			t.Errorf("%d new: want %q in\n%s", n, want, view(m))
 		}
 	}
-	tm, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: row, Button: tea.MouseLeft})
+	opened := 0
+	m := update(t, New(Config{Theme: theme.Default(), OpenRelayStation: func() error { opened++; return errors.New("no client") }}),
+		size, loadedMsg{signals: Signals{RelayNew: 3}})
+	row := rowOf(t, m, "Relay Station")
+	m, cmd := m.Update(tea.MouseClickMsg{X: 20, Y: row, Button: tea.MouseLeft})
 	if cmd == nil {
-		t.Fatal("a click on Collect messages did nothing")
+		t.Fatal("a click on the count beside Relay Station did nothing")
 	}
-	tm, _ = tm.Update(cmd())
-	if collected != 1 || !strings.Contains(escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), ""), "nothing waits") {
-		t.Errorf("collected %d times; the notice should say why it couldn't", collected)
-	}
-	if _, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: 1, Button: tea.MouseLeft}); cmd != nil {
-		t.Error("a click on the train's name collected")
-	}
-}
-
-func TestCollectClicksAreSafe(t *testing.T) {
-	calls := 0
-	m := New(Config{Theme: theme.Default(), Collect: func() error { calls++; return nil }})
-	var tm tea.Model = m
-	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done, Held: true}}})
-	if _, cmd := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); cmd != nil {
-		t.Error("a click before the pane's size is known collected")
-	}
-	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 4, Height: 12})
-	if _, cmd := tm.Update(tea.MouseClickMsg{X: 1, Y: 3, Button: tea.MouseLeft}); cmd != nil {
-		t.Error("a click in a pane too small to draw collected")
-	}
-	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 26, Height: 12})
-	for _, x := range []int{2, 24} {
-		if _, off := tm.Update(tea.MouseClickMsg{X: x, Y: 3, Button: tea.MouseLeft}); off != nil {
-			t.Errorf("a click at x=%d, beside the button, collected", x)
-		}
-	}
-	tm, first := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
-	if first == nil {
-		t.Fatal("a click on the button did nothing")
-	}
-	if _, again := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); again != nil {
-		t.Error("a second click while the first is on its way collected again")
-	}
-	tm, _ = tm.Update(collectedMsg{err: errors.New("answer it first")})
-	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
-	if strings.Contains(escapes.ReplaceAllString(strings.Join(tm.(Model).lines(), "\n"), ""), "answer it first") {
-		t.Error("the notice of a button that's gone stayed")
+	m = update(t, m, cmd(), loadedMsg{signals: Signals{RelayNew: 3}})
+	if opened != 1 || !strings.Contains(view(m), "no client") {
+		t.Errorf("opened %d times; why it couldn't should stay shown:\n%s", opened, view(m))
 	}
 }
 
@@ -185,7 +225,7 @@ func TestAClickOpensTheTrain(t *testing.T) {
 	var opened []string
 	m := New(Config{Theme: theme.Default(), Open: func(h string) { opened = append(opened, h) }})
 	var tm tea.Model = m
-	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, trainsMsg{trains: []Entry{
+	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, loadedMsg{trains: []Entry{
 		{Handle: "reviewer-527192", Status: track.Active, Held: true}, {Handle: "watch-000001", Status: track.Done}}}} {
 		tm, _ = tm.Update(msg)
 	}
@@ -195,7 +235,7 @@ func TestAClickOpensTheTrain(t *testing.T) {
 		tm, cmd = tm.Update(tea.MouseClickMsg{X: 4, Y: y, Button: tea.MouseLeft})
 		if cmd != nil {
 			if msg := cmd(); msg != nil {
-				if _, ok := msg.(openedMsg); ok {
+				if _, ok := msg.(actedMsg); ok {
 					tm, _ = tm.Update(msg)
 				}
 			}
@@ -221,7 +261,7 @@ func TestAClickWhileOpeningIsDropped(t *testing.T) {
 	var opened int
 	m := New(Config{Theme: theme.Default(), Open: func(string) { opened++ }})
 	var tm tea.Model = m
-	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, trainsMsg{trains: []Entry{{Handle: "reviewer-527192"}}}} {
+	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, loadedMsg{trains: []Entry{{Handle: "reviewer-527192"}}}} {
 		tm, _ = tm.Update(msg)
 	}
 	tm, first := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft})

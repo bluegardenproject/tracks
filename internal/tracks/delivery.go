@@ -36,7 +36,7 @@ func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 		s.turns = map[string]bool{}
 	}
 	s.turns[id] = turn == hooks.TurnStart
-	if turn == hooks.TurnStart {
+	if p, ok := s.pointing[id]; ok && turn == hooks.TurnStart && !p.collected {
 		// A pointer waiting for a turn was taken, however short the turn.
 		delete(s.pointing, id)
 	}
@@ -106,6 +106,9 @@ type pointing struct {
 	at     time.Time
 	before int64
 	gen    uint64
+	// collected says the user sent it: it's done once pasted, and
+	// neither a turn's start nor the stall check touches it meanwhile.
+	collected bool
 }
 
 // Deliver types a pointer into each open track's agent for the relay
@@ -156,7 +159,7 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	s.mu.Lock()
 	s.deliveryMaps()
 	p, waiting := s.pointing[t.ID]
-	stalled := waiting && now.Sub(p.at) >= pointerStall
+	stalled := waiting && !p.collected && now.Sub(p.at) >= pointerStall
 	switch {
 	case stalled:
 		// It didn't: it's as idle as it was when the pointer went.
@@ -270,18 +273,23 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	_, waiting := s.pointing[id]
 	if s.busy[id] || s.pointed[id] != pointed || waiting || !collected && (!known || in) {
 		s.mu.Unlock()
+		if collected {
+			return Problem("The messages changed meanwhile: try again.")
+		}
 		return nil
 	}
 	s.pointerGen++
 	gen := s.pointerGen
-	s.pointing[id] = pointing{at: now, before: pointed, gen: gen}
+	s.pointing[id] = pointing{at: now, before: pointed, gen: gen, collected: collected}
 	s.pointed[id] = due[len(due)-1].ID
 	if !collected {
 		delete(s.turns, id)
+		// Delivered, it's held no more: the Platform drops Collect
+		// messages as the pointer goes. A collected one's goes once
+		// it's in.
+		delete(s.held, id)
 	}
 	delete(s.retryAt, id)
-	held := s.held[id]
-	delete(s.held, id)
 	s.mu.Unlock()
 	// The messages count as pointed to from here, as the Relay Station
 	// shows.
@@ -295,9 +303,6 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	case err != nil:
 		delete(s.pointing, id)
 		s.pointed[id] = p.before
-		if len(held) > 0 {
-			s.held[id] = held
-		}
 		// A collected pointer left the turn as it was; a delivered one
 		// went to an idle agent.
 		if !collected {
@@ -307,7 +312,10 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 		s.Changes.Notify()
 		return err
 	case collected:
+		// Held no more once it's in, not before: the Platform keeps the
+		// button, and its notice, while the paste may still fail.
 		delete(s.pointing, id)
+		delete(s.held, id)
 	default:
 		// The stall's wait starts once the pointer is in.
 		p.at = s.now()
@@ -361,7 +369,13 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 	if len(due) == 0 {
 		return t.Name, Problem("No messages wait for " + t.Name + ".")
 	}
-	if scrolled, err := s.Windows.Scrolled(window); err == nil && scrolled {
+	// A pane whose mode can't be told might be scrolled back, where the
+	// Enter would only leave the scrollback.
+	scrolled, err := s.Windows.Scrolled(window)
+	if err != nil {
+		return t.Name, err
+	}
+	if scrolled {
 		if err := s.Windows.LeaveScroll(window); err != nil {
 			return t.Name, err
 		}

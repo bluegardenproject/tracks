@@ -411,16 +411,29 @@ func TestAFailedCollectKeepsItHeld(t *testing.T) {
 	*now = now.Add(pointerGrace)
 	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
 	deliver(t, f)
+	// In a turn, which a turn's start during the paste mustn't take as
+	// the pointer taken, nor a failed collect undo.
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
 	f.windows.pasteErr = errors.New("tmux is gone")
-	f.windows.whilePasting = func() { f.svc.SetTurn(ctx, "a", hooks.TurnEnd) }
+	f.windows.whilePasting = func() {
+		f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+		if !f.svc.heldFrom("a", "reviewer-1") {
+			t.Error("Collect messages went before the paste was in")
+		}
+	}
 	if _, err := f.svc.CollectMessages(ctx, "a"); err == nil {
 		t.Fatal("a failed paste said nothing")
 	}
 	if !f.svc.heldFrom("a", "reviewer-1") {
 		t.Error("a failed collect hid Collect messages")
 	}
-	if f.svc.inTurn("a") {
-		t.Error("a failed collect undid the turn's end that came during it")
+	if !f.svc.inTurn("a") {
+		t.Error("a failed collect marked the agent, in a turn, idle")
+	}
+	f.windows.pasteErr, f.windows.whilePasting = nil, nil
+	f.windows.scrollErr = errors.New("tmux can't tell")
+	if _, err := f.svc.CollectMessages(ctx, "a"); err == nil || len(f.windows.pasted) != 1 {
+		t.Errorf("collect pasted %v into a pane whose mode it couldn't tell: %v", f.windows.pasted, err)
 	}
 }
 
@@ -479,5 +492,23 @@ func TestHeldGoesWithTheAgent(t *testing.T) {
 	}
 	if f.svc.heldFrom("a", "reviewer-1") {
 		t.Error("Collect messages stayed after the agent exited")
+	}
+}
+
+func TestADeliveredPointerIsHeldNoMore(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	deliver(t, f)
+	if !f.svc.heldFrom("a", "reviewer-1") {
+		t.Fatal("not held while the user typed")
+	}
+	f.windows.lastKeys = nil
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %v once the typing stopped", got)
+	}
+	if f.svc.heldFrom("a", "reviewer-1") {
+		t.Error("Collect messages stayed while the delivered pointer waits for its turn")
 	}
 }

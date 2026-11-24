@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
@@ -11,8 +12,9 @@ import (
 )
 
 // CountComments asks GitHub how many review threads wait on each open
-// track's agent, per PR not merged or closed, and shows a button on the
-// track's window for each PR with some. A track whose counts couldn't be
+// track's agent, per PR not merged or closed; the Platform's Signals
+// shows a button for each PR with some, and the change feed tells it
+// when they changed. A track whose counts couldn't be
 // read keeps the last ones. ErrNoGH means nothing was asked.
 func (s *Service) CountComments(ctx context.Context) error {
 	if s.GitHub == nil {
@@ -28,8 +30,7 @@ func (s *Service) CountComments(ctx context.Context) error {
 	}
 	var errs []error
 	for _, t := range open {
-		window, ok := windows[t.ID]
-		if !ok {
+		if _, ok := windows[t.ID]; !ok {
 			continue
 		}
 		counts, err := s.openThreads(ctx, t)
@@ -39,8 +40,6 @@ func (s *Service) CountComments(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 			continue
 		}
-		// Written every poll, so a send between the count and this write
-		// can't leave the window showing an older state for long.
 		s.mu.Lock()
 		was := s.comments[t.ID]
 		now := map[string]actions.Comments{}
@@ -51,10 +50,9 @@ func (s *Service) CountComments(ctx context.Context) error {
 			s.comments = map[string]map[string]actions.Comments{}
 		}
 		s.comments[t.ID] = now
-		buttons := s.buttons(t)
 		s.mu.Unlock()
-		if err := s.Windows.Buttons(window, buttons); err != nil {
-			errs = append(errs, err)
+		if !maps.Equal(was, now) {
+			s.Changes.Notify()
 		}
 	}
 	return errors.Join(errs...)
@@ -77,18 +75,28 @@ func (s *Service) openThreads(ctx context.Context, t track.Track) (map[string]in
 	return counts, nil
 }
 
-// renderButtons are the buttons of t's PRs with open comments, in the
-// order t found them, as the footer draws them.
-func renderButtons(t track.Track, comments map[string]actions.Comments) string {
-	var buttons []actions.Button
+// PRSignal is one of a track's PRs with open comments, for Signals: the
+// PR, what its button does, and whether that's done, the prompt sent.
+type PRSignal struct {
+	Index      int
+	PR, Action string
+	Sent       bool
+}
+
+// prSignals are t's PRs with open comments, as comments counted them.
+func prSignals(t track.Track, comments map[string]actions.Comments) []PRSignal {
 	repos := map[string]bool{}
-	for i, pr := range t.PRs {
+	for _, pr := range t.PRs {
 		repos[pr.Repo] = true
+	}
+	var out []PRSignal
+	for i, pr := range t.PRs {
 		if c := comments[pr.URL]; c.Open > 0 {
-			buttons = append(buttons, actions.Button{Index: i, Repo: pr.Repo, Number: pr.Number, Comments: c})
+			b := actions.Button{Index: i, Repo: pr.Repo, Number: pr.Number, Comments: c}
+			out = append(out, PRSignal{Index: i, PR: b.PR(len(repos) > 1), Action: b.Action(), Sent: c.Sent})
 		}
 	}
-	return actions.Render(buttons, len(repos) > 1)
+	return out
 }
 
 // trackWindows are the open track windows by track ID.
@@ -160,10 +168,9 @@ func (s *Service) RunAction(ctx context.Context, id, button string) (string, err
 		s.mu.Unlock()
 		return t.Name, err
 	}
-	s.mu.Lock()
-	buttons := s.buttons(t)
-	s.mu.Unlock()
-	return t.Name, s.Windows.Buttons(window, buttons)
+	// Signals shows it sent.
+	s.Changes.Notify()
+	return t.Name, nil
 }
 
 // setSent marks the comments on track id's PR at url sent, or not. The

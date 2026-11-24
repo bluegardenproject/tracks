@@ -41,8 +41,12 @@ func TestActionsRow(t *testing.T) {
 		return string(out)
 	}
 
-	if got := strings.TrimSpace(styles.ReplaceAllString(draw(""), "")); got != "api · active · Claude Code opus" {
+	alone := draw("")
+	if got := strings.TrimSpace(styles.ReplaceAllString(alone, "")); got != "api · active · Claude Code opus" {
 		t.Errorf("without buttons: %q, want the track's info", got)
+	}
+	if !strings.Contains(alone, "#[align=centre]") || strings.Contains(alone, "#[align=left]") {
+		t.Errorf("without buttons the info should be centred: %q", alone)
 	}
 	got := draw(actions.Render([]actions.Button{
 		{Index: 0, Repo: "a/b", Number: 3, Comments: actions.Comments{Open: 2}},
