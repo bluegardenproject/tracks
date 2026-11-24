@@ -45,6 +45,14 @@ func TestPlatformShowsTheTrains(t *testing.T) {
 	}
 }
 
+func TestALongHandleEndsInAnEllipsis(t *testing.T) {
+	m := New(Config{Theme: theme.Default()})
+	view := shown(t, m, trainsMsg{trains: []Entry{{Handle: "a-very-long-prefix-for-trains-123456", Status: track.Active}}})
+	if !strings.Contains(view, "a-very-long-prefix-fo…") {
+		t.Errorf("a long handle:\n%s", view)
+	}
+}
+
 func TestPlatformWithoutTrains(t *testing.T) {
 	m := New(Config{Theme: theme.Default()})
 	if view := shown(t, m, trainsMsg{}); !strings.Contains(view, "No trains.") {

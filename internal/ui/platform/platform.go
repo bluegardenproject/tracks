@@ -125,7 +125,11 @@ func (m Model) lines() []string {
 	inner := m.width - 4
 	var body []string
 	for _, t := range m.trains {
-		name := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(t.Handle)
+		handle := t.Handle
+		if r := []rune(handle); len(r) > inner {
+			handle = string(r[:inner-1]) + "…"
+		}
+		name := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(handle)
 		body = append(body, name)
 		badges := widget.Badge(m.palette, t.Status)
 		if t.Outcome.Label != "" {
