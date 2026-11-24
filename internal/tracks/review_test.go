@@ -26,6 +26,7 @@ type fakeReviewers struct {
 	respawned []string
 	screen    string
 	showErr   error
+	openErr   error
 }
 
 func (f *fakeReviewers) CaptureReviewer(string) (string, error) { return f.screen, nil }
@@ -41,6 +42,9 @@ func (f *fakeReviewers) RespawnReviewer(pane, dir, command string) error {
 }
 
 func (f *fakeReviewers) OpenReviewer(_, dir string, p trackwin.Process) error {
+	if f.openErr != nil {
+		return f.openErr
+	}
 	f.opened, f.dirs = append(f.opened, p), append(f.dirs, dir)
 	f.state = ReviewerState{Pane: "%9"}
 	return nil

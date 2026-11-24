@@ -91,10 +91,8 @@ func (s *Service) dropReview(ctx context.Context, id, why string) error {
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
 	dir := s.reviewDir(id)
-	if _, err := os.Stat(filepath.Join(dir, "handle")); err == nil {
-		if err := s.notice(context.WithoutCancel(ctx), id, "@"+reviewHandle(dir)+" left: "+why+"."); err != nil {
-			return err
-		}
+	if err := s.leftNotice(ctx, id, dir, why); err != nil {
+		return err
 	}
 	return os.RemoveAll(dir)
 }
