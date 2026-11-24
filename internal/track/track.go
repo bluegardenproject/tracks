@@ -45,15 +45,12 @@ type Track struct {
 	// Engine is the agent CLI's id, Model what it was started with ("" is
 	// the engine's own default), Session the ID that resumes it.
 	Engine, Model, Session string
-	// Cost is what the agent's work has cost so far, in US dollars, at
-	// list prices; 0 while unknown, and for engines without transcripts.
-	Cost                float64
-	Prompt              string // as the user wrote it
-	ReviewRef           string // Review: the PR link or branch
-	Document            string // Doc: the resolved path
-	Candor              int    // Review, Doc
-	Opinion, ClaimCheck bool   // Doc's optional sections
-	Terminal            bool
+	Prompt                 string // as the user wrote it
+	ReviewRef              string // Review: the PR link or branch
+	Document               string // Doc: the resolved path
+	Candor                 int    // Review, Doc
+	Opinion, ClaimCheck    bool   // Doc's optional sections
+	Terminal               bool
 	// Parent is the ID of the track this one was started from with
 	// tracks new, "" for none or once that track is deleted; ParentName
 	// is that track's name as shown, read with it.

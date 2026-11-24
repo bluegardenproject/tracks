@@ -9,10 +9,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/agents"
+	"github.com/bluegardenproject/tracks/internal/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
-	"github.com/bluegardenproject/tracks/internal/usage"
 )
 
 const (
@@ -103,25 +103,19 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 	return m, m.act(actionEnd)
 }
 
-var columns = []string{"Name", "Type", "Status", "Model", "Cost"}
+var columns = []string{"Name", "Type", "Status", "Model"}
 
-// statusColumn is drawn as badges; costColumn is right-aligned.
-const (
-	statusColumn = 2
-	costColumn   = 4
-)
+// statusColumn is drawn as badges.
+const statusColumn = 2
 
 func cells(t source.Track) []string {
-	model, cost := "default", "—"
+	model := "default"
 	if t.Model != "" && t.Engine == agents.Claude.Name {
-		model = usage.ShortModel(t.Model)
+		model = claude.ShortModel(t.Model)
 	} else if t.Model != "" {
 		model = t.Model
 	}
-	if t.Cost > 0 {
-		cost = usage.FormatCost(t.Cost)
-	}
-	return []string{t.Shown(), t.Kind, statusText(t), model, cost}
+	return []string{t.Shown(), t.Kind, statusText(t), model}
 }
 
 func (m Model) loadTracks() tea.Cmd {
@@ -376,7 +370,7 @@ func (m Model) list(width, height int) []string {
 	if s.filter.On() {
 		filter = []string{m.filterLine(width)}
 	}
-	lines := table{header: columns, rows: rows, right: costColumn, selected: s.selected, hover: s.hover, offset: s.offset,
+	lines := table{header: columns, rows: rows, right: -1, selected: s.selected, hover: s.hover, offset: s.offset,
 		cell: cell}.draw(m, width, height-len(filter))
 	switch {
 	case len(s.tracks) == 0 && s.filter.On():

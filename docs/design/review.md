@@ -26,8 +26,8 @@ buttons and showing it for the trust question are gone.
   report in Tracks and decides what to raise in the PR themselves. Posting
   would need agreement with the teams first, so PRs don't fill up with
   generated comments.
-- **Cost of reviewer sessions.** Per-track cost is Claude-only and inaccurate,
-  and may be removed; reviewer sessions don't add to it.
+- **Cost of reviewer sessions.** Tracks doesn't reckon cost; the engines' own
+  apps and dashboards show what was spent.
 
 ## What exists
 

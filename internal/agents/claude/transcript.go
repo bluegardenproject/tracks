@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/bluegardenproject/tracks/internal/usage"
 )
 
 // maxCarried bounds the reply a promoted track starts with: a plan is
@@ -20,7 +18,7 @@ const maxCarried = 20_000
 // text. "" when the transcript can't be found or has neither.
 func LastReply(session string) string {
 	var last string
-	for _, path := range usage.Locate(session, "") {
+	for _, path := range Locate(session, "") {
 		f, err := os.Open(path)
 		if err != nil {
 			continue
@@ -35,7 +33,7 @@ func LastReply(session string) string {
 
 // Started reports whether session has a transcript: Claude writes it
 // once the session starts, so without one there's nothing to resume.
-func Started(session string) bool { return len(usage.Locate(session, "")) > 0 }
+func Started(session string) bool { return len(Locate(session, "")) > 0 }
 
 type transcriptLine struct {
 	Type    string `json:"type"`
