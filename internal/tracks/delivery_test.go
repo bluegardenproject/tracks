@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -25,6 +26,23 @@ func TestTurns(t *testing.T) {
 	f.svc.SetTurn("a", hooks.TurnStart)
 	if !f.svc.inTurn("a") {
 		t.Error("a turn that started")
+	}
+}
+
+func TestANewAgentForgetsTheTurn(t *testing.T) {
+	ctx := context.Background()
+	for _, e := range []track.Event{track.Resumed, track.Ended, track.Interrupted} {
+		f := newFixture(t)
+		if err := f.store.AddTrack(ctx, track.Track{ID: "a", Kind: track.Work, Name: "a", Engine: "claude"}); err != nil {
+			t.Fatal(err)
+		}
+		f.svc.SetTurn("a", hooks.TurnEnd)
+		if err := f.svc.Report(ctx, "a", e); err != nil {
+			t.Fatal(err)
+		}
+		if !f.svc.inTurn("a") {
+			t.Errorf("after %s the old agent's ended turn still holds", e)
+		}
 	}
 }
 

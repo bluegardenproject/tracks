@@ -104,6 +104,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	}
 
 	progress(fmt.Sprintf("Starting %s…", info.Name))
+	s.forgetTurn(t.ID)
 	var win trackwin.Window
 	if window != "" {
 		win, err = s.Windows.Respawn(window, windowSpec(work, info, start))

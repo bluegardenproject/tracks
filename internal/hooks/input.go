@@ -50,7 +50,8 @@ func claudeInputEmpty(lines []string) (empty, known bool) {
 }
 
 // cursorInputEmpty reads Cursor's input: the last line starting with →,
-// which it draws dim, with its placeholder, while the input is empty.
+// which it draws dim, with its placeholder, while the input is empty;
+// a draft, even one whose first line is blank, draws the → plain.
 func cursorInputEmpty(lines []string) (empty, known bool) {
 	for i := len(lines) - 1; i >= 0; i-- {
 		c := cells(lines[i])
@@ -149,7 +150,7 @@ func markerAt(c []cell, marker rune) int {
 func allDim(lines [][]cell) bool {
 	for _, l := range lines {
 		for _, x := range l {
-			if !x.dim && !unicode.IsSpace(x.r) && x.r != '│' && x.r != '→' && x.r != '❯' {
+			if !x.dim && !unicode.IsSpace(x.r) && x.r != '│' {
 				return false
 			}
 		}

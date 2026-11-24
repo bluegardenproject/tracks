@@ -28,6 +28,7 @@ func TestInputEmpty(t *testing.T) {
 		{"claude, nothing", "claude", "", false, false},
 		{"cursor, placeholder", "cursor", cursorEmpty, true, true},
 		{"cursor, a draft", "cursor", cursorDraft, false, true},
+		{"cursor, a draft with a blank first line", "cursor", " \x1b[48;2;21;21;21m →                \x1b[49m\n   second line", false, true},
 		{"cursor, nothing", "cursor", "Cursor Agent", false, false},
 		{"an engine Tracks can't read", "other", claudeEmpty, false, false},
 	} {

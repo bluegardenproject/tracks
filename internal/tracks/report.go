@@ -23,6 +23,12 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 	} else if err != nil {
 		return err
 	}
+	switch e {
+	case track.Created, track.Resumed, track.Ended, track.Interrupted:
+		// A new agent, or none: what Tracks heard of the last one's
+		// turns no longer holds.
+		s.forgetTurn(id)
+	}
 	next := t.State.Apply(e, s.now())
 	if next == t.State {
 		return nil
