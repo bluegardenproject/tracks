@@ -69,8 +69,10 @@ type Store interface {
 	DeleteDraft(ctx context.Context, id string) (bool, error)
 	AddRelayMessage(ctx context.Context, id string, m relay.Message) (relay.Message, error)
 	RelayUnread(ctx context.Context, id, reader string) ([]relay.Message, error)
-	MarkRelayRead(ctx context.Context, id, reader string, upTo int64) error
+	MarkRelayRead(ctx context.Context, id, reader string, upTo int64) (bool, error)
 	RelayMessage(ctx context.Context, id string, msg int64) (relay.Message, error)
+	RelayLog(ctx context.Context, id string) ([]relay.Message, error)
+	RelayUnseen(ctx context.Context, id, reader string) (int, error)
 }
 
 // Worktrees makes and removes a track's worktrees.

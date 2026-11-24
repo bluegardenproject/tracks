@@ -188,9 +188,19 @@ overlay, as a train's opens:
   Enter.
 - A message still waiting for its pointer is marked "not delivered".
 - Read only: the user doesn't post (see Not in scope).
-- **Hide** and `Ctrl+b Esc` close it, as a train's overlay. Opening it
-  marks the messages seen by the user; it doesn't mark them read for any
-  agent.
+- **Esc**, `q` and `Ctrl+b Esc` close it. It is a plain program in a
+  `display-popup -E`, not a nested client, so the popup gets both keys
+  of `Ctrl+b Esc` and needs no tmux binding.
+- Opening it marks the messages seen by the user, a reader of its own on
+  the relay (`user`); it doesn't mark them read for any agent. The daemon
+  counts what the user hasn't seen, for the entry's "N new".
+- **Built (9a):** `internal/ui/relaystation`, run by the hidden `tracks
+  relay-station`; `tracks relay-station open [--client <name>]` opens it
+  over a client, 80% × 80%. The daemon's `relay-station` call is the
+  relay, which messages wait for a pointer (from delivery's state in
+  memory) and the user's mark; `relay-new` is the count. Adding a message,
+  a reader's cursor moving and a pointer going or stalling tell the
+  change feed, so it updates live.
 
 ### Signals: the PRs' comments
 
@@ -462,8 +472,11 @@ Each step a PR of its own.
    its pane is open. Today's reviewer UI goes: the footer's reviewer buttons,
    `join-pane`, the pane shown for the trust question, `button.variant6`.
 8. Collect messages.
-9. Signals: the Relay Station and its overlay; the PR buttons moved in
-   from the footer, the track's info centred again.
+9. Signals, in two PRs:
+   - 9a: the Relay Station: the program, "not delivered", the user's
+     mark and the count of new messages, the popup. Done.
+   - 9b: Signals in the Platform, its entry opening the Relay Station; the
+     PR buttons moved in from the footer, the track's info centred again.
 10. The track's prompt: the relay paragraph (reading messages when a pointer
     comes).
 11. The "started from" note on independent tracks. Independent of the rest.

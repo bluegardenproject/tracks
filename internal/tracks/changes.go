@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
@@ -185,4 +186,20 @@ func (w watched) SavePR(ctx context.Context, id string, pr track.PR, at time.Tim
 		w.changes.Notify()
 	}
 	return was, err
+}
+
+func (w watched) AddRelayMessage(ctx context.Context, id string, m relay.Message) (relay.Message, error) {
+	m, err := w.Store.AddRelayMessage(ctx, id, m)
+	return m, w.notify(err)
+}
+
+// MarkRelayRead tells only when the reader's cursor moved, so a screen
+// that marks what it shows, as the Relay Station does, isn't woken by
+// its own mark again.
+func (w watched) MarkRelayRead(ctx context.Context, id, reader string, upTo int64) (bool, error) {
+	moved, err := w.Store.MarkRelayRead(ctx, id, reader, upTo)
+	if moved {
+		w.changes.Notify()
+	}
+	return moved, err
 }

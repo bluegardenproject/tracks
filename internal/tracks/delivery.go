@@ -148,8 +148,9 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 		s.turns = map[string]bool{}
 	}
 	p, waiting := s.pointing[t.ID]
+	stalled := waiting && now.Sub(p.at) >= pointerStall
 	switch {
-	case waiting && now.Sub(p.at) >= pointerStall:
+	case stalled:
 		// It didn't: it's as idle as it was when the pointer went.
 		delete(s.pointing, t.ID)
 		s.pointed[t.ID] = p.before
@@ -161,6 +162,11 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	}
 	pointed, retry := s.pointed[t.ID], s.retryAt[t.ID]
 	s.mu.Unlock()
+	if stalled {
+		// Its messages wait for a pointer again, as the Relay Station
+		// shows.
+		s.Changes.Notify()
+	}
 	// The turn and a dialog hold the pointer back without asking the
 	// store or tmux anything.
 	if now.Before(retry) || t.Waiting || s.inTurn(t.ID) {
@@ -219,5 +225,6 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	// The stall's wait starts once the pointer is in.
 	p.at = s.now()
 	s.pointing[t.ID] = p
+	defer s.Changes.Notify()
 	return nil
 }

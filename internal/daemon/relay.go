@@ -7,7 +7,8 @@ import (
 	"github.com/bluegardenproject/tracks/internal/rpc"
 )
 
-// The relay's calls come from a track's agent: it reads as the track.
+// The relay's calls come from a track's agent, which reads as the
+// track, and from the Relay Station, which reads for the user.
 
 func (c Config) relaySend(ctx context.Context, call *rpc.Call) (any, error) {
 	var p rpc.RelaySendParams
@@ -77,4 +78,25 @@ func (c Config) relayWho(ctx context.Context, call *rpc.Call) (any, error) {
 			Status: m.Status.Label, Outcome: m.Outcome.Label})
 	}
 	return out, nil
+}
+
+func (c Config) relayStation(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.RelayIDParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	log, err := c.Tracks.RelayStation(ctx, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	return rpc.RelayStationResult{Messages: log.Messages, Waiting: log.Waiting}, nil
+}
+
+func (c Config) relayNew(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.RelayIDParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	n, err := c.Tracks.RelayNew(ctx, p.ID)
+	return rpc.RelayNewResult{New: n}, err
 }
