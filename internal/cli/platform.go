@@ -1,11 +1,12 @@
 package cli
 
 import (
-	"context"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/rpc"
+	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	uiplatform "github.com/bluegardenproject/tracks/internal/ui/platform"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
@@ -20,22 +21,22 @@ func newPlatformCmd(version string) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, id, err := trackClient("platform")
-			if err != nil {
-				return err
+			id := os.Getenv("TRACKS_ID")
+			if id == "" {
+				return errNoTrack("platform")
 			}
 			paths, err := platform.Resolve()
 			if err != nil {
 				return err
 			}
 			t, _ := loadTheme(paths)
+			client := rpc.Client{Socket: paths.Socket}
 			daemon := daemonCalls{tmux: tmux.New(paths.TmuxSocket), paths: paths, version: version}
 			m := uiplatform.New(uiplatform.Config{
-				Theme:  t,
-				Trains: func() ([]rpc.Train, error) { return client.TrainList(cmd.Context(), id) },
-				Watch: func(ctx context.Context, changed func()) error {
-					return daemon.watch(ctx, changed)
-				},
+				Theme:     t,
+				Trains:    func() ([]rpc.Train, error) { return client.TrainList(cmd.Context(), id) },
+				Watch:     daemon.watch,
+				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
 			})
 			_, err = tea.NewProgram(m, tea.WithContext(cmd.Context()), tea.WithColorProfile(style.Profile())).Run()
 			if cmd.Context().Err() != nil {

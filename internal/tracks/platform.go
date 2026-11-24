@@ -15,28 +15,41 @@ import (
 // open while it has one, closed when it has none. A train's status
 // comes from tmux and its run, not the store, so SyncTrains also tells
 // Changes when a track's trains changed since it last looked, for the
-// Platforms to read them again.
+// Platforms to read them again. It reads the windows, their Platforms
+// and the reviewers once each, whatever the number of tracks.
 func (s *Service) SyncTrains(ctx context.Context) error {
 	infos, err := s.Windows.List()
 	if err != nil {
 		return err
 	}
+	platforms, err := s.Windows.Platforms()
+	if err != nil {
+		return err
+	}
+	reviewers := map[string]ReviewerState{}
+	if s.Reviewers != nil && s.HooksDir != "" {
+		if reviewers, err = s.Reviewers.Reviewers(); err != nil {
+			return err
+		}
+	}
 	seen := map[string]string{}
-	changed := false
 	var errs []error
 	for _, in := range infos {
-		if in.Track == "" || in.Exit != "" || s.isBusy(in.Track) {
+		// A track whose agent exited is still synced: its window and its
+		// trains run on, and the Platform types nothing into the agent.
+		if in.Track == "" || s.isBusy(in.Track) {
 			continue
 		}
-		trains, err := s.Trains(ctx, in.Track)
-		if err != nil {
-			continue
+		r := reviewers[in.Track]
+		s.reviewMu.Lock()
+		run := s.reviewerRun(in.Track, r)
+		s.reviewMu.Unlock()
+		trains := s.reviewerTrains(in.Track, r, run)
+		if len(trains) > 0 {
+			seen[in.Track] = trainsKey(trains)
 		}
-		seen[in.Track] = trainsKey(trains)
-		pane, err := s.Windows.Platform(in.Window)
+		pane := platforms[in.Window]
 		switch {
-		case err != nil:
-			errs = append(errs, err)
 		case len(trains) > 0 && pane == "":
 			errs = append(errs, s.Windows.OpenPlatform(in.Window, s.platformCommand(in.Track)))
 		case len(trains) == 0 && pane != "":
@@ -44,12 +57,12 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		}
 	}
 	s.mu.Lock()
+	changed := len(s.trainsSeen) != len(seen)
 	for id, key := range seen {
 		if s.trainsSeen[id] != key {
 			changed = true
 		}
 	}
-	changed = changed || len(s.trainsSeen) != len(seen)
 	s.trainsSeen = seen
 	s.mu.Unlock()
 	if changed && s.Changes != nil {
@@ -67,8 +80,8 @@ func trainsKey(trains []train.Train) string {
 	return b.String()
 }
 
-// platformCommand runs track id's Platform: tracks platform, with the
-// track's ID and Tracks on PATH.
+// platformCommand runs track id's Platform: tracks platform from
+// Tracks' own folder, with the track's ID.
 func (s *Service) platformCommand(id string) string {
 	env := "TRACKS_ID=" + shellx.Quote(id) + " TRACKS_SOCKET_DIR=" + shellx.Quote(s.SocketDir)
 	tracks := "tracks"

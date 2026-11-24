@@ -19,8 +19,12 @@ import (
 )
 
 // reconnectEvery is how long the Platform waits before watching the
-// daemon again after the stream broke.
-const reconnectEvery = 2 * time.Second
+// daemon again after the stream broke; themeEvery how often it reads
+// the theme again, which the user may switch or edit meanwhile.
+const (
+	reconnectEvery = 2 * time.Second
+	themeEvery     = 3 * time.Second
+)
 
 // Config is what the Platform reads and how.
 type Config struct {
@@ -30,6 +34,8 @@ type Config struct {
 	// Watch calls changed once connected to the daemon and after each
 	// change, until the stream breaks.
 	Watch func(ctx context.Context, changed func()) error
+	// LoadTheme reads the theme the user chose, now.
+	LoadTheme func() (theme.Theme, error)
 }
 
 // Model is the Platform.
@@ -41,6 +47,7 @@ type Model struct {
 	list          func() ([]rpc.Train, error)
 	watchFn       func(ctx context.Context, changed func()) error
 	changes       chan struct{}
+	loadTheme     func() (theme.Theme, error)
 }
 
 type (
@@ -49,18 +56,22 @@ type (
 		err    error
 	}
 	changedMsg struct{}
+	themeMsg   struct {
+		theme theme.Theme
+		err   error
+	}
 )
 
 // New is the Platform for c.
 func New(c Config) Model {
-	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch}
+	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme}
 	if c.Watch != nil {
 		m.changes = make(chan struct{}, 1)
 	}
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return tea.Batch(m.load(), m.watch(), m.next()) }
+func (m Model) Init() tea.Cmd { return tea.Batch(m.load(), m.watch(), m.next(), m.nextTheme()) }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -70,12 +81,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.trains, m.err = msg.trains, msg.err
 	case changedMsg:
 		return m, tea.Batch(m.load(), m.next())
-	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
+	case themeMsg:
+		if msg.err == nil {
+			m.palette = style.New(msg.theme)
 		}
+		return m, m.nextTheme()
 	}
+	// No key quits it: the daemon keeps it open while the track has a
+	// train, and would only open it again.
 	return m, nil
+}
+
+// nextTheme reads the theme again after themeEvery.
+func (m Model) nextTheme() tea.Cmd {
+	if m.loadTheme == nil {
+		return nil
+	}
+	load := m.loadTheme
+	return tea.Tick(themeEvery, func(time.Time) tea.Msg {
+		t, err := load()
+		return themeMsg{t, err}
+	})
 }
 
 func (m Model) View() tea.View {
