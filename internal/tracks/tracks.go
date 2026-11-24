@@ -463,16 +463,11 @@ func (w TmuxWindows) StyledScreen(window string) (string, error) {
 
 // agentScreen is window's agent pane as capture captures it.
 func (w TmuxWindows) agentScreen(window string, capture func(pane string) (string, error)) (string, error) {
-	panes, err := w.Tmux.ListPanes(window)
+	pane, err := w.agentPane(window)
 	if err != nil {
 		return "", err
 	}
-	for _, p := range panes {
-		if p.Role == trackwin.RoleAgent {
-			return capture(p.ID)
-		}
-	}
-	return "", fmt.Errorf("window %s has no agent pane", window)
+	return capture(pane)
 }
 
 func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }
@@ -502,14 +497,9 @@ func (w TmuxWindows) agentPane(window string) (string, error) {
 }
 
 func (w TmuxWindows) Scrolled(window string) (bool, error) {
-	panes, err := w.Tmux.ListPanes(window)
+	pane, err := w.agentPane(window)
 	if err != nil {
 		return false, err
 	}
-	for _, p := range panes {
-		if p.Role == trackwin.RoleAgent {
-			return w.Tmux.InMode(p.ID)
-		}
-	}
-	return false, fmt.Errorf("window %s has no agent pane", window)
+	return w.Tmux.InMode(pane)
 }
