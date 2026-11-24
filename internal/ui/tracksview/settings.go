@@ -301,6 +301,9 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		s.creator, cmd = s.creator.Update(msg)
 		return m, cmd
 	}
+	if s.section == sectionAgents && s.agents.editingPrefix {
+		return m.agentsKey(msg)
+	}
 	if key == "esc" {
 		return m.showSection(s.section), nil
 	}
@@ -310,7 +313,7 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case sectionTracks:
 		return m.typesKey(key)
 	case sectionAgents:
-		return m.agentsKey(key)
+		return m.agentsKey(msg)
 	case sectionKeys:
 		switch key {
 		case "up", "k":

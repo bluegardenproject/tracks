@@ -30,7 +30,7 @@ func trainsFixture(t *testing.T, engine string) (*fixture, *fakeReviewers, strin
 	panes := &fakeReviewers{}
 	f.svc.Reviewers = panes
 	f.svc.Settings = func() (settings.Settings, error) {
-		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.TrackType{Engine: engine, Model: "m1"}}}, nil
+		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.Agent{Engine: engine, Model: "m1"}}}, nil
 	}
 	return f, panes, worktree
 }

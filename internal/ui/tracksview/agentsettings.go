@@ -3,10 +3,12 @@ package tracksview
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/theme"
+	"github.com/bluegardenproject/tracks/internal/train"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
@@ -16,8 +18,13 @@ import (
 type agentsState struct {
 	agents  settings.Agents
 	loadErr error
-	focus   int // reviewerAgent or reviewerModel
+	focus   int // reviewerAgent, reviewerModel or reviewerPrefix
 	hover   int // the field under the mouse, -1 for none
+	// prefix edits the reviewer's prefix while editingPrefix;
+	// prefixErr says why the last one typed was refused.
+	prefix        textinput.Model
+	editingPrefix bool
+	prefixErr     string
 	// saving is a save on its way; pending is another one due after it.
 	saving, pending bool
 }
@@ -26,6 +33,7 @@ type agentsState struct {
 const (
 	reviewerAgent = iota
 	reviewerModel
+	reviewerPrefix
 )
 
 // sameAsTrack is the reviewer's agent when it follows the reviewed
@@ -61,9 +69,17 @@ func (m Model) setAgents(msg agentsMsg) Model {
 }
 
 // setReviewer makes d the reviewer, nil to follow the track, and saves
-// it.
+// it. Its prefix stays.
 func (m Model) setReviewer(d *settings.TrackType) (Model, tea.Cmd) {
-	m.settings.agents.agents.Reviewer = d
+	prefix := m.settings.agents.agents.ReviewerPrefix()
+	switch {
+	case d != nil:
+		m.settings.agents.agents.Reviewer = &settings.Agent{Engine: d.Engine, Model: d.Model, Prefix: prefix}
+	case prefix != "":
+		m.settings.agents.agents.Reviewer = &settings.Agent{Prefix: prefix}
+	default:
+		m.settings.agents.agents.Reviewer = nil
+	}
 	text := "Reviews run on the reviewed track's own agent and model."
 	if d != nil {
 		en, _ := agents.ByID(d.Engine)
@@ -75,6 +91,76 @@ func (m Model) setReviewer(d *settings.TrackType) (Model, tea.Cmd) {
 	}
 	m.settings.notice = notice{text: text}
 	return m.saveAgents()
+}
+
+// setReviewerPrefix makes p the prefix of the reviewer's handles, ""
+// for its name, and saves it.
+func (m Model) setReviewerPrefix(p string) (Model, tea.Cmd) {
+	r := m.settings.agents.agents.Reviewer
+	switch {
+	case r != nil:
+		c := *r
+		c.Prefix = p
+		r = &c
+	case p != "":
+		r = &settings.Agent{Prefix: p}
+	}
+	if r != nil && *r == (settings.Agent{}) {
+		r = nil
+	}
+	m.settings.agents.agents.Reviewer = r
+	shown := p
+	if shown == "" {
+		shown = train.Reviewer.Prefix()
+	}
+	m.settings.notice = notice{text: "New reviewers take handles such as " + shown + "-527192."}
+	return m.saveAgents()
+}
+
+// startPrefix starts editing the reviewer's prefix.
+func (m Model) startPrefix() Model {
+	a := &m.settings.agents
+	a.focus, a.editingPrefix, a.prefixErr = reviewerPrefix, true, ""
+	a.prefix = widget.NewInput(train.MaxPrefix, train.Reviewer.Prefix())
+	a.prefix.SetValue(a.agents.ReviewerPrefix())
+	a.prefix.CursorEnd()
+	a.prefix.Focus()
+	return m
+}
+
+// prefixKey handles a key while the prefix is edited: Enter keeps a
+// prefix that can be one, empty for the reviewer's name; Esc drops the
+// edit.
+func (m Model) prefixKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	a := &m.settings.agents
+	switch msg.String() {
+	case "esc":
+		a.editingPrefix, a.prefixErr = false, ""
+		a.prefix.Blur()
+		return m, nil
+	case "enter":
+		p := strings.TrimSpace(a.prefix.Value())
+		if p != "" {
+			if err := train.CheckPrefix(p); err != nil {
+				a.prefixErr = err.Error()
+				return m, nil
+			}
+		}
+		a.editingPrefix, a.prefixErr = false, ""
+		a.prefix.Blur()
+		return m.setReviewerPrefix(p)
+	}
+	var cmd tea.Cmd
+	a.prefix, cmd = a.prefix.Update(msg)
+	return m, cmd
+}
+
+// agentsPaste pastes into the prefix while it's edited.
+func (m Model) agentsPaste(msg tea.Msg) (tea.Model, tea.Cmd) {
+	a := &m.settings.agents
+	var cmd tea.Cmd
+	a.prefix, cmd = a.prefix.Update(msg)
+	return m, cmd
 }
 
 func (m Model) saveAgents() (Model, tea.Cmd) {
@@ -149,8 +235,9 @@ func (m Model) reviewerBody(width int) []string {
 	label := func(s string) string { return m.fg(theme.TextFaint).Render(pad(s, labelWidth)) }
 	lines := append(m.reviewerAbout(width), "")
 	if m.reviewerFollows() {
-		return append(lines, label("Agent")+m.selectField(sameAsTrack, fw, lit(reviewerAgent)),
+		lines = append(lines, label("Agent")+m.selectField(sameAsTrack, fw, lit(reviewerAgent)),
 			label("Model")+m.fg(theme.TextMuted).Render("The track's"))
+		return append(lines, m.prefixLines(width, fw, lit(reviewerPrefix))...)
 	}
 	en := m.reviewerEngine()
 	text := m.reviewerModel()
@@ -165,10 +252,38 @@ func (m Model) reviewerBody(width int) []string {
 		model += m.fg(theme.StateWarningText).Render(cut("  "+notListed, max(0, width-labelWidth-fw-2)))
 	}
 	lines = append(lines, label("Agent")+m.selectField(en.Name, fw, lit(reviewerAgent)), model)
+	lines = append(lines, m.prefixLines(width, fw, lit(reviewerPrefix))...)
 	if m.engines.settings.Get(en.ID) == nil {
 		warn := en.Name + " isn't added on the Engines tab, so reviews can't run."
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(m.fg(theme.StateWarningText).Width(max(1, width)).Render(warn), "\n")...)
+	}
+	return lines
+}
+
+// prefixLines are the Prefix field, and why the last prefix typed was
+// refused.
+func (m Model) prefixLines(width, fw int, lit bool) []string {
+	a := m.settings.agents
+	bracket := theme.BorderDefault
+	if lit {
+		bracket = theme.BorderFocus
+	}
+	label := m.fg(theme.TextFaint).Render(pad("Prefix", labelWidth))
+	var field string
+	if a.editingPrefix {
+		field = widget.Input(m.palette, a.prefix, fw, bracket)
+	} else {
+		value, tone := a.agents.ReviewerPrefix(), theme.TextDefault
+		if value == "" {
+			value, tone = train.Reviewer.Prefix()+" (its name)", theme.TextMuted
+		}
+		bg := m.fg(tone).Background(m.palette.Color(theme.InputBg))
+		field = m.fg(bracket).Render("[") + bg.Render(pad(" "+cut(value, fw-2), fw)) + m.fg(bracket).Render("]")
+	}
+	lines := []string{label + field}
+	if a.prefixErr != "" {
+		lines = append(lines, strings.Split(m.fg(theme.StateDangerText).Width(max(1, width)).Render(a.prefixErr), "\n")...)
 	}
 	return lines
 }
@@ -191,7 +306,8 @@ func (m Model) reviewerFieldWidth() int {
 // reviewerAbout is the Reviewer frame's text above its fields.
 func (m Model) reviewerAbout(width int) []string {
 	about := "Reviews a track's changes when its agent runs `tracks review`, in a pane of the track the footer's " +
-		"button shows. It only reads: it never edits, commits or pushes."
+		"button shows. It only reads: it never edits, commits or pushes. Each review's handle on the relay is " +
+		"the prefix and a number, such as reviewer-527192."
 	return strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(about), "\n")
 }
 
@@ -202,7 +318,7 @@ func (m Model) agentAt(bx, by int) int {
 	// The intro, the frame's top border, its text and a blank line.
 	field := by - (len(m.agentsIntro(width)) + 1 + len(m.reviewerAbout(max(1, width-4))) + 1)
 	x := bx - 2 // the frame's border and padding
-	if field < reviewerAgent || field > reviewerModel || x < labelWidth || x >= labelWidth+m.reviewerFieldWidth()+2 {
+	if field < reviewerAgent || field > reviewerPrefix || x < labelWidth || x >= labelWidth+m.reviewerFieldWidth()+2 {
 		return -1
 	}
 	if field == reviewerModel && m.reviewerFollows() {
@@ -214,26 +330,39 @@ func (m Model) agentAt(bx, by int) int {
 func (m Model) agentsClick(bx, by int) (Model, tea.Cmd) {
 	if f := m.agentAt(bx, by); f >= 0 {
 		m.settings.agents.focus = f
+		if f == reviewerPrefix {
+			return m.startPrefix(), nil
+		}
 		return m.openReviewerPicker()
 	}
 	return m, nil
 }
 
 // agentsKey handles a key while the Trains (agents) section has focus.
-func (m Model) agentsKey(key string) (Model, tea.Cmd) {
+// The model is skipped while the reviewer follows the track.
+func (m Model) agentsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	a := &m.settings.agents
-	last := reviewerModel
-	if m.reviewerFollows() {
-		last = reviewerAgent
+	if a.editingPrefix {
+		return m.prefixKey(msg)
 	}
-	a.focus = min(a.focus, last)
-	switch key {
+	step := 0
+	switch msg.String() {
 	case "up", "k", "shift+tab":
-		a.focus = max(reviewerAgent, a.focus-1)
+		step = -1
 	case "down", "j", "tab":
-		a.focus = min(last, a.focus+1)
+		step = 1
 	case "enter", "space":
+		if a.focus == reviewerPrefix {
+			return m.startPrefix(), nil
+		}
 		return m.openReviewerPicker()
+	}
+	a.focus = min(reviewerPrefix, max(reviewerAgent, a.focus+step))
+	if a.focus == reviewerModel && m.reviewerFollows() {
+		if step == 0 {
+			step = 1
+		}
+		a.focus += step
 	}
 	return m, nil
 }

@@ -129,7 +129,7 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	handle, err := newReviewHandle(oldHandle)
+	handle, err := newReviewHandle(set.Agents.ReviewerPrefix(), oldHandle)
 	if err != nil {
 		return "", err
 	}

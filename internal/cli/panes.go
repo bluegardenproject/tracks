@@ -216,13 +216,24 @@ func stopServer(ctx context.Context, id, key string) error {
 	return err
 }
 
-// endReviewer ends track id's reviewer through the daemon.
+// endReviewer ends track id's reviewer through the daemon, by its
+// handle, whatever prefix it took.
 func endReviewer(ctx context.Context, id string) error {
 	paths, err := platform.Resolve()
 	if err != nil {
 		return err
 	}
-	return rpc.Client{Socket: paths.Socket}.TrainEnd(ctx, id, train.Reviewer.Prefix())
+	client := rpc.Client{Socket: paths.Socket}
+	trains, err := client.TrainList(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, t := range trains {
+		if t.Agent == train.Reviewer.Name() {
+			return client.TrainEnd(ctx, id, t.Handle)
+		}
+	}
+	return errors.New("the daemon knows no reviewer of this track")
 }
 
 // trackPanes are the panes beside w's agent, and its reviewer while

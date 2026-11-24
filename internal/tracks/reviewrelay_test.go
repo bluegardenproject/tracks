@@ -8,6 +8,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/review"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
@@ -144,5 +145,18 @@ func TestAReviewerThatExitedLeavesWhenReplaced(t *testing.T) {
 	msgs := relayOf(t, f)
 	if len(msgs) != 3 || msgs[1].Body != "@"+first+" left: a new review replaces it." {
 		t.Errorf("replacing a reviewer that exited: %+v", msgs)
+	}
+}
+
+func TestTheReviewerTakesThePrefixSet(t *testing.T) {
+	for prefix, want := range map[string]string{"rev": "rev-", "": "reviewer-", "Bad Prefix": "reviewer-"} {
+		f, _, worktree := trainsFixture(t, "cursor")
+		f.svc.Settings = func() (settings.Settings, error) {
+			return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.Agent{Engine: "cursor", Prefix: prefix}}}, nil
+		}
+		startReview(t, f, worktree)
+		if h := oneTrain(t, f).Handle; !strings.HasPrefix(h, want) || train.CheckHandle(h) != nil {
+			t.Errorf("prefix %q gave the handle %q, want %s…", prefix, h, want)
+		}
 	}
 }
