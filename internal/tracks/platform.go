@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/shellx"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
@@ -31,7 +32,11 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	reviewers := map[string]ReviewerState{}
 	runs := map[string]reviewerRunState{}
 	if s.Reviewers != nil && s.HooksDir != "" {
-		s.reviewMu.Lock()
+		// A review starting holds the lock across a network call; the
+		// tick doesn't wait for it, the next one catches up.
+		if !s.reviewMu.TryLock() {
+			return nil
+		}
 		reviewers, err = s.Reviewers.Reviewers()
 		for id, r := range reviewers {
 			runs[id] = s.reviewerRun(id, r)
@@ -105,4 +110,37 @@ func (s *Service) platformCommand(id string) string {
 		tracks = shellx.Quote(filepath.Join(s.BinDir, "tracks"))
 	}
 	return env + " " + tracks + " platform"
+}
+
+func (w TmuxWindows) Platforms() (map[string]string, error) {
+	panes, err := w.Tmux.ListSessionPanes(w.Session)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, p := range panes {
+		if p.Role == trackwin.RolePlatform {
+			out[p.Window] = p.ID
+		}
+	}
+	return out, nil
+}
+
+// OpenPlatform kills a pane it opened but couldn't label: unlabelled,
+// it wouldn't be found as the Platform, and the next tick would open
+// another.
+func (w TmuxWindows) OpenPlatform(window, command string) error {
+	pane, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
+	if err != nil && pane != "" {
+		_ = w.Tmux.KillPane(pane)
+	}
+	return err
+}
+
+func (w TmuxWindows) ClosePlatform(window string) error {
+	pane, err := trackwin.Platform(w.Tmux, window)
+	if err != nil || pane == "" {
+		return err
+	}
+	return w.Tmux.KillPane(pane)
 }

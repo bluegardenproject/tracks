@@ -470,39 +470,6 @@ func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.L
 
 func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }
 
-func (w TmuxWindows) Platforms() (map[string]string, error) {
-	panes, err := w.Tmux.ListSessionPanes(w.Session)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]string{}
-	for _, p := range panes {
-		if p.Role == trackwin.RolePlatform {
-			out[p.Window] = p.ID
-		}
-	}
-	return out, nil
-}
-
-// OpenPlatform kills a pane it opened but couldn't label: unlabelled,
-// it wouldn't be found as the Platform, and the next tick would open
-// another.
-func (w TmuxWindows) OpenPlatform(window, command string) error {
-	pane, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
-	if err != nil && pane != "" {
-		_ = w.Tmux.KillPane(pane)
-	}
-	return err
-}
-
-func (w TmuxWindows) ClosePlatform(window string) error {
-	pane, err := trackwin.Platform(w.Tmux, window)
-	if err != nil || pane == "" {
-		return err
-	}
-	return w.Tmux.KillPane(pane)
-}
-
 func (w TmuxWindows) Scrolled(window string) (bool, error) {
 	panes, err := w.Tmux.ListPanes(window)
 	if err != nil {

@@ -60,6 +60,22 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 		t.Error("the reviewer's report changed its status, yet no change was told")
 	}
 
+	// A busy track, being restarted or promoted, is left as it is and
+	// tells no change.
+	_, release, err := f.svc.hold(ctx, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	panes.state = ReviewerState{}
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.windows.platforms) != 1 || heardChange() {
+		t.Errorf("a busy track's Platform was touched (%v) or a change told", f.windows.platforms)
+	}
+	release()
+	panes.state = ReviewerState{Pane: "%9"}
+
 	// The track's agent exits; its window and its reviewer run on.
 	f.windows.windows[0].Exit = "0"
 	if err := f.svc.SyncTrains(ctx); err != nil {
