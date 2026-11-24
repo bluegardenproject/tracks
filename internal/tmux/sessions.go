@@ -1,6 +1,9 @@
 package tmux
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // NewKeptSession starts a detached session called name, its one window
 // running command in dir, and returns its pane. The pane stays when the
@@ -51,9 +54,20 @@ func (c *Client) RefreshStatus(client string) error {
 	return err
 }
 
-// ClientSession is the session client is attached to.
+// ClientSession is the session client is attached to. It's read from
+// list-clients: display-message -c reports the session of the client
+// used last, which may be another.
 func (c *Client) ClientSession(client string) (string, error) {
-	return c.run("display-message", "-p", "-c", client, "#{client_session}")
+	out, err := c.run("list-clients", "-F", "#{client_name}\t#{client_session}")
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if name, session, ok := strings.Cut(line, "\t"); ok && name == client {
+			return session, nil
+		}
+	}
+	return "", fmt.Errorf("no client %s", client)
 }
 
 // DetachClient detaches client from its session.

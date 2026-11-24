@@ -17,8 +17,9 @@ the v2.0.0 release; git history keeps them.
   track hands tasks to, on the track's Platform, talking through Tracks'
   relay. Steps 1–8 (the Platform, the overlay, Collect messages), 9a, 10
   and 11 are built; v1 makes the Reviewer the first train, the
-  Investigator and the Watcher come last. Phase 2: side tracks, child tracks a main track orchestrates
-  to write code in parallel, on its relay, grouped under it in the Station.
+  Investigator and the Watcher come last. Phase 2: side tracks, child
+  tracks a main track orchestrates to write code in parallel, on its
+  relay, grouped under it in the Station.
 - **GitHub on the relay** (in [trains](design/trains.md), Phase 2): poll
   the notifications endpoint and one GraphQL query instead of each PR,
   and post `@github` events (merged, conflicts, CI failed, new comments)
