@@ -26,6 +26,15 @@ func (s *Service) SetTurn(id, turn string) {
 	s.turns[id] = turn == hooks.TurnStart
 }
 
+// forgetTurn forgets what track id's agent's hooks told of its turns,
+// as a new agent starts in its window or the track ends: until its
+// next turn ends, it counts as in one.
+func (s *Service) forgetTurn(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.turns, id)
+}
+
 // inTurn reports whether track id's agent may be in a turn: one Tracks
 // hasn't heard end, or not heard of at all since it started.
 func (s *Service) inTurn(id string) bool {
@@ -40,7 +49,7 @@ func (s *Service) inTurn(id string) bool {
 // is the guard left.
 func (s *Service) blockers(t track.Track, window string) relay.Blockers {
 	b := relay.Blockers{InTurn: s.inTurn(t.ID), Asking: t.Waiting}
-	if last, err := s.Windows.LastKey(window); err != nil || s.now().Sub(last) < typingQuiet {
+	if last, err := s.Windows.LastKey(window); err != nil || !last.IsZero() && s.now().Sub(last) < typingQuiet {
 		b.Typing = true
 	}
 	if screen, err := s.Windows.StyledScreen(window); err == nil {
