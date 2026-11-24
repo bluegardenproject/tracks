@@ -15,6 +15,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/procs"
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -66,6 +67,10 @@ type Store interface {
 	Drafts(ctx context.Context) ([]store.Draft, error)
 	Draft(ctx context.Context, id string) (store.Draft, error)
 	DeleteDraft(ctx context.Context, id string) (bool, error)
+	AddRelayMessage(ctx context.Context, id string, m relay.Message) (relay.Message, error)
+	RelayUnread(ctx context.Context, id, reader string) ([]relay.Message, error)
+	MarkRelayRead(ctx context.Context, id, reader string, upTo int64) error
+	RelayMessage(ctx context.Context, id string, msg int64) (relay.Message, error)
 }
 
 // Worktrees makes and removes a track's worktrees.

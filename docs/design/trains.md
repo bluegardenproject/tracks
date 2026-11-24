@@ -257,11 +257,20 @@ interactive: the user answers its questions, asks it things, scrolls.
 How a track and its trains talk: messages kept in Tracks' database, routed
 by Tracks. A relay station more than a chat.
 
-- **Handles.** Each track and train has one, given by Tracks: the track's
-  name for the track, the name given at `tracks train new --name`, or the
-  agent and a number. Unique within the track.
-- **Tracks stamps the sender.** Each agent's environment carries a token, as
-  the reviewer's run ID; the daemon maps it to the handle. Nobody sends as
+- **Handles.** Each track and train has one, given by Tracks.
+  - The track is **`track`**: one per relay, and every train addresses it.
+  - A train is its agent's prefix and six random digits, new each time it
+    starts: `reviewer-527192`. A new review is a new handle, so the Relay
+    Station keeps an old reviewer's messages apart. The prefix is set per
+    agent in Settings → Trains (agents), its agent's name by default.
+  - `--to` and `tracks train end` take a handle, or a prefix only one of
+    the track's trains has (`reviewer`); with two, Tracks names both.
+  - Notices come from **`tracks`**, Tracks itself.
+- **Tracks stamps the sender.** In v1 the only sender running commands is
+  the track's agent, named by `$TRACKS_ID`; Tracks posts for the reviewer,
+  and a process with the review marker is refused. Once trains run
+  commands (step 12), each agent's environment carries a token, as the
+  reviewer's run ID; the daemon maps it to the handle. Nobody sends as
   another.
 - **Star layout.** A train sends only to its track; the track sends to its
   trains. Trains don't talk to each other in v1; addressing by handle
@@ -405,9 +414,13 @@ Each step a PR of its own.
    first, read from tmux and its run as now; `tracks train list|end`.
    Ending with the parent, as hidden panes end now. No migration: trains
    end on a restart, so tmux stays their record.
-4. The relay: the first migration, handles and tokens, `tracks relay
-   send|read|show|wait|who`, join and end notices; the Reviewer on it, its
-   `--ask` and `--wait` reading it.
+4. The relay, in three PRs:
+   - 4a: the first migration, `internal/relay`, handles (prefix, digits,
+     resolving a prefix), `tracks relay send|read|show|wait|who`;
+   - 4b: the Reviewer on it: its handle, its reports and answers posted as
+     its messages, `--ask` as a question, join and end notices; `--wait`
+     and `--ask` print as now and mark what they print read;
+   - 4c: the prefix in Settings → Trains (agents).
 5. Delivery: the pointer, the blockers, the tick, the stall check,
    notifications.
 6. The Platform: the pane, the list, the badges; the Reviewer in it.

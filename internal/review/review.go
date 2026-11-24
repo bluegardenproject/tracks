@@ -73,7 +73,7 @@ func Brief(instructions string, candor int, p Packet) string {
 	}
 	if commits := strings.TrimSpace(p.Commits); commits != "" {
 		b.WriteString("## The commits\n\nWhat the change is for, in its commits' words, newest first. " +
-			"Check the change does what they say.\n\n" + fenced(commits) + "\n\n")
+			"Check the change does what they say.\n\n" + Fenced(commits) + "\n\n")
 	}
 	b.WriteString("## Changed files\n\n")
 	for _, f := range p.Files {
@@ -112,7 +112,7 @@ func Brief(instructions string, candor int, p Packet) string {
 func writePR(b *strings.Builder, pr PR) {
 	fmt.Fprintf(b, "## The pull request\n\n%s\n\n**%s**\n\n", pr.URL, oneLine(pr.Title))
 	if body := strings.TrimSpace(pr.Body); body != "" {
-		b.WriteString(fenced(body) + "\n\n")
+		b.WriteString(Fenced(body) + "\n\n")
 	}
 	b.WriteString("Check the change does what the pull request says it does.\n\n")
 	if len(pr.Threads) > 0 || pr.MoreThreads > 0 {
@@ -131,7 +131,7 @@ func writePR(b *strings.Builder, pr PR) {
 				fmt.Fprintf(b, "%d earlier comments, not fetched.\n\n", t.EarlierComments)
 			}
 			for _, c := range t.Comments {
-				b.WriteString(oneLine(c.Author) + ":\n\n" + fenced(strings.TrimSpace(c.Body)) + "\n\n")
+				b.WriteString(oneLine(c.Author) + ":\n\n" + Fenced(strings.TrimSpace(c.Body)) + "\n\n")
 			}
 		}
 		if pr.MoreThreads > 0 {
@@ -149,7 +149,7 @@ func writePR(b *strings.Builder, pr PR) {
 			}
 			b.WriteString("\n")
 			if log := strings.TrimSpace(c.Log); log != "" {
-				b.WriteString("\n" + fenced(log) + "\n\n")
+				b.WriteString("\n" + Fenced(log) + "\n\n")
 			}
 		}
 		b.WriteString("\n")
@@ -159,9 +159,9 @@ func writePR(b *strings.Builder, pr PR) {
 // oneLine is text on one line, so it can't start a line of the brief.
 func oneLine(text string) string { return strings.Join(strings.Fields(text), " ") }
 
-// fenced is text in a code fence longer than any run of backticks in
+// Fenced is text in a code fence longer than any run of backticks in
 // it, so it can't close the fence and pass for the brief's own text.
-func fenced(text string) string {
+func Fenced(text string) string {
 	fence := strings.Repeat("`", max(3, longestRun(text, '`')+1))
 	return fence + "\n" + text + "\n" + fence
 }
