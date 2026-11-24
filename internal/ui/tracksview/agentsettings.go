@@ -128,6 +128,16 @@ func (m Model) startPrefix() Model {
 	return m
 }
 
+// stopPrefix drops an edit of the prefix, as focus leaves it.
+func (m Model) stopPrefix() Model {
+	a := &m.settings.agents
+	if a.editingPrefix {
+		a.editingPrefix, a.prefixErr = false, ""
+		a.prefix.Blur()
+	}
+	return m
+}
+
 // prefixKey handles a key while the prefix is edited: Enter keeps a
 // prefix that can be one, empty for the reviewer's name; Esc drops the
 // edit.
@@ -135,9 +145,7 @@ func (m Model) prefixKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	a := &m.settings.agents
 	switch msg.String() {
 	case "esc":
-		a.editingPrefix, a.prefixErr = false, ""
-		a.prefix.Blur()
-		return m, nil
+		return m.stopPrefix(), nil
 	case "enter":
 		p := strings.TrimSpace(a.prefix.Value())
 		if p != "" {
@@ -150,17 +158,25 @@ func (m Model) prefixKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		a.prefix.Blur()
 		return m.setReviewerPrefix(p)
 	}
+	a.prefixErr = ""
 	var cmd tea.Cmd
 	a.prefix, cmd = a.prefix.Update(msg)
 	return m, cmd
 }
 
-// agentsPaste pastes into the prefix while it's edited.
+// agentsPaste pastes into the prefix while it's edited: a paste of the
+// terminal's, or of the input's own Ctrl+V.
 func (m Model) agentsPaste(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a := &m.settings.agents
+	a.prefixErr = ""
 	var cmd tea.Cmd
 	a.prefix, cmd = a.prefix.Update(msg)
 	return m, cmd
+}
+
+// editingPrefix reports whether the prefix is edited now, with focus.
+func (m Model) editingPrefix() bool {
+	return m.tab == tabSettings && m.settings.section == sectionAgents && m.settings.editing && m.settings.agents.editingPrefix
 }
 
 func (m Model) saveAgents() (Model, tea.Cmd) {
@@ -328,14 +344,18 @@ func (m Model) agentAt(bx, by int) int {
 }
 
 func (m Model) agentsClick(bx, by int) (Model, tea.Cmd) {
-	if f := m.agentAt(bx, by); f >= 0 {
+	f := m.agentAt(bx, by)
+	switch {
+	case f == reviewerPrefix && m.settings.agents.editingPrefix:
+		return m, nil
+	case f == reviewerPrefix:
+		return m.startPrefix(), nil
+	case f >= 0:
+		m = m.stopPrefix()
 		m.settings.agents.focus = f
-		if f == reviewerPrefix {
-			return m.startPrefix(), nil
-		}
 		return m.openReviewerPicker()
 	}
-	return m, nil
+	return m.stopPrefix(), nil
 }
 
 // agentsKey handles a key while the Trains (agents) section has focus.
