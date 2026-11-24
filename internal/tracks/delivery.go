@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"context"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/hooks"
@@ -13,9 +14,13 @@ import (
 const typingQuiet = 3 * time.Second
 
 // SetTurn notes whether track id's agent is in a turn, as its hooks
-// tell: a prompt starts one, the agent stopping ends it.
-func (s *Service) SetTurn(id, turn string) {
+// tell: a prompt starts one, the agent stopping ends it. A track that
+// ended, or whose agent exited, has no turn to note.
+func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 	if turn != hooks.TurnStart && turn != hooks.TurnEnd {
+		return
+	}
+	if t, err := s.Store.Track(ctx, id); err != nil || !t.Open() || t.Exit != "" {
 		return
 	}
 	s.mu.Lock()

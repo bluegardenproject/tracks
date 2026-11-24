@@ -24,7 +24,7 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 		return err
 	}
 	switch e {
-	case track.Created, track.Resumed, track.Ended, track.Interrupted:
+	case track.Created, track.Resumed, track.Ended, track.Interrupted, track.AgentExited, track.AgentFailed:
 		// A new agent, or none: what Tracks heard of the last one's
 		// turns no longer holds.
 		s.forgetTurn(id)

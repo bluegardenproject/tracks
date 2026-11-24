@@ -104,7 +104,6 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	}
 
 	progress(fmt.Sprintf("Starting %s…", info.Name))
-	s.forgetTurn(t.ID)
 	var win trackwin.Window
 	if window != "" {
 		win, err = s.Windows.Respawn(window, windowSpec(work, info, start))
@@ -115,6 +114,9 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 		removeWorktrees()
 		return Created{}, fmt.Errorf("start %s: %w", info.Name, err)
 	}
+	// After the new agent starts: a late Stop of the old one doesn't
+	// count for it.
+	s.forgetTurn(t.ID)
 	if err = s.Store.Promote(undo, work); err == nil && work.Name != t.Name {
 		err = s.Store.Rename(undo, work.ID, work.Name)
 	}
