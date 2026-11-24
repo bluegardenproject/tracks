@@ -2,10 +2,12 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/relay"
+	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
@@ -114,5 +116,33 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	}
 	if again := relayOf(t, f); len(again) != len(msgs) {
 		t.Errorf("closing a reviewer that isn't there posted %+v", again[len(msgs):])
+	}
+}
+
+func TestAFailedStartLeavesNoNotices(t *testing.T) {
+	ctx := context.Background()
+	f, panes, worktree := trainsFixture(t, "cursor")
+	panes.openErr = errors.New("tmux is gone")
+	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree,
+		Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+changed\n"}}}}); err == nil {
+		t.Fatal("the start didn't fail")
+	}
+	if err := f.svc.End(ctx, "r"); err != nil {
+		t.Fatal(err)
+	}
+	if msgs := relayOf(t, f); len(msgs) != 0 {
+		t.Errorf("a reviewer that never started: %+v", msgs)
+	}
+}
+
+func TestAReviewerThatExitedLeavesWhenReplaced(t *testing.T) {
+	f, panes, worktree := trainsFixture(t, "cursor")
+	startReview(t, f, worktree)
+	first := oneTrain(t, f).Handle
+	panes.state = ReviewerState{}
+	startReview(t, f, worktree)
+	msgs := relayOf(t, f)
+	if len(msgs) != 3 || msgs[1].Body != "@"+first+" left: a new review replaces it." {
+		t.Errorf("replacing a reviewer that exited: %+v", msgs)
 	}
 }

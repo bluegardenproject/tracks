@@ -115,20 +115,12 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	defer s.reviewMu.Unlock()
 	window, _ := s.windowOf(t.ID)
 	dir := s.reviewDir(t.ID)
-	old, err := s.Reviewers.Reviewer(t.ID, window)
-	if err != nil {
-		return "", err
-	}
 	oldHandle := reviewHandle(dir)
 	if err := s.Reviewers.CloseReviewer(t.ID, window); err != nil {
 		return "", fmt.Errorf("end the reviewer that's there: %w", err)
 	}
-	// The notices follow what tmux did, so a caller hanging up doesn't
-	// stop them.
-	if old.Pane != "" {
-		if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+oldHandle+" left: a new review replaces it."); err != nil {
-			return "", err
-		}
+	if err := s.leftNotice(ctx, t.ID, dir, "a new review replaces it"); err != nil {
+		return "", err
 	}
 
 	if err := os.RemoveAll(dir); err != nil {
@@ -139,9 +131,6 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	handle, err := newReviewHandle(oldHandle)
 	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
 		return "", err
 	}
 	run := newRun()
@@ -187,6 +176,11 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	p := trackwin.Process{Title: "reviewer: " + name, Command: s.reviewerCommand(t.ID, script)}
 	if err := s.Reviewers.OpenReviewer(t.ID, worktree, p); err != nil {
+		return "", err
+	}
+	// Kept once it runs, as joined is posted: a left notice goes with
+	// the handle, so the two pair up.
+	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
 		return "", err
 	}
 	if window != "" {
@@ -311,8 +305,17 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 	}
 	s.reviewMu.Unlock()
 	for {
-		if b, err := os.ReadFile(path); err == nil {
-			return string(b), s.markPrinted(ctx, id, path)
+		// The reply and its message's number are read together, as
+		// ReviewReply writes them.
+		s.reviewMu.Lock()
+		b, err := os.ReadFile(path)
+		msg := printedMessage(path)
+		s.reviewMu.Unlock()
+		if err == nil {
+			if msg == 0 {
+				return string(b), nil
+			}
+			return string(b), s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, msg)
 		}
 		if _, err := os.Stat(filepath.Join(s.reviewDir(id), "run")); err != nil {
 			return "", Problem("This track has no review running: start one with tracks review.")
@@ -406,14 +409,10 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	}
 	s.reviewMu.Lock()
 	window, _ := s.windowOf(id)
-	r, rErr := s.Reviewers.Reviewer(id, window)
-	handle := reviewHandle(s.reviewDir(id))
 	// The run goes whatever tmux says: the user asked for the review
 	// to end.
-	err = errors.Join(s.Reviewers.CloseReviewer(id, window), os.RemoveAll(s.reviewDir(id)))
-	if rErr == nil && r.Pane != "" {
-		err = errors.Join(err, s.notice(context.WithoutCancel(ctx), id, "@"+handle+" left: it was ended."))
-	}
+	closeErr := s.Reviewers.CloseReviewer(id, window)
+	err = errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
 	s.reviewMu.Unlock()
 	if window != "" {
 		s.syncReviewer(t, window)

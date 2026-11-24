@@ -44,24 +44,32 @@ func (s *Service) postReview(ctx context.Context, id, dir string, kind relay.Kin
 	return writeWhole(filepath.Join(dir, string(kind)+".msg"), strconv.FormatInt(m.ID, 10))
 }
 
-// markPrinted marks read, for the track, the relay message of what
-// tracks review printed: the report or an answer from dir, named by
-// path. Marking is a reader's cursor, so what came before it on the
-// relay counts as read too.
-func (s *Service) markPrinted(ctx context.Context, id, path string) error {
+// printedMessage is the number of the relay message of the report or
+// answer at path, which tracks review prints and then marks read; 0 for
+// none. Marking is a reader's cursor, so what came before it on the
+// relay counts as read too. The caller holds s.reviewMu.
+func printedMessage(path string) int64 {
 	kind := relay.Report
 	if strings.HasPrefix(filepath.Base(path), "answer") {
 		kind = relay.Answer
 	}
 	b, err := os.ReadFile(filepath.Join(filepath.Dir(path), string(kind)+".msg"))
 	if err != nil {
+		return 0
+	}
+	msg, _ := strconv.ParseInt(string(b), 10, 64)
+	return msg
+}
+
+// leftNotice says on track id's relay that the reviewer of the review in
+// dir left, and why, when one joined: its handle is kept as it joins. It
+// follows what tmux did, so a caller hanging up doesn't stop it. The
+// caller holds s.reviewMu.
+func (s *Service) leftNotice(ctx context.Context, id, dir, why string) error {
+	if _, err := os.Stat(filepath.Join(dir, "handle")); err != nil {
 		return nil
 	}
-	msg, err := strconv.ParseInt(string(b), 10, 64)
-	if err != nil {
-		return nil
-	}
-	return s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, msg)
+	return s.notice(context.WithoutCancel(ctx), id, "@"+reviewHandle(dir)+" left: "+why+".")
 }
 
 // notice posts body on track id's relay as Tracks' notice to everyone.
