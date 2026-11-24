@@ -161,7 +161,7 @@ func TestReview(t *testing.T) {
 	}
 	defer func(d time.Duration) { reviewWait = d }(reviewWait)
 	reviewWait = time.Second
-	if _, err := f.svc.WaitReview(ctx, "r"); err == nil || !strings.Contains(err.Error(), "still runs") {
+	if _, err := f.svc.WaitReview(ctx, "r"); err == nil || !strings.Contains(err.Error(), "No report after") {
 		t.Errorf("a new review returned the old report, or waited on: %v", err)
 	}
 	if _, err := f.svc.WaitReview(ctx, "../x"); err == nil {

@@ -177,3 +177,55 @@ func TestCollectClicksAreSafe(t *testing.T) {
 		t.Error("the notice of a button that's gone stayed")
 	}
 }
+
+// A click on a train's handle or badges opens it; the border, the blank
+// rows, Collect messages and below the list don't. A held train's
+// button pushes the trains after it down a row.
+func TestAClickOpensTheTrain(t *testing.T) {
+	var opened []string
+	m := New(Config{Theme: theme.Default(), Open: func(h string) { opened = append(opened, h) }})
+	var tm tea.Model = m
+	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, trainsMsg{trains: []Entry{
+		{Handle: "reviewer-527192", Status: track.Active, Held: true}, {Handle: "watch-000001", Status: track.Done}}}} {
+		tm, _ = tm.Update(msg)
+	}
+	click := func(y int) {
+		t.Helper()
+		var cmd tea.Cmd
+		tm, cmd = tm.Update(tea.MouseClickMsg{X: 4, Y: y, Button: tea.MouseLeft})
+		if cmd != nil {
+			if msg := cmd(); msg != nil {
+				if _, ok := msg.(openedMsg); ok {
+					tm, _ = tm.Update(msg)
+				}
+			}
+		}
+	}
+	for _, y := range []int{0, 1, 2, 4, 5, 6, 7, 8, 11} {
+		click(y)
+	}
+	want := "reviewer-527192 reviewer-527192 watch-000001 watch-000001"
+	if got := strings.Join(opened, " "); got != want {
+		t.Errorf("opened %q, want %q", got, want)
+	}
+}
+
+// A second click while an overlay opens is dropped: two popups can't
+// open over one client.
+func TestAClickWhileOpeningIsDropped(t *testing.T) {
+	var opened int
+	m := New(Config{Theme: theme.Default(), Open: func(string) { opened++ }})
+	var tm tea.Model = m
+	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, trainsMsg{trains: []Entry{{Handle: "reviewer-527192"}}}} {
+		tm, _ = tm.Update(msg)
+	}
+	tm, first := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft})
+	tm, second := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft})
+	if first == nil || second != nil {
+		t.Fatalf("first %v, second %v; want the first click only", first != nil, second != nil)
+	}
+	tm, _ = tm.Update(first())
+	if _, again := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft}); again == nil || opened != 1 {
+		t.Errorf("after the overlay closed: a click opens again (%v), opened %d", again != nil, opened)
+	}
+}
