@@ -61,6 +61,7 @@ const taskSuffix = "" +
 	"If you open several, emit one such line per PR — the dashboard " +
 	"tracks each one and rolls them up into the track's status.\n\n" +
 	agents.TerminalContract + "\n\n" +
+	agents.RelayContract + "\n\n" +
 	"**Jira sync** (only if your task prompt references a Jira-style " +
 	"ticket like ABC-123 and the Atlassian MCP tools are available):\n" +
 	"  1. At the start, use `Bash` to read `git config user.email`. " +
