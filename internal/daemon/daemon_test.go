@@ -37,6 +37,7 @@ func (noWindows) List() ([]trackwin.Info, error)      { return nil, nil }
 func (noWindows) LastKey(string) (time.Time, error)   { return time.Time{}, nil }
 func (noWindows) StyledScreen(string) (string, error) { return "", nil }
 func (noWindows) Paste(string, string) error          { return nil }
+func (noWindows) Scrolled(string) (bool, error)       { return false, nil }
 func (noWindows) Open(trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no windows")
 }

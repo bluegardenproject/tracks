@@ -98,7 +98,7 @@ func TestBlockersWhy(t *testing.T) {
 	if got := (Blockers{InTurn: true, Asking: true, Draft: true}).Why(); got != "it asks the user something" {
 		t.Errorf("a question comes first: %q", got)
 	}
-	for _, b := range []Blockers{{InTurn: true}, {Typing: true}, {Draft: true}} {
+	for _, b := range []Blockers{{InTurn: true}, {Typing: true}, {Draft: true}, {Scrolled: true}} {
 		if b.Why() == "" {
 			t.Errorf("%+v says nothing", b)
 		}

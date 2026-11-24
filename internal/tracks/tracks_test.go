@@ -172,7 +172,9 @@ type fakeWindows struct {
 	// whileChecking inside LastKey.
 	whilePasting  func()
 	whileChecking func()
-	pasteErr      error
+	// scrolled says whose agent pane is in copy mode.
+	scrolled map[string]bool
+	pasteErr error
 	// buttons is each window's buttons; prompts the lines typed into the
 	// agents, as "<window> <text>".
 	buttons map[string]string
@@ -214,6 +216,8 @@ func (w *fakeWindows) LastKey(window string) (time.Time, error) {
 	}
 	return w.lastKeys[window], nil
 }
+
+func (w *fakeWindows) Scrolled(window string) (bool, error) { return w.scrolled[window], nil }
 
 func (w *fakeWindows) Paste(window, text string) error {
 	w.pasted = append(w.pasted, window+" "+text)

@@ -213,6 +213,14 @@ func (c *Client) SendText(pane, text string) error {
 	return err
 }
 
+// InMode reports whether pane is in a mode, such as copy mode while
+// the user scrolls back: keys sent to it go to the mode, not to what
+// runs there.
+func (c *Client) InMode(pane string) (bool, error) {
+	out, err := c.run("display-message", "-p", "-t", pane, "#{pane_in_mode}")
+	return out == "1", err
+}
+
 // PasteText pastes text into pane at once, as one bracketed paste when
 // the program there asked for them: keys typed meanwhile can't land
 // inside it. A buffer of its own carries it and goes after.

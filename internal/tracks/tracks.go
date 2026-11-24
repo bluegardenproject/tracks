@@ -121,6 +121,9 @@ type Windows interface {
 	StyledScreen(window string) (string, error)
 	// Paste pastes text into window's agent pane and submits it.
 	Paste(window, text string) error
+	// Scrolled reports whether window's agent pane is in a mode, such as
+	// copy mode while the user scrolls back.
+	Scrolled(window string) (bool, error)
 }
 
 // Service creates, lists and ends tracks.
@@ -329,6 +332,7 @@ type TmuxWindows struct {
 		CapturePane(pane string) (string, error)
 		CapturePaneStyled(pane string) (string, error)
 		LastKey(window string) (time.Time, error)
+		InMode(pane string) (bool, error)
 		CaptureHistory(pane string, lines int) (string, error)
 	}
 	Session string
@@ -457,3 +461,16 @@ func (w TmuxWindows) agentScreen(window string, capture func(pane string) (strin
 func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }
 
 func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }
+
+func (w TmuxWindows) Scrolled(window string) (bool, error) {
+	panes, err := w.Tmux.ListPanes(window)
+	if err != nil {
+		return false, err
+	}
+	for _, p := range panes {
+		if p.Role == trackwin.RoleAgent {
+			return w.Tmux.InMode(p.ID)
+		}
+	}
+	return false, fmt.Errorf("window %s has no agent pane", window)
+}
