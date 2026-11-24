@@ -2,6 +2,8 @@ package tracks
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/hooks"
@@ -36,12 +38,16 @@ func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 }
 
 // forgetTurn forgets what track id's agent's hooks told of its turns,
-// as a new agent starts in its window or the track ends: until its
-// next turn ends, it counts as in one.
+// and what it was pointed to, as a new agent starts in its window or
+// the track ends: until its next turn ends, it counts as in one, and
+// its unread messages are pointed to again.
 func (s *Service) forgetTurn(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.turns, id)
+	delete(s.pointing, id)
+	delete(s.pointed, id)
+	delete(s.retryAt, id)
 }
 
 // inTurn reports whether track id's agent may be in a turn: one Tracks
@@ -66,4 +72,106 @@ func (s *Service) blockers(t track.Track, window string) relay.Blockers {
 		b.Draft = known && !empty
 	}
 	return b
+}
+
+// Delivery's timing: a message waits pointerGrace before a pointer goes
+// for it, so a tracks review that prints it marks it read first; an
+// agent that doesn't start a turn within pointerStall didn't take the
+// pointer, which goes again after pointerRetry.
+const (
+	pointerGrace = 3 * time.Second
+	pointerStall = 5 * time.Second
+	pointerRetry = time.Minute
+)
+
+// pointing is a pointer typed into a track's agent, waiting for the
+// turn it starts: sent when, and how far the track was pointed to
+// before it.
+type pointing struct {
+	at     time.Time
+	before int64
+}
+
+// Deliver types a pointer into each open track's agent for the relay
+// messages it hasn't read, once they've waited pointerGrace and nothing
+// holds it back. Notices wake no one. A pointer goes once per message;
+// one the agent didn't take, by not starting a turn within
+// pointerStall, goes again after pointerRetry.
+func (s *Service) Deliver(ctx context.Context) error {
+	windows, err := s.trackWindows()
+	if err != nil {
+		return err
+	}
+	open, err := s.Store.OpenTracks(ctx)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range open {
+		window, ok := windows[t.ID]
+		if !ok || t.Exit != "" {
+			continue
+		}
+		if err := s.deliver(ctx, t, window); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// deliver points t's agent, in window, to its new messages.
+func (s *Service) deliver(ctx context.Context, t track.Track, window string) error {
+	now := s.now()
+	s.mu.Lock()
+	if s.pointing == nil {
+		s.pointing, s.pointed, s.retryAt = map[string]pointing{}, map[string]int64{}, map[string]time.Time{}
+	}
+	if s.turns == nil {
+		s.turns = map[string]bool{}
+	}
+	p, waiting := s.pointing[t.ID]
+	switch {
+	case waiting && s.turns[t.ID]:
+		// It took the pointer.
+		delete(s.pointing, t.ID)
+	case waiting && now.Sub(p.at) >= pointerStall:
+		// It didn't: it's as idle as it was when the pointer went.
+		delete(s.pointing, t.ID)
+		s.pointed[t.ID] = p.before
+		s.retryAt[t.ID] = now.Add(pointerRetry)
+		s.turns[t.ID] = false
+	case waiting:
+		s.mu.Unlock()
+		return nil
+	}
+	pointed, retry := s.pointed[t.ID], s.retryAt[t.ID]
+	s.mu.Unlock()
+	if now.Before(retry) {
+		return nil
+	}
+
+	unread, err := s.Store.RelayUnread(ctx, t.ID, relay.TrackHandle)
+	if err != nil {
+		return err
+	}
+	var due []relay.Message
+	for _, m := range unread {
+		if m.Kind != relay.Notice && m.ID > pointed && now.Sub(m.At) >= pointerGrace {
+			due = append(due, m)
+		}
+	}
+	if len(due) == 0 || s.blockers(t, window).Why() != "" {
+		return nil
+	}
+	if err := s.Windows.Paste(window, relay.Pointer(due)); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pointing[t.ID] = pointing{at: s.now(), before: pointed}
+	s.pointed[t.ID] = due[len(due)-1].ID
+	// The pointer starts the agent's turn: none is known until its hooks
+	// say so.
+	delete(s.turns, t.ID)
+	return nil
 }

@@ -43,6 +43,24 @@ func Prompt(t Tmux, window, text string) error {
 	return Type(t, agent.ID, text)
 }
 
+// Paste pastes text into window's agent pane, as one bracketed paste,
+// and presses Enter after it, as a prompt of the user's.
+func Paste(t Tmux, window, text string) error {
+	panes, err := t.ListPanes(window)
+	if err != nil {
+		return err
+	}
+	agent, _ := layout(panes)
+	if agent == nil {
+		return fmt.Errorf("window %s has no agent pane", window)
+	}
+	if err := t.PasteText(agent.ID, text); err != nil {
+		return err
+	}
+	time.Sleep(submitDelay)
+	return t.SendKey(agent.ID, "Enter")
+}
+
 // Type types text into pane and presses Enter.
 func Type(t Tmux, pane, text string) error {
 	if err := t.SendText(pane, text); err != nil {

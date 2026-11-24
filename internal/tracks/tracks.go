@@ -119,6 +119,8 @@ type Windows interface {
 	LastKey(window string) (time.Time, error)
 	// StyledScreen is what window's agent pane shows, with its styles.
 	StyledScreen(window string) (string, error)
+	// Paste pastes text into window's agent pane and submits it.
+	Paste(window, text string) error
 }
 
 // Service creates, lists and ends tracks.
@@ -207,6 +209,12 @@ type Service struct {
 	// turns says, by track, whether its agent is in a turn, from its
 	// hooks; a track it hasn't heard of may be.
 	turns map[string]bool
+	// pointing is the pointer typed into each track's agent that waits
+	// for its turn; pointed how far each track was pointed to on its
+	// relay; retryAt when a pointer the agent didn't take may go again.
+	pointing map[string]pointing
+	pointed  map[string]int64
+	retryAt  map[string]time.Time
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string
@@ -446,3 +454,5 @@ func (w TmuxWindows) agentScreen(window string, capture func(pane string) (strin
 }
 
 func (w TmuxWindows) LastKey(window string) (time.Time, error) { return w.Tmux.LastKey(window) }
+
+func (w TmuxWindows) Paste(window, text string) error { return trackwin.Paste(w.Tmux, window, text) }

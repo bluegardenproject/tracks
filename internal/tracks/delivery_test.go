@@ -8,6 +8,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/hooks"
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/track"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 )
 
 // trackA is a fixture with an open track a, whose agent runs.
@@ -98,5 +99,126 @@ func TestNoTurnWithoutAnAgent(t *testing.T) {
 	f.svc.SetTurn(ctx, "gone", hooks.TurnEnd)
 	if !f.svc.inTurn("gone") {
 		t.Error("a track that isn't there noted a turn")
+	}
+}
+
+// deliveryFixture is track a, open in window @a with its agent idle,
+// and a clock the test moves.
+func deliveryFixture(t *testing.T) (*fixture, *time.Time) {
+	t.Helper()
+	f := trackA(t)
+	now := time.Unix(1_800_000_000, 0)
+	f.svc.Now = func() time.Time { return now }
+	f.windows.windows = append(f.windows.windows, trackwin.Info{Window: "@a", Track: "a", Name: "a"})
+	f.svc.SetTurn(context.Background(), "a", hooks.TurnEnd)
+	return f, &now
+}
+
+func post(t *testing.T, f *fixture, m relay.Message) relay.Message {
+	t.Helper()
+	m, err := f.store.AddRelayMessage(context.Background(), "a", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func deliver(t *testing.T, f *fixture) []string {
+	t.Helper()
+	before := len(f.windows.pasted)
+	if err := f.svc.Deliver(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return f.windows.pasted[before:]
+}
+
+func TestDeliverPointsOnceNothingHoldsItBack(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: relay.TracksHandle, Kind: relay.Notice, Body: "@reviewer-1 joined", At: *now})
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a message younger than the grace was pointed to: %v", got)
+	}
+	*now = now.Add(pointerGrace)
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("an agent in a turn was pointed to: %v", got)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	got := deliver(t, f)
+	if len(got) != 1 || got[0] != "@a 1 message from @reviewer-1 on the relay: run `tracks relay read`." {
+		t.Fatalf("pasted %v, want one pointer to the report, not the notice", got)
+	}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a pointer waiting for its turn went again: %v", got)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	*now = now.Add(time.Minute)
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a message pointed to once was pointed to again: %v", got)
+	}
+
+	answer := post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Answer, Body: "Because.", At: *now})
+	*now = now.Add(pointerGrace)
+	if err := f.store.MarkRelayRead(ctx, "a", relay.TrackHandle, answer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a message read already was pointed to: %v", got)
+	}
+}
+
+func TestDeliverWaitsForWhatHoldsItBack(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pointed while the user typed: %v", got)
+	}
+	f.windows.lastKeys = nil
+	f.windows.screens = map[string]string{"@a": "──────────────────\n\x1b[39m❯ half a thought\n──────────────────"}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pointed over a draft: %v", got)
+	}
+	f.windows.screens = nil
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %v once nothing held it back, want the pointer", got)
+	}
+}
+
+func TestDeliverTriesAgainWhenTheAgentDidntTakeIt(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %v, want the pointer", got)
+	}
+	*now = now.Add(pointerStall)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a stalled pointer went again at once: %v", got)
+	}
+	*now = now.Add(pointerRetry)
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %v after the retry's wait, want the pointer again", got)
+	}
+}
+
+func TestANewAgentIsPointedAgain(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	deliver(t, f)
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	deliver(t, f)
+	if err := f.svc.Report(ctx, "a", track.Resumed); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 1 {
+		t.Errorf("a new agent wasn't pointed to the unread report: %v", got)
 	}
 }
