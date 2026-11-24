@@ -2,7 +2,6 @@ package tracks
 
 import (
 	"context"
-
 	"strings"
 	"testing"
 	"time"

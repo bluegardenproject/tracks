@@ -97,7 +97,7 @@ func (m Model) platformBody() ([]string, []item) {
 		body = append(body, "")
 	}
 	if m.err != nil {
-		body = append(body, m.muted("Couldn't read the trains: "+m.err.Error(), inner)...)
+		body = append(body, m.muted("Couldn't read the Platform: "+m.err.Error(), inner)...)
 	}
 	if m.notice != "" && m.noticeFor == targetCollect {
 		body = append(body, m.muted(m.notice, inner)...)

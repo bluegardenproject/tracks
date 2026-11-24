@@ -364,7 +364,16 @@ func TestAHeldPointerIsShownAndCollected(t *testing.T) {
 		t.Fatal("a pointer held back by typing isn't shown as held")
 	}
 	f.windows.scrolled = map[string]bool{"@a": true}
+	f.svc.Changes = &Changes{}
+	changed, cancel := f.svc.Changes.Subscribe()
+	defer cancel()
+	<-changed
 	name, err := f.svc.CollectMessages(ctx, "a")
+	select {
+	case <-changed:
+	case <-time.After(time.Second):
+		t.Error("a collect told the change feed nothing")
+	}
 	if err != nil || name != "a" {
 		t.Fatalf("collect: %q, %v", name, err)
 	}

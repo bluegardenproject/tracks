@@ -73,7 +73,7 @@ func TestSignalsAloneWithoutTrains(t *testing.T) {
 	if strings.Contains(v, "Platform") || !strings.HasPrefix(v, "╭─ Signals ") {
 		t.Errorf("without trains, Signals alone:\n%s", v)
 	}
-	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read") {
+	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read the") {
 		t.Errorf("an error:\n%s", e)
 	}
 }
