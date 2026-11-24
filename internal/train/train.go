@@ -18,6 +18,11 @@ type Agent string
 // Reviewer reviews a track's changes.
 const Reviewer Agent = "reviewer"
 
+// ReadsRelay says whether a's train reads its relay messages itself.
+// The reviewer runs no commands, so it doesn't: Tracks types questions
+// to it (tracks review --ask).
+func (a Agent) ReadsRelay() bool { return false }
+
 // Name is how a is shown.
 func (a Agent) Name() string {
 	if a == "" {

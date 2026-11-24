@@ -27,7 +27,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `review/` what a track's reviewer is given: its brief, the diff's limit, the review marker
 - `hooks/` the engines' hook events and what they mean for a track's status · `notifier/` the user's notification channels
 - `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
-- `train/` the trains a track hands tasks to: handles, agents, status (the reviewer is the first; see `docs/design/trains.md`)
+- `train/` the trains a track hands tasks to: handles, agents, status (the reviewer is the first; see `docs/design/trains.md`) · `relay/` the messages between a track and its trains: kinds, who may send to whom, how they're shown
 - `daemon/` the daemon: lock, socket, helpers, keeping the tracks in step with their windows · `rpc/` the daemon's protocol and client · `proxy/` the output ports forwarding to dev servers
 - `ui/widget/` UI pieces more than one screen uses · `golden/` golden-file comparisons for tests
 - Shared leaf packages: `git`, `notify`, `procs` (processes and the ports they listen on), `shellx`, `update` (`tracks update`), `usage` (token use and cost)

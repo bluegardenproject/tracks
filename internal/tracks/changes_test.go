@@ -133,8 +133,10 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
 		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "ProxyPorts": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
-		// A write no screen shows, so it needn't notify.
-		"ClaimPorts": true}
+		"RelayUnread": true, "RelayMessage": true,
+		// Writes no screen shows, so they needn't notify; the relay's
+		// until the Relay Station shows it.
+		"ClaimPorts": true, "AddRelayMessage": true, "MarkRelayRead": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {
