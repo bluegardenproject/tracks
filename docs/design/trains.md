@@ -306,16 +306,23 @@ by Tracks. A relay station more than a chat.
 The Reviewer runs no commands, so it can't `relay send` or `relay read`.
 Tracks speaks for it:
 
-- **Its report and answers go on the relay** as @reviewer's, kind `report`
-  or `answer`, taken from the hooks as now (Claude's Stop hook; Cursor's
-  print-mode turn). The track gets a pointer, as for any message.
+- **Its handle is new with each review** (`reviewer-527192`), kept in its
+  review folder. Tracks posts "@reviewer-527192 joined" as it starts, and
+  "left" when it's ended or a new review replaces it.
+- **Its report and answers go on the relay** as its messages, kind
+  `report` or `answer`, taken from the hooks as now (Claude's Stop hook;
+  Cursor's print-mode turn). The track gets a pointer (step 5), as for any
+  message.
 - **A question for it** is `tracks review --ask`, or `tracks relay send --to
-  reviewer --kind question`. Tracks types the question itself into the
-  reviewer's session, behind the fixed lead-in `--ask` uses now: it comes
-  from the track, never from another train (the star layout). The delivery
-  blockers apply.
-- **`tracks review --wait` and `--ask`** read the relay underneath and print
-  as now, so the prompts that use them don't change.
+  reviewer --kind question`; both post it as the track's question. Tracks
+  types it into the reviewer's session, behind the fixed lead-in `--ask`
+  uses: it comes from the track, never from another train (the star
+  layout). Other kinds to it are refused. The delivery blockers apply
+  (step 5).
+- **`tracks review --wait` and `--ask`** wait on the review's files and
+  print as before, so the prompts that use them don't change. What they
+  print is marked read on the relay, so `relay read` doesn't repeat it;
+  marking is a reader's cursor, so what came before it counts as read too.
 - The Relay Station shows the reviews and the questions and answers.
 
 ### Delivery

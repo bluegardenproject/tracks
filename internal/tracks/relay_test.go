@@ -9,7 +9,6 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/track"
-	"github.com/bluegardenproject/tracks/internal/train"
 )
 
 func TestRelaySend(t *testing.T) {
@@ -25,7 +24,8 @@ func TestRelaySend(t *testing.T) {
 		kind relay.Kind
 		why  string
 	}{
-		{"reviewer", relay.Question, "doesn't read the relay yet"},
+		{"reviewer", relay.Question, "hasn't reported yet"},
+		{"reviewer", relay.Report, "takes questions"},
 		{"detective", relay.Question, `no train called "detective"`},
 		{"track", relay.Question, `no train called "track"`},
 		{"reviewer", relay.Notice, "isn't a kind of message"},
@@ -35,8 +35,9 @@ func TestRelaySend(t *testing.T) {
 			t.Errorf("sending %s to %s: %v, want a Problem saying %q", tc.kind, tc.to, err, tc.why)
 		}
 	}
-	if msgs, err := f.store.RelayUnread(ctx, "r", train.ReviewerHandle); err != nil || len(msgs) != 0 {
-		t.Errorf("refused messages were kept: %+v, %v", msgs, err)
+	who, _ := f.svc.RelayWho(ctx, "r")
+	if msgs, err := f.store.RelayUnread(ctx, "r", who[1].Handle); err != nil || len(msgs) != 1 || msgs[0].Kind != relay.Notice {
+		t.Errorf("refused messages were kept: %+v, %v; want only the reviewer's join notice", msgs, err)
 	}
 }
 
@@ -107,7 +108,7 @@ func TestRelayWho(t *testing.T) {
 	}
 	startReview(t, f, worktree)
 	who, err = f.svc.RelayWho(ctx, "r")
-	if err != nil || len(who) != 2 || who[1].Handle != train.ReviewerHandle || who[1].Agent != "Reviewer" || who[1].Engine != "Cursor (m1)" {
+	if err != nil || len(who) != 2 || !strings.HasPrefix(who[1].Handle, "reviewer-") || who[1].Agent != "Reviewer" || who[1].Engine != "Cursor (m1)" {
 		t.Errorf("who during a review: %+v, %v", who, err)
 	}
 }

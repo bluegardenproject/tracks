@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/review"
@@ -63,7 +64,7 @@ func TestTrainsListTheReviewer(t *testing.T) {
 	}
 	run := startReview(t, f, worktree)
 	tr := oneTrain(t, f)
-	if tr.Handle != "reviewer" || tr.Agent != train.Reviewer || tr.Engine != "Cursor (m1)" || tr.Status != track.Active || tr.Outcome.ID != "" {
+	if !strings.HasPrefix(tr.Handle, "reviewer-") || train.CheckHandle(tr.Handle) != nil || tr.Agent != train.Reviewer || tr.Engine != "Cursor (m1)" || tr.Status != track.Active || tr.Outcome.ID != "" {
 		t.Errorf("reviewing: %+v", tr)
 	}
 	if err := f.svc.ReviewReply(ctx, "r", run, "Fine.\nREVIEW OUTCOME: pass"); err != nil {
