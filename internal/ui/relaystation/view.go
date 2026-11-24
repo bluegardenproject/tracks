@@ -149,7 +149,10 @@ func (m Model) render() string {
 	var body []string
 	switch {
 	case m.err != "":
-		body = []string{m.fg(theme.StateDangerText).Render("Couldn't read the relay: " + m.err)}
+		body = strings.Split(lipgloss.Wrap(clean("Couldn't read the relay: "+m.err), max(1, m.width-4), ""), "\n")
+		for i, line := range body {
+			body[i] = m.fg(theme.StateDangerText).Render(line)
+		}
 	case !m.loaded:
 		body = []string{m.fg(theme.TextMuted).Render("Reading the relay…")}
 	case len(m.msgs) == 0:
@@ -159,7 +162,11 @@ func (m Model) render() string {
 		body = lines[min(m.top, len(lines)):min(m.top+m.rows(), len(lines))]
 	}
 	title := "Relay Station"
-	if n := len(m.msgs); n > 0 {
+	switch n := len(m.msgs); {
+	case m.err != "":
+	case n == 1:
+		title += " · 1 message"
+	case n > 1:
 		title += fmt.Sprintf(" · %d messages", n)
 	}
 	lines := widget.Frame(m.palette, title, body, m.width, m.height-1, theme.OverlayBorderFocus)

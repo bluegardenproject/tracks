@@ -10,7 +10,7 @@ func TestCheckPrefix(t *testing.T) {
 	for p, ok := range map[string]bool{
 		"reviewer": true, "watch-ci": true, "a": true, strings.Repeat("a", MaxPrefix): true,
 		"": false, "1a": false, "Reviewer": false, "a_b": false, "a-": false, strings.Repeat("a", MaxPrefix+1): false,
-		"track": false, "tracks": false,
+		"track": false, "tracks": false, "user": false,
 	} {
 		if err := CheckPrefix(p); (err == nil) != ok {
 			t.Errorf("CheckPrefix(%q) = %v, want ok %v", p, err, ok)
