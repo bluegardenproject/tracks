@@ -30,7 +30,8 @@ func (s *Service) CountComments(ctx context.Context) error {
 	}
 	var errs []error
 	for _, t := range open {
-		if _, ok := windows[t.ID]; !ok {
+		window, ok := windows[t.ID]
+		if !ok {
 			continue
 		}
 		counts, err := s.openThreads(ctx, t)
@@ -50,9 +51,17 @@ func (s *Service) CountComments(ctx context.Context) error {
 			s.comments = map[string]map[string]actions.Comments{}
 		}
 		s.comments[t.ID] = now
+		// Compared under the lock: RunAction marks a PR's comments sent
+		// in this map.
+		changed := !maps.Equal(was, now)
 		s.mu.Unlock()
-		if !maps.Equal(was, now) {
+		if changed {
 			s.Changes.Notify()
+		}
+		// The footer has no buttons of its own now: a window opened
+		// before the PRs' buttons moved to Signals loses its old ones.
+		if err := s.Windows.Buttons(window, ""); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
