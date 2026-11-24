@@ -114,9 +114,11 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 		removeWorktrees()
 		return Created{}, fmt.Errorf("start %s: %w", info.Name, err)
 	}
-	// After the new agent starts: a late Stop of the old one doesn't
-	// count for it.
+	// After the new agent starts, and under Report's lock as SetTurn
+	// notes turns: a late Stop of the old one doesn't count for it.
+	s.reporting.Lock()
 	s.forgetTurn(t.ID)
+	s.reporting.Unlock()
 	if err = s.Store.Promote(undo, work); err == nil && work.Name != t.Name {
 		err = s.Store.Rename(undo, work.ID, work.Name)
 	}

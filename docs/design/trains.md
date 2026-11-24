@@ -368,10 +368,17 @@ From the spike:
 - **Collect messages.** While a pointer is held, the sending train's entry
   on the Platform shows **[ Collect messages ]**. A click sends it now,
   whatever blocks it: the user vouches for the input. It stops the retries.
-- **Paste and Enter as one:** a bracketed paste (`paste-buffer -p`), then
-  Enter, in one tmux call, so keys typed meanwhile don't land inside it.
-- **Stall check:** an agent not `active` within about 5 s of the pointer
-  didn't take it; the message stays undelivered and the button comes back.
+- **Only what waited:** a message is pointed to once it's 3 s old and
+  still unread, so a `tracks review` that prints it marks it read first;
+  notices never are. A pointer goes once per message.
+- **A paste, then Enter:** the pointer goes in as one bracketed paste
+  (`set-buffer` and `paste-buffer -p` in one tmux call), so keys typed
+  meanwhile can't land inside it; Enter follows after the short delay the
+  agent CLIs need to take it as a submit, not a new line.
+- **Stall check:** an agent whose turn doesn't start within 5 s didn't
+  take the pointer: its messages count as not pointed to, and the pointer
+  goes again after a minute. A new agent in the window (a resume, a
+  restart, a promote) is pointed to the unread messages again.
 - **Trains get pointers too:** a question from the track to a train is
   delivered the same way, with the same blockers.
 - **The user is notified** when a train reports or needs them, through the

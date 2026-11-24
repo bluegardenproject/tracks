@@ -213,6 +213,15 @@ func (c *Client) SendText(pane, text string) error {
 	return err
 }
 
+// PasteText pastes text into pane at once, as one bracketed paste when
+// the program there asked for them: keys typed meanwhile can't land
+// inside it. A buffer of its own carries it and goes after.
+func (c *Client) PasteText(pane, text string) error {
+	_, err := c.run("set-buffer", "-b", "tracks-paste", "--", text, ";",
+		"paste-buffer", "-p", "-d", "-b", "tracks-paste", "-t", pane)
+	return err
+}
+
 // SendKey presses key, such as Enter, in pane.
 func (c *Client) SendKey(pane, key string) error {
 	_, err := c.run("send-keys", "-t", pane, key)

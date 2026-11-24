@@ -86,6 +86,7 @@ type Tmux interface {
 	SelectPane(pane string) error
 	ResizePaneHeight(pane string, rows int) error
 	SendText(pane, text string) error
+	PasteText(pane, text string) error
 	SendKey(pane, key string) error
 	SetWindowOption(window, name, value string) error
 	WindowOption(window, name string) (string, error)
