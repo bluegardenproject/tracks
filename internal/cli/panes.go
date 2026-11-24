@@ -16,6 +16,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
+	"github.com/bluegardenproject/tracks/internal/train"
 	"github.com/spf13/cobra"
 )
 
@@ -171,6 +172,12 @@ func closePanes(ctx context.Context, out io.Writer, t *tmux.Client, w trackwin.I
 			if err = stopServer(ctx, w.Track, p.Key); err != nil {
 				err = windows.StopPane(p)
 			}
+		case p.Role == trackwin.RoleReviewer:
+			// Through the daemon, which ends its review and says so on
+			// the relay; the pane closes whatever it says.
+			if err = endReviewer(ctx, w.Track); err != nil {
+				err = windows.EndPane(p)
+			}
 		default:
 			err = windows.EndPane(p)
 		}
@@ -207,6 +214,15 @@ func stopServer(ctx context.Context, id, key string) error {
 	}
 	_, err = rpc.Client{Socket: paths.Socket}.Down(ctx, rpc.ServersOf(id, []string{key}))
 	return err
+}
+
+// endReviewer ends track id's reviewer through the daemon.
+func endReviewer(ctx context.Context, id string) error {
+	paths, err := platform.Resolve()
+	if err != nil {
+		return err
+	}
+	return rpc.Client{Socket: paths.Socket}.TrainEnd(ctx, id, train.Reviewer.Prefix())
 }
 
 // trackPanes are the panes beside w's agent, and its reviewer while

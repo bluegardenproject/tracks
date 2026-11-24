@@ -35,7 +35,8 @@ func (a Agent) Name() string {
 	return strings.ToUpper(string(a[:1])) + string(a[1:])
 }
 
-// ReviewerHandle is the reviewer's handle: a track has one reviewer.
+// ReviewerHandle is the handle of a review started before reviews had
+// handles of their own; a new review's is its prefix and a number.
 const ReviewerHandle = "reviewer"
 
 var handlePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
