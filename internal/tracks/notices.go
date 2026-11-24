@@ -3,7 +3,9 @@ package tracks
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
@@ -49,6 +51,34 @@ func prNotice(id, name string, pr track.PR, was track.PRState) (Notice, bool) {
 		return Notice{}, false
 	}
 	return n, true
+}
+
+// trainNotice is the notice for m, a train's message to the track named
+// name, if it's one to tell: a report, an answer, a question or an
+// event. Its body is the message's first line, for the user.
+func trainNotice(id, name string, m relay.Message) (Notice, bool) {
+	var did string
+	switch m.Kind {
+	case relay.Report:
+		did = "reported"
+	case relay.Answer:
+		did = "answered"
+	case relay.Question:
+		did = "asks something"
+	case relay.Event:
+		did = "saw something"
+	default:
+		return Notice{}, false
+	}
+	if m.To != relay.TrackHandle {
+		return Notice{}, false
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(m.Body), "\n")
+	if r := []rune(first); len(r) > 120 {
+		first = string(r[:119]) + "…"
+	}
+	return Notice{Track: id, Name: name, Event: settings.NotifyTrainReported,
+		Title: "Tracks: @" + m.From + " " + did + " on " + name, Body: first}, true
 }
 
 // notify hands n to Notify, if there's one.

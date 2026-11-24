@@ -26,7 +26,7 @@ func TestNotificationToggles(t *testing.T) {
 	m := New(Config{Version: "test", Theme: theme.Default(), Themes: newFakeThemes(), Notifications: notify})
 	m = settle(m, tea.WindowSizeMsg{Width: 120, Height: 40}, shiftTabKey)
 	view := plainView(m)
-	for _, want := range []string{"Notifications", "[x] macOS notifications", "[ ] Terminal bell", "[x] A track needs you", "[x] A track's PR is merged or closed"} {
+	for _, want := range []string{"Notifications", "[x] macOS notifications", "[ ] Terminal bell", "[x] A track needs you", "[x] A track's PR is merged or closed", "[x] A train reports or answers"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("General should show %q:\n%s", want, view)
 		}

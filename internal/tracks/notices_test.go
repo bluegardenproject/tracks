@@ -3,8 +3,10 @@ package tracks
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -91,5 +93,55 @@ func TestPRNotices(t *testing.T) {
 	}
 	if !slices.Equal(*got, want) {
 		t.Errorf("notices %q\nwant %q: a PR opening once, a known one settling once, none for one found merged", *got, want)
+	}
+}
+
+func TestTrainNotices(t *testing.T) {
+	ctx := context.Background()
+	f, _, worktree := trainsFixture(t, "cursor")
+	got := heard(f)
+	run := startReview(t, f, worktree)
+	handle := oneTrain(t, f).Handle
+	if len(*got) != 0 {
+		t.Fatalf("a reviewer joining sent %q; want nothing", *got)
+	}
+	if err := f.svc.ReviewReply(ctx, "r", run, "Two blocks in the cache.\n\nREVIEW OUTCOME: blocked"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.WaitReview(ctx, "r"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.AskReview(ctx, "r", "Why?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.ReviewReply(ctx, "r", run, "Because it's hot."); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"train_reported Tracks: @" + handle + " reported on r Two blocks in the cache.",
+		"train_reported Tracks: @" + handle + " answered on r Because it's hot.",
+	}
+	if !slices.Equal(*got, want) {
+		t.Errorf("notices %q, want %q: its report and its answer, not the question asked of it", *got, want)
+	}
+}
+
+func TestTrainNotice(t *testing.T) {
+	long := strings.Repeat("x", 200)
+	for _, tc := range []struct {
+		m    relay.Message
+		ok   bool
+		body string
+	}{
+		{relay.Message{From: "w-1", To: "track", Kind: relay.Event, Body: "CI is red.\nmore"}, true, "CI is red."},
+		{relay.Message{From: "w-1", To: "track", Kind: relay.Question, Body: "Which branch?"}, true, "Which branch?"},
+		{relay.Message{From: "w-1", To: "track", Kind: relay.Report, Body: long}, true, strings.Repeat("x", 119) + "…"},
+		{relay.Message{From: "track", To: "w-1", Kind: relay.Question, Body: "From the track"}, false, ""},
+		{relay.Message{From: "tracks", Kind: relay.Notice, Body: "joined"}, false, ""},
+	} {
+		n, ok := trainNotice("a", "a", tc.m)
+		if ok != tc.ok || ok && n.Body != tc.body {
+			t.Errorf("%+v: %+v, %v", tc.m, n, ok)
+		}
 	}
 }

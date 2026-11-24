@@ -45,6 +45,11 @@ func (s *Service) postReview(ctx context.Context, id, dir string, kind relay.Kin
 	if err != nil {
 		return err
 	}
+	if s.Notify != nil {
+		if t, err := s.Store.Track(ctx, id); err == nil {
+			s.notify(trainNotice(id, t.Name, m))
+		}
+	}
 	return writeWhole(filepath.Join(dir, string(kind)+".msg"), strconv.FormatInt(m.ID, 10))
 }
 

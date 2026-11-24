@@ -10,6 +10,7 @@ type Notifications struct {
 	Error          *bool `yaml:"error,omitempty"`
 	PROpened       *bool `yaml:"pr_opened,omitempty"`
 	PRSettled      *bool `yaml:"pr_settled,omitempty"`
+	TrainReported  *bool `yaml:"train_reported,omitempty"`
 }
 
 // The channels and events, as keys of the notifications section.
@@ -20,6 +21,7 @@ const (
 	NotifyError          = "error"
 	NotifyPROpened       = "pr_opened"
 	NotifyPRSettled      = "pr_settled"
+	NotifyTrainReported  = "train_reported"
 )
 
 // On reports whether the channel or event key is on. An unknown key
@@ -55,6 +57,8 @@ func (n *Notifications) field(key string) **bool {
 		return &n.PROpened
 	case NotifyPRSettled:
 		return &n.PRSettled
+	case NotifyTrainReported:
+		return &n.TrainReported
 	}
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var notifyKeys = []string{NotifyMacOS, NotifyBell, NotifyActionRequired, NotifyError, NotifyPROpened, NotifyPRSettled}
+var notifyKeys = []string{NotifyMacOS, NotifyBell, NotifyActionRequired, NotifyError, NotifyPROpened, NotifyPRSettled, NotifyTrainReported}
 
 func TestNotificationsDefaultOn(t *testing.T) {
 	var n Notifications
