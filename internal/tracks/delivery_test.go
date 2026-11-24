@@ -78,6 +78,7 @@ func TestBlockers(t *testing.T) {
 		{"a draft", hooks.TurnEnd, false, time.Time{}, draft, relay.Blockers{Draft: true}},
 		{"a screen it can't read", hooks.TurnEnd, false, time.Time{}, "a dialog", relay.Blockers{}},
 	} {
+		f.windows.scrolled = nil
 		f.svc.SetTurn(context.Background(), "a", tc.turn)
 		f.windows.lastKeys = map[string]time.Time{"@a": tc.key}
 		f.windows.screens = map[string]string{"@a": tc.screen}
@@ -333,5 +334,19 @@ func TestPromoteForgetsTheTurn(t *testing.T) {
 	}
 	if !f.svc.inTurn(id) {
 		t.Error("the old agent's ended turn holds for the promoted one")
+	}
+}
+
+func TestNoPointerWhileTheUserScrollsBack(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.scrolled = map[string]bool{"@a": true}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a pointer went into a pane in copy mode: %v", got)
+	}
+	f.windows.scrolled = nil
+	if got := deliver(t, f); len(got) != 1 {
+		t.Errorf("pasted %v once the user left the scrollback, want the pointer", got)
 	}
 }

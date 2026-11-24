@@ -71,6 +71,9 @@ func (s *Service) blockers(t track.Track, window string) relay.Blockers {
 	if last, err := s.Windows.LastKey(window); err != nil || !last.IsZero() && s.now().Sub(last) < typingQuiet {
 		b.Typing = true
 	}
+	if scrolled, err := s.Windows.Scrolled(window); err != nil || scrolled {
+		b.Scrolled = true
+	}
 	if screen, err := s.Windows.StyledScreen(window); err == nil {
 		empty, known := hooks.InputEmpty(t.Engine, screen)
 		b.Draft = known && !empty
@@ -158,7 +161,9 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	}
 	pointed, retry := s.pointed[t.ID], s.retryAt[t.ID]
 	s.mu.Unlock()
-	if now.Before(retry) {
+	// The turn and a dialog hold the pointer back without asking the
+	// store or tmux anything.
+	if now.Before(retry) || t.Waiting || s.inTurn(t.ID) {
 		return nil
 	}
 
@@ -172,9 +177,7 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 			due = append(due, m)
 		}
 	}
-	// The turn and a dialog first: they hold the pointer back without
-	// asking tmux anything.
-	if len(due) == 0 || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+	if len(due) == 0 || s.blockers(t, window).Why() != "" {
 		return nil
 	}
 	// Recorded before the paste, so a turn's start or a new agent
@@ -185,7 +188,7 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	// Again, under the lock: the checks above asked tmux, unlocked, and
 	// a turn may have started, a pointer gone or the track turned busy
 	// meanwhile.
-	if in, known := s.turns[t.ID]; !known || in || s.busy[t.ID] {
+	if in, known := s.turns[t.ID]; !known || in || s.busy[t.ID] || s.pointed[t.ID] != pointed {
 		s.mu.Unlock()
 		return nil
 	}

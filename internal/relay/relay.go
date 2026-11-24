@@ -95,6 +95,9 @@ func CanRead(reader string, m Message) bool {
 // a draft of theirs.
 type Blockers struct {
 	InTurn, Asking, Typing, Draft bool
+	// Scrolled says the user scrolls back in its pane: the paste would
+	// pull them out, and its Enter only leave the scrollback.
+	Scrolled bool
 }
 
 // Why is what holds the pointer back, "" when nothing does.
@@ -106,6 +109,8 @@ func (b Blockers) Why() string {
 		return "it's in a turn"
 	case b.Typing:
 		return "the user is typing in its pane"
+	case b.Scrolled:
+		return "the user scrolls back in its pane"
 	case b.Draft:
 		return "its input holds a draft"
 	}

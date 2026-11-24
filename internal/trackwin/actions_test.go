@@ -51,6 +51,30 @@ func TestPromptAndComments(t *testing.T) {
 		t.Errorf("the agent pane shows %q; want the line typed, then cat's copy after Enter", screen)
 	}
 
+	const pointer = "1 message from @reviewer-1 on the relay: run `tracks relay read`."
+	if err := trackwin.Paste(c, w.ID, pointer); err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		if screen, _ = c.CapturePane(w.Agent); strings.Count(strings.ReplaceAll(screen, "\n", ""), pointer) == 2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// The pane is narrow: the pointer wraps.
+	if strings.Count(strings.ReplaceAll(screen, "\n", ""), pointer) != 2 {
+		t.Errorf("the agent pane shows %q; want the pointer pasted, then cat's copy after Enter", screen)
+	}
+	if scrolled, err := c.InMode(w.Agent); err != nil || scrolled {
+		t.Errorf("a pane not scrolled back reads as in a mode: %v, %v", scrolled, err)
+	}
+	if err := exec.Command("tmux", "-L", socket, "copy-mode", "-t", w.Agent).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if scrolled, err := c.InMode(w.Agent); err != nil || !scrolled {
+		t.Errorf("a pane in copy mode reads as not: %v, %v", scrolled, err)
+	}
+
 	if err := trackwin.SetInfo(c, w.ID, "fix #12"); err != nil {
 		t.Fatal(err)
 	}
