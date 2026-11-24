@@ -158,20 +158,26 @@ func (m Model) prefixKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		a.prefix.Blur()
 		return m.setReviewerPrefix(p)
 	}
-	a.prefixErr = ""
+	return m.updatePrefix(msg)
+}
+
+// updatePrefix hands msg to the prefix's input; its error goes once its
+// text changes.
+func (m Model) updatePrefix(msg tea.Msg) (Model, tea.Cmd) {
+	a := &m.settings.agents
+	before := a.prefix.Value()
 	var cmd tea.Cmd
 	a.prefix, cmd = a.prefix.Update(msg)
+	if a.prefix.Value() != before {
+		a.prefixErr = ""
+	}
 	return m, cmd
 }
 
 // agentsPaste pastes into the prefix while it's edited: a paste of the
 // terminal's, or of the input's own Ctrl+V.
 func (m Model) agentsPaste(msg tea.Msg) (tea.Model, tea.Cmd) {
-	a := &m.settings.agents
-	a.prefixErr = ""
-	var cmd tea.Cmd
-	a.prefix, cmd = a.prefix.Update(msg)
-	return m, cmd
+	return m.updatePrefix(msg)
 }
 
 // editingPrefix reports whether the prefix is edited now, with focus.

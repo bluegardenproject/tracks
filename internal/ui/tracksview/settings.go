@@ -226,8 +226,8 @@ func (m Model) applyTheme(t theme.Theme) Model {
 // showSection selects section i. The creator opens on the applied
 // theme unless it holds edits.
 func (m Model) showSection(i int) Model {
-	s := &m.settings
 	m = m.stopPrefix()
+	s := &m.settings
 	s.section, s.editing, s.leaving = i, false, nil
 	s.creator.Blur()
 	if i == sectionCreator && !s.creator.Dirty() {
