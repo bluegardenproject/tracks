@@ -121,7 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice, m.collecting = "Collecting…", true
 			return m, func() tea.Msg { return collectedMsg{collect()} }
 		}
-		if i, ok := m.trainAt(msg.Y); ok && msg.Button == tea.MouseLeft && !m.opening && m.open != nil {
+		if i, ok := m.trainAt(msg.X, msg.Y); ok && msg.Button == tea.MouseLeft && !m.opening && m.open != nil {
 			open, handle := m.open, m.trains[i].Handle
 			m.opening = true
 			return m, func() tea.Msg { open(handle); return openedMsg{} }
@@ -186,10 +186,11 @@ func (m Model) collectAt(x, y int) bool {
 	return false
 }
 
-// trainAt is the train on row y of the pane, its handle's row or its
-// badges'; false for none. The frame's top border is row 0.
-func (m Model) trainAt(y int) (int, bool) {
-	if m.width < 6 || m.height < 3 || y >= m.height-1 {
+// trainAt is the train at cell x, y of the pane, on its handle's row or
+// its badges'; false for none. The frame's borders are row 0 and the
+// first and last columns.
+func (m Model) trainAt(x, y int) (int, bool) {
+	if m.width < 6 || m.height < 3 || y >= m.height-1 || x < 1 || x >= m.width-1 {
 		return 0, false
 	}
 	_, _, names := m.body()

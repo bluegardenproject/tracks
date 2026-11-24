@@ -204,6 +204,9 @@ func TestAClickOpensTheTrain(t *testing.T) {
 	for _, y := range []int{0, 1, 2, 4, 5, 6, 7, 8, 11} {
 		click(y)
 	}
+	if _, cmd := tm.Update(tea.MouseClickMsg{X: 0, Y: 1, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click on the frame's left border opened a train")
+	}
 	want := "reviewer-527192 reviewer-527192 watch-000001 watch-000001"
 	if got := strings.Join(opened, " "); got != want {
 		t.Errorf("opened %q, want %q", got, want)
