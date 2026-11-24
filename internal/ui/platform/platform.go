@@ -11,9 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/theme"
-	"github.com/bluegardenproject/tracks/internal/train"
+	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
@@ -26,11 +25,18 @@ const (
 	themeEvery     = 3 * time.Second
 )
 
+// Entry is a train as the Platform shows it: its handle, its status
+// and an outcome, none for none.
+type Entry struct {
+	Handle          string
+	Status, Outcome track.Status
+}
+
 // Config is what the Platform reads and how.
 type Config struct {
 	Theme theme.Theme
 	// Trains lists the track's trains.
-	Trains func() ([]rpc.Train, error)
+	Trains func() ([]Entry, error)
 	// Watch calls changed once connected to the daemon and after each
 	// change, until the stream breaks.
 	Watch func(ctx context.Context, changed func()) error
@@ -41,10 +47,10 @@ type Config struct {
 // Model is the Platform.
 type Model struct {
 	palette       style.Palette
-	trains        []rpc.Train
+	trains        []Entry
 	err           error
 	width, height int
-	list          func() ([]rpc.Train, error)
+	list          func() ([]Entry, error)
 	watchFn       func(ctx context.Context, changed func()) error
 	changes       chan struct{}
 	loadTheme     func() (theme.Theme, error)
@@ -52,7 +58,7 @@ type Model struct {
 
 type (
 	trainsMsg struct {
-		trains []rpc.Train
+		trains []Entry
 		err    error
 	}
 	changedMsg struct{}
@@ -121,9 +127,9 @@ func (m Model) lines() []string {
 	for _, t := range m.trains {
 		name := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(t.Handle)
 		body = append(body, name)
-		badges := widget.Badge(m.palette, train.StatusOf(t.StatusID))
-		if t.OutcomeID != "" {
-			badges += " " + widget.Badge(m.palette, train.StatusOf(t.OutcomeID))
+		badges := widget.Badge(m.palette, t.Status)
+		if t.Outcome.Label != "" {
+			badges += " " + widget.Badge(m.palette, t.Outcome)
 		}
 		body = append(body, " "+badges, "")
 	}

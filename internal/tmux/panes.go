@@ -10,7 +10,9 @@ import (
 type Split int
 
 const (
-	// Right puts the new pane to the right, full height.
+	// Right puts the new pane to the right of the target, as tall as
+	// it: a split of the target, not of the whole window, so a pane
+	// left of it, as the Platform, keeps its width.
 	Right Split = iota
 	// Below puts the new pane underneath, full width.
 	Below
@@ -65,7 +67,7 @@ func (c *Client) NewWindow(session, name, dir, command string) (window, pane str
 func (c *Client) SplitPane(target string, dir Split, percent int, cwd, command string) (string, error) {
 	args := []string{"split-window", "-d", "-t", target, "-P", "-F", "#{pane_id}"}
 	if dir == Right {
-		args = append(args, "-h", "-f")
+		args = append(args, "-h")
 	} else {
 		args = append(args, "-v")
 	}
@@ -155,7 +157,7 @@ func (c *Client) SplitLeft(target string, cols int, cwd, command string) (string
 func (c *Client) JoinPane(src, target string, dir Split, percent int) error {
 	args := []string{"join-pane", "-d", "-s", src, "-t", target}
 	if dir == Right {
-		args = append(args, "-h", "-f")
+		args = append(args, "-h")
 	} else {
 		args = append(args, "-v")
 	}

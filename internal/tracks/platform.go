@@ -26,25 +26,41 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The reviewers' panes and runs are read together, as StartReview
+	// and CloseReviewer change them together.
 	reviewers := map[string]ReviewerState{}
+	runs := map[string]reviewerRunState{}
 	if s.Reviewers != nil && s.HooksDir != "" {
-		if reviewers, err = s.Reviewers.Reviewers(); err != nil {
+		s.reviewMu.Lock()
+		reviewers, err = s.Reviewers.Reviewers()
+		for id, r := range reviewers {
+			runs[id] = s.reviewerRun(id, r)
+		}
+		s.reviewMu.Unlock()
+		if err != nil {
 			return err
 		}
 	}
+	s.mu.Lock()
+	last := s.trainsSeen
+	s.mu.Unlock()
 	seen := map[string]string{}
 	var errs []error
 	for _, in := range infos {
-		// A track whose agent exited is still synced: its window and its
-		// trains run on, and the Platform types nothing into the agent.
-		if in.Track == "" || s.isBusy(in.Track) {
+		if in.Track == "" {
 			continue
 		}
-		r := reviewers[in.Track]
-		s.reviewMu.Lock()
-		run := s.reviewerRun(in.Track, r)
-		s.reviewMu.Unlock()
-		trains := s.reviewerTrains(in.Track, r, run)
+		// A busy track, being restarted or promoted, keeps what was seen
+		// of it: its Platform is left as it is meanwhile.
+		if s.isBusy(in.Track) {
+			if key, ok := last[in.Track]; ok {
+				seen[in.Track] = key
+			}
+			continue
+		}
+		// A track whose agent exited is still synced: its window and its
+		// trains run on, and the Platform types nothing into the agent.
+		trains := s.reviewerTrains(in.Track, reviewers[in.Track], runs[in.Track])
 		if len(trains) > 0 {
 			seen[in.Track] = trainsKey(trains)
 		}
