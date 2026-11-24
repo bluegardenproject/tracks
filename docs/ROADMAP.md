@@ -19,6 +19,10 @@ the v2.0.0 release; git history keeps them.
   Investigator and the Watcher come last. Phase 2: side tracks, child
   tracks a main track orchestrates to write code in parallel, on its relay,
   grouped under it in the Station.
+- **GitHub on the relay** (in [trains](design/trains.md), Phase 2): poll
+  the notifications endpoint and one GraphQL query instead of each PR,
+  and post `@github` events (merged, conflicts, CI failed, new comments)
+  that wake the track's agent to act on them.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
