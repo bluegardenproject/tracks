@@ -586,6 +586,32 @@ Filters and sorting keep a side track with its main track; a side track
 whose main track is filtered out shows on its own with "side track of
 <name>" in its details.
 
+### GitHub on the relay
+
+Tracks learns about its PRs by polling GitHub: a laptop's daemon can't
+take webhooks without a tunnel, repo admin rights and a fallback for
+while it sleeps. The polling gets cheaper and its news reaches the agents:
+
+- **Polling**: one call to the notifications endpoint
+  (`GET /notifications`, with `If-Modified-Since`, honouring
+  `X-Poll-Interval`; an answer that changed nothing is a `304`, free of
+  the rate limit) says which PRs had activity; then one GraphQL query
+  reads just those: state, mergeability, CI checks, unresolved review
+  threads. It replaces the per-PR polling, and the footer's PR buttons
+  read the same.
+- **`@github` on the relay**: a sender of its own, reserved as `track` and
+  `tracks` are, posting `event` messages to the track (or side track)
+  whose PR it is: "PR #231 merged", "PR #234 conflicts with main", "CI
+  failed on PR #234: lint", "3 new review comments on PR #234". Unlike
+  notices, they wake the agent: delivery points it to them, so it can
+  rebase, fix the check or answer the comments on its own. The Relay
+  Station shows them.
+- **Facts only**: `@github` posts what Tracks reads (states, counts, check
+  names), never a comment's text, which the agent reads on GitHub through
+  the comments flow, under the same fenced-data rule.
+- **With side tracks**: a side track's PR merging tells its main track it
+  can restack the next; a conflict goes to the side tracks it concerns.
+
 ### Order
 
 1. The model: a side track is a track with a main track (the step 11
@@ -597,6 +623,9 @@ whose main track is filtered out shows on its own with "side track of
 6. Side tracks talking to each other.
 7. The main track's prompt: a "Side tracks" paragraph, its wording agreed
    with the user first, as every prompt.
+8. GitHub on the relay: the notifications endpoint and one GraphQL query
+   in place of the per-PR polling; then `@github`'s events. It can come
+   before the side tracks, for a track's own PRs.
 
 ### Open
 
