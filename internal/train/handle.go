@@ -58,8 +58,9 @@ func NewHandle(prefix string, taken func(string) bool) (string, error) {
 
 // Resolve is the handle among handles that name means: the one it is,
 // or the one whose prefix it is when only one has it, as `reviewer` for
-// reviewer-527192.
+// reviewer-527192. A leading @, as messages show handles, is dropped.
 func Resolve(name string, handles []string) (string, error) {
+	name = strings.TrimPrefix(name, "@")
 	if slices.Contains(handles, name) {
 		return name, nil
 	}

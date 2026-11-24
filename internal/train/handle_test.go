@@ -47,6 +47,8 @@ func TestResolve(t *testing.T) {
 	for _, tc := range []struct{ name, want string }{
 		{"reviewer-527192", "reviewer-527192"},
 		{"reviewer", "reviewer-527192"},
+		{"@reviewer-527192", "reviewer-527192"},
+		{"@reviewer", "reviewer-527192"},
 		{"watch-000002", "watch-000002"},
 		{"watch", ""},
 		{"detective", ""},

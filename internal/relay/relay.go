@@ -57,6 +57,8 @@ func CheckSend(from, to string, kind Kind, body string) error {
 	switch {
 	case !knownKind(kind):
 		return fmt.Errorf("%q isn't a kind of message: report, event, question or answer", kind)
+	case from == "" || to == "":
+		return errors.New("a message has a sender and a recipient; only Tracks' notices go to everyone")
 	case from == TracksHandle || to == TracksHandle:
 		return errors.New("only Tracks sends notices")
 	case from == to:

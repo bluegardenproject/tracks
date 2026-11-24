@@ -30,11 +30,10 @@ func (s *Store) AddRelayMessage(ctx context.Context, id string, m relay.Message)
 // track, but none it sent.
 func (s *Store) RelayUnread(ctx context.Context, id, reader string) ([]relay.Message, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT m.id, m.sender, m.recipient, m.kind, m.body, m.at FROM relay_messages m "+
-			"LEFT JOIN relay_cursors c ON c.track_id = m.track_id AND c.reader = ? "+
-			"WHERE m.track_id = ? AND m.id > COALESCE(c.last_id, 0) AND m.sender != ? "+
-			"AND (? = ? OR m.recipient IN (?, '')) ORDER BY m.id",
-		reader, id, reader, reader, relay.TrackHandle, reader)
+		"SELECT id, sender, recipient, kind, body, at FROM relay_messages "+
+			"WHERE track_id = ? AND id > COALESCE((SELECT last_id FROM relay_cursors WHERE track_id = ? AND reader = ?), 0) "+
+			"AND sender != ? AND (? = ? OR recipient IN (?, '')) ORDER BY id",
+		id, id, reader, reader, reader, relay.TrackHandle, reader)
 	if err != nil {
 		return nil, err
 	}
