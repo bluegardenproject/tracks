@@ -212,9 +212,10 @@ type Service struct {
 	// pointing is the pointer typed into each track's agent that waits
 	// for its turn; pointed how far each track was pointed to on its
 	// relay; retryAt when a pointer the agent didn't take may go again.
-	pointing map[string]pointing
-	pointed  map[string]int64
-	retryAt  map[string]time.Time
+	pointing   map[string]pointing
+	pointed    map[string]int64
+	retryAt    map[string]time.Time
+	pointerGen uint64
 	// transcripts are the signatures of the open Claude tracks'
 	// transcripts the last Costs read; only Costs uses them.
 	transcripts map[string]string

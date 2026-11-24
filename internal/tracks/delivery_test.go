@@ -2,6 +2,8 @@ package tracks
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,5 +222,76 @@ func TestANewAgentIsPointedAgain(t *testing.T) {
 	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
 	if got := deliver(t, f); len(got) != 1 {
 		t.Errorf("a new agent wasn't pointed to the unread report: %v", got)
+	}
+}
+
+func TestAShortTurnTookThePointer(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	deliver(t, f)
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	*now = now.Add(pointerStall)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a turn that came and went between ticks counted as a stall: %v", got)
+	}
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Answer, Body: "Later.", At: *now})
+	*now = now.Add(pointerGrace)
+	got := deliver(t, f)
+	if len(got) != 1 || !strings.HasPrefix(got[0], "@a 1 message") {
+		t.Errorf("pasted %v, want a pointer to the new message alone, at once", got)
+	}
+}
+
+func TestNoPointerWhereTheAgentIsGone(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.windows[0].Exit = "0"
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("a pointer went into the shell an exited agent left: %v", got)
+	}
+	f.windows.windows[0].Exit = ""
+	_, release, err := f.svc.hold(context.Background(), "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Errorf("a pointer went into a track being ended or promoted: %v", got)
+	}
+	release()
+}
+
+func TestATurnDuringThePasteHolds(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.whilePasting = func() { f.svc.SetTurn(ctx, "a", hooks.TurnStart) }
+	deliver(t, f)
+	f.windows.whilePasting = nil
+	if !f.svc.inTurn("a") {
+		t.Fatal("the paste's end undid the turn that started during it")
+	}
+	*now = now.Add(pointerStall)
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Errorf("the pointer taken during its paste went again: %v", got)
+	}
+}
+
+func TestAFailedPasteIsTriedAgain(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.pasteErr = errors.New("tmux is gone")
+	if err := f.svc.Deliver(context.Background()); err == nil {
+		t.Fatal("a failed paste said nothing")
+	}
+	f.windows.pasteErr = nil
+	if got := deliver(t, f); len(got) != 1 {
+		t.Errorf("pasted %v after a failed paste, want the pointer again", got)
 	}
 }
