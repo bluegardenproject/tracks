@@ -23,6 +23,10 @@ const Reviewer Agent = "reviewer"
 // to it (tracks review --ask).
 func (a Agent) ReadsRelay() bool { return false }
 
+// Prefix starts the handles of a's trains: its name, until Settings
+// sets one.
+func (a Agent) Prefix() string { return string(a) }
+
 // Name is how a is shown.
 func (a Agent) Name() string {
 	if a == "" {

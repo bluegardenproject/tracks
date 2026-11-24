@@ -40,6 +40,7 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	}
 	f.Asking = s.asking(id)
 	sess, sessErr := loadSession(dir)
+	handle := reviewHandle(dir)
 	s.reviewMu.Unlock()
 	// Claude asks for trust as it starts, before any report: a report
 	// that quotes the question isn't one.
@@ -52,7 +53,7 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	if !ok {
 		return nil, nil
 	}
-	return []train.Train{{Track: id, Handle: train.ReviewerHandle, Agent: train.Reviewer,
+	return []train.Train{{Track: id, Handle: handle, Agent: train.Reviewer,
 		Engine: engineName(sess), Status: status, Outcome: outcome}}, nil
 }
 
@@ -65,19 +66,19 @@ func (s *Service) EndTrain(ctx context.Context, id, handle string) (string, erro
 	} else if err != nil {
 		return "", err
 	}
-	if err := train.CheckHandle(handle); err != nil {
-		return t.Name, Problem(err.Error() + ".")
-	}
 	trains, err := s.Trains(ctx, id)
 	if err != nil {
 		return t.Name, err
 	}
-	for _, tr := range trains {
-		if tr.Handle == handle {
-			return s.CloseReviewer(ctx, id)
-		}
+	handles := make([]string, len(trains))
+	for i, tr := range trains {
+		handles[i] = tr.Handle
 	}
-	return t.Name, Problem(fmt.Sprintf("%s has no train called %s: tracks train list lists them.", t.Name, handle))
+	if _, err := train.Resolve(handle, handles); err != nil {
+		return t.Name, Problem(fmt.Sprintf("%s: %v. tracks train list lists them.", t.Name, err))
+	}
+	// The reviewer is its only train.
+	return s.CloseReviewer(ctx, id)
 }
 
 // dropReview removes track id's review: its run, report and brief, once

@@ -12,6 +12,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/cursor"
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/store"
 )
@@ -82,22 +83,29 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 // again on a print-mode turn on the question, in the same chat, which
 // ends what's typed in the pane but not sent.
 func (s *Service) AskReview(ctx context.Context, id, question string) error {
+	_, err := s.askReview(ctx, id, question)
+	return err
+}
+
+// askReview is AskReview; it returns the question as posted on the
+// track's relay.
+func (s *Service) askReview(ctx context.Context, id, question string) (relay.Message, error) {
 	if s.Reviewers == nil {
-		return errors.New("reviews need tmux")
+		return relay.Message{}, errors.New("reviews need tmux")
 	}
-	question = strings.TrimSpace(question)
-	if question == "" {
-		return Problem("Ask the reviewer something: tracks review --ask \"<question>\".")
+	asked := strings.TrimSpace(question)
+	if asked == "" {
+		return relay.Message{}, Problem("Ask the reviewer something: tracks review --ask \"<question>\".")
 	}
-	if strings.ContainsFunc(question, unicode.IsControl) {
-		return Problem("Ask the reviewer on one line, without control characters.")
+	if strings.ContainsFunc(asked, unicode.IsControl) {
+		return relay.Message{}, Problem("Ask the reviewer on one line, without control characters.")
 	}
-	question = questionLead + question
+	question = questionLead + asked
 	t, err := s.Store.Track(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
-		return Problem("That track is gone.")
+		return relay.Message{}, Problem("That track is gone.")
 	} else if err != nil {
-		return err
+		return relay.Message{}, err
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
@@ -105,28 +113,28 @@ func (s *Service) AskReview(ctx context.Context, id, question string) error {
 	window, _ := s.windowOf(id)
 	r, err := s.Reviewers.Reviewer(id, window)
 	if err != nil {
-		return err
+		return relay.Message{}, err
 	}
 	sess, sessErr := loadSession(dir)
 	switch {
 	case r.Pane == "" || sessErr != nil:
-		return Problem(t.Name + " has no reviewer: tracks review starts one.")
+		return relay.Message{}, Problem(t.Name + " has no reviewer: tracks review starts one.")
 	case r.Shown:
-		return Problem("The reviewer's pane is open, so the user may be talking to it: ask there, or hide it " +
+		return relay.Message{}, Problem("The reviewer's pane is open, so the user may be talking to it: ask there, or hide it " +
 			"with the footer's button and ask again.")
 	case !exists(filepath.Join(dir, "report.md")):
-		return Problem("The reviewer hasn't reported yet: tracks review --wait waits for its report.")
+		return relay.Message{}, Problem("The reviewer hasn't reported yet: tracks review --wait waits for its report.")
 	case s.asking(id):
-		return Problem("The reviewer is still on the last question: tracks review --wait waits for its answer.")
+		return relay.Message{}, Problem("The reviewer is still on the last question: tracks review --wait waits for its answer.")
 	}
 	// The question first, so a WaitReview meanwhile never takes the
 	// report for the answer.
 	if err := writeWhole(filepath.Join(dir, "question.md"), question); err != nil {
-		return err
+		return relay.Message{}, err
 	}
 	for _, old := range []string{"answer.md", "answer.out"} {
 		if err := os.Remove(filepath.Join(dir, old)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			return relay.Message{}, err
 		}
 	}
 	switch sess.Engine {
@@ -138,9 +146,10 @@ func (s *Service) AskReview(ctx context.Context, id, question string) error {
 	}
 	if err != nil {
 		_ = os.Remove(filepath.Join(dir, "question.md"))
-		return fmt.Errorf("ask the reviewer: %w", err)
+		return relay.Message{}, fmt.Errorf("ask the reviewer: %w", err)
 	}
-	return nil
+	return s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.TrackHandle, To: reviewHandle(dir),
+		Kind: relay.Question, Body: asked, At: s.now()})
 }
 
 // questionLead starts every question. Typed into Claude's input box, a

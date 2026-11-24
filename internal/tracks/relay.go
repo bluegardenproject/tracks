@@ -45,8 +45,15 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 		return relay.Message{}, Problem(err.Error() + ".")
 	}
 	for _, tr := range trains {
-		if tr.Handle == handle && !tr.Agent.ReadsRelay() {
-			return relay.Message{}, Problem("The " + tr.Agent.Name() + " doesn't read the relay yet: ask it with tracks review --ask.")
+		switch {
+		case tr.Handle != handle || tr.Agent.ReadsRelay():
+		case tr.Agent == train.Reviewer && kind == relay.Question:
+			// It runs no commands: Tracks types the question to it.
+			return s.askReview(ctx, id, body)
+		case tr.Agent == train.Reviewer:
+			return relay.Message{}, Problem("The reviewer takes questions: send it --kind question.")
+		default:
+			return relay.Message{}, Problem("The " + tr.Agent.Name() + " doesn't read the relay.")
 		}
 	}
 	return s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.TrackHandle, To: handle, Kind: kind, Body: body})

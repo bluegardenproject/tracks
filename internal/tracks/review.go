@@ -15,6 +15,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/hooks"
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -113,15 +114,32 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
 	window, _ := s.windowOf(t.ID)
+	dir := s.reviewDir(t.ID)
+	old, err := s.Reviewers.Reviewer(t.ID, window)
+	if err != nil {
+		return "", err
+	}
+	oldHandle := reviewHandle(dir)
 	if err := s.Reviewers.CloseReviewer(t.ID, window); err != nil {
 		return "", fmt.Errorf("end the reviewer that's there: %w", err)
 	}
+	if old.Pane != "" {
+		if err := s.notice(ctx, t.ID, "@"+oldHandle+" left: a new review replaces it."); err != nil {
+			return "", err
+		}
+	}
 
-	dir := s.reviewDir(t.ID)
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	handle, err := newReviewHandle(oldHandle)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
 		return "", err
 	}
 	run := newRun()
@@ -171,6 +189,9 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	}
 	if window != "" {
 		s.syncReviewer(t, window)
+	}
+	if err := s.notice(ctx, t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
+		return "", err
 	}
 	return name, nil
 }
@@ -246,6 +267,15 @@ func (s *Service) ReviewReply(ctx context.Context, id, run, text string) error {
 	} else if !strings.Contains(text, review.Outcome) {
 		return nil
 	}
+	// Posted first, so the tracks review that prints it finds the
+	// message to mark read.
+	kind := relay.Report
+	if filepath.Base(path) == "answer.md" {
+		kind = relay.Answer
+	}
+	if err := s.postReview(ctx, id, dir, kind, text); err != nil {
+		return err
+	}
 	return writeWhole(path, text)
 }
 
@@ -280,7 +310,7 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 	s.reviewMu.Unlock()
 	for {
 		if b, err := os.ReadFile(path); err == nil {
-			return string(b), nil
+			return string(b), s.markPrinted(ctx, id, path)
 		}
 		if _, err := os.Stat(filepath.Join(s.reviewDir(id), "run")); err != nil {
 			return "", Problem("This track has no review running: start one with tracks review.")
@@ -374,9 +404,14 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	}
 	s.reviewMu.Lock()
 	window, _ := s.windowOf(id)
+	r, rErr := s.Reviewers.Reviewer(id, window)
+	handle := reviewHandle(s.reviewDir(id))
 	// The run goes whatever tmux says: the user asked for the review
 	// to end.
 	err = errors.Join(s.Reviewers.CloseReviewer(id, window), os.RemoveAll(s.reviewDir(id)))
+	if rErr == nil && r.Pane != "" {
+		err = errors.Join(err, s.notice(ctx, id, "@"+handle+" left: it was ended."))
+	}
 	s.reviewMu.Unlock()
 	if window != "" {
 		s.syncReviewer(t, window)
