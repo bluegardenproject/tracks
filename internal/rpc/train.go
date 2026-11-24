@@ -6,6 +6,8 @@ import "context"
 const (
 	TrainList = "train-list"
 	TrainEnd  = "train-end"
+	// Signals is what a track's Platform shows under Signals.
+	Signals = "signals"
 )
 
 // TrainListParams names the track whose trains to list.
@@ -50,4 +52,25 @@ func (c Client) TrainList(ctx context.Context, id string) ([]Train, error) {
 // TrainEnd ends track id's train handle.
 func (c Client) TrainEnd(ctx context.Context, id, handle string) error {
 	return c.Call(ctx, TrainEnd, TrainEndParams{ID: id, Handle: handle}, nil, nil)
+}
+
+// PRSignal is a PR with open comments, as Signals shows it: Index is
+// its button's, for Action.
+type PRSignal struct {
+	Index  int    `json:"index"`
+	PR     string `json:"pr"`
+	Action string `json:"action"`
+	Sent   bool   `json:"sent,omitempty"`
+}
+
+// SignalsResult is a track's Signals.
+type SignalsResult struct {
+	PRs      []PRSignal `json:"prs"`
+	RelayNew int        `json:"relay_new"`
+}
+
+// Signals are track id's Signals.
+func (c Client) Signals(ctx context.Context, id string) (SignalsResult, error) {
+	var r SignalsResult
+	return r, c.Call(ctx, Signals, TrainListParams{ID: id}, &r, nil)
 }

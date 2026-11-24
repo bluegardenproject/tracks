@@ -5,6 +5,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/platform"
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/theme"
@@ -41,6 +42,13 @@ func newPlatformCmd(version string) *cobra.Command {
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
 				Collect:   func() error { return client.RelayCollect(cmd.Context(), id) },
 				Open:      func(handle string) { openFromPlatform(cmd.Context(), daemon.tmux, client, paths, id, handle) },
+				Signals:   func() (uiplatform.Signals, error) { return platformSignals(client.Signals(cmd.Context(), id)) },
+				// Over the client showing this pane: the user's.
+				OpenRelayStation: func() error { return openRelayStation(id, "") },
+				Solve: func(index int) error {
+					_, err := client.Action(cmd.Context(), id, actions.Range(index))
+					return err
+				},
 			})
 			_, err = tea.NewProgram(m, tea.WithContext(cmd.Context()), tea.WithColorProfile(style.Profile())).Run()
 			if cmd.Context().Err() != nil {
@@ -76,4 +84,17 @@ func openFromPlatform(ctx context.Context, t *tmux.Client, daemon rpc.Client, pa
 	if err := showTrain(ctx, t, daemon, th, id, handle, client); err != nil {
 		_ = t.Tell(client, "Couldn't open "+handle+": "+err.Error())
 	}
+}
+
+// platformSignals are Signals, from the daemon, as the Platform shows
+// them.
+func platformSignals(sig rpc.SignalsResult, err error) (uiplatform.Signals, error) {
+	if err != nil {
+		return uiplatform.Signals{}, err
+	}
+	out := uiplatform.Signals{RelayNew: sig.RelayNew}
+	for _, pr := range sig.PRs {
+		out.PRs = append(out.PRs, uiplatform.PR{Index: pr.Index, PR: pr.PR, Action: pr.Action, Sent: pr.Sent})
+	}
+	return out, nil
 }

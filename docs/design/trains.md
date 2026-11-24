@@ -221,7 +221,8 @@ width.
   comments; once sent, the entry reads "sent to the agent", muted, until
   new comments come. The click is the user's, so it goes straight in, as
   Collect messages does.
-- They keep the variants they take now (1 to 4, in turn).
+- They take the default button colours; the variants (1 to 4, in turn) were
+  the footer's.
 - **The footer's top row is the track's info alone, centred again**, as
   before the reviewer's buttons took its sides.
 
@@ -512,6 +513,10 @@ Each step a PR of its own.
      mark and the count of new messages, the popup. Done.
    - 9b: Signals in the Platform, its entry opening the Relay Station; the
      PR buttons moved in from the footer, the track's info centred again.
+     Done: the sidebar shows for a train or a PR's comments, Signals under
+     the Platform, the track's info centred when no button is left. The
+     setting that hides the sidebar, and the PR buttons back in the footer
+     then, comes later.
 10. The track's prompt: the relay paragraph (reading messages when a pointer
     comes). Done, for Work and Review tracks; Plan tracks may get it later.
 11. The "started from" note on independent tracks. Independent of the rest.

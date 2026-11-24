@@ -8,20 +8,22 @@ import (
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/shellx"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
-// SyncTrains keeps each open track's Platform in step with its trains:
-// open while it has one, closed when it has none. A train's status
-// comes from tmux and its run, not the store, so SyncTrains also tells
-// Changes when a track's trains changed since it last looked, for the
-// Platforms to read them again, brings the trains' overlay headers up
-// to their status, and tells the user when one waits on them, as on
-// Claude's trust question, which only its overlay shows. It reads the windows, their Platforms
-// and the reviewers once each, whatever the number of tracks.
+// SyncTrains keeps each open track's Platform in step with its trains
+// and its PRs' comments: open while it has one or the other, closed when
+// it has neither. A train's status comes from tmux and its run, not the
+// store, so SyncTrains also tells Changes when a track's trains changed
+// since it last looked, for the Platforms to read them again, brings the
+// trains' overlay headers up to their status, and tells the user when
+// one waits on them, as on Claude's trust question, which only its
+// overlay shows. It reads the windows, their Platforms and the reviewers
+// once each, whatever the number of tracks.
 func (s *Service) SyncTrains(ctx context.Context) error {
 	infos, err := s.Windows.List()
 	if err != nil {
@@ -53,6 +55,14 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	s.mu.Lock()
 	last := s.trainsSeen
 	s.mu.Unlock()
+	open, err := s.Store.OpenTracks(ctx)
+	if err != nil {
+		return err
+	}
+	tracks := map[string]track.Track{}
+	for _, t := range open {
+		tracks[t.ID] = t
+	}
 	seen := map[string]string{}
 	live, windowed := map[string]bool{}, map[string]bool{}
 	var errs []error
@@ -72,8 +82,14 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		// A track whose agent exited is still synced: its window and its
 		// trains run on, and the Platform types nothing into the agent.
 		trains := s.reviewerTrains(in.Track, reviewers[in.Track], runs[in.Track])
-		if len(trains) > 0 {
-			seen[in.Track] = trainsKey(trains)
+		s.mu.Lock()
+		prs := prSignals(tracks[in.Track], s.comments[in.Track])
+		s.mu.Unlock()
+		// The Platform shows while it has something: a train, or a PR's
+		// comments under Signals.
+		shown := len(trains) > 0 || len(prs) > 0
+		if shown {
+			seen[in.Track] = trainsKey(trains) + fmt.Sprint(prs)
 		}
 		for _, tr := range trains {
 			session := reviewers[in.Track].Session
@@ -85,9 +101,9 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		}
 		pane := platforms[in.Window]
 		switch {
-		case len(trains) > 0 && pane == "":
+		case shown && pane == "":
 			errs = append(errs, s.Windows.OpenPlatform(in.Window, s.platformCommand(in.Track)))
-		case len(trains) == 0 && pane != "":
+		case !shown && pane != "":
 			errs = append(errs, s.Windows.ClosePlatform(in.Window))
 		}
 	}
@@ -114,6 +130,29 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		s.Changes.Notify()
 	}
 	return errors.Join(errs...)
+}
+
+// Signals are what a track's Platform shows under Signals: its PRs with
+// open comments, and how many relay messages the user hasn't seen.
+type Signals struct {
+	PRs      []PRSignal
+	RelayNew int
+}
+
+// Signals are track id's Signals.
+func (s *Service) Signals(ctx context.Context, id string) (Signals, error) {
+	t, err := s.relayTrack(ctx, id)
+	if err != nil {
+		return Signals{}, err
+	}
+	n, err := s.Store.RelayUnseen(ctx, id, relay.UserHandle)
+	if err != nil {
+		return Signals{}, err
+	}
+	s.mu.Lock()
+	prs := prSignals(t, s.comments[id])
+	s.mu.Unlock()
+	return Signals{PRs: prs, RelayNew: n}, nil
 }
 
 // trainsKey is what of trains a Platform shows, to tell a change.

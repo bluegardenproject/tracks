@@ -2,9 +2,12 @@ package tracks
 
 import (
 	"context"
+
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bluegardenproject/tracks/internal/actions"
 )
 
 func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
@@ -94,5 +97,36 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 	}
 	if !heardChange() {
 		t.Error("the last train going wasn't told as a change")
+	}
+}
+
+func TestAPRsCommentsOpenThePlatform(t *testing.T) {
+	ctx := context.Background()
+	f, _, _ := trainsFixture(t, "cursor")
+	const url = "https://github.com/acme/api/pull/7"
+	if err := f.svc.SeePRs(ctx, "r", []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.mu.Lock()
+	f.svc.comments = map[string]map[string]actions.Comments{"r": {url: {Open: 2}}}
+	f.svc.mu.Unlock()
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.windows.platforms) != 1 {
+		t.Fatalf("a track with a PR's comments and no train got no Platform: %v", f.windows.platforms)
+	}
+	sig, err := f.svc.Signals(ctx, "r")
+	if err != nil || len(sig.PRs) != 1 || sig.PRs[0].PR != "PR #7" || sig.PRs[0].Action != "solve 2 comments" {
+		t.Errorf("Signals %+v, %v", sig, err)
+	}
+	f.svc.mu.Lock()
+	f.svc.comments = nil
+	f.svc.mu.Unlock()
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.windows.platforms) != 0 {
+		t.Errorf("the Platform stayed with nothing to show: %v", f.windows.platforms)
 	}
 }

@@ -33,3 +33,20 @@ func (c Config) trainEnd(ctx context.Context, call *rpc.Call) (any, error) {
 	_, err := c.Tracks.EndTrain(ctx, p.ID, p.Handle)
 	return nil, err
 }
+
+// signals are what a track's Platform shows under Signals.
+func (c Config) signals(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.TrainListParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	sig, err := c.Tracks.Signals(ctx, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := rpc.SignalsResult{PRs: []rpc.PRSignal{}, RelayNew: sig.RelayNew}
+	for _, pr := range sig.PRs {
+		out.PRs = append(out.PRs, rpc.PRSignal{Index: pr.Index, PR: pr.PR, Action: pr.Action, Sent: pr.Sent})
+	}
+	return out, nil
+}

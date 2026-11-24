@@ -91,22 +91,33 @@ const maxRepo = 14
 // Label is what b reads. multiRepo says the track has PRs in more than
 // one repo, which puts the repo's name, cut short, before the number.
 func (b Button) Label(multiRepo bool) string {
-	pr := "PR #" + strconv.Itoa(b.Number)
-	if multiRepo {
-		_, name, _ := strings.Cut(b.Repo, "/")
-		if utf8.RuneCountInString(name) > maxRepo {
-			name = string([]rune(name)[:maxRepo]) + "…"
-		}
-		pr = name + "#" + strconv.Itoa(b.Number)
+	return b.PR(multiRepo) + " · " + b.Action()
+}
+
+// PR names b's PR: PR #12, or the repo's name, cut short, and the
+// number when the track has PRs in more than one repo.
+func (b Button) PR(multiRepo bool) string {
+	if !multiRepo {
+		return "PR #" + strconv.Itoa(b.Number)
 	}
+	_, name, _ := strings.Cut(b.Repo, "/")
+	if utf8.RuneCountInString(name) > maxRepo {
+		name = string([]rune(name)[:maxRepo]) + "…"
+	}
+	return name + "#" + strconv.Itoa(b.Number)
+}
+
+// Action is what b does: solve its PR's comments, or that they were
+// sent.
+func (b Button) Action() string {
 	if b.Sent {
-		return pr + " · sent to the agent"
+		return "sent to the agent"
 	}
 	noun := "comments"
 	if b.Open == 1 {
 		noun = "comment"
 	}
-	return fmt.Sprintf("%s · solve %d %s", pr, b.Open, noun)
+	return fmt.Sprintf("solve %d %s", b.Open, noun)
 }
 
 // style sets attr to the colour in the global option named option.

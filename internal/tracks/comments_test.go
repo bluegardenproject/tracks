@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -39,6 +40,23 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 		_, err := f.svc.RunAction(ctx, id, button)
 		return err
 	}
+	// signals are the PRs Signals shows, as "PR: action (sent)".
+	signals := func() string {
+		t.Helper()
+		sig, err := f.svc.Signals(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, pr := range sig.PRs {
+			line := fmt.Sprintf("%d %s: %s", pr.Index, pr.PR, pr.Action)
+			if pr.Sent {
+				line += " (sent)"
+			}
+			out = append(out, line)
+		}
+		return strings.Join(out, "; ")
+	}
 
 	if err := run(actions.Range(0)); err == nil {
 		t.Error("sent with no comments counted")
@@ -49,10 +67,11 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 	if want := []string{"threads " + first, "threads " + second}; !slices.Equal(gh.asked, want) {
 		t.Errorf("asked %q, want %q: a merged PR's threads don't count", gh.asked, want)
 	}
-	buttons := f.windows.buttons[window]
-	if !strings.Contains(buttons, "range=user|pr:0]") || !strings.Contains(buttons, "PR ##1 · solve 3 comments") ||
-		!strings.Contains(buttons, "range=user|pr:1]") || !strings.Contains(buttons, "PR ##2 · solve 1 comment") {
-		t.Errorf("want a button per PR with comments: %s", buttons)
+	if got, want := signals(), "0 PR #1: solve 3 comments; 1 PR #2: solve 1 comment"; got != want {
+		t.Errorf("Signals shows %q, want %q", got, want)
+	}
+	if buttons := f.windows.buttons[window]; strings.Contains(buttons, "pr:") {
+		t.Errorf("the PRs' buttons stayed in the footer: %s", buttons)
 	}
 
 	if err := run("nope"); err == nil {
@@ -78,9 +97,8 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 	if !slices.Equal(f.windows.prompts, []string{window + " " + want}) {
 		t.Errorf("typed %q, want the prompt for PR 2 into %s", f.windows.prompts, window)
 	}
-	buttons = f.windows.buttons[window]
-	if !strings.Contains(buttons, "PR ##2 · sent to the agent") || !strings.Contains(buttons, "range=user|pr:0]") {
-		t.Errorf("after sending PR 2, want it muted and PR 1 still a button: %s", buttons)
+	if got, want := signals(), "0 PR #1: solve 3 comments; 1 PR #2: sent to the agent (sent)"; got != want {
+		t.Errorf("after sending PR 2: %q, want %q", got, want)
 	}
 	if err := run(actions.Range(1)); err == nil || len(f.windows.prompts) != 1 {
 		t.Error("sent the same comments twice")
@@ -88,24 +106,24 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 
 	gh.threads[second] = 2
 	count()
-	if buttons := f.windows.buttons[window]; !strings.Contains(buttons, "range=user|pr:1]") || !strings.Contains(buttons, "PR ##2 · solve 2 comments") {
-		t.Errorf("after a new comment on PR 2, want its button back: %s", buttons)
+	if got, want := signals(), "0 PR #1: solve 3 comments; 1 PR #2: solve 2 comments"; got != want {
+		t.Errorf("after a new comment on PR 2: %q, want %q", got, want)
 	}
 	gh.threads = map[string]int{}
 	count()
-	if buttons := f.windows.buttons[window]; buttons != "" {
-		t.Errorf("with every comment answered, the window shows %q", buttons)
+	if got := signals(); got != "" {
+		t.Errorf("with every comment answered, Signals shows %q", got)
 	}
 }
 
-func TestRenderButtonsAcrossRepos(t *testing.T) {
+func TestPRSignalsAcrossRepos(t *testing.T) {
 	var tr track.Track
 	for _, url := range []string{"https://github.com/acme/predictions-live-app/pull/23", "https://github.com/acme/tracks/pull/12"} {
 		pr, _ := track.ParsePR(url)
 		tr.PRs = append(tr.PRs, pr)
 	}
-	got := renderButtons(tr, map[string]actions.Comments{tr.PRs[0].URL: {Open: 4}, tr.PRs[1].URL: {Open: 1}})
-	if !strings.Contains(got, "predictions-li…##23 · solve 4 comments") || !strings.Contains(got, "tracks##12 · solve 1 comment") {
-		t.Errorf("with PRs in two repos, want the repos named: %s", got)
+	got := prSignals(tr, map[string]actions.Comments{tr.PRs[0].URL: {Open: 4}, tr.PRs[1].URL: {Open: 1}})
+	if len(got) != 2 || got[0].PR != "predictions-li…#23" || got[0].Action != "solve 4 comments" || got[1].PR != "tracks#12" || got[1].Action != "solve 1 comment" {
+		t.Errorf("with PRs in two repos, want the repos named: %+v", got)
 	}
 }

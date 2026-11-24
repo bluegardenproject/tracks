@@ -1,5 +1,6 @@
 // Package platform is the Platform: the pane on a track window's left
-// that lists the track's trains, each with the Station's status badges
+// that lists the track's trains, each with the Station's status badges,
+// and under Signals its Relay Station and its PRs with open comments
 // (see docs/design/trains.md). It reads them from the daemon, again on
 // each change the daemon tells of. A click on a train opens its overlay.
 package platform
@@ -10,11 +11,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
-	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
 // reconnectEvery is how long the Platform waits before watching the
@@ -35,20 +34,41 @@ type Entry struct {
 	Held bool
 }
 
-// Config is what the Platform reads and how.
+// PR is a PR with open comments, under Signals: its name, what its
+// button does, and whether that's done; Index names it for Solve.
+type PR struct {
+	Index      int
+	PR, Action string
+	Sent       bool
+}
+
+// Signals are the Relay Station's count of messages the user hasn't
+// seen, and the PRs with open comments.
+type Signals struct {
+	RelayNew int
+	PRs      []PR
+}
+
+// Config is what the Platform reads, what its clicks do, and how.
 type Config struct {
 	Theme theme.Theme
-	// Trains lists the track's trains.
-	Trains func() ([]Entry, error)
+	// Trains lists the track's trains; Signals reads its Signals.
+	Trains  func() ([]Entry, error)
+	Signals func() (Signals, error)
 	// Watch calls changed once connected to the daemon and after each
 	// change, until the stream breaks.
 	Watch func(ctx context.Context, changed func()) error
 	// LoadTheme reads the theme the user chose, now.
 	LoadTheme func() (theme.Theme, error)
 	// Collect sends the track's agent the pointer to its waiting
-	// messages now: Collect messages.
-	Collect func() error
-	// Open opens train handle's overlay; it returns once it closes.
+	// messages now; OpenRelayStation opens the Relay Station over the
+	// user's client; Solve sends the agent the prompt to work through a
+	// PR's comments.
+	Collect          func() error
+	OpenRelayStation func() error
+	Solve            func(index int) error
+	// Open opens a train, by its handle, in its overlay over the user's
+	// client.
 	Open func(handle string)
 }
 
@@ -56,40 +76,36 @@ type Config struct {
 type Model struct {
 	palette       style.Palette
 	trains        []Entry
+	signals       Signals
 	err           error
 	width, height int
-	list          func() ([]Entry, error)
-	watchFn       func(ctx context.Context, changed func()) error
+	c             Config
 	changes       chan struct{}
-	loadTheme     func() (theme.Theme, error)
-	collect       func() error
-	// notice says what a click did, or why it couldn't; collecting is
-	// a click's call on its way, which other clicks wait for.
-	notice     string
-	collecting bool
-	open       func(handle string)
-	// opening says an overlay is being opened: clicks on trains wait
-	// for it.
-	opening bool
+	// notice says what a click did, or why it couldn't, and noticeFor
+	// which kind of target it was; acting is a click's call on its way,
+	// which other clicks wait for.
+	notice    string
+	noticeFor int
+	acting    bool
 }
 
 type (
-	trainsMsg struct {
-		trains []Entry
-		err    error
+	loadedMsg struct {
+		trains  []Entry
+		signals Signals
+		err     error
 	}
 	changedMsg struct{}
 	themeMsg   struct {
 		theme theme.Theme
 		err   error
 	}
-	collectedMsg struct{ err error }
-	openedMsg    struct{}
+	actedMsg struct{ err error }
 )
 
 // New is the Platform for c.
 func New(c Config) Model {
-	m := Model{palette: style.New(c.Theme), list: c.Trains, watchFn: c.Watch, loadTheme: c.LoadTheme, collect: c.Collect, open: c.Open}
+	m := Model{palette: style.New(c.Theme), c: c}
 	if c.Watch != nil {
 		m.changes = make(chan struct{}, 1)
 	}
@@ -102,9 +118,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-	case trainsMsg:
-		m.trains, m.err = msg.trains, msg.err
-		if !m.collecting && !m.anyHeld() {
+	case loadedMsg:
+		m.trains, m.signals, m.err = msg.trains, msg.signals, msg.err
+		if !m.acting && m.targetGone(m.noticeFor) {
 			// What it said was of a button that's gone.
 			m.notice = ""
 		}
@@ -116,90 +132,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.nextTheme()
 	case tea.MouseClickMsg:
-		if msg.Button == tea.MouseLeft && !m.collecting && m.collectAt(msg.X, msg.Y) && m.collect != nil {
-			collect := m.collect
-			m.notice, m.collecting = "Collecting…", true
-			return m, func() tea.Msg { return collectedMsg{collect()} }
+		if msg.Button != tea.MouseLeft || m.acting {
+			break
 		}
-		if i, ok := m.trainAt(msg.X, msg.Y); ok && msg.Button == tea.MouseLeft && !m.opening && m.open != nil {
-			open, handle := m.open, m.trains[i].Handle
-			m.opening = true
-			return m, func() tea.Msg { open(handle); return openedMsg{} }
+		if act, kind, notice := m.actionAt(msg.X, msg.Y); act != nil {
+			m.notice, m.noticeFor, m.acting = notice, kind, true
+			return m, func() tea.Msg { return actedMsg{act()} }
 		}
-	case openedMsg:
-		m.opening = false
-	case collectedMsg:
-		m.notice, m.collecting = "", false
+	case actedMsg:
+		m.notice, m.acting = "", false
 		if msg.err != nil {
 			m.notice = msg.err.Error()
 		}
 		return m, m.load()
 	}
-	// No key quits it: the daemon keeps it open while the track has a
-	// train, and would only open it again.
+	// No key quits it: the daemon keeps it open while the track has
+	// something to show, and would only open it again.
 	return m, nil
 }
 
-// nextTheme reads the theme again after themeEvery.
-func (m Model) nextTheme() tea.Cmd {
-	if m.loadTheme == nil {
-		return nil
-	}
-	load := m.loadTheme
-	return tea.Tick(themeEvery, func(time.Time) tea.Msg {
-		t, err := load()
-		return themeMsg{t, err}
-	})
-}
-
-func (m Model) View() tea.View {
-	v := tea.NewView(strings.Join(m.lines(), "\n"))
-	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
-	return v
-}
-
-// lines are the Platform's frame, the trains in it, filling the pane's
-// height.
-func (m Model) lines() []string {
-	if m.width < 6 || m.height < 3 {
-		return nil
-	}
-	body, _, _ := m.body()
-	return widget.Frame(m.palette, "Platform", body, m.width, m.height, theme.BorderDefault)
-}
-
-// collectAt reports whether cell x, y of the pane is on a Collect
-// messages button: the frame's top border is row 0, its left border and
-// padding columns 0 and 1, and the button starts a cell in.
-func (m Model) collectAt(x, y int) bool {
-	if m.width < 6 || m.height < 3 || y >= m.height-1 {
-		return false
-	}
-	_, buttons, _ := m.body()
-	width := widget.NewButton("Collect messages", widget.ButtonAccent).Width()
-	for _, row := range buttons {
-		if y == row+1 && x >= 3 && x < min(3+width, m.width-2) {
-			return true
+// actionAt is what a click at x, y does, the kind of target it's on,
+// and what to say meanwhile; nil for nothing.
+func (m Model) actionAt(x, y int) (func() error, int, string) {
+	_, targets := m.layout()
+	for _, t := range targets {
+		if y != t.y || x < t.x0 || x >= t.x1 {
+			continue
 		}
+		switch t.kind {
+		case targetCollect:
+			if m.c.Collect != nil {
+				return m.c.Collect, t.kind, "Collecting…"
+			}
+		case targetRelayStation:
+			if m.c.OpenRelayStation != nil {
+				return m.c.OpenRelayStation, t.kind, ""
+			}
+		case targetSolve:
+			if m.c.Solve != nil {
+				index, solve := t.index, m.c.Solve
+				return func() error { return solve(index) }, t.kind, "Sending…"
+			}
+		case targetTrain:
+			if m.c.Open != nil && t.index < len(m.trains) {
+				handle, open := m.trains[t.index].Handle, m.c.Open
+				return func() error { open(handle); return nil }, t.kind, ""
+			}
+		}
+	}
+	return nil, 0, ""
+}
+
+// targetGone reports whether no target of kind is shown any more: a
+// notice about one goes with it. The Relay Station is always there, so
+// what it said stays until the next click.
+func (m Model) targetGone(kind int) bool {
+	switch kind {
+	case targetCollect:
+		return !m.anyHeld()
+	case targetSolve:
+		for _, pr := range m.signals.PRs {
+			if !pr.Sent {
+				return false
+			}
+		}
+		return true
 	}
 	return false
-}
-
-// trainAt is the train at cell x, y of the pane, on its handle's row or
-// its badges'; false for none. The frame's borders are row 0 and the
-// first and last columns.
-func (m Model) trainAt(x, y int) (int, bool) {
-	if m.width < 6 || m.height < 3 || y >= m.height-1 || x < 1 || x >= m.width-1 {
-		return 0, false
-	}
-	_, _, names := m.body()
-	for i, row := range names {
-		if y == row+1 || y == row+2 {
-			return i, true
-		}
-	}
-	return 0, false
 }
 
 // anyHeld reports whether a train's messages wait for a held pointer.
@@ -212,65 +211,49 @@ func (m Model) anyHeld() bool {
 	return false
 }
 
-// body is the frame's inside, the rows of its Collect messages buttons,
-// and the row of each train's handle, its badges below it.
-func (m Model) body() (body []string, buttons, names []int) {
-	inner := m.width - 4
-	for _, t := range m.trains {
-		handle := t.Handle
-		if r := []rune(handle); len(r) > inner {
-			handle = string(r[:inner-1]) + "…"
-		}
-		name := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(handle)
-		names = append(names, len(body))
-		body = append(body, name)
-		badges := widget.Badge(m.palette, t.Status)
-		if t.Outcome.Label != "" {
-			badges += " " + widget.Badge(m.palette, t.Outcome)
-		}
-		body = append(body, " "+badges)
-		if t.Held {
-			buttons = append(buttons, len(body))
-			body = append(body, " "+widget.NewButton("Collect messages", widget.ButtonAccent).View(m.palette))
-		}
-		body = append(body, "")
-	}
-	switch {
-	case m.err != nil:
-		body = append(body, m.muted("Couldn't read the trains: "+m.err.Error(), inner)...)
-	case len(m.trains) == 0:
-		body = append(body, m.muted("No trains.", inner)...)
-	}
-	if m.notice != "" {
-		body = append(body, m.muted(m.notice, inner)...)
-	}
-	return body, buttons, names
-}
-
-// muted is text in muted colour, wrapped to width.
-func (m Model) muted(text string, width int) []string {
-	return strings.Split(lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextMuted)).Width(max(1, width)).Render(text), "\n")
-}
-
-// load reads the trains.
-func (m Model) load() tea.Cmd {
-	if m.list == nil {
+// nextTheme reads the theme again after themeEvery.
+func (m Model) nextTheme() tea.Cmd {
+	if m.c.LoadTheme == nil {
 		return nil
 	}
-	list := m.list
+	load := m.c.LoadTheme
+	return tea.Tick(themeEvery, func(time.Time) tea.Msg {
+		t, err := load()
+		return themeMsg{t, err}
+	})
+}
+
+func (m Model) View() tea.View {
+	lines, _ := m.layout()
+	v := tea.NewView(strings.Join(lines, "\n"))
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
+
+// load reads the trains and the Signals.
+func (m Model) load() tea.Cmd {
+	if m.c.Trains == nil {
+		return nil
+	}
+	trains, signals := m.c.Trains, m.c.Signals
 	return func() tea.Msg {
-		trains, err := list()
-		return trainsMsg{trains, err}
+		ts, err := trains()
+		var sig Signals
+		if err == nil && signals != nil {
+			sig, err = signals()
+		}
+		return loadedMsg{ts, sig, err}
 	}
 }
 
 // watch follows the daemon's changes, connecting again when the stream
 // breaks.
 func (m Model) watch() tea.Cmd {
-	if m.watchFn == nil {
+	if m.c.Watch == nil {
 		return nil
 	}
-	fn, changes := m.watchFn, m.changes
+	fn, changes := m.c.Watch, m.changes
 	return func() tea.Msg {
 		for {
 			_ = fn(context.Background(), func() {

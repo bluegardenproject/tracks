@@ -175,6 +175,7 @@ type fakeWindows struct {
 	// scrolled says whose agent pane is in copy mode; platforms are the
 	// open Platforms' commands, by window.
 	scrolled  map[string]bool
+	scrollErr error
 	platforms map[string]string
 	pasteErr  error
 	// buttons is each window's buttons; prompts the lines typed into the
@@ -219,7 +220,7 @@ func (w *fakeWindows) LastKey(window string) (time.Time, error) {
 	return w.lastKeys[window], nil
 }
 
-func (w *fakeWindows) Scrolled(window string) (bool, error) { return w.scrolled[window], nil }
+func (w *fakeWindows) Scrolled(window string) (bool, error) { return w.scrolled[window], w.scrollErr }
 
 func (w *fakeWindows) LeaveScroll(window string) error {
 	delete(w.scrolled, window)
