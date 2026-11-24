@@ -43,6 +43,7 @@ const taskSuffix = "" +
 	"own line as `TRACKS_PR_URL=<url>` so the tracks dashboard " +
 	"surfaces it. If you open several, emit one such line per PR.\n\n" +
 	agents.TerminalContract + "\n\n" +
+	agents.RelayContract + "\n\n" +
 	"Keep your output terse and your diffs comment-free unless the " +
 	"repo's conventions ask otherwise — these sessions are read in a " +
 	"dashboard."

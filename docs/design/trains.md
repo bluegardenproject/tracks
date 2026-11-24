@@ -479,7 +479,7 @@ Each step a PR of its own.
    - 9b: Signals in the Platform, its entry opening the Relay Station; the
      PR buttons moved in from the footer, the track's info centred again.
 10. The track's prompt: the relay paragraph (reading messages when a pointer
-    comes).
+    comes). Done, for Work and Review tracks; Plan tracks may get it later.
 11. The "started from" note on independent tracks. Independent of the rest.
     Done: `parent_id` on `tracks`; a parent that's deleted leaves no note.
 12. The Investigator and the Watcher: their design (purpose, briefs,
