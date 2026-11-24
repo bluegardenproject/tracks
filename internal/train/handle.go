@@ -74,7 +74,7 @@ func Resolve(name string, handles []string) (string, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return "", fmt.Errorf("no train called %s", name)
+		return "", fmt.Errorf("no train called %q", name)
 	}
 	return "", fmt.Errorf("%s could be %s: name one", name, strings.Join(matches, " or "))
 }
