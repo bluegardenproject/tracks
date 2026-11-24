@@ -20,12 +20,13 @@ func TestRunHook(t *testing.T) {
 	}{
 		{"claude", `{"hook_event_name":"PermissionRequest"}`, "agent.waiting", "", false},
 		{"claude", `{"hook_event_name":"SessionStart"}`, "", "", false},
-		{"cursor", `{"hook_event_name":"beforeSubmitPrompt"}`, "agent.working", `{"continue":true}`, false},
+		{"cursor", `{"hook_event_name":"beforeSubmitPrompt"}`, "agent.working turn=start", `{"continue":true}`, false},
+		{"claude", `{"hook_event_name":"UserPromptSubmit"}`, "agent.working turn=start", "", false},
 		{"cursor", `not json`, "", "{}", true},
 		{"cursor", `{"hook_event_name":"afterAgentResponse","text":"TRACKS_PR_URL=https://github.com/a/b/pull/1"}`,
 			" [https://github.com/a/b/pull/1]", "{}", false},
 		{"claude", `{"hook_event_name":"Stop","last_assistant_message":"TRACKS_PR_URL=https://github.com/a/b/pull/1"}`,
-			"agent.working [https://github.com/a/b/pull/1]", "", false},
+			"agent.working [https://github.com/a/b/pull/1] turn=end", "", false},
 	}
 	for _, tt := range tests {
 		var out bytes.Buffer
@@ -35,6 +36,9 @@ func TestRunHook(t *testing.T) {
 			r := p.ID + " " + p.Event
 			if len(p.PRs) > 0 {
 				r += fmt.Sprint(" ", p.PRs)
+			}
+			if p.Turn != "" {
+				r += " turn=" + p.Turn
 			}
 			got = append(got, r)
 			return nil

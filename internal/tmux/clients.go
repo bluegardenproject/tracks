@@ -2,7 +2,9 @@ package tmux
 
 import (
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // ClientOf is the client showing pane: of those attached to its
@@ -23,6 +25,33 @@ func (c *Client) ShownWindows(session string) ([]string, error) {
 		return nil, err
 	}
 	return strings.Split(out, "\n"), nil
+}
+
+// LastKey is when a client showing window last had a key or a click,
+// the zero time when none shows it. tmux keeps it in whole seconds, and
+// output to the client doesn't change it.
+func (c *Client) LastKey(window string) (time.Time, error) {
+	out, err := c.run("list-clients", "-F", "#{window_id}\t#{client_activity}")
+	if err != nil {
+		return time.Time{}, err
+	}
+	return lastKey(out, window), nil
+}
+
+// lastKey is the latest activity among list-clients' lines out of the
+// clients showing window.
+func lastKey(out, window string) time.Time {
+	var last time.Time
+	for _, line := range strings.Split(out, "\n") {
+		w, at, ok := strings.Cut(line, "\t")
+		if !ok || w != window {
+			continue
+		}
+		if secs, err := strconv.ParseInt(at, 10, 64); err == nil && time.Unix(secs, 0).After(last) {
+			last = time.Unix(secs, 0)
+		}
+	}
+	return last
 }
 
 // SwitchClient shows target, a window, on client.

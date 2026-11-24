@@ -171,6 +171,11 @@ func (c *Client) CapturePane(pane string) (string, error) {
 	return c.run("capture-pane", "-p", "-t", pane)
 }
 
+// CapturePaneStyled is what pane shows, with the escapes that style it.
+func (c *Client) CapturePaneStyled(pane string) (string, error) {
+	return c.run("capture-pane", "-p", "-e", "-t", pane)
+}
+
 // SourceFile loads a config file into the running server.
 func (c *Client) SourceFile(path string) error {
 	_, err := c.run("source-file", path)

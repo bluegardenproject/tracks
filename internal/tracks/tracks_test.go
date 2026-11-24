@@ -164,6 +164,8 @@ type fakeWindows struct {
 	// window's agent pane shows.
 	attention map[string]bool
 	screens   map[string]string
+	// lastKeys are when a client showing each window last had a key.
+	lastKeys map[string]time.Time
 	// buttons is each window's buttons; prompts the lines typed into the
 	// agents, as "<window> <text>".
 	buttons map[string]string
@@ -196,6 +198,10 @@ func (w *fakeWindows) Prompt(window, text string) error {
 }
 
 func (w *fakeWindows) Screen(window string) (string, error) { return w.screens[window], nil }
+
+func (w *fakeWindows) StyledScreen(window string) (string, error) { return w.screens[window], nil }
+
+func (w *fakeWindows) LastKey(window string) (time.Time, error) { return w.lastKeys[window], nil }
 
 func (w *fakeWindows) List() ([]trackwin.Info, error) { return w.windows, nil }
 
