@@ -53,7 +53,7 @@ func (c *Client) RefreshStatus(client string) error {
 
 // ClientSession is the session client is attached to.
 func (c *Client) ClientSession(client string) (string, error) {
-	return c.run("display-message", "-p", "-c", client, "#{session_name}")
+	return c.run("display-message", "-p", "-c", client, "#{client_session}")
 }
 
 // DetachClient detaches client from its session.
