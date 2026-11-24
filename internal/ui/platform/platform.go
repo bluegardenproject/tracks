@@ -165,7 +165,7 @@ func (m Model) collectAt(x, y int) bool {
 	_, buttons := m.body()
 	width := widget.NewButton("Collect messages", widget.ButtonAccent).Width()
 	for _, row := range buttons {
-		if y == row+1 && x >= 3 && x < 3+width {
+		if y == row+1 && x >= 3 && x < min(3+width, m.width-2) {
 			return true
 		}
 	}

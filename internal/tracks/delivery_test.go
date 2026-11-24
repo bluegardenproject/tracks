@@ -375,8 +375,52 @@ func TestAHeldPointerIsShownAndCollected(t *testing.T) {
 		t.Error("a collected pointer is still shown as held")
 	}
 	var problem Problem
-	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) {
-		t.Errorf("collecting with a pointer on its way: %v, want a Problem", err)
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) || !strings.Contains(err.Error(), "No messages") {
+		t.Errorf("collecting what was collected: %v, want No messages", err)
+	}
+	// A delivered pointer, waiting for its turn, is on its way.
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Answer, Body: "Later.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = nil
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %v, want the pointer delivered", got)
+	}
+	if _, err := f.svc.CollectMessages(ctx, "a"); !errors.As(err, &problem) || !strings.Contains(err.Error(), "on its way") {
+		t.Errorf("collecting with a pointer on its way: %v", err)
+	}
+}
+
+func TestHeldGoesWhenTheAgentExited(t *testing.T) {
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	deliver(t, f)
+	f.windows.windows[0].Exit = "0"
+	deliver(t, f)
+	if f.svc.heldFrom("a", "reviewer-1") {
+		t.Error("Collect messages stayed for an agent that exited in tmux")
+	}
+}
+
+func TestAFailedCollectKeepsItHeld(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	f.windows.lastKeys = map[string]time.Time{"@a": now.Add(-time.Second)}
+	deliver(t, f)
+	f.windows.pasteErr = errors.New("tmux is gone")
+	f.windows.whilePasting = func() { f.svc.SetTurn(ctx, "a", hooks.TurnEnd) }
+	if _, err := f.svc.CollectMessages(ctx, "a"); err == nil {
+		t.Fatal("a failed paste said nothing")
+	}
+	if !f.svc.heldFrom("a", "reviewer-1") {
+		t.Error("a failed collect hid Collect messages")
+	}
+	if f.svc.inTurn("a") {
+		t.Error("a failed collect undid the turn's end that came during it")
 	}
 }
 

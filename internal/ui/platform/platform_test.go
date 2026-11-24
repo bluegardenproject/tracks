@@ -155,17 +155,21 @@ func TestCollectClicksAreSafe(t *testing.T) {
 		t.Error("a click before the pane's size is known collected")
 	}
 	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 4, Height: 12})
-	tm.Update(tea.MouseClickMsg{X: 1, Y: 3, Button: tea.MouseLeft})
+	if _, cmd := tm.Update(tea.MouseClickMsg{X: 1, Y: 3, Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click in a pane too small to draw collected")
+	}
 	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 26, Height: 12})
+	for _, x := range []int{2, 24} {
+		if _, off := tm.Update(tea.MouseClickMsg{X: x, Y: 3, Button: tea.MouseLeft}); off != nil {
+			t.Errorf("a click at x=%d, beside the button, collected", x)
+		}
+	}
 	tm, first := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
 	if first == nil {
 		t.Fatal("a click on the button did nothing")
 	}
 	if _, again := tm.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}); again != nil {
 		t.Error("a second click while the first is on its way collected again")
-	}
-	if _, off := tm.Update(tea.MouseClickMsg{X: 24, Y: 3, Button: tea.MouseLeft}); off != nil {
-		t.Error("a click right of the button collected")
 	}
 	tm, _ = tm.Update(collectedMsg{err: errors.New("answer it first")})
 	tm, _ = tm.Update(trainsMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
