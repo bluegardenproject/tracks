@@ -27,7 +27,10 @@ type Track struct {
 	// track ended, has worktrees, and Archive hasn't removed them yet.
 	Removable bool
 	Archived  bool // taken out of Station
-	Repos     []Repo
+	// Parent is the name of the track it was started from, "" for none
+	// or once that track is deleted.
+	Parent string
+	Repos  []Repo
 	// Engine is the agent CLI, Model its model; Session is the agent's
 	// session ID, which resumes it.
 	Engine, Model, Session string
@@ -136,7 +139,7 @@ func (d Daemon) Tracks(ctx context.Context) ([]Track, track.Filter, error) {
 		out[i] = Track{ID: l.ID, Number: l.Number, Name: l.Name, Title: l.Title, Kind: string(l.Kind), Status: l.Status(),
 			Removable: !l.Open() && l.Kind.Worktrees() && !l.Cleaned(), Archived: l.Archived(), Repos: repos,
 			Engine: engine, Model: l.Model, Session: l.Session, Cost: l.Cost, Created: l.CreatedAt, PRs: prs, PRStatus: track.PRStatus(l.PRs),
-			Failures: l.Failures, FailureStatus: track.FailureStatus(l.Failures)}
+			Failures: l.Failures, FailureStatus: track.FailureStatus(l.Failures), Parent: l.ParentName}
 		if l.Draft != nil {
 			out[i].Draft = &Draft{Error: l.Draft.Error, Prompt: l.Draft.Request.Prompt}
 		}

@@ -41,6 +41,8 @@ type Request struct {
 	// NoDraft keeps no draft when the track can't be made: the caller,
 	// such as an agent running tracks new, reports the error itself.
 	NoDraft bool `json:"no_draft,omitempty"`
+	// Parent is the ID of the track tracks new ran in, "" for none.
+	Parent string `json:"parent,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:
@@ -122,6 +124,7 @@ func (s *Service) check(ctx context.Context, req Request) (track.Track, []string
 		}
 	}
 	t.Terminal = req.Terminal && t.Kind.Worktrees()
+	t.Parent = strings.TrimSpace(req.Parent)
 	return t, drafts, nil
 }
 

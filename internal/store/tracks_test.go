@@ -281,3 +281,49 @@ func TestPromote(t *testing.T) {
 		}
 	}
 }
+
+func TestTrackParent(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	created := time.UnixMilli(time.Now().UnixMilli())
+	parent := track.Track{ID: "20261124-100000-aaaaaa", Kind: track.Work, Name: "station-bug", Title: "Station bug",
+		Engine: "claude", Session: "s-1", Prompt: "Fix it", CreatedAt: created}
+	untitled := track.Track{ID: "20261124-100100-bbbbbb", Kind: track.Ask, Name: "why-slow",
+		Engine: "claude", Session: "s-2", Prompt: "Why?", CreatedAt: created}
+	child := track.Track{ID: "20261124-100200-cccccc", Kind: track.Plan, Name: "theme-idea", Parent: parent.ID,
+		Engine: "claude", Session: "s-3", Prompt: "Plan it", CreatedAt: created}
+	grandchild := track.Track{ID: "20261124-100300-dddddd", Kind: track.Ask, Name: "ask-more", Parent: untitled.ID,
+		Engine: "claude", Session: "s-4", Prompt: "Ask", CreatedAt: created}
+	for _, tr := range []track.Track{parent, untitled, child, grandchild} {
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for id, want := range map[string][2]string{
+		parent.ID:     {"", ""},
+		child.ID:      {parent.ID, "Station bug"},
+		grandchild.ID: {untitled.ID, "why-slow"},
+	} {
+		got, err := s.Track(ctx, id)
+		if err != nil || got.Parent != want[0] || got.ParentName != want[1] {
+			t.Errorf("Track(%s) has parent %q named %q, %v; want %q named %q", id, got.Parent, got.ParentName, err, want[0], want[1])
+		}
+	}
+
+	if err := s.DeleteTrack(ctx, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Track(ctx, child.ID)
+	if err != nil || got.Parent != "" || got.ParentName != "" {
+		t.Errorf("after its parent was deleted the track has parent %q named %q, %v; want none", got.Parent, got.ParentName, err)
+	}
+
+	orphan := track.Track{ID: "20261124-100400-eeeeee", Kind: track.Ask, Name: "orphan", Parent: "nope",
+		Engine: "claude", Session: "s-5", Prompt: "Ask", CreatedAt: created}
+	if err := s.AddTrack(ctx, orphan); err != nil {
+		t.Fatalf("a track whose parent is gone wasn't stored: %v", err)
+	}
+	if got, err := s.Track(ctx, orphan.ID); err != nil || got.Parent != "" {
+		t.Errorf("a track whose parent is gone has parent %q, %v; want none", got.Parent, err)
+	}
+}
