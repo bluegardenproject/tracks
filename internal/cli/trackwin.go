@@ -37,9 +37,12 @@ func newTrackwinCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:  "nav <first|prev|next|last|number> <current-window-index>",
-		Args: cobra.ExactArgs(2),
+		Use:  "nav <first|prev|next|last|number> <current-window-index> [session]",
+		Args: cobra.RangeArgs(2, 3),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 3 && trackwin.IsTrainSession(args[2]) {
+				return nil
+			}
 			paths, err := platform.Resolve()
 			if err != nil {
 				return err

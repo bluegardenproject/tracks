@@ -12,6 +12,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/tmux"
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/ui/confirm"
 	"github.com/bluegardenproject/tracks/internal/ui/quickaccess"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
@@ -41,6 +42,10 @@ func newQuickAccessCmd() *cobra.Command {
 }
 
 func quickAccess(c *tmux.Client, paths platform.Paths, client string) error {
+	// Not over a train's overlay: what it opens acts on the tracks.
+	if session, err := c.ClientSession(client); err == nil && trackwin.IsTrainSession(session) {
+		return nil
+	}
 	picked, err := askInPopup(c, paths, client, "quick-access", quickaccess.Width, quickaccess.Height())
 	if err != nil {
 		return err
