@@ -80,6 +80,7 @@ type Window struct {
 type Tmux interface {
 	NewWindow(session, name, dir, command string) (window, pane string, err error)
 	SplitPane(target string, dir tmux.Split, percent int, cwd, command string) (string, error)
+	SplitLeft(target string, cols int, cwd, command string) (string, error)
 	RespawnPane(pane, dir, command string) error
 	ListPanes(window string) ([]tmux.Pane, error)
 	SetPaneOption(pane, name, value string) error

@@ -449,6 +449,11 @@ Each step a PR of its own.
 5. Delivery: the pointer, the blockers, the tick, the stall check,
    notifications.
 6. The Platform: the pane, the list, the badges; the Reviewer in it.
+   Built: `tracks platform` in a pane `PlatformWidth` (26) wide on the
+   window's left, opened and closed by the daemon's tick
+   (`SyncTrains`), which also tells the change feed when a track's
+   trains changed, since their status comes from tmux and their runs,
+   not the store. Clicking a train comes with step 7.
 7. The overlay: a session per train in place of a window in
    `tracks-back` (`join-pane` moves a pane out of its session, so the two
    can't come apart), the popup, the header with Hide and End train,

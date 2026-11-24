@@ -20,8 +20,11 @@ type Train struct {
 	// Engine is the agent CLI and model it runs on, "" when unknown.
 	Engine string `json:"engine,omitempty"`
 	// Status and Outcome are badge labels; Outcome "" for none.
-	Status  string `json:"status"`
-	Outcome string `json:"outcome,omitempty"`
+	// StatusID and OutcomeID name them, for drawing their badges.
+	Status    string `json:"status"`
+	Outcome   string `json:"outcome,omitempty"`
+	StatusID  string `json:"status_id,omitempty"`
+	OutcomeID string `json:"outcome_id,omitempty"`
 }
 
 // TrainListResult is a track's trains.

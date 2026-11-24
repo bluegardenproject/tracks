@@ -33,6 +33,7 @@ func newRoot(version string) *cobra.Command {
 		newPathsCmd(),
 		newStopCmd(),
 		newTracksWindowCmd(version),
+		newPlatformCmd(version),
 		newTrackwinCmd(),
 		newQuickAccessCmd(),
 		newPopupCmd(version),

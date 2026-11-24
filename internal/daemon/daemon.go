@@ -173,6 +173,9 @@ func Run(ctx context.Context, c Config) error {
 				if err := c.Tracks.Deliver(ctx); err != nil {
 					c.Log.Printf("pointing agents to their messages: %v", err)
 				}
+				if err := c.Tracks.SyncTrains(ctx); err != nil {
+					c.Log.Printf("showing the tracks' trains: %v", err)
+				}
 				proxier.start(pollCtx, syncProxy)
 			}
 		}
