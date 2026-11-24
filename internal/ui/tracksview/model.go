@@ -306,6 +306,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.enginesPaste(msg)
 		case m.creatorFocused():
 			return m.creatorMsg(msg)
+		case m.tab == tabSettings && m.settings.section == sectionAgents && m.settings.agents.editingPrefix:
+			return m.agentsPaste(msg)
 		}
 	case tea.KeyPressMsg:
 		return m.key(msg)

@@ -26,9 +26,13 @@ func reviewHandle(dir string) string {
 }
 
 // newReviewHandle is a handle for a new review that isn't old's, the
-// handle of the review it replaces.
-func newReviewHandle(old string) (string, error) {
-	return train.NewHandle(train.Reviewer.Prefix(), func(h string) bool { return h == old })
+// handle of the review it replaces. prefix is the setting's, the
+// reviewer's name when it's unset or isn't one.
+func newReviewHandle(prefix, old string) (string, error) {
+	if train.CheckPrefix(prefix) != nil {
+		prefix = train.Reviewer.Prefix()
+	}
+	return train.NewHandle(prefix, func(h string) bool { return h == old })
 }
 
 // postReview posts text, the report or an answer of track id's reviewer,

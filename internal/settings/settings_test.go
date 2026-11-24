@@ -186,3 +186,31 @@ func TestTracksKeepWhatThisBuildDoesntKnow(t *testing.T) {
 		t.Errorf("unsetting Work should keep the rest:\n%s", data)
 	}
 }
+
+func TestReviewerPrefixKeepsWithTheRest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.yaml")
+	if err := os.WriteFile(path, []byte("agents:\n  reviewer:\n    engine: claude\n    other: kept\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Agents.Reviewer.Engine, s.Agents.Reviewer.Model, s.Agents.Reviewer.Prefix = "cursor", "gpt-5", "rev"
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	for _, want := range []string{"engine: cursor", "model: gpt-5", "prefix: rev", "other: kept"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("settings.yaml lacks %q:\n%s", want, b)
+		}
+	}
+	back, err := Load(path)
+	if err != nil || back.Agents.ReviewerPrefix() != "rev" || back.Agents.Reviewer.Engine != "cursor" {
+		t.Errorf("read back %+v, %v", back.Agents.Reviewer, err)
+	}
+	if (Agents{}).ReviewerPrefix() != "" {
+		t.Error("no reviewer setting has a prefix")
+	}
+}

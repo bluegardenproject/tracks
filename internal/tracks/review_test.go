@@ -90,7 +90,7 @@ func TestReview(t *testing.T) {
 	panes := &fakeReviewers{}
 	f.svc.Reviewers = panes
 	f.svc.Settings = func() (settings.Settings, error) {
-		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.TrackType{Engine: "cursor", Model: "gpt-5"}}}, nil
+		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.Agent{Engine: "cursor", Model: "gpt-5"}}}, nil
 	}
 
 	sub := filepath.Join(worktree, "sub")
@@ -320,7 +320,7 @@ func TestAskReview(t *testing.T) {
 	}
 
 	f.svc.Settings = func() (settings.Settings, error) {
-		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.TrackType{Engine: "cursor"}}}, nil
+		return settings.Settings{Engines: f.engines, Agents: settings.Agents{Reviewer: &settings.Agent{Engine: "cursor"}}}, nil
 	}
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
