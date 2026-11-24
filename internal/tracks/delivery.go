@@ -20,6 +20,10 @@ func (s *Service) SetTurn(ctx context.Context, id, turn string) {
 	if turn != hooks.TurnStart && turn != hooks.TurnEnd {
 		return
 	}
+	// Under Report's lock, so it can't land between Report reading the
+	// track and forgetting its turn.
+	s.reporting.Lock()
+	defer s.reporting.Unlock()
 	if t, err := s.Store.Track(ctx, id); err != nil || !t.Open() || t.Exit != "" {
 		return
 	}

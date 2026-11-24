@@ -41,7 +41,7 @@ func TestTurns(t *testing.T) {
 
 func TestANewAgentForgetsTheTurn(t *testing.T) {
 	ctx := context.Background()
-	for _, e := range []track.Event{track.Resumed, track.Ended, track.Interrupted, track.AgentExited} {
+	for _, e := range []track.Event{track.Resumed, track.Ended, track.Interrupted, track.AgentExited, track.AgentFailed} {
 		f := trackA(t)
 		f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
 		if err := f.svc.Report(ctx, "a", e); err != nil {

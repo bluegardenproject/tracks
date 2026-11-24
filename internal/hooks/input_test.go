@@ -32,6 +32,7 @@ func TestInputEmpty(t *testing.T) {
 		{"cursor, nothing", "cursor", "Cursor Agent", false, false},
 		{"claude, a draft after a charset's escape", "claude", ruleLine + "\n\x1b(B\x1b[39m❯ draft\n" + ruleLine, false, true},
 		{"claude, a draft after an OSC", "claude", ruleLine + "\n\x1b]8;;http://x\a❯ draft\n" + ruleLine, false, true},
+		{"claude, an OSC with a backslash, ended by ST", "claude", ruleLine + "\n\x1b]8;;C:\\x\x1b\\❯ draft\n" + ruleLine, false, true},
 		{"claude, an empty input after a two-byte escape", "claude", ruleLine + "\n\x1b=❯ \x1b[2mTry\x1b[0m\n" + ruleLine, true, true},
 		{"an engine Tracks can't read", "other", claudeEmpty, false, false},
 	} {

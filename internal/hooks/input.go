@@ -90,8 +90,8 @@ func cells(line string) []cell {
 		switch rs[i+1] {
 		case '[':
 		case ']', 'P', 'X', '^', '_':
-			// A string, such as OSC: skip to its BEL or ST.
-			for i += 2; i < len(rs) && rs[i] != '\a' && rs[i] != '\\'; i++ {
+			// A string, such as OSC: skip to its BEL or ST (ESC \).
+			for i += 2; i < len(rs) && rs[i] != '\a' && !(rs[i] == '\\' && rs[i-1] == '\x1b'); i++ {
 			}
 			continue
 		case '(', ')', '*', '+':
