@@ -62,3 +62,32 @@ func TestReviewPicksOneRepo(t *testing.T) {
 		t.Errorf("choosing ledger-live: picker open %v, repo %d", m.picker != nil, m.repo)
 	}
 }
+
+func TestPrefixHint(t *testing.T) {
+	m := form("web", "api", "docs")
+	m.prefixed = map[string]bool{"web": true}
+	hint := "the name goes without the repos' prefixes"
+	for _, c := range []struct {
+		kind   Kind
+		picked []string
+		want   bool
+	}{
+		{Work, []string{"web", "api"}, false},
+		{Work, []string{"api", "docs", "web"}, true},
+		{Review, []string{"api", "docs", "web"}, false},
+	} {
+		m = m.setKind(c.kind)
+		m.picked = map[string]bool{}
+		for _, r := range c.picked {
+			m.picked[r] = true
+		}
+		if got := strings.Contains(plain(m), hint); got != c.want {
+			t.Errorf("%v with %v: hint shown %v, want %v", c.kind, c.picked, got, c.want)
+		}
+	}
+	m = m.setKind(Work)
+	m.prefixed = nil
+	if strings.Contains(plain(m), hint) {
+		t.Error("three repos without prefixes show the hint")
+	}
+}

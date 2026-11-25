@@ -73,8 +73,8 @@ func addTrack(ctx context.Context, version, client, draft string) error {
 	}
 	t, _ := loadTheme(paths)
 	c := tmux.New(paths.TmuxSocket)
-	names, reposErr := repoNames(ctx, paths)
-	conf := addtrack.Config{Theme: t, Repos: names, ReposErr: reposErr, Create: creator(c, paths, version, client)}
+	names, prefixed, reposErr := repoNames(ctx, paths)
+	conf := addtrack.Config{Theme: t, Repos: names, Prefixed: prefixed, ReposErr: reposErr, Create: creator(c, paths, version, client)}
 	if s, err := settings.Load(paths.Settings); err == nil {
 		conf.RunsOn, conf.Engines, conf.Models = runsOn(s), addedEngines(s), listModels
 	}

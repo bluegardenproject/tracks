@@ -1,9 +1,12 @@
 package addtrack
 
 import (
+	"fmt"
 	"maps"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
@@ -87,4 +90,20 @@ func (m Model) reposHints() []widget.KeyHelp {
 		return append(keys, widget.KeyHelp{Key: "Enter", Help: "select repos"})
 	}
 	return append(keys, widget.KeyHelp{Key: "Enter", Help: "remove"})
+}
+
+// prefixHint says the repos' prefixes are left out of the name, when
+// more repos are picked than names are shown under theirs and one of
+// them has a prefix; "" otherwise.
+func (m Model) prefixHint() string {
+	picked := m.pickedRepos()
+	if !slices.Contains(kinds[m.kind].fields, ctlRepos) || len(picked) <= track.MaxPrefixed {
+		return ""
+	}
+	for _, r := range picked {
+		if m.prefixed[r] {
+			return fmt.Sprintf("With more than %d repos, the name goes without the repos' prefixes.", track.MaxPrefixed)
+		}
+	}
+	return ""
 }

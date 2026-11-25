@@ -218,17 +218,19 @@ func runPopup(ctx context.Context, m tea.Model) (tea.Model, error) {
 	return done, err
 }
 
-// repoNames are the Repositories tab's repos, in its order.
-func repoNames(ctx context.Context, paths platform.Paths) ([]string, error) {
+// repoNames are the Repositories tab's repos' names, and which of them
+// have a prefix.
+func repoNames(ctx context.Context, paths platform.Paths) ([]string, map[string]bool, error) {
 	db, err := store.Open(ctx, paths.Database)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer db.Close()
 	all, err := db.Repos(ctx)
-	names := make([]string, len(all))
+	names, prefixed := make([]string, len(all)), map[string]bool{}
 	for i, r := range all {
 		names[i] = r.Name
+		prefixed[r.Name] = r.Prefix != ""
 	}
-	return names, err
+	return names, prefixed, err
 }

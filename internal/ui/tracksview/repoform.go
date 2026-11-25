@@ -20,6 +20,7 @@ const (
 	fieldPath
 	fieldBase
 	fieldOwner
+	fieldPrefix
 	fieldDrafts
 	fieldSetup
 	fieldRemoveSetup
@@ -48,6 +49,8 @@ var inputs = []struct {
 	{fieldBase, "Base branch", "New tracks branch off it; " + source.DefaultBase + " when left empty.", "base", 255, source.DefaultBase},
 	{fieldOwner, "Code owner", "Review tracks review only the files it owns by CODEOWNERS; the whole change when left empty.",
 		"owner", 255, "@org/team"},
+	{fieldPrefix, "Prefix", "Goes before the name of its tracks with at most one other repo; none when left empty.",
+		"prefix", 24, "[WEB]"},
 }
 
 // repoForm edits one repo, or a new one when id is 0.
@@ -81,6 +84,7 @@ func newForm(e *source.RepositoryEntry) repoForm {
 		f.inputs[fieldPath].SetValue(e.Path)
 		f.inputs[fieldBase].SetValue(e.BaseBranch)
 		f.inputs[fieldOwner].SetValue(e.CodeOwner)
+		f.inputs[fieldPrefix].SetValue(e.Prefix)
 		f.drafts = e.DraftPRs
 		f.suggested = e.Path
 		f.setupOn = e.Setup != ""
@@ -100,7 +104,7 @@ func (f repoForm) value(field formField) string {
 func (f repoForm) repo() source.Repository {
 	r := f.original
 	r.ID, r.Path, r.Name, r.BaseBranch, r.DraftPRs = f.id, f.value(fieldPath), f.value(fieldName), f.value(fieldBase), f.drafts
-	r.CodeOwner = f.value(fieldOwner)
+	r.CodeOwner, r.Prefix = f.value(fieldOwner), f.value(fieldPrefix)
 	r.Setup = ""
 	if f.setupOn {
 		r.Setup = strings.TrimSpace(f.setup.Value())
@@ -114,13 +118,13 @@ func (f repoForm) repo() source.Repository {
 
 func (f repoForm) dirty() bool {
 	r := f.repo()
-	return r.Path != f.original.Path || r.Name != f.original.Name || r.BaseBranch != f.original.BaseBranch || r.CodeOwner != f.original.CodeOwner ||
+	return r.Path != f.original.Path || r.Name != f.original.Name || r.BaseBranch != f.original.BaseBranch || r.CodeOwner != f.original.CodeOwner || r.Prefix != f.original.Prefix ||
 		r.DraftPRs != f.original.DraftPRs || r.Setup != f.original.Setup || !slices.Equal(r.Servers, f.original.Servers)
 }
 
 // order is what Tab moves through, in display order.
 func (f repoForm) order() []formField {
-	order := []formField{fieldName, fieldPath, fieldBase, fieldOwner, fieldDrafts}
+	order := []formField{fieldName, fieldPath, fieldBase, fieldOwner, fieldPrefix, fieldDrafts}
 	if f.setupOn {
 		order = append(order, fieldSetup, fieldRemoveSetup)
 	} else {
@@ -144,7 +148,7 @@ func (f repoForm) order() []formField {
 // input is field's text input, nil for fields that aren't one.
 func (f *repoForm) input(field formField) *textinput.Model {
 	switch {
-	case field <= fieldOwner:
+	case field <= fieldPrefix:
 		return &f.inputs[field]
 	case field == fieldSetup:
 		return &f.setup
@@ -161,7 +165,7 @@ func (f repoForm) isInput(field formField) bool { return f.input(field) != nil }
 // errKey is the key field's errors come under.
 func (f repoForm) errKey(field formField) string {
 	switch {
-	case field <= fieldOwner:
+	case field <= fieldPrefix:
 		return inputs[field].key
 	case field == fieldSetup:
 		return "setup"
