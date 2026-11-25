@@ -15,6 +15,9 @@ import (
 // maxName is the longest name, in characters.
 const maxName = 64
 
+// maxPrefix is the longest prefix, in characters.
+const maxPrefix = 24
+
 // validName reports whether name, already trimmed, can be shown as a
 // repo's name. Folders get a simplified version when a track starts,
 // so any printable text goes.
@@ -43,6 +46,7 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	r.Name = strings.TrimSpace(r.Name)
 	r.BaseBranch = strings.TrimSpace(r.BaseBranch)
 	r.CodeOwner = review.NormalOwner(r.CodeOwner)
+	r.Prefix = strings.TrimSpace(r.Prefix)
 	if !validName(r.Name) {
 		return r, &FieldError{"name", fmt.Sprintf("Enter a name of up to %d characters.", maxName)}
 	}
@@ -61,6 +65,9 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	}
 	if strings.ContainsFunc(r.CodeOwner, unicode.IsSpace) {
 		return r, &FieldError{"owner", "Enter one code owner, such as @org/team, or leave it empty."}
+	}
+	if r.Prefix != "" && !printable(r.Prefix, maxPrefix) {
+		return r, &FieldError{"prefix", fmt.Sprintf("Enter a prefix of up to %d characters, or leave it empty.", maxPrefix)}
 	}
 	return checkServers(r)
 }

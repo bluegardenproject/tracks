@@ -22,6 +22,9 @@ type Config struct {
 	// why they couldn't be read.
 	Repos    []string
 	ReposErr error
+	// Prefixed says which repos have a prefix their tracks' names are
+	// shown under.
+	Prefixed map[string]bool
 	// RunsOn is what each type's tracks run on, Engines the engines
 	// added, and Models lists the models of one that lists its own.
 	RunsOn  map[track.Kind]RunsOn
@@ -35,6 +38,7 @@ type Model struct {
 	palette  style.Palette
 	repos    []string
 	reposErr error
+	prefixed map[string]bool
 
 	kind     Kind
 	picked   map[string]bool // the repos ticked, kept across kinds
@@ -88,6 +92,7 @@ func New(c Config) Model {
 		palette:  style.New(c.Theme),
 		repos:    c.Repos,
 		reposErr: c.ReposErr,
+		prefixed: c.Prefixed,
 		picked:   map[string]bool{},
 		target:   widget.NewInput(500, placeholders[ctlTarget]),
 		document: widget.NewInput(1000, placeholders[ctlDocument]),

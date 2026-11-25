@@ -34,6 +34,10 @@ func (k Kind) Worktrees() bool { return k == Work || k == Review }
 // ReadOnly reports whether k's agent runs in a read-only mode.
 func (k Kind) ReadOnly() bool { return k == Ask || k == Plan }
 
+// MaxPrefixed is the most repos a track can have and still be shown
+// under their prefixes.
+const MaxPrefixed = 2
+
 // Track is a track as it's stored.
 type Track struct {
 	ID   string

@@ -97,6 +97,9 @@ func (m Model) body(width int) ([]string, []hit) {
 		case ctlDocument:
 			b.input(c, m.document)
 		case ctlName:
+			if hint := m.prefixHint(); hint != "" {
+				b.wrapped(theme.StateWarningText, hint)
+			}
 			b.input(c, m.name)
 		case ctlTerminal:
 			b.checks(c, []string{"Open a shell in the worktree, beside the agent."}, []bool{m.terminal})

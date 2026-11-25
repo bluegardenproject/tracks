@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -83,7 +84,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 			return Created{}, err
 		}
 	}
-	t, drafts, err := s.check(ctx, req)
+	t, drafts, prefix, err := s.check(ctx, req)
 	if err != nil {
 		return Created{}, err
 	}
@@ -100,6 +101,9 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	}
 	defer release()
 	t.Name = name
+	if prefix != "" {
+		t.Title = prefixed(prefix, cmp.Or(t.Title, t.Name))
+	}
 
 	if id == agents.Cursor.ID {
 		progress("Starting a Cursor chat…")

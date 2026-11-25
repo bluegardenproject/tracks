@@ -110,18 +110,19 @@ func TestAddChecksEveryField(t *testing.T) {
 		{store.Repo{Name: "shop", Path: dir, BaseBranch: "--all"}, "base"},
 		{store.Repo{Name: "shop", Path: dir}, "base"}, // main, which this repo lacks
 		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", CodeOwner: "@a @b"}, "owner"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Prefix: strings.Repeat("x", maxPrefix+1)}, "prefix"},
 	} {
 		if _, err := s.Add(ctx, c.repo); field(err) != c.field {
 			t.Errorf("Add(%+v): %v; want a problem with %s", c.repo, err, c.field)
 		}
 	}
 
-	added, err := s.Add(ctx, store.Repo{Name: " Shop Web ", Path: dir + "/", BaseBranch: "develop", CodeOwner: " org/team "})
+	added, err := s.Add(ctx, store.Repo{Name: " Shop Web ", Path: dir + "/", BaseBranch: "develop", CodeOwner: " org/team ", Prefix: " [WEB] "})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if added.Name != "Shop Web" || added.Path != dir || added.CodeOwner != "@org/team" {
-		t.Errorf("added %+v; want the name trimmed, the path cleaned and the code owner a handle", added)
+	if added.Name != "Shop Web" || added.Path != dir || added.CodeOwner != "@org/team" || added.Prefix != "[WEB]" {
+		t.Errorf("added %+v; want the name and prefix trimmed, the path cleaned and the code owner a handle", added)
 	}
 	if _, err := s.Add(ctx, store.Repo{Name: "other", Path: dir, BaseBranch: "trunk"}); field(err) != "path" {
 		t.Errorf("adding the same checkout twice: %v; want a path problem", err)
