@@ -53,8 +53,8 @@ type State struct {
 	ArchivedAt time.Time // zero while it's listed in Station
 	Waiting    bool      // its agent waits on a dialog in its window
 	Exit       string    // how its agent exited: "" while it runs, ExitOK or ExitFailed
-	// Interrupted says its window closed with Tracks, to be offered for
-	// reopening when Tracks starts again.
+	// Interrupted says its window closed with Tracks, to be reopened when
+	// Tracks starts again.
 	Interrupted bool
 }
 

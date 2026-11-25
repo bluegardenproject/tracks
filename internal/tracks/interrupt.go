@@ -41,7 +41,7 @@ func (s *Service) Interrupt(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// Interrupted are the tracks to offer for reopening, oldest first.
+// Interrupted are the tracks to reopen when Tracks starts, oldest first.
 func (s *Service) Interrupted(ctx context.Context) ([]track.Track, error) {
 	return s.Store.InterruptedTracks(ctx)
 }
