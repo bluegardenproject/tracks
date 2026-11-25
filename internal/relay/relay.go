@@ -19,6 +19,10 @@ const TrackHandle = "track"
 // TracksHandle sends the notices: Tracks itself, never an agent.
 const TracksHandle = "tracks"
 
+// GitHubHandle posts what Tracks reads on GitHub of a track's PRs, as
+// events that wake its agent: Tracks too, never an agent.
+const GitHubHandle = "github"
+
 // Kind is what a message is.
 type Kind string
 
@@ -61,6 +65,8 @@ func CheckSend(from, to string, kind Kind, body string) error {
 		return errors.New("a message has a sender and a recipient; only Tracks' notices go to everyone")
 	case from == TracksHandle || to == TracksHandle:
 		return errors.New("only Tracks sends notices")
+	case from == GitHubHandle || to == GitHubHandle:
+		return errors.New("@github only posts what Tracks reads on GitHub; nobody sends to it")
 	case from == to:
 		return errors.New("a message goes to someone else")
 	case (from == TrackHandle) == (to == TrackHandle):

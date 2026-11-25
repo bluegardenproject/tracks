@@ -12,7 +12,8 @@ import (
 
 type fakeGitHub struct {
 	states   map[string]track.PRState
-	branches map[string][]track.PR // by branch
+	health   map[string]track.Health // by PR URL
+	branches map[string][]track.PR   // by branch
 	fail     error
 	asked    []string
 	threads  map[string]int // by PR URL
@@ -45,12 +46,14 @@ func (g *fakeGitHub) OpenThreads(_ context.Context, pr track.PR) (int, error) {
 	return g.threads[pr.URL], nil
 }
 
-func (g *fakeGitHub) PR(_ context.Context, url string) (track.PRState, error) {
+func (g *fakeGitHub) PR(_ context.Context, url string) (track.PR, error) {
 	g.asked = append(g.asked, "view "+url)
 	if g.fail != nil {
-		return "", g.fail
+		return track.PR{}, g.fail
 	}
-	return g.states[url], nil
+	pr, _ := track.ParsePR(url)
+	pr.State, pr.Health = g.states[url], g.health[url]
+	return pr, nil
 }
 
 func (g *fakeGitHub) BranchPRs(_ context.Context, _, branch string) ([]track.PR, error) {

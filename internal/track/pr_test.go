@@ -1,6 +1,9 @@
 package track
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParsePR(t *testing.T) {
 	want := PR{URL: "https://github.com/acme/web.app/pull/42", Repo: "acme/web.app", Number: 42, State: PROpen}
@@ -10,7 +13,7 @@ func TestParsePR(t *testing.T) {
 		"https://github.com/acme/web.app/pull/42#issuecomment-1",
 		"https://github.com/acme/web.app/pull/42?w=1",
 	} {
-		if got, ok := ParsePR(url); !ok || got != want {
+		if got, ok := ParsePR(url); !ok || !reflect.DeepEqual(got, want) {
 			t.Errorf("ParsePR(%q) = %+v, %v", url, got, ok)
 		}
 	}

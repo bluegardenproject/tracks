@@ -11,7 +11,9 @@ import (
 // PollPRs asks GitHub about the tracks' pull requests, in one pass:
 // the PRs from the branches of Work tracks that aren't closed, which
 // finds those opened by hand, then every PR not yet merged or closed,
-// whatever its track's status. ErrNoGH means nothing was asked.
+// whatever its track's status. What changed on an open Work track's
+// PR goes to its relay as @github's events. ErrNoGH means nothing was
+// asked.
 func (s *Service) PollPRs(ctx context.Context) error {
 	if s.GitHub == nil {
 		return nil
@@ -19,6 +21,10 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	tracks, err := s.branchTracks(ctx)
 	if err != nil {
 		return err
+	}
+	working := map[string]bool{}
+	for _, t := range tracks {
+		working[t.ID] = t.Open()
 	}
 	var errs []error
 	asked := map[[2]string]bool{}
@@ -41,6 +47,9 @@ func (s *Service) PollPRs(ctx context.Context) error {
 					return err
 				}
 				s.notify(prNotice(t.ID, t.Name, pr, was))
+				if err := s.prHealth(ctx, t.ID, pr, was, working[t.ID]); err != nil {
+					return err
+				}
 				asked[[2]string{t.ID, pr.URL}] = true
 			}
 		}
@@ -54,14 +63,14 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		if asked[[2]string{p.TrackID, p.URL}] {
 			continue
 		}
-		state, err := s.GitHub.PR(ctx, p.URL)
+		now, err := s.GitHub.PR(ctx, p.URL)
 		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 			return errors.Join(err, ctx.Err())
 		} else if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		p.State, p.CheckedAt = state, s.now()
+		p.State, p.Health, p.CheckedAt = now.State, now.Health, s.now()
 		was, err := s.Store.SavePR(ctx, p.TrackID, p.PR, p.CheckedAt)
 		if err != nil {
 			return err
@@ -69,8 +78,33 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		if err := s.notifyPR(ctx, p.TrackID, p.PR, was); err != nil {
 			return err
 		}
+		if err := s.prHealth(ctx, p.TrackID, p.PR, was, working[p.TrackID]); err != nil {
+			return err
+		}
 	}
 	return errors.Join(errs...)
+}
+
+// prHealth records pr's health, as track id's, which was in state was,
+// and posts @github's events on what changed when post says the track
+// is an open Work track, whose agent acts on them.
+func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post bool) error {
+	before := pr.Health
+	if !pr.State.Settled() {
+		var err error
+		if before, err = s.Store.SavePRHealth(ctx, id, pr.URL, pr.Health); err != nil {
+			return err
+		}
+	}
+	if !post {
+		return nil
+	}
+	for _, e := range prEvents(pr, was, before) {
+		if err := s.postGitHub(ctx, id, e); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // branchTracks are the Work tracks whose branches may get PRs: those

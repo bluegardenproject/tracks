@@ -22,6 +22,8 @@ func TestCheckSend(t *testing.T) {
 		{"reviewer-1", "watch-2", Question, "Train to train", false},
 		{"track", "reviewer-1", Notice, "Pretending", false},
 		{"tracks", "track", Report, "Pretending", false},
+		{"github", "track", Event, "Pretending", false},
+		{"track", "github", Question, "Asking GitHub", false},
 		{"track", "reviewer-1", "order", "Unknown kind", false},
 		{"track", "reviewer-1", Question, "  \n", false},
 		{"track", "reviewer-1", Question, strings.Repeat("a", MaxBody+1), false},

@@ -100,3 +100,39 @@ func scanPR(row scanner, id *string) (track.PR, error) {
 	}
 	return pr, err
 }
+
+// SavePRHealth records h as track id's PR at url has it now and returns
+// what it had: zero until the poll read it. A Mergeable GitHub hasn't
+// computed keeps the last one.
+func (s *Store) SavePRHealth(ctx context.Context, id, url string, h track.Health) (was track.Health, err error) {
+	var mergeable, checks, head sql.NullString
+	err = s.db.QueryRowContext(ctx, "SELECT mergeable, checks, head FROM track_prs WHERE track_id = ? AND url = ?", id, url).
+		Scan(&mergeable, &checks, &head)
+	if err != nil {
+		return track.Health{}, err
+	}
+	was = track.Health{Mergeable: track.Mergeable(mergeable.String), Checks: track.Checks(checks.String), Head: head.String}
+	_, err = s.db.ExecContext(ctx, "UPDATE track_prs SET mergeable = COALESCE(?, mergeable), checks = ?, head = ? "+
+		"WHERE track_id = ? AND url = ?", nullString(string(h.Mergeable)), nullString(string(h.Checks)), nullString(h.Head), id, url)
+	return was, err
+}
+
+// SavePRThreads records n open review threads on track id's PR at url
+// and returns how many it had; known is false until they were counted.
+func (s *Store) SavePRThreads(ctx context.Context, id, url string, n int) (was int, known bool, err error) {
+	var threads sql.NullInt64
+	err = s.db.QueryRowContext(ctx, "SELECT threads FROM track_prs WHERE track_id = ? AND url = ?", id, url).Scan(&threads)
+	if err != nil {
+		return 0, false, err
+	}
+	_, err = s.db.ExecContext(ctx, "UPDATE track_prs SET threads = ? WHERE track_id = ? AND url = ?", n, id, url)
+	return int(threads.Int64), threads.Valid, err
+}
+
+// nullString is s, NULL for "".
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}

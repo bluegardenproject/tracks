@@ -14,6 +14,9 @@ type PR struct {
 	Number    int
 	State     PRState
 	CheckedAt time.Time // zero until the poll asked GitHub
+	// Health is what the poll read of its conflicts and checks, zero
+	// until it did.
+	Health Health
 }
 
 // PRState is where a pull request is.

@@ -14,8 +14,9 @@ import (
 // CountComments asks GitHub how many review threads wait on each open
 // track's agent, per PR not merged or closed; the Platform's Signals
 // shows a button for each PR with some, and the change feed tells it
-// when they changed. A track whose counts couldn't be
-// read keeps the last ones. ErrNoGH means nothing was asked.
+// when they changed. More of them on a Work track's PR is @github's
+// event on its relay. A track whose counts couldn't be read keeps the
+// last ones. ErrNoGH means nothing was asked.
 func (s *Service) CountComments(ctx context.Context) error {
 	if s.GitHub == nil {
 		return nil
@@ -41,6 +42,9 @@ func (s *Service) CountComments(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 			continue
 		}
+		if err := s.threadsEvents(ctx, t, counts); err != nil {
+			return err
+		}
 		s.mu.Lock()
 		was := s.comments[t.ID]
 		now := map[string]actions.Comments{}
@@ -65,6 +69,28 @@ func (s *Service) CountComments(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// threadsEvents records the open threads counted on t's PRs, and posts
+// @github's events for a Work track's PRs that have more than before.
+// The first count is no event: the threads may have waited long.
+func (s *Service) threadsEvents(ctx context.Context, t track.Track, counts map[string]int) error {
+	for _, pr := range t.PRs {
+		n, ok := counts[pr.URL]
+		if !ok {
+			continue
+		}
+		was, known, err := s.Store.SavePRThreads(ctx, t.ID, pr.URL, n)
+		if err != nil {
+			return err
+		}
+		if e := threadsEvent(pr, was, n); known && e != "" && t.Kind == track.Work {
+			if err := s.postGitHub(ctx, t.ID, e); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // openThreads counts the open threads on each of t's unsettled PRs, by
