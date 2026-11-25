@@ -546,7 +546,7 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Phase 2: Side tracks
 
-**Status:** agreed in discussion; steps 1 to 8 built, the rest not yet.
+**Status:** agreed in discussion; steps 1 to 9 built.
 
 Tracks running side by side, each on its own worktree and branch with its
 own review and PR, while one track plans, checks for overlaps and merges,
