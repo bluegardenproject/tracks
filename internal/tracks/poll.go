@@ -123,20 +123,20 @@ func (s *Service) keepThreads(a Answer) {
 	if s.threads == nil {
 		s.threads = map[string]int{}
 	}
-	keep := func(f PRFacts) {
+	for _, list := range a.Branches {
+		for _, f := range list {
+			// Read without their threads.
+			if f.State.Settled() {
+				delete(s.threads, f.URL)
+			}
+		}
+	}
+	for _, f := range a.PRs {
 		if f.State.Settled() {
 			delete(s.threads, f.URL)
 		} else {
 			s.threads[f.URL] = f.Threads
 		}
-	}
-	for _, list := range a.Branches {
-		for _, f := range list {
-			keep(f)
-		}
-	}
-	for _, f := range a.PRs {
-		keep(f)
 	}
 }
 

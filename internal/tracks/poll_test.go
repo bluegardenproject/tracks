@@ -51,7 +51,8 @@ func (g *fakeGitHub) Poll(_ context.Context, q Query) (Answer, error) {
 		g.asked = append(g.asked, "list "+b.Branch)
 		list := []PRFacts{}
 		for _, pr := range g.branches[b.Branch] {
-			list = append(list, PRFacts{PR: pr, Threads: g.threads[pr.URL]})
+			// A branch's PRs come without their threads, as GH's.
+			list = append(list, PRFacts{PR: pr})
 		}
 		a.Branches[b] = list
 	}
@@ -165,12 +166,9 @@ func TestPollKeepsWhatItCouldntRead(t *testing.T) {
 	if err := f.svc.SeePRs(ctx, work.Track.ID, []string{url}); err != nil {
 		t.Fatal(err)
 	}
-	poll := func() error {
-		if err := f.svc.PollPRs(ctx); err != nil {
-			return err
-		}
-		return f.svc.CountComments(ctx)
-	}
+	// As the daemon polls: the comments are counted after a poll that
+	// read only some.
+	poll := func() error { return errors.Join(f.svc.PollPRs(ctx), f.svc.CountComments(ctx)) }
 	threads := func() int {
 		f.svc.mu.Lock()
 		defer f.svc.mu.Unlock()
