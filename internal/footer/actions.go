@@ -27,8 +27,8 @@ func Options(t theme.Theme) map[string]string {
 		options[actions.VariantBg(i+1)] = t.Value(v[0])
 		options[actions.VariantText(i+1)] = t.Value(v[1])
 	}
-	options[actions.VariantBg(actions.EndTrainVariant)] = t.Value(theme.ButtonVariant5Bg)
-	options[actions.VariantText(actions.EndTrainVariant)] = t.Value(theme.ButtonVariant5Text)
+	options[actions.VariantBg(actions.HideTrainVariant)] = t.Value(theme.ButtonVariant5Bg)
+	options[actions.VariantText(actions.HideTrainVariant)] = t.Value(theme.ButtonVariant5Text)
 	for _, kind := range actions.BadgeKinds {
 		options[actions.BadgeBg(kind)] = t.Value(theme.Token("state." + kind + ".bg"))
 		options[actions.BadgeText(kind)] = t.Value(theme.Token("state." + kind + ".text"))

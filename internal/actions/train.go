@@ -14,10 +14,10 @@ const (
 )
 
 // HideTrainVariant and EndTrainVariant are the colour variants of the
-// header's buttons. End train has one of its own, outside the rotation.
+// header's buttons. Hide has one of its own, outside the rotation.
 const (
-	HideTrainVariant = 1
-	EndTrainVariant  = 5
+	HideTrainVariant = 5
+	EndTrainVariant  = 2
 )
 
 // BadgeBg and BadgeText name the global options holding the colours of

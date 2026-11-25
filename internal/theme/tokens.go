@@ -97,8 +97,8 @@ const (
 	ButtonVariant3Text Token = "button.variant3.text"
 	ButtonVariant4Bg   Token = "button.variant4.bg"
 	ButtonVariant4Text Token = "button.variant4.text"
-	// A variant of one button, outside the rotation: End train, in a
-	// train's overlay header.
+	// A variant of one button, outside the rotation: Hide, in a train's
+	// overlay header.
 	ButtonVariant5Bg   Token = "button.variant5.bg"
 	ButtonVariant5Text Token = "button.variant5.text"
 

@@ -141,7 +141,7 @@ Until trains' step 7, the footer's top row had an **Open reviewer** /
 **Hide reviewer** button, which moved the pane into the track's right
 column (`join-pane`) and back, in `button.variant6`, and **Close
 reviewer** beside it, in `button.variant5`. The overlay replaced both:
-its header's **End train** keeps `button.variant5`; `button.variant6` is
+its header's **Hide** takes `button.variant5`; `button.variant6` is
 retired, and a theme file that still sets it loads, the token skipped.
 
 ### Lifetime
