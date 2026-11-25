@@ -51,9 +51,15 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	// hands its instructions over, and none may be queued after.
 	s.reporting.Lock()
 	defer s.reporting.Unlock()
-	if now, err := s.Store.Track(ctx, t.ID); err == nil {
-		t = now
+	now, err := s.Store.Track(ctx, t.ID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		// Derailed meanwhile.
+		return nil
+	case err != nil:
+		return err
 	}
+	t = now
 	// What waits about an earlier event of its kind, under the policy
 	// then, gives way to what this one's says now.
 	if err := s.Store.DropInstructions(ctx, e.PR.URL, instructionKinds(e.Kind)...); err != nil {
@@ -103,8 +109,12 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 func (s *Service) githubPolicy(kind string) settings.Policy {
 	var set settings.Settings
 	if s.Settings != nil {
-		// Unread settings are the defaults.
-		set, _ = s.Settings()
+		var err error
+		if set, err = s.Settings(); err != nil {
+			// A settings.yaml that doesn't read, as one edited by hand
+			// may: nothing acts on its own, the main track decides.
+			return settings.PolicyMain
+		}
 	}
 	return set.GitHub.Policy(kind)
 }

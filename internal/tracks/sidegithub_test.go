@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -517,5 +518,58 @@ func TestHeldWhileAnInstructionWaits(t *testing.T) {
 	}
 	if !f.svc.heldFrom("a", relay.GitHubHandle) {
 		t.Error("@github's event isn't shown held while the instruction waits")
+	}
+}
+
+// A settings.yaml that doesn't read lets nothing act on its own.
+func TestUnreadSettingsLeaveItToTheMainTrack(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	f.svc.Settings = func() (settings.Settings, error) { return settings.Settings{}, errors.New("yaml: line 3: bad") }
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/231")
+	if err := f.svc.githubEvent(ctx, st, ghEvent{Kind: settings.EventConflicts, PR: pr, Body: "conflicts"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, st.ID); len(got) != 0 {
+		t.Errorf("instructed the side track on unread settings: %q", got)
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != 1 || !strings.HasPrefix(got[0], "event: ") {
+		t.Errorf("the main track's relay: %q; want the event, for it to decide", got)
+	}
+}
+
+// Archiving or derailing a side track hands what waited for it over.
+func TestArchivingOrDerailingASideTrackHandsOver(t *testing.T) {
+	ctx := context.Background()
+	for _, how := range []string{"archive", "derail"} {
+		f, main, st := sideFixture(t)
+		const url = "https://github.com/acme/api/pull/231"
+		if err := f.svc.SeePRs(ctx, st.ID, []string{url}); err != nil {
+			t.Fatal(err)
+		}
+		// Ended by Tracks stopping: Ended itself doesn't come again.
+		if err := f.svc.Report(ctx, st.ID, track.Interrupted); err != nil {
+			t.Fatal(err)
+		}
+		merged, _ := track.ParsePR(url)
+		merged.State = track.PRMerged
+		if _, err := f.store.SavePR(ctx, st.ID, merged, f.svc.now()); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.instruct(ctx, main.ID, askKind(settings.EventCIFailed), url, "Ask."); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		if how == "archive" {
+			_, err = f.svc.Archive(ctx, st.ID, true)
+		} else {
+			_, err = f.svc.Derail(ctx, st.ID, true)
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", how, err)
+		}
+		if got := waitingFor(t, f, main.ID); len(got) != 0 {
+			t.Errorf("%s: the main track's question still waits: %q", how, got)
+		}
 	}
 }
