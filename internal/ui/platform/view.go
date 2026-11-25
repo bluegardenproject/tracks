@@ -125,7 +125,7 @@ func (m Model) platformBody() ([]string, []item) {
 		if s.PR.Label != "" {
 			pr = widget.Badge(m.palette, s.PR)
 		}
-		if pr != "" && lipgloss.Width(badges+" "+pr) < inner {
+		if pr != "" && s.Status.Label != "" && lipgloss.Width(badges+" "+pr) < inner {
 			badges, pr = badges+" "+pr, ""
 		}
 		// A long status, "action required", leaves the PR's badge a row
