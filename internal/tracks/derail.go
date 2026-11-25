@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 
+	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/workspace"
 )
@@ -29,6 +30,15 @@ func (s *Service) Derail(ctx context.Context, id string, force bool) ([]workspac
 		}
 	}
 	s.removeHooks(t.ID)
+	if side.Is(t) {
+		// What waited for it goes to its main track first.
+		s.reporting.Lock()
+		err := s.sideEnded(context.WithoutCancel(ctx), t)
+		s.reporting.Unlock()
+		if err != nil {
+			return nil, err
+		}
+	}
 	return nil, s.Store.DeleteTrack(context.WithoutCancel(ctx), t.ID)
 }
 

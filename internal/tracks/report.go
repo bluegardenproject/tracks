@@ -41,7 +41,7 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 	if t.Open() != next.Open() {
 		s.sideNotice(ctx, t, e)
 	}
-	if e == track.Ended && side.Is(t) {
+	if (e == track.Ended || e == track.Archived) && side.Is(t) {
 		// Done whatever happens to the caller now: the track has ended.
 		if err := s.sideEnded(context.WithoutCancel(ctx), t); err != nil {
 			return err
