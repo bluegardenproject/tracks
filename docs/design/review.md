@@ -1,7 +1,7 @@
 # Reviews
 
 **Status:** being built, one PR per step under Order. Steps 1 to 9 are
-built; step 12, several reviewers, is being built. The reviewer is a train ([trains.md](trains.md)): since its step 7
+built; step 12, several reviewers, is being built: reviewers by handle (#268), then `--dir`. The reviewer is a train ([trains.md](trains.md)): since its step 7
 it runs in a tmux session of its own, seen in its overlay; its footer
 buttons and showing it for the trust question are gone.
 
@@ -334,14 +334,18 @@ beside the track's branch, each with a reviewer of its own.
   worktrees. The target is that worktree's top folder, so a track with
   two repos has a target per repo.
 - **Another checkout**: `tracks review --dir <path>` reviews the checkout
-  `<path>` is in, a worktree or clone of one of the track's repos, such as
-  a worktree the agent added itself. Its top folder is the target.
+  `<path>` is in, another worktree, or the main checkout, of one of the
+  track's repos, such as a worktree the agent added itself, even under
+  the track's own. Its top folder is the target. A separate clone has a
+  repository of its own, so it isn't one.
   - The CLI gathers the packet there and checks it before and after the
     review, as it does the track's worktree.
   - The daemon runs no git, so it checks the checkout is one of the
     track's repos by reading files: its `.git` (a folder, or a file naming
-    one) leads to the repository's common folder, which must be one of the
-    track's worktrees'.
+    one, which must name the checkout back) leads to the repository's
+    common folder, which must be one of the track's worktrees'.
+  - A pull request's head is the track's own worktree's: another
+    checkout's review reads nothing from GitHub.
   - Its base is found as `reviewBase` finds the track's: the track's repo
     whose worktree it is, else the track's repo it's a checkout of, its
     `origin/<base>`; else the guess. `--base` still overrides.

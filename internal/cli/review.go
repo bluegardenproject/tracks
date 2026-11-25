@@ -28,7 +28,7 @@ import (
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
-	var base, ask, brief, owner, to string
+	var base, ask, brief, owner, to, other string
 	var wait, stale, all bool
 	cmd := &cobra.Command{
 		Use:   "review",
@@ -41,7 +41,8 @@ func newReviewCmd() *cobra.Command {
 			"its review and prints its answer; --wait waits for the report of the one that's running, or its " +
 			"answer to the last question; with more than one reviewer, --to names the one meant. A review covers the whole change. --owner alone narrows it to the " +
 			"files the repo's Code owner owns by CODEOWNERS, as the Repositories tab sets it; --owner <handle> to " +
-			"another's.",
+			"another's. --dir reviews another worktree, or the main checkout, of one of the track's repos, such as a worktree made for an " +
+			"independent fix, against its repo's base, with a reviewer of its own.",
 		Args: func(c *cobra.Command, args []string) error {
 			// --owner takes no value when it's alone, so a handle after it
 			// comes as an argument.
@@ -78,8 +79,17 @@ func newReviewCmd() *cobra.Command {
 				return errors.New("--owner needs a code owner, such as @org/team")
 			case all && c.Flags().Changed("owner"):
 				return errors.New("--all and --owner can't go together")
+			case c.Flags().Changed("dir") && strings.TrimSpace(other) == "":
+				return errors.New("--dir needs a folder: a worktree, or the main checkout, of one of the track's repos")
+			case (wait || asking) && c.Flags().Changed("dir"):
+				return errors.New("--dir is for a new review; --to names the reviewer for --wait or --ask")
 			case (wait || asking) && (c.Flags().Changed("base") || c.Flags().Changed("brief") || c.Flags().Changed("owner") || stale || all):
 				return errors.New("--base, --brief, --owner, --all and --stale are for a new review, not with --wait or --ask")
+			}
+			if c.Flags().Changed("dir") {
+				if dir, err = checkoutTop(c.Context(), other); err != nil {
+					return err
+				}
 			}
 			var packet review.Packet
 			if !wait && !asking {
@@ -130,7 +140,8 @@ func newReviewCmd() *cobra.Command {
 			case asking:
 				report, err = client.ReviewAsk(c.Context(), id, to, ask, progress)
 			default:
-				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit(), Stale: stale}, progress)
+				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit(), Stale: stale,
+					Other: c.Flags().Changed("dir")}, progress)
 			}
 			if err != nil {
 				return err
@@ -161,6 +172,8 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().Lookup("owner").NoOptDefVal = repoOwner
 	cmd.Flags().BoolVar(&all, "all", false, "review the whole change, as without --owner")
 	cmd.Flags().BoolVar(&stale, "stale", false, "review a pull request's worktree that's behind the pull request")
+	cmd.Flags().StringVar(&other, "dir", "", "review the checkout this folder is in, another worktree, or the main checkout, "+
+		"of one of the track's repos, instead of the track's branch")
 	cmd.Flags().StringVar(&to, "to", "", "with --wait or --ask: the reviewer meant, by handle or a prefix only it has, "+
 		"when more than one runs")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
@@ -279,8 +292,10 @@ func askTrack(ctx context.Context, client rpc.Client, id string) track.Track {
 }
 
 // reviewBase is origin/<base> of the track repo dir is in: what its
-// worktree was branched from. Guessing instead is wrong on a repo based
-// on anything but main, since origin/main usually exists there too.
+// worktree was branched from. For another checkout of one of the
+// track's repos, such as a worktree the agent added, it's that repo's.
+// Guessing instead is wrong on a repo based on anything but main, since
+// origin/main usually exists there too.
 func reviewBase(ctx context.Context, dir string, t track.Track) string {
 	if top, err := git(ctx, dir, "rev-parse", "--show-toplevel"); err == nil {
 		for _, r := range t.Repos {
@@ -289,7 +304,38 @@ func reviewBase(ctx context.Context, dir string, t track.Track) string {
 			}
 		}
 	}
+	if common, err := commonDir(ctx, dir); err == nil {
+		for _, r := range t.Repos {
+			if r.Worktree == "" || r.Base == "" {
+				continue
+			}
+			if c, err := commonDir(ctx, r.Worktree); err == nil && samePath(c, common) {
+				return "origin/" + r.Base
+			}
+		}
+	}
 	return fallbackBase(ctx, dir)
+}
+
+// commonDir is the repository dir is a checkout of: its common git
+// folder, which every worktree of a repo shares.
+func commonDir(ctx context.Context, dir string) (string, error) {
+	out, err := git(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	return strings.TrimSpace(out), err
+}
+
+// checkoutTop is the top folder of the checkout path is in, which
+// --dir reviews.
+func checkoutTop(ctx context.Context, path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	top, err := git(ctx, abs, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("--dir %s isn't in a git checkout: %w", path, err)
+	}
+	return strings.TrimSpace(top), nil
 }
 
 // fallbackBase guesses, for a repo the track doesn't list.
