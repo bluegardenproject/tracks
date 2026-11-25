@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -171,9 +172,33 @@ func (s *Service) restackMerged(ctx context.Context) error {
 	s.mu.Unlock()
 	var errs []error
 	for _, m := range merged {
-		errs = append(errs, s.restack(ctx, m.id, m.pr))
+		pr := m.pr
+		pr.Health.Base = finalBase(pr, merged)
+		errs = append(errs, s.restack(ctx, m.id, pr))
 	}
 	return errors.Join(errs...)
+}
+
+// finalBase is where pr's merge ends up: its base, or, when the PR into
+// that base merged in the same poll too, that one's, and so on. A track
+// stacked on pr then restacks onto the branch that's left, not one
+// merged away under it.
+func finalBase(pr track.PR, merged []mergedPR) string {
+	base := pr.Health.Base
+	for range merged {
+		next := ""
+		for _, m := range merged {
+			if strings.EqualFold(m.pr.Repo, pr.Repo) && m.pr.Health.HeadBranch == base && m.pr.Health.Base != "" {
+				next = m.pr.Health.Base
+				break
+			}
+		}
+		if next == "" || next == base {
+			break
+		}
+		base = next
+	}
+	return base
 }
 
 // keepThreads keeps the open threads a poll read on each PR not

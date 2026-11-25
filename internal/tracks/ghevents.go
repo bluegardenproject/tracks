@@ -139,10 +139,10 @@ func gitHubText(s string) string {
 }
 
 // safeRef matches a branch name Tracks puts into a command it has an
-// agent run: letters, digits, '.', '_', '/' and '-', not starting with
-// '-' or '.', with no "..", at most 200. Git and GitHub allow more
+// agent run: letters, digits, '.', '_', '/' and '-', starting with a
+// letter, digit or '_', with no "..", at most 200. Git and GitHub allow more
 // (backticks, $(), ;), which a command would run.
-var safeRef = regexp.MustCompile(`^[A-Za-z0-9_/][A-Za-z0-9._/-]{0,199}$`)
+var safeRef = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}$`)
 
 // gitHubRef is ref, a branch's name read on GitHub, for a git or gh
 // command an agent runs; false for one that isn't safe there.

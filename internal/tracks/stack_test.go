@@ -3,10 +3,12 @@ package tracks
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -249,5 +251,64 @@ func TestStackingOnARenamedBranch(t *testing.T) {
 	}
 	if now, err := f.store.Track(ctx, lower.ID); err != nil || now.Repos[0].Branch != "side/relay-store" {
 		t.Errorf("the lower track's branch is %q, %v; want the renamed one kept", now.Repos[0].Branch, err)
+	}
+}
+
+func TestFinalBase(t *testing.T) {
+	pr := func(n int, repo, head, base string) mergedPR {
+		p, _ := track.ParsePR(fmt.Sprintf("https://github.com/%s/pull/%d", repo, n))
+		p.Health = track.Health{HeadBranch: head, Base: base}
+		return mergedPR{pr: p}
+	}
+	a := pr(1, "acme/api", "a", "main")
+	b := pr(2, "acme/api", "b", "a")
+	c := pr(3, "acme/api", "c", "b")
+	other := pr(4, "acme/web", "b", "release")
+	for _, tc := range []struct {
+		name   string
+		of     mergedPR
+		merged []mergedPR
+		want   string
+	}{
+		{"alone", b, []mergedPR{b}, "a"},
+		{"the one below merged too", b, []mergedPR{a, b}, "main"},
+		{"two below merged too", c, []mergedPR{c, a, b}, "main"},
+		{"another repo's branch of that name", c, []mergedPR{c, other}, "b"},
+	} {
+		if got := finalBase(tc.of.pr, tc.merged); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A restack drops what it makes moot for its side track: an earlier
+// restack, its conflicts' rebase and the main track's question on it.
+func TestARestackDropsWhatItMakesMoot(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	const own = "https://github.com/acme/api/pull/240"
+	if err := f.svc.SeePRs(ctx, upper.ID, []string{own}); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []struct{ id, kind, pr string }{
+		{upper.ID, settings.EventConflicts, own},
+		{upper.ID, instructionRestack, "https://github.com/acme/api/pull/100"},
+		{main.ID, askKind(settings.EventConflicts), own},
+		{upper.ID, settings.EventCIFailed, own},
+	} {
+		if err := f.svc.instruct(ctx, in.id, in.kind, in.pr, "old"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
+		t.Fatal(err)
+	}
+	got := waitingFor(t, f, upper.ID)
+	if len(got) != 2 || !strings.HasPrefix(got[0], "ci_failed: ") || !strings.HasPrefix(got[1], "restack: The PR below") {
+		t.Errorf("waiting for the side track: %q; want CI's and the new restack", got)
+	}
+	if got := waitingFor(t, f, main.ID); len(got) != 0 {
+		t.Errorf("waiting for the main track: %q", got)
 	}
 }

@@ -196,6 +196,13 @@ func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
 		if !mine && !asked {
 			continue
 		}
+		if below, ok := track.ParsePR(in.PR); ok && mine && in.Kind == instructionRestack && settledIn(t, below.Repo) {
+			// Moot already: its own PRs there settled.
+			if err := s.Store.DropInstruction(ctx, in.ID); err != nil {
+				return err
+			}
+			continue
+		}
 		// Its own only: a sibling's of the same kind and PR, a restack
 		// after the same merge, stays.
 		if err := s.Store.DropInstruction(ctx, in.ID); err != nil {
