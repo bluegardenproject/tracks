@@ -639,7 +639,14 @@ own. "Side track" is always two words: "sidetracked" means something else.
   command go into it (letters, digits, `.`, `_`, `/`, `-`; 7 hex digits);
   any other leaves it to the main track. Restacking runs once the poll
   saved every PR, and a waiting restack is dropped once the side track's
-  own PRs there settle. `--on` stacks on the lower track's branch as its
+  own PRs there settle, and queuing one drops what it makes moot (an
+  earlier restack, a rebase onto the branch below). When PRs one on
+  another merge in the same poll, a track stacked on the top one
+  restacks onto where the chain ends. Known limits: a lower track that
+  rewrote its history after the upper branched makes `--onto` replay or
+  fail, which the agent sees and solves; the base is recorded before the
+  agent restacked, so a review in between diffs against the new one.
+  `--on` stacks on the lower track's branch as its
   worktree has it, renamed or not. It's typed as the policies' instructions are, and the
   main track gets a notice; a stacked side track that ended is the main
   track's to decide. A PR below that only changes needs no restack of its

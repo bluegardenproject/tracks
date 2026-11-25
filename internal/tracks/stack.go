@@ -11,6 +11,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/relay"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -105,6 +106,10 @@ func (s *Service) sideSpec(ctx context.Context, t track.Track) *agents.SideTrack
 		}
 	}
 	for _, r := range t.Repos {
+		if r.Base == defaults[r.Name] {
+			// On the repo's base: not stacked, whoever else is on it.
+			continue
+		}
 		for _, other := range family {
 			if other.ID == t.ID {
 				continue
@@ -210,10 +215,41 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 	if !upper.Open() {
 		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event)
 	}
+	if err := s.dropBeforeRestack(ctx, upper, mainID, pr.Repo); err != nil {
+		return err
+	}
 	if err := s.instruct(ctx, upper.ID, instructionRestack, pr.URL, actions.SideRestack(ref, gitHubText(lowerName), base, head)); err != nil {
 		return err
 	}
 	return s.postGitHub(ctx, mainID, named+" Tracks tells it to restack, once its agent is free.", relay.Notice)
+}
+
+// dropBeforeRestack drops what waits for side track upper that the
+// restack about to be queued makes moot, as it would be pasted first: an
+// earlier restack, and a rebase onto the branch below, its own or its
+// main track's question about it, for its PRs in GitHub repo.
+func (s *Service) dropBeforeRestack(ctx context.Context, upper track.Track, mainID, repo string) error {
+	waiting, err := s.Store.WaitingInstructions(ctx)
+	if err != nil {
+		return err
+	}
+	mine := map[string]bool{}
+	for _, pr := range upper.PRs {
+		if strings.EqualFold(pr.Repo, repo) {
+			mine[pr.URL] = true
+		}
+	}
+	for _, in := range waiting {
+		drop := in.TrackID == upper.ID && in.Kind == instructionRestack ||
+			in.TrackID == upper.ID && in.Kind == settings.EventConflicts && mine[in.PR] ||
+			in.TrackID == mainID && in.Kind == askKind(settings.EventConflicts) && mine[in.PR]
+		if drop {
+			if err := s.Store.DropInstruction(ctx, in.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // settledIn reports whether t has PRs in GitHub repo and all of them
