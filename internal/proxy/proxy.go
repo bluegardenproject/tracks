@@ -125,11 +125,21 @@ func (o *output) serve(w http.ResponseWriter, r *http.Request) {
 	up.rp.ServeHTTP(w, r)
 }
 
+// directTransport forwards directly to loopback without honoring
+// HTTP_PROXY / HTTPS_PROXY environment variables, so local dev-server
+// traffic and cookies are never sent to an external proxy.
+var directTransport = func() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = nil
+	return t
+}()
+
 // reverse forwards to localhost:upstream, which reaches a server on
 // either loopback: Vite on macOS often listens on ::1 alone.
 func reverse(upstream int) *httputil.ReverseProxy {
 	target := &url.URL{Scheme: "http", Host: fmt.Sprintf("localhost:%d", upstream)}
 	return &httputil.ReverseProxy{
+		Transport: directTransport,
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(target)
 			r.Out.Host = r.In.Host

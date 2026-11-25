@@ -7,27 +7,60 @@ import (
 	"strings"
 )
 
+var safeSessionID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
 // Locate returns a session's transcript files.
 //
-// Primary: glob `projects/*/<sessionID>.jsonl` across every project
-// dir — exact, and free of any dependency on how Claude derives a
-// project directory name from the cwd. Fallback (e.g. if a Claude
-// build doesn't honor --session-id in interactive mode): derive the
-// project dir from the worktree cwd and take every transcript in it.
-// Because each track has a unique worktree path, that directory holds
-// only this track's sessions.
+// Primary: look for `<sessionID>.jsonl` directly inside each project
+// dir under `projects/` — exact, and free of any dependency on how
+// Claude derives a project directory name from the cwd. Fallback (e.g.
+// if a Claude build doesn't honor --session-id in interactive mode):
+// derive the project dir from the worktree cwd and take every `.jsonl`
+// transcript in it. Because each track has a unique worktree path, that
+// directory holds only this track's sessions.
 func Locate(sessionID, cwd string) []string {
 	base, err := projectsDir()
 	if err != nil {
 		return nil
 	}
-	if sessionID != "" {
-		if matches, _ := filepath.Glob(filepath.Join(base, "*", sessionID+".jsonl")); len(matches) > 0 {
-			return matches
+	if sessionID != "" && sessionID != "." && sessionID != ".." && safeSessionID.MatchString(sessionID) {
+		if entries, err := os.ReadDir(base); err == nil {
+			var matches []string
+			target := sessionID + ".jsonl"
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				p := filepath.Join(base, e.Name(), target)
+				if info, err := os.Lstat(p); err == nil && info.Mode().IsRegular() {
+					matches = append(matches, p)
+				}
+			}
+			if len(matches) > 0 {
+				return matches
+			}
 		}
 	}
 	if cwd != "" {
-		matches, _ := filepath.Glob(filepath.Join(base, sanitizeCWD(cwd), "*.jsonl"))
+		dir := filepath.Join(base, sanitizeCWD(cwd))
+		info, err := os.Lstat(dir)
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil
+		}
+		var matches []string
+		for _, e := range entries {
+			if !strings.HasSuffix(e.Name(), ".jsonl") {
+				continue
+			}
+			p := filepath.Join(dir, e.Name())
+			if info, err := os.Lstat(p); err == nil && info.Mode().IsRegular() {
+				matches = append(matches, p)
+			}
+		}
 		return matches
 	}
 	return nil

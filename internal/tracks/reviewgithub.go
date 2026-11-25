@@ -77,7 +77,7 @@ func (g GH) ReviewPR(ctx context.Context, pr track.PR) (out review.PR, head stri
 	logs := 0
 	for i, c := range out.Checks {
 		repo, job := actionsJobOf(c.Link)
-		if c.State != review.CheckFail || job == "" || logs == maxLogs {
+		if c.State != review.CheckFail || job == "" || !strings.EqualFold(repo, pr.Repo) || logs == maxLogs {
 			continue
 		}
 		logs++
@@ -221,13 +221,19 @@ func plain(text string) string {
 	}, text)
 }
 
-// actionsJob matches a GitHub Actions job's link.
-var actionsJob = regexp.MustCompile(`^https://github\.com/([\w.-]+/[\w.-]+)/actions/runs/\d+/job/(\d+)`)
+// actionsJob matches a GitHub Actions job's link. Owner must start with
+// an alphanumeric or underscore so CLI flags are excluded; repo names
+// may start with a dot (such as .github), except literal "." and "..".
+var actionsJob = regexp.MustCompile(`^https://github\.com/([A-Za-z0-9_][\w.-]*/[\w.-]+)/actions/runs/\d+/job/(\d+)(?:$|[/?#])`)
 
 // actionsJobOf is the repo and Actions job a check's link is to, "" for
 // another link.
 func actionsJobOf(link string) (repo, job string) {
 	if m := actionsJob.FindStringSubmatch(link); m != nil {
+		_, name, _ := strings.Cut(m[1], "/")
+		if name == "." || name == ".." {
+			return "", ""
+		}
 		return m[1], m[2]
 	}
 	return "", ""

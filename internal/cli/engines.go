@@ -9,7 +9,10 @@ import (
 )
 
 // engines keeps the engines section of settings.yaml for the Engines tab.
-type engines struct{ path string }
+type engines struct {
+	path   string
+	mcpDir string
+}
 
 var _ source.Engines = engines{}
 
@@ -127,6 +130,6 @@ func (engines) Models(ctx context.Context, path string) ([]agents.Model, error) 
 	return agents.ListModels(ctx, path)
 }
 
-func (engines) MCP(ctx context.Context, path string) ([]agents.MCPServer, error) {
-	return agents.ListMCP(ctx, path)
+func (e engines) MCP(ctx context.Context, path string) ([]agents.MCPServer, error) {
+	return agents.ListMCP(ctx, path, e.mcpDir)
 }

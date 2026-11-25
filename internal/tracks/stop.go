@@ -20,8 +20,12 @@ const stopGrace = 5 * time.Second
 
 // stopGroup ends process group pgid: SIGTERM, then SIGKILL for what's
 // left after grace. Node servers fork workers, so the pane's first
-// process alone isn't enough.
+// process alone isn't enough. pgid <= 1 is refused so kill(-1, ...) can
+// never broadcast to every user process.
 func stopGroup(pgid int, grace time.Duration) error {
+	if pgid <= 1 {
+		return nil
+	}
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); errors.Is(err, syscall.ESRCH) {
 		return nil
 	} else if err != nil {
@@ -68,15 +72,25 @@ func groupLiving(ps string, pgid int) bool {
 // the pane. A pane whose server ended runs only its shell, which
 // closing the pane ends.
 func (w TmuxWindows) StopPane(p tmux.Pane) error {
-	if p.PID > 0 && serverState(p) == ServerRunning {
-		if err := stopGroup(p.PID, stopGrace); err != nil {
-			return err
-		}
-		// The pane may have closed with its processes.
-		_ = w.Tmux.KillPane(p.ID)
+	live, ok, err := livePane(w.Tmux, p.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return nil
 	}
-	return w.Tmux.KillPane(p.ID)
+	if !live.Dead && live.PID > 1 && serverState(live) == ServerRunning {
+		if err := stopGroup(live.PID, stopGrace); err != nil {
+			return err
+		}
+	}
+	// The pane may have closed with its processes.
+	if err := w.Tmux.KillPane(p.ID); err != nil {
+		if _, still, checkErr := livePane(w.Tmux, p.ID); still || checkErr != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // StopServers stops the dev servers in window, all at once.
@@ -116,34 +130,63 @@ func (w TmuxWindows) AddDevServer(window, dir string, p trackwin.Process, key st
 // A dead pane's terminal is closed, and may be another pane's by now:
 // nothing is signalled.
 func (w TmuxWindows) EndPane(p tmux.Pane) error {
-	if tty := strings.TrimPrefix(p.TTY, "/dev/"); tty != "" && !p.Dead {
-		out, err := exec.Command("ps", "-t", tty, "-o", "pgid=").Output()
-		if err == nil {
-			groups := groupsToEnd(ttyGroups(string(out)), p.PID, syscall.Getpgrp())
-			errs := make([]error, len(groups))
-			var wg sync.WaitGroup
-			for i, g := range groups {
-				wg.Go(func() { errs[i] = stopGroup(g, stopGrace) })
-			}
-			wg.Wait()
-			if err := errors.Join(errs...); err != nil {
-				return err
+	// Re-query the pane immediately before inspecting its TTY so a
+	// recycled PTY from an already-closed pane is never signalled.
+	live, ok, err := livePane(w.Tmux, p.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if !live.Dead {
+		if tty := strings.TrimPrefix(live.TTY, "/dev/"); tty != "" {
+			out, err := exec.Command("ps", "-t", tty, "-o", "pgid=").Output()
+			if err == nil {
+				groups := groupsToEnd(ttyGroups(string(out)), live.PID, syscall.Getpgrp())
+				errs := make([]error, len(groups))
+				var wg sync.WaitGroup
+				for i, g := range groups {
+					wg.Go(func() { errs[i] = stopGroup(g, stopGrace) })
+				}
+				wg.Wait()
+				if err := errors.Join(errs...); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	// The pane may have closed with its processes.
-	if err := w.Tmux.KillPane(p.ID); err != nil && !paneGone(w.Tmux, p) {
-		return err
+	if err := w.Tmux.KillPane(p.ID); err != nil {
+		if _, still, checkErr := livePane(w.Tmux, p.ID); still || checkErr != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// ttyGroups are the process groups in `ps -o pgid=` output, each once.
+// livePane returns the current state of pane id if it still exists.
+// ListAllPanes succeeds even when id is already gone, so an absent pane
+// reports (false, nil) while a tmux failure surfaces as an error.
+func livePane(t trackwin.TrainTmux, id string) (tmux.Pane, bool, error) {
+	panes, err := t.ListAllPanes()
+	if err != nil {
+		return tmux.Pane{}, false, err
+	}
+	for _, q := range panes {
+		if q.ID == id {
+			return q, true, nil
+		}
+	}
+	return tmux.Pane{}, false, nil
+}
+
+// ttyGroups are the process groups (> 1) in `ps -o pgid=` output, each once.
 func ttyGroups(ps string) []int {
 	var groups []int
 	for _, f := range strings.Fields(ps) {
 		g, err := strconv.Atoi(f)
-		if err == nil && g > 0 && !slices.Contains(groups, g) {
+		if err == nil && g > 1 && !slices.Contains(groups, g) {
 			groups = append(groups, g)
 		}
 	}
@@ -154,12 +197,6 @@ func ttyGroups(ps string) []int {
 // ends with the pane, and the caller's own.
 func groupsToEnd(groups []int, first, own int) []int {
 	return slices.DeleteFunc(groups, func(g int) bool { return g == first || g == own })
-}
-
-// paneGone reports whether p's window no longer has p, or is gone.
-func paneGone(t trackwin.Tmux, p tmux.Pane) bool {
-	panes, err := t.ListPanes(p.ID)
-	return err != nil || !slices.ContainsFunc(panes, func(q tmux.Pane) bool { return q.ID == p.ID })
 }
 
 func (w TmuxWindows) Capture(pane string, lines int) (string, error) {
