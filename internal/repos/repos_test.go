@@ -102,6 +102,19 @@ func TestAddChecksEveryField(t *testing.T) {
 		{store.Repo{Name: "  ", Path: dir, BaseBranch: "trunk"}, "name"},
 		{store.Repo{Name: "shop\tweb", Path: dir, BaseBranch: "trunk"}, "name"},
 		{store.Repo{Name: strings.Repeat("ü", 65), Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "../escape", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "a/../b", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "/abs", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "a/", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "a//b", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: `a\b`, Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "a,b", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "..", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: ".", Path: dir, BaseBranch: "trunk"}, "name"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Servers: []store.DevServer{{Name: "a/b", Command: "echo ok"}}}, "servers.0.name"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Servers: []store.DevServer{{Name: `a\b`, Command: "echo ok"}}}, "servers.0.name"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Servers: []store.DevServer{{Name: "..", Command: "echo ok"}}}, "servers.0.name"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Servers: []store.DevServer{{Name: ".", Command: "echo ok"}}}, "servers.0.name"},
 		{store.Repo{Name: "shop", Path: "relative/path", BaseBranch: "trunk"}, "path"},
 		{store.Repo{Name: "shop", Path: filepath.Join(dir, "missing"), BaseBranch: "trunk"}, "path"},
 		{store.Repo{Name: "shop", Path: plain, BaseBranch: "trunk"}, "path"},
@@ -129,6 +142,9 @@ func TestAddChecksEveryField(t *testing.T) {
 	}
 	if _, err := s.Add(ctx, store.Repo{Name: "shop web", Path: clone(t, "other"), BaseBranch: "trunk"}); field(err) != "name" {
 		t.Errorf("adding a second repo called shop web: %v; want a name problem", err)
+	}
+	if slashed, err := s.Add(ctx, store.Repo{Name: "acme/web", Path: clone(t, "acme-web"), BaseBranch: "trunk"}); err != nil || slashed.Name != "acme/web" {
+		t.Errorf("adding repo named acme/web: %+v, %v; want it accepted", slashed, err)
 	}
 }
 
@@ -189,6 +205,7 @@ func TestWebURL(t *testing.T) {
 func TestNameFrom(t *testing.T) {
 	for folder, want := range map[string]string{
 		"shop-web": "shop-web", " Shop Web ": "Shop Web", "Über\tApp": "ÜberApp",
+		"a/b,c\\d": "abcd", "..": "", ",..": "", ".": "",
 		strings.Repeat("a", 63) + " b": strings.Repeat("a", 63),
 	} {
 		if got := nameFrom(folder); got != want {

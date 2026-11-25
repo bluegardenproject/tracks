@@ -30,11 +30,18 @@ func NewPrimaryRepoClient(path string) *PrimaryRepoClient {
 	}
 }
 
-// Fetch runs `git fetch <remote> <ref> --no-tags`. This is safe for
+// Fetch runs `git fetch --no-tags -- <remote> <ref>`. This is safe for
 // the primary checkout: it only writes under .git/refs/remotes/ and
-// .git/objects/, never touching HEAD or the working tree.
+// .git/objects/, never touching HEAD or the working tree. Refspecs with
+// ':' are refused so Fetch can never overwrite local branches.
 func (c *PrimaryRepoClient) Fetch(ctx context.Context, remote, ref string) error {
-	_, _, err := c.Runner.Run(ctx, "fetch", remote, ref, "--no-tags")
+	if remote == "" || strings.HasPrefix(remote, "-") {
+		return fmt.Errorf("Fetch: invalid remote %q", remote)
+	}
+	if ref == "" || strings.HasPrefix(ref, "-") || strings.Contains(ref, ":") {
+		return fmt.Errorf("Fetch: invalid ref %q", ref)
+	}
+	_, _, err := c.Runner.Run(ctx, "fetch", "--no-tags", "--", remote, ref)
 	return err
 }
 
@@ -68,7 +75,7 @@ func (c *PrimaryRepoClient) FetchWithRetry(ctx context.Context, remote, ref stri
 // This is the central worktree-creation operation in `tracks`. It
 // runs:
 //
-//	git worktree add -b <branchName> <path> <start>
+//	git worktree add -b <branchName> -- <path> <start>
 //
 // which creates the branch and the worktree in one step. The new
 // branch does NOT shadow the primary's HEAD.
@@ -80,7 +87,10 @@ func (c *PrimaryRepoClient) AddWorktree(ctx context.Context, path, branchName, s
 	if path == "" || branchName == "" || start == "" {
 		return errors.New("AddWorktree: path/branchName/start required")
 	}
-	_, _, err := c.Runner.Run(ctx, "worktree", "add", "-b", branchName, path, start)
+	if strings.HasPrefix(branchName, "-") || strings.HasPrefix(start, "-") {
+		return fmt.Errorf("AddWorktree: invalid ref (%q, %q)", branchName, start)
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "add", "-b", branchName, "--", path, start)
 	return err
 }
 
@@ -91,12 +101,15 @@ func (c *PrimaryRepoClient) AddWorktree(ctx context.Context, path, branchName, s
 //
 // It runs:
 //
-//	git worktree add --detach <path> <start>
+//	git worktree add --detach -- <path> <start>
 func (c *PrimaryRepoClient) AddWorktreeDetached(ctx context.Context, path, start string) error {
 	if path == "" || start == "" {
 		return errors.New("AddWorktreeDetached: path/start required")
 	}
-	_, _, err := c.Runner.Run(ctx, "worktree", "add", "--detach", path, start)
+	if strings.HasPrefix(start, "-") {
+		return fmt.Errorf("AddWorktreeDetached: invalid start %q", start)
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "add", "--detach", "--", path, start)
 	return err
 }
 
@@ -106,12 +119,15 @@ func (c *PrimaryRepoClient) AddWorktreeDetached(ctx context.Context, path, start
 // does NOT pass -b, so git checks out the branch rather than creating it.
 // It runs:
 //
-//	git worktree add <path> <branchName>
+//	git worktree add -- <path> <branchName>
 func (c *PrimaryRepoClient) CheckoutWorktree(ctx context.Context, path, branchName string) error {
 	if path == "" || branchName == "" {
 		return errors.New("CheckoutWorktree: path and branchName required")
 	}
-	_, _, err := c.Runner.Run(ctx, "worktree", "add", path, branchName)
+	if strings.HasPrefix(branchName, "-") {
+		return fmt.Errorf("CheckoutWorktree: invalid branch %q", branchName)
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "add", "--", path, branchName)
 	return err
 }
 
@@ -121,7 +137,10 @@ func (c *PrimaryRepoClient) CheckoutWorktree(ctx context.Context, path, branchNa
 // cleanup": tracks intentionally keeps branches around so the user
 // can revisit them).
 func (c *PrimaryRepoClient) RemoveWorktree(ctx context.Context, path string) error {
-	_, _, err := c.Runner.Run(ctx, "worktree", "remove", "--force", path)
+	if path == "" {
+		return errors.New("RemoveWorktree: path required")
+	}
+	_, _, err := c.Runner.Run(ctx, "worktree", "remove", "--force", "--", path)
 	return err
 }
 
@@ -195,7 +214,10 @@ func (c *PrimaryRepoClient) ListWorktrees(ctx context.Context) ([]Worktree, erro
 // Uses `show-ref --verify --quiet` so a missing branch returns
 // (false, nil), not an error.
 func (c *PrimaryRepoClient) BranchExists(ctx context.Context, name string) (bool, error) {
-	_, _, err := c.Runner.Run(ctx, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	if name == "" || strings.HasPrefix(name, "-") {
+		return false, fmt.Errorf("BranchExists: invalid branch %q", name)
+	}
+	_, _, err := c.Runner.Run(ctx, "show-ref", "--verify", "--quiet", "--", "refs/heads/"+name)
 	if err == nil {
 		return true, nil
 	}
@@ -220,10 +242,10 @@ func (c *PrimaryRepoClient) CurrentBranch(ctx context.Context) (string, error) {
 // merged). `tracks gc --branches` uses this; the default cleanup
 // path (`tracks done`) does NOT delete branches.
 func (c *PrimaryRepoClient) DeleteBranch(ctx context.Context, name string) error {
-	if name == "" {
-		return errors.New("DeleteBranch: name required")
+	if name == "" || strings.HasPrefix(name, "-") {
+		return errors.New("DeleteBranch: valid name required")
 	}
-	_, _, err := c.Runner.Run(ctx, "branch", "-D", name)
+	_, _, err := c.Runner.Run(ctx, "branch", "-D", "--", name)
 	return err
 }
 

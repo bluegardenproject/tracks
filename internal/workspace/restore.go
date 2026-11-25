@@ -38,6 +38,10 @@ func (w *Worktrees) Restore(ctx context.Context, t track.Track, progress func(st
 	}
 	var made []track.Repo
 	for _, r := range w.Missing(t) {
+		if w.Root != "" && !withinRoot(w.Root, r.Worktree) {
+			_ = w.RemoveWorktrees(context.WithoutCancel(ctx), t.ID, made)
+			return nil, fmt.Errorf("worktree %q is outside %q: check XDG_STATE_HOME, or derail the track and start a new one", r.Worktree, w.Root)
+		}
 		if err := w.restore(ctx, r, review, progress); err != nil {
 			_ = w.RemoveWorktrees(context.WithoutCancel(ctx), t.ID, made)
 			return nil, err

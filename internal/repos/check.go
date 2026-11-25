@@ -19,9 +19,18 @@ const maxName = 64
 const maxPrefix = 24
 
 // validName reports whether name, already trimmed, can be shown as a
-// repo's name. Folders get a simplified version when a track starts,
-// so any printable text goes.
-func validName(name string) bool { return printable(name, maxName) }
+// repo's name and turned into a safe worktree folder name and list item.
+func validName(name string) bool {
+	if !printable(name, maxName) || strings.ContainsAny(name, "\\,") {
+		return false
+	}
+	for _, seg := range strings.Split(name, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
 
 // DefaultBase is the base branch of a repo saved without one.
 const DefaultBase = "main"
@@ -48,7 +57,7 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	r.CodeOwner = review.NormalOwner(r.CodeOwner)
 	r.Prefix = strings.TrimSpace(r.Prefix)
 	if !validName(r.Name) {
-		return r, &FieldError{"name", fmt.Sprintf("Enter a name of up to %d characters.", maxName)}
+		return r, &FieldError{"name", fmt.Sprintf("Enter a name of up to %d characters without \\, commas, or .. segments.", maxName)}
 	}
 	top, err := s.checkout(ctx, r.Path)
 	if err != nil {
@@ -105,7 +114,7 @@ func (s Service) checkout(ctx context.Context, path string) (string, error) {
 // nameFrom turns a folder name into a valid repo name.
 func nameFrom(folder string) string {
 	name := strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || r == '/' || r == '\\' || r == ',' {
 			return -1
 		}
 		return r
@@ -113,6 +122,9 @@ func nameFrom(folder string) string {
 	name = strings.TrimSpace(name)
 	if r := []rune(name); len(r) > maxName {
 		name = strings.TrimSpace(string(r[:maxName]))
+	}
+	if name == "." || name == ".." {
+		return ""
 	}
 	return name
 }

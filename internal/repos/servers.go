@@ -60,8 +60,8 @@ func checkServers(r store.Repo) (store.Repo, error) {
 func checkServer(i int, d store.DevServer) (store.DevServer, error) {
 	d.Name, d.Command, d.Type = strings.TrimSpace(d.Name), strings.TrimSpace(d.Command), strings.TrimSpace(d.Type)
 	d.Dir = strings.TrimSpace(d.Dir)
-	if !printable(d.Name, maxServerName) {
-		return d, &FieldError{ServerField(i, "name"), fmt.Sprintf("Enter a name of up to %d characters.", maxServerName)}
+	if !printable(d.Name, maxServerName) || strings.ContainsAny(d.Name, "/\\") || d.Name == "." || d.Name == ".." {
+		return d, &FieldError{ServerField(i, "name"), fmt.Sprintf("Enter a name of up to %d characters without / or \\.", maxServerName)}
 	}
 	if !printable(d.Command, maxCommand) {
 		return d, &FieldError{ServerField(i, "command"), "Enter the command that starts the server, on one line."}

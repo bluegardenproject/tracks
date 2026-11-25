@@ -148,18 +148,129 @@ func TestNoWorktrees(t *testing.T) {
 
 func TestParseReview(t *testing.T) {
 	for ref, want := range map[string]Review{
-		"https://github.com/acme/api/pull/42":             {"pull/42/head", "pr/42"},
-		" https://github.com/acme/api/pull/42#discussion": {"pull/42/head", "pr/42"},
-		"feat/x": {"feat/x", "feat/x"},
+		"https://github.com/acme/api/pull/42":               {"pull/42/head", "pr/42"},
+		" https://github.com/acme/api/pull/42#discussion":   {"pull/42/head", "pr/42"},
+		"https://www.github.com/acme/api/pull/7#discussion": {"pull/7/head", "pr/7"},
+		"github.com/acme/api/pull/7":                        {"pull/7/head", "pr/7"},
+		"www.github.com/acme/api/pull/7/files":              {"pull/7/head", "pr/7"},
+		"feat/x":                                            {"feat/x", "feat/x"},
 	} {
 		if got, err := ParseReview(ref); err != nil || got != want {
 			t.Errorf("ParseReview(%q) = %v, %v", ref, got, err)
 		}
 	}
-	for _, ref := range []string{"", "https://gitlab.com/acme/api/-/merge_requests/1", "github.com/acme/api"} {
+	for _, ref := range []string{
+		"",
+		"https://gitlab.com/acme/api/-/merge_requests/1",
+		"github.com/acme/api",
+		"--upload-pack=touch /tmp/pwn",
+		"-f",
+		"+main",
+		"HEAD:refs/heads/main",
+		"feat/..bar",
+		"feat/.hidden",
+		"feat/x.lock",
+		"feat x",
+		"--flag https://github.com/acme/api/pull/7",
+		"--flag github.com/acme/api/pull/7",
+		"https://github.com/acme/api/pull/7evil",
+	} {
 		if _, err := ParseReview(ref); err == nil {
 			t.Errorf("ParseReview(%q) accepted", ref)
 		}
+	}
+}
+
+func TestWorktreeSlashNamesAndTraversal(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	api := repo(t, root, "api")
+	other := repo(t, root, "other")
+	w := &Worktrees{Root: filepath.Join(root, "worktrees")}
+
+	// Repos with '/' map to a safe single-segment folder without colliding.
+	slashed := api
+	slashed.Name = "acme/web"
+	dashed := other
+	dashed.Name = "acme-web"
+	made, err := w.Add(ctx, track.Track{ID: "t-slash", Kind: track.Work, Repos: []track.Repo{slashed, dashed}}, noProgress)
+	if err != nil {
+		t.Fatalf("Add with acme/web and acme-web: %v", err)
+	}
+	if want := filepath.Join(w.Root, "t-slash", "acme-web"); made[0].Worktree != want {
+		t.Errorf("acme/web worktree = %s, want %s", made[0].Worktree, want)
+	}
+	if want := filepath.Join(w.Root, "t-slash", "acme-web-2"); made[1].Worktree != want {
+		t.Errorf("acme-web worktree = %s, want %s", made[1].Worktree, want)
+	}
+	if err := w.Remove(ctx, track.Track{ID: "t-slash", Kind: track.Work, Repos: made}); err != nil {
+		t.Fatalf("Remove slashed worktrees: %v", err)
+	}
+
+	for _, bad := range []string{"../escape", "a/../b", "/abs", "a/", "a//b", `a\b`, "..", ".", ""} {
+		r := api
+		r.Name = bad
+		tr := track.Track{ID: "t1", Kind: track.Work, Repos: []track.Repo{r}}
+		if _, err := w.Add(ctx, tr, noProgress); err == nil {
+			t.Errorf("Add accepted repo name %q", bad)
+		}
+		if _, err := w.AddRepo(ctx, "t1", r, "fix/x", noProgress); err == nil {
+			t.Errorf("AddRepo accepted repo name %q", bad)
+		}
+	}
+
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tr := track.Track{ID: "t1", Kind: track.Work, Repos: []track.Repo{{Name: "api", Path: api.Path, Worktree: outside}}}
+	if err := w.Remove(ctx, tr); err == nil || !strings.Contains(err.Error(), "XDG_STATE_HOME") {
+		t.Errorf("Remove outside Root: %v, want actionable error", err)
+	}
+	if err := w.RemoveWorktrees(ctx, "t1", tr.Repos); err == nil || !strings.Contains(err.Error(), "XDG_STATE_HOME") {
+		t.Errorf("RemoveWorktrees outside Root: %v, want actionable error", err)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("outside folder was modified: %v", err)
+	}
+	// Once removed by hand, RemoveWorktrees succeeds instead of wedging cleanup.
+	if err := os.Remove(outside); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.RemoveWorktrees(ctx, "t1", tr.Repos); err != nil {
+		t.Errorf("RemoveWorktrees after manual removal: %v", err)
+	}
+	// A symlink inside Root pointing outside Root is also refused.
+	escapeLink := filepath.Join(w.Root, "t1", "escape")
+	if err := os.MkdirAll(filepath.Dir(escapeLink), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideTarget := filepath.Join(root, "target")
+	if err := os.MkdirAll(outsideTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideTarget, escapeLink); err != nil {
+		t.Fatal(err)
+	}
+	trLink := track.Track{ID: "t1", Kind: track.Work, Repos: []track.Repo{{Name: "api", Path: api.Path, Worktree: escapeLink}}}
+	if err := w.RemoveWorktrees(ctx, "t1", trLink.Repos); err == nil {
+		t.Error("RemoveWorktrees accepted symlink inside Root pointing outside Root")
+	}
+	// A dangling symlink inside Root also fails closed with the actionable error.
+	danglingLink := filepath.Join(w.Root, "t1", "dangling")
+	if err := os.Symlink(filepath.Join(root, "does-not-exist"), danglingLink); err != nil {
+		t.Fatal(err)
+	}
+	trDangling := track.Track{ID: "t1", Kind: track.Work, Repos: []track.Repo{{Name: "api", Path: api.Path, Worktree: danglingLink}}}
+	if err := w.RemoveWorktrees(ctx, "t1", trDangling.Repos); err == nil || !strings.Contains(err.Error(), "XDG_STATE_HOME") {
+		t.Errorf("RemoveWorktrees(dangling symlink) = %v, want actionable outside-root error", err)
+	}
+
+	missingOutside := filepath.Join(root, "outside-restore")
+	trRestore := track.Track{ID: "t1", Kind: track.Work, Repos: []track.Repo{{Name: "api", Path: api.Path, Base: "main", Branch: "fix/x", Worktree: missingOutside}}}
+	if _, err := w.Restore(ctx, trRestore, noProgress); err == nil || !strings.Contains(err.Error(), "XDG_STATE_HOME") {
+		t.Errorf("Restore outside Root: %v, want actionable error", err)
 	}
 }
 

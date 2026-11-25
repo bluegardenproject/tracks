@@ -78,9 +78,10 @@ shows only for fixed. The look gets revisited once it's in use.
   with `tracks setup --wait` before building, testing or installing, so it
   never runs against a half-installed tree or starts a second install.
 - `tracks up` and the Proxy tab wait for setup too.
-- **`.env` files:** a track whose repo has a setup or dev servers gets the
-  repo's `.env` files copied into its worktree on creation, whatever the kind;
-  copying is cheap. The
+- **`.env` files:** a Work track whose repo has a setup or dev servers gets the
+  repo's `.env` files copied into its worktree on creation; Review tracks are
+  skipped so primary `.env` secrets are not copied into untrusted pull-request
+  checkouts. The
   files are the ignored `.env` and `.env.*` files of the main checkout, at any
   depth (monorepos keep one per app), skipping ignored directories such as
   `node_modules`. They keep their relative paths, and an existing file in the

@@ -138,8 +138,8 @@ func TestReviewTracksWaitUntilSetupIsNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(setups.added) != 0 || len(*copies) != 1 {
-		t.Fatalf("%d setup panes, %d .env copies; want none and one, for the repo with dev servers", len(setups.added), len(*copies))
+	if len(setups.added) != 0 || len(*copies) != 0 {
+		t.Fatalf("%d setup panes, %d .env copies; want none for a Review track", len(setups.added), len(*copies))
 	}
 	states, err := f.svc.SetupStates(context.Background(), got.Track.ID)
 	if err != nil || len(states) != 0 {

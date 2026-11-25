@@ -352,19 +352,22 @@ func fallbackBase(ctx context.Context, dir string) string {
 // branch's own commits and what isn't committed yet, since the review
 // runs before a push, which is often before the last commit.
 func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) {
+	if !validBaseRef(base) {
+		return review.Packet{}, fmt.Errorf("invalid base ref %q", base)
+	}
 	p := review.Packet{Base: base}
 	for _, part := range []struct {
 		rng         []string
 		uncommitted bool
-	}{{[]string{base + "...HEAD"}, false}, {[]string{"HEAD"}, true}} {
+	}{{[]string{"--end-of-options", base + "...HEAD", "--"}, false}, {[]string{"--end-of-options", "HEAD", "--"}, true}} {
 		// The same paths in both, whatever the user's diff config.
 		diff, err := git(ctx, dir, append(diffArgs, part.rng...)...)
 		if err != nil {
-			return p, fmt.Errorf("git diff %s: %w", part.rng[0], err)
+			return p, fmt.Errorf("git diff %s: %w", part.rng[1], err)
 		}
 		numstat, err := git(ctx, dir, append(append(diffArgs, "--numstat", "-z"), part.rng...)...)
 		if err != nil {
-			return p, fmt.Errorf("git diff --numstat %s: %w", part.rng[0], err)
+			return p, fmt.Errorf("git diff --numstat %s: %w", part.rng[1], err)
 		}
 		p.Diffs = append(p.Diffs, review.SplitDiff(diff, part.uncommitted)...)
 		p.Files = review.MergeFiles(p.Files, review.ParseNumstat(numstat))
@@ -372,7 +375,7 @@ func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) 
 	if p.Empty() {
 		return p, fmt.Errorf("no changes against %s: nothing to review", base)
 	}
-	commits, err := git(ctx, dir, "log", "--no-merges", "--no-color", "--format=### %h %s%n%n%b", base+"..HEAD")
+	commits, err := git(ctx, dir, "log", "--no-merges", "--no-color", "--format=### %h %s%n%n%b", "--end-of-options", base+"..HEAD", "--")
 	if err != nil {
 		return p, fmt.Errorf("git log %s..HEAD: %w", base, err)
 	}
@@ -383,6 +386,20 @@ func gatherPacket(ctx context.Context, dir, base string) (review.Packet, error) 
 	}
 	p.Head = strings.TrimSpace(head)
 	return p, nil
+}
+
+// validBaseRef rejects option-like or whitespace/control base refs so
+// --base cannot inject git flags.
+func validBaseRef(base string) bool {
+	if base == "" || strings.HasPrefix(base, "-") || strings.Contains(base, ":") {
+		return false
+	}
+	for _, r := range base {
+		if r <= 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // diffArgs run git diff with plain output: paths unquoted where they
@@ -414,10 +431,13 @@ func codeOwner(ctx context.Context, client rpc.Client, id, dir string) (string, 
 // scope. With no CODEOWNERS, or nothing owner owns, there's nothing to
 // narrow to, and the review stops rather than review all.
 func ownedPacket(ctx context.Context, dir string, p review.Packet, owner string) (review.Packet, error) {
+	if !validBaseRef(p.Base) {
+		return p, fmt.Errorf("invalid base ref %q", p.Base)
+	}
 	var file string
 	found := false
 	for _, path := range review.CodeownersPaths {
-		if text, err := git(ctx, dir, "show", p.Base+":"+path); err == nil {
+		if text, err := git(ctx, dir, "show", "--end-of-options", p.Base+":"+path); err == nil {
 			file, found = text, true
 			break
 		}

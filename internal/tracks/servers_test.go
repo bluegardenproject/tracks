@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -277,5 +279,31 @@ func TestThePromptKnowsTheDevServers(t *testing.T) {
 	}
 	if _, err := f.svc.Promote(ctx, plan.Track.ID, func(string) {}); err != nil || !f.engine.spec.DevServers {
 		t.Errorf("promoted to Work: %v, told about dev servers %v; want told", err, f.engine.spec.DevServers)
+	}
+}
+
+func TestUpRejectsSymlinkDirOutsideWorktree(t *testing.T) {
+	f := newFixture(t)
+	servers := withServers(t, f, "api", []store.DevServer{
+		{Name: "web", Command: "pnpm dev", Dir: "apps/web", PortMode: store.PortAssigned},
+	})
+	tr := work(t, f, "api")
+	outside := t.TempDir()
+	wt := tr.Repos[0].Worktree
+	if err := os.MkdirAll(filepath.Join(wt, "apps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wt, "apps", "web")); err != nil {
+		t.Fatal(err)
+	}
+	states, err := f.svc.Up(context.Background(), tr.ID)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if len(servers.added) != 0 {
+		t.Fatalf("AddDevServer called for symlink outside worktree: %v", servers.added)
+	}
+	if len(states) != 1 || !strings.Contains(states[0].Problem, "outside the worktree") {
+		t.Errorf("states = %+v; want problem reporting outside the worktree", states)
 	}
 }

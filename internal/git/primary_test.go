@@ -267,3 +267,59 @@ func TestExitErrorOf(t *testing.T) {
 	}
 	_ = strings.TrimSpace // silence unused if reorganized
 }
+
+func TestPrimaryRejectsFlagAndRefspecInjection(t *testing.T) {
+	primary := setupRepo(t)
+	c := NewPrimaryRepoClient(primary)
+	ctx := context.Background()
+
+	for _, bad := range []string{"--upload-pack=sh -c true", "-f", "HEAD:refs/heads/main", ""} {
+		if err := c.Fetch(ctx, "origin", bad); err == nil {
+			t.Errorf("Fetch(%q) succeeded, want error", bad)
+		}
+	}
+	if err := c.Fetch(ctx, "--upload-pack=x", "develop"); err == nil {
+		t.Error("Fetch with flag remote succeeded")
+	}
+	if err := c.AddWorktree(ctx, filepath.Join(t.TempDir(), "wt"), "--flag", "origin/develop"); err == nil {
+		t.Error("AddWorktree accepted flag branch")
+	}
+	if err := c.AddWorktree(ctx, filepath.Join(t.TempDir(), "wt"), "ok", "--flag"); err == nil {
+		t.Error("AddWorktree accepted flag start")
+	}
+	if err := c.AddWorktreeDetached(ctx, filepath.Join(t.TempDir(), "wt"), "--flag"); err == nil {
+		t.Error("AddWorktreeDetached accepted flag start")
+	}
+	if err := c.CheckoutWorktree(ctx, filepath.Join(t.TempDir(), "wt"), "--flag"); err == nil {
+		t.Error("CheckoutWorktree accepted flag branch")
+	}
+	if err := c.DeleteBranch(ctx, "--flag"); err == nil {
+		t.Error("DeleteBranch accepted flag branch")
+	}
+	if _, err := c.BranchExists(ctx, "--flag"); err == nil {
+		t.Error("BranchExists accepted flag branch")
+	}
+
+	wt := NewWorktreeClient(primary)
+	if _, err := wt.HasCommitsBeyond(ctx, "--flag"); err == nil {
+		t.Error("HasCommitsBeyond accepted flag base")
+	}
+	if _, err := wt.ChangedFiles(ctx, "--flag"); err == nil {
+		t.Error("ChangedFiles accepted flag base")
+	}
+	if _, err := wt.CommitLog(ctx, "--flag"); err == nil {
+		t.Error("CommitLog accepted flag base")
+	}
+
+	cmd := ExecRunner{Dir: "/gd", GitDir: "/gd", WorkTree: "/wt", Safe: true}.command(ctx, "status", "--porcelain")
+	joined := strings.Join(cmd.Args, " ")
+	for _, want := range []string{"-c core.fsmonitor=false", "-c core.hooksPath=/dev/null", "--git-dir /gd", "--work-tree /wt", "status --ignore-submodules=all --porcelain"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("Safe ExecRunner args %q missing %q", joined, want)
+		}
+	}
+	plainCmd := ExecRunner{Dir: "/wt"}.command(ctx, "status", "--porcelain")
+	if strings.Contains(strings.Join(plainCmd.Args, " "), "--ignore-submodules=all") {
+		t.Errorf("non-Safe ExecRunner unexpectedly added --ignore-submodules=all: %v", plainCmd.Args)
+	}
+}
