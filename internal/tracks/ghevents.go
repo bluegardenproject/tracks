@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -137,9 +138,20 @@ func gitHubText(s string) string {
 	return s
 }
 
+// safeRef matches a branch name Tracks puts into a command it has an
+// agent run: letters, digits, '.', '_', '/' and '-', not starting with
+// '-' or '.', with no "..", at most 200. Git and GitHub allow more
+// (backticks, $(), ;), which a command would run.
+var safeRef = regexp.MustCompile(`^[A-Za-z0-9_/][A-Za-z0-9._/-]{0,199}$`)
+
 // gitHubRef is ref, a branch's name read on GitHub, for a git or gh
-// command: on one line of printable characters, never cut.
-func gitHubRef(ref string) string {
-	ref = escapes.ReplaceAllString(ref, "")
-	return strings.Join(strings.FieldsFunc(ref, func(r rune) bool { return !unicode.IsPrint(r) || unicode.IsSpace(r) }), "")
+// command an agent runs; false for one that isn't safe there.
+func gitHubRef(ref string) (string, bool) {
+	if !safeRef.MatchString(ref) || strings.Contains(ref, "..") {
+		return "", false
+	}
+	return ref, true
 }
+
+// shortSHA matches a commit's first 7 hex digits.
+var shortSHA = regexp.MustCompile(`^[0-9a-f]{7}$`)

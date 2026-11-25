@@ -13,7 +13,7 @@ import (
 // sideTrack checks that req asks for a side track it may have: a Work
 // track of the open main track req.Parent, which isn't a side track
 // itself. It fills in the main track's repos when req names none, and
-// returns the main track's name as shown.
+// returns the main track.
 func (s *Service) sideTrack(ctx context.Context, req *Request) (track.Track, error) {
 	if req.Parent == "" {
 		return track.Track{}, Problem("Start side tracks from inside a track.")

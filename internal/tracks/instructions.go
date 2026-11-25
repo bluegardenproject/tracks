@@ -17,6 +17,13 @@ import (
 // sent. held says the agent isn't free; neither typed nor held, in was
 // moot.
 func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (typed, held bool, err error) {
+	if in.Kind == instructionRestack {
+		// Its own PRs there merged or closed meanwhile: nothing to
+		// restack.
+		if below, ok := track.ParsePR(in.PR); ok && settledIn(t, below.Repo) {
+			return false, false, s.Store.DropInstruction(ctx, in.ID)
+		}
+	}
 	s.mu.Lock()
 	retry := s.retryAt[t.ID]
 	s.mu.Unlock()
