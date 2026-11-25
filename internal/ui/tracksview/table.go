@@ -1,6 +1,7 @@
 package tracksview
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -23,16 +24,22 @@ type table struct {
 	// width cells wide; "" draws the value. A drawn cell that doesn't fit
 	// falls back to it.
 	cell func(row, col, width int, fill lipgloss.Style) string
+	// snug are the columns that take none of the spare room, so the one
+	// after sits close.
+	snug []int
 }
 
 // draw renders the header and the rows that fit, width by at most
 // height lines.
 func (t table) draw(m Model, width, height int) []string {
-	widths := columnWidths(t.header, t.rows, width)
+	widths := columnWidths(t.header, t.rows, width, t.snug...)
 	row := func(values []string, fill lipgloss.Style, style func(col int) lipgloss.Style, drawn func(col, width int) string) string {
 		var b strings.Builder
 		used := 0
 		for i, v := range values {
+			if i > 0 && widths[i] == 0 {
+				continue // empty in every row: not drawn, gap and all
+			}
 			if i > 0 {
 				b.WriteString(fill.Render(strings.Repeat(" ", columnGap)))
 				used += columnGap
@@ -80,8 +87,10 @@ func (t table) draw(m Model, width, height int) []string {
 }
 
 // columnWidths fits the columns into width: the first one gets half the
-// spare room, or is cut when there is none.
-func columnWidths(header []string, rows [][]string, width int) []int {
+// spare room, the others but snug share the rest, and the first is cut
+// when there is none. A column empty in every row, header too, stays 0
+// wide.
+func columnWidths(header []string, rows [][]string, width int, snug ...int) []int {
 	widths := make([]int, len(header))
 	for i, c := range header {
 		widths[i] = lipgloss.Width(c)
@@ -91,8 +100,12 @@ func columnWidths(header []string, rows [][]string, width int) []int {
 			widths[i] = max(widths[i], lipgloss.Width(c))
 		}
 	}
-	total := columnGap * (len(widths) - 1)
-	for _, w := range widths {
+	// A column empty in every row isn't drawn, nor the gap before it.
+	total := 0
+	for i, w := range widths {
+		if i > 0 && w > 0 {
+			total += columnGap
+		}
 		total += w
 	}
 	spare := width - total
@@ -100,16 +113,22 @@ func columnWidths(header []string, rows [][]string, width int) []int {
 		widths[0] = max(4, widths[0]+spare)
 		return widths
 	}
-	if len(widths) == 1 {
+	var loose []int
+	for i := 1; i < len(widths); i++ {
+		if widths[i] > 0 && !slices.Contains(snug, i) {
+			loose = append(loose, i)
+		}
+	}
+	if len(loose) == 0 {
 		widths[0] += spare
 		return widths
 	}
 	widths[0] += spare / 2
 	rest := spare - spare/2
-	for i := 1; i < len(widths); i++ {
-		widths[i] += rest / (len(widths) - 1)
+	for _, i := range loose {
+		widths[i] += rest / len(loose)
 	}
-	widths[len(widths)-1] += rest % (len(widths) - 1)
+	widths[loose[len(loose)-1]] += rest % len(loose)
 	return widths
 }
 

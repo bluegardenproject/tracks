@@ -6,18 +6,17 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
-	"github.com/bluegardenproject/tracks/internal/ui/source"
+	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
-func TestStatusTextIsAsWideAsTheBadges(t *testing.T) {
+func TestBadgeTextIsAsWideAsTheBadge(t *testing.T) {
 	m := New(Config{Version: "test", Theme: theme.Default()})
-	for _, tr := range []source.Track{
-		{Status: track.Active},
-		{Status: track.ActionRequired, PRStatus: track.PRsOpen},
-		{Status: track.Done, PRStatus: track.PRsMerged},
-	} {
-		if got, want := lipgloss.Width(m.statusBadges(tr, lipgloss.NewStyle())), lipgloss.Width(statusText(tr)); got != want {
-			t.Errorf("%s: badges %d wide, text %d", statusText(tr), got, want)
+	for _, s := range []track.Status{track.Active, track.ActionRequired, track.PRsOpen, track.PRsMerged} {
+		if got, want := lipgloss.Width(widget.Badge(m.palette, s)), lipgloss.Width(badgeText(s)); got != want {
+			t.Errorf("%s: badge %d wide, text %d", s.Label, got, want)
 		}
+	}
+	if badgeText(track.Status{}) != "" {
+		t.Error("no status has a text")
 	}
 }
