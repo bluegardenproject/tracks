@@ -138,7 +138,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 	}
 
 	reads := map[string]bool{"Repos": true, "Track": true, "OpenTracks": true, "EndedTracks": true,
-		"EndedBefore": true, "InterruptedTracks": true, "FilteredTracks": true, "ProxyPorts": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
+		"EndedBefore": true, "InterruptedTracks": true, "SideTracks": true, "FilteredTracks": true, "ProxyPorts": true, "Filter": true, "UnsettledPRs": true, "Drafts": true, "Draft": true,
 		"RelayUnread": true, "RelayMessage": true, "RelayLog": true, "RelayUnseen": true,
 		// A write no screen shows, so it needn't notify.
 		"ClaimPorts": true, "SavePRHealth": true, "SavePRThreads": true}

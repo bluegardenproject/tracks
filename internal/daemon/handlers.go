@@ -139,6 +139,8 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.ReviewReply:  c.reviewReply,
 		rpc.TrainList:    c.trainList,
 		rpc.TrainEnd:     c.trainEnd,
+		rpc.SideNew:      c.sideNew,
+		rpc.SideList:     c.sideList,
 		rpc.Signals:      c.signals,
 		rpc.RelaySend:    c.relaySend,
 		rpc.RelayRead:    c.relayRead,
@@ -363,7 +365,7 @@ func (c Config) create(ctx context.Context, call *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID}, nil
+	return rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID, Side: created.Track.Side}, nil
 }
 
 // outcome is how a creation went, for a status line.

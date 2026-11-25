@@ -327,3 +327,30 @@ func TestTrackParent(t *testing.T) {
 		t.Errorf("a track whose parent is gone has parent %q, %v; want none", got.Parent, err)
 	}
 }
+
+func TestSideTracks(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	created := time.UnixMilli(time.Now().UnixMilli())
+	mk := func(id, parent, side string) track.Track {
+		return track.Track{ID: id, Kind: track.Work, Name: id[16:], Parent: parent, Side: side,
+			Engine: "claude", Session: "s-" + id, Prompt: "Do it", CreatedAt: created}
+	}
+	main := mk("20261125-100000-aaaaaa", "", "")
+	for _, tr := range []track.Track{main, mk("20261125-100100-bbbbbb", main.ID, "side-000001"),
+		mk("20261125-100200-cccccc", main.ID, ""), mk("20261125-100300-dddddd", main.ID, "side-000002")} {
+		if err := s.AddTrack(ctx, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sides, err := s.SideTracks(ctx, main.ID)
+	if err != nil || len(sides) != 2 || sides[0].Side != "side-000001" || sides[1].Side != "side-000002" {
+		t.Errorf("side tracks %+v, %v; want side-000001 and side-000002, not the track only started from it", sides, err)
+	}
+	if got, err := s.Track(ctx, main.ID); err != nil || got.Side != "" {
+		t.Errorf("a main track has handle %q, %v; want none", got.Side, err)
+	}
+	if err := s.AddTrack(ctx, mk("20261125-100400-eeeeee", main.ID, "side-000001")); err == nil {
+		t.Error("two side tracks of a main track took one handle")
+	}
+}

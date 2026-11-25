@@ -55,10 +55,13 @@ type Track struct {
 	// tracks new, "" for none or once that track is deleted; ParentName
 	// is that track's name as shown, read with it.
 	Parent, ParentName string
-	Repos              []Repo
-	PRs                []PR      // in the order they were found
-	Failures           []Failure // its server and setup errors, until cleared
-	CreatedAt          time.Time
+	// Side is a side track's handle on its main track's relay, the
+	// track Parent names; "" for every other track.
+	Side      string
+	Repos     []Repo
+	PRs       []PR      // in the order they were found
+	Failures  []Failure // its server and setup errors, until cleared
+	CreatedAt time.Time
 	State
 }
 

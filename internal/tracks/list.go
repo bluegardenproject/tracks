@@ -59,13 +59,16 @@ func (s *Service) List(ctx context.Context) ([]Listed, error) {
 }
 
 // End closes id's window and records that it closed. Its worktrees
-// stay.
+// stay. A main track ends only once its side tracks are settled.
 func (s *Service) End(ctx context.Context, id string) error {
-	_, release, err := s.hold(ctx, id)
+	t, release, err := s.hold(ctx, id)
 	if err != nil {
 		return err
 	}
 	defer release()
+	if err := s.sidesSettled(ctx, t, "it ends"); err != nil {
+		return err
+	}
 	infos, err := s.Windows.List()
 	if err != nil {
 		return err

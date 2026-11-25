@@ -1,6 +1,7 @@
 package tracksview
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -368,7 +369,7 @@ func (m Model) act(id actionID) tea.Cmd {
 	run := func(f func() error, ok, failed string, reload bool) tea.Cmd {
 		return func() tea.Msg {
 			if err := f(); err != nil {
-				return doneMsg{err: fmt.Errorf("%s: %w", failed, err)}
+				return doneMsg{err: errors.New(failure(failed, err))}
 			}
 			return doneMsg{ok: ok, reload: reload}
 		}

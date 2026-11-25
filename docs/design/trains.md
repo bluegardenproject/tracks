@@ -675,6 +675,19 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 2. The model: a side track is a track with a main track (the step 11
    link) on its main track's relay; `tracks side new|list`; no nesting;
    the main track can't end while a side track is unsettled.
+   Built, in two PRs:
+   - 2a, the model: `tracks.side`, the side track's handle on its main
+     track's relay (`side-000123`), marks it; `parent_id` alone stays
+     "Started from". A column, not a flag: the handle outlives restarts,
+     unlike a train's, and the relay's messages name it.
+     `internal/side` decides what a side track is and when it's settled:
+     ended, and its PRs merged or closed, or none opened. End, Archive and
+     Derail refuse a main track with an unsettled side track, naming
+     each and why; auto-archive skips it. A window closed some other way
+     can't be refused: the main track ends, its side tracks run on.
+     `tracks side new` is `tracks new work` with the side flag: the
+     daemon refuses it from a side track and for a main track that
+     ended, the command under the review marker, as `tracks relay`.
 3. Draft PRs the main track promotes, as the repo's rule allows.
 4. The Platform's "Side tracks" list; a click switches to the window.
 5. The Station's grouping.
