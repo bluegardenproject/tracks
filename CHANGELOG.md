@@ -1,5 +1,84 @@
 # Changelog
 
+## [3.6.0](https://github.com/bluegardenproject/tracks/compare/v3.5.0...v3.6.0) (2026-11-25)
+
+
+### Features
+
+* **agents:** the relay paragraph in Work and Review prompts ([f159b35](https://github.com/bluegardenproject/tracks/commit/f159b356d3907ac301ebdd1b3c85eac1d1cc6f79))
+* **notify:** tell the user when a train reports ([fc1a1a1](https://github.com/bluegardenproject/tracks/commit/fc1a1a1f2d9f54587b0d2137038d761961d279df))
+* **platform:** a click on a train opens its overlay ([05012cc](https://github.com/bluegardenproject/tracks/commit/05012ccca4f4d112586ee48ffd0111eba8408daa))
+* **platform:** a track window's trains on its left ([bb4eceb](https://github.com/bluegardenproject/tracks/commit/bb4eceb81e4d717b822d11c9c1830a20a5e27477))
+* **platform:** Signals, the Relay Station and the PRs' comments ([dc0d788](https://github.com/bluegardenproject/tracks/commit/dc0d788be40cefa245237be184ccfc719b7bfe91))
+* **relay:** collect messages a held pointer waits for ([db98027](https://github.com/bluegardenproject/tracks/commit/db980278c9ee007e89586fd058b7a57e55efe038))
+* **relay:** messages between a track and its trains ([fae5984](https://github.com/bluegardenproject/tracks/commit/fae59842a2b49a6513e91c704a4b5c096162d5a5))
+* **relay:** point an agent to its messages ([744dc21](https://github.com/bluegardenproject/tracks/commit/744dc213789c2063719f4254a80bce2b0bb214a5))
+* **relay:** the Relay Station ([f1048a8](https://github.com/bluegardenproject/tracks/commit/f1048a8c8ba190b8b97e2a75a576d37bdd3efa12))
+* **relay:** the reviewer on the relay ([e071a9a](https://github.com/bluegardenproject/tracks/commit/e071a9a014d4c556044066a7b67b2fe1ead89b75))
+* **relay:** what holds a pointer back from an agent ([836bd0f](https://github.com/bluegardenproject/tracks/commit/836bd0f6bb951c5956c557d45d6a5c145a02a42e))
+* **settings:** the reviewer's prefix for its handles ([2e4e717](https://github.com/bluegardenproject/tracks/commit/2e4e7172be07cc91e60c565add6bbcd31f5b2168))
+* **station:** open a Review track from a pull request link in Fast Track ([a213308](https://github.com/bluegardenproject/tracks/commit/a213308179929389a074e9a5ed133dd0bae16919))
+* **tracks:** note where an independent track was started from ([e7296c0](https://github.com/bluegardenproject/tracks/commit/e7296c0c5e39c9e85e6e62d2282bf738bd723e1e))
+* **train:** a session per train and its overlay ([dc0e538](https://github.com/bluegardenproject/tracks/commit/dc0e5384cddeca5831ab57d0b49b36a68fec7e50))
+* **train:** list and end a track's trains, the reviewer the first ([317b718](https://github.com/bluegardenproject/tracks/commit/317b718552b419105920b7bf45a27702a2390174))
+
+
+### Bug Fixes
+
+* **platform:** a Signals click's notice shows under Signals ([1efeb82](https://github.com/bluegardenproject/tracks/commit/1efeb825d5ddd0a9120e3f003d741186bc4960af))
+* **platform:** a track whose agent exited keeps its Platform ([e622ce4](https://github.com/bluegardenproject/tracks/commit/e622ce460f5e12574aa3e35f0bca3cc6db2a4794))
+* **platform:** the right column leaves the Platform its width ([ec45ca9](https://github.com/bluegardenproject/tracks/commit/ec45ca9890f93d3a843f73c863173a53313b0bab))
+* **platform:** the tick doesn't wait for a review starting ([a0b0bef](https://github.com/bluegardenproject/tracks/commit/a0b0bef2febfdfb507d55fa2f6981f2294a167fb))
+* **relay:** a collected pointer is done once pasted ([974926b](https://github.com/bluegardenproject/tracks/commit/974926b3e70c509ce00b296ae7100e5d8c3aaf17))
+* **relay:** a new agent starts with no turn known ([dec7e93](https://github.com/bluegardenproject/tracks/commit/dec7e93c954d3da24f912df9791ec1be3428a08c))
+* **relay:** a reviewer that goes with its track says so ([2de4b18](https://github.com/bluegardenproject/tracks/commit/2de4b18d010dbaedee1b8148d87af2ae482db3b0))
+* **relay:** a turn is noted under Report's lock ([e86d67d](https://github.com/bluegardenproject/tracks/commit/e86d67d272938aa3d572066b7adaa980e517a05f))
+* **relay:** check a message is UTF-8 before JSON hides it ([1efa19c](https://github.com/bluegardenproject/tracks/commit/1efa19c5abafa3aaf45a3e5b4ed3fa9d2773dc69))
+* **relay:** Collect messages goes and stays as it should ([49ac9b8](https://github.com/bluegardenproject/tracks/commit/49ac9b8f8c44bfdcb93b9ce8e6d6b5cf53024eb7))
+* **relay:** joined and left always pair up ([76d62ac](https://github.com/bluegardenproject/tracks/commit/76d62ac7678397f84e3d0d2983495b15e300c6f0))
+* **relay:** look again under the lock before a pointer goes ([591a22d](https://github.com/bluegardenproject/tracks/commit/591a22d3748a13aca9c579f3e1740a12d89ed1c0))
+* **relay:** no pointer into a shell, and none lost to a short turn ([d8a9d12](https://github.com/bluegardenproject/tracks/commit/d8a9d12680f8b0015a0475427f6a23f99a27253e))
+* **relay:** no pointer while the user scrolls back ([33071e7](https://github.com/bluegardenproject/tracks/commit/33071e7f982f1aa4a5e43b28b3c3e4ed2cea457d))
+* **relay:** no turn noted for an agent that's gone ([0c24319](https://github.com/bluegardenproject/tracks/commit/0c24319d918eaa253cad4116568666f875193709))
+* **relay:** show takes [#12](https://github.com/bluegardenproject/tracks/issues/12), and a refused send says why ([bb03754](https://github.com/bluegardenproject/tracks/commit/bb03754368031387dec8c46c3ad2d0a7929ce44a))
+* **relay:** the Relay Station follows a restarted daemon ([ee5fc60](https://github.com/bluegardenproject/tracks/commit/ee5fc605366debaf4f45bacad29f13e1d85dd5b5))
+* **relay:** the reviewer's notices hold whatever ends it ([6c69a09](https://github.com/bluegardenproject/tracks/commit/6c69a09bfe7c6cbee1c7ae447465348e8cb1e5ab))
+* **settings:** an edit of the prefix ends when focus leaves it ([be55af8](https://github.com/bluegardenproject/tracks/commit/be55af8c20c0404f03d26f09a52c41278ba0183c))
+* **settings:** keep Trains (agents) whole in the narrowest side-by-side Settings ([12bcfa5](https://github.com/bluegardenproject/tracks/commit/12bcfa591e1f329292d964af51f9ec4130918193))
+* **settings:** the prefix's error stays until its text changes ([51b2562](https://github.com/bluegardenproject/tracks/commit/51b2562a50cce230727b898ae90c4b4f1b8bf619))
+* **tmux:** read a client's session from list-clients ([378d857](https://github.com/bluegardenproject/tracks/commit/378d857e2ee98c8826049871f5348c1e3bc26d09))
+* **tracks:** compare the comments' counts under the lock ([8df0b7d](https://github.com/bluegardenproject/tracks/commit/8df0b7d3c9e1e8eb5a1bf06d88980b4051cff25d))
+* **train:** a train is listed while its pane is open ([1abd446](https://github.com/bluegardenproject/tracks/commit/1abd446d7cd67f00e08185e3d2c0bfa067c05871))
+* **train:** no ghost reviewer after its track ends; a train's status in review ([ebd98d5](https://github.com/bluegardenproject/tracks/commit/ebd98d59f9de294bbe53e912d741d364627578c4))
+* **train:** prefix keys in an overlay leave the tracks alone ([fe613cd](https://github.com/bluegardenproject/tracks/commit/fe613cd3b37bcb0021396a21e217a2401fc96b28))
+* **train:** Quick Access reads its own client's session ([65cb969](https://github.com/bluegardenproject/tracks/commit/65cb969cf6d7f3f1c3615a251941dad76ee2afe5))
+
+
+### Code Refactoring
+
+* **settings:** name the Agents section Trains (agents) ([9b9e8e9](https://github.com/bluegardenproject/tracks/commit/9b9e8e90f6a8a26641e9133cf8e5995523d354c8))
+* **widget:** draw status badges in ui/widget ([ea07331](https://github.com/bluegardenproject/tracks/commit/ea07331573dca52c5e1ef9528bb43c8be9cfaf6b))
+* **widget:** keep badgeTokens unexported, test Badge ([495a11e](https://github.com/bluegardenproject/tracks/commit/495a11ef783588868b050fe965d80b73c5a170da))
+
+
+### Documentation
+
+* **design:** an agent protocol to explore for v2 ([ea6e1c9](https://github.com/bluegardenproject/tracks/commit/ea6e1c9f001b93d07904deb462e8930b6599e322))
+* **design:** GitHub's news on the relay ([c9998ae](https://github.com/bluegardenproject/tracks/commit/c9998aeb54f0556249a13e3006dc038feabef2b7))
+* **design:** side tracks, a main track's parallel builders ([6c6fd3f](https://github.com/bluegardenproject/tracks/commit/6c6fd3fa44457817465dea0358361738216ab1d6))
+* **design:** the PR comment buttons move to Signals ([2d83a31](https://github.com/bluegardenproject/tracks/commit/2d83a31b2fbdbaa5a00fa8d0c0fad80c96a1bf92))
+* **design:** the scrollback holds a pointer back too ([430253c](https://github.com/bluegardenproject/tracks/commit/430253cf336411c5cfe2843bb94e4115ad175d7b))
+* **design:** trains list who's on the platform, and hear who joins ([28e06d4](https://github.com/bluegardenproject/tracks/commit/28e06d4fb4d163aecf97a198c3de96dc53f46ebd))
+* **design:** trains, read-only agents a track hands tasks to ([bfb7719](https://github.com/bluegardenproject/tracks/commit/bfb7719c1f94ff5ffeb449a4620cf6bcc29d671e))
+* **design:** trains' commands, restarts and missing reports; the Relay Station ([b0fc88c](https://github.com/bluegardenproject/tracks/commit/b0fc88c6c1e97b56fbc34af987d40690780efc1a))
+* **design:** trains' spike findings; the Reviewer first, on the relay ([4063a41](https://github.com/bluegardenproject/tracks/commit/4063a418b53e0bc249ac95b986773461231193b7))
+* **design:** trains' step 7, the overlay, is built ([43dd4bd](https://github.com/bluegardenproject/tracks/commit/43dd4bd1673761f1ab43ec11470b7da4dab4e315))
+
+
+### Miscellaneous
+
+* drop the Station's Cost column and the cost reckoning ([e2534e2](https://github.com/bluegardenproject/tracks/commit/e2534e21e11fbbb81ea1747bd9e71f239caa8729))
+
 ## [3.5.0](https://github.com/bluegardenproject/tracks/compare/v3.4.0...v3.5.0) (2026-11-20)
 
 
