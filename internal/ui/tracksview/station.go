@@ -137,10 +137,10 @@ func shownInList(t source.Track) string {
 // width cells: the corner and prefix stay, the name is cut.
 func (m Model) sideName(t source.Track, width int, selected bool, fill lipgloss.Style) string {
 	lead := lipgloss.Width(sideCorner + sidePrefix)
-	if width <= lead {
-		return ""
-	}
 	muted := fill.Foreground(m.palette.Color(theme.TableTextMuted))
+	if width <= lead {
+		return muted.Render(cut(sideCorner+sidePrefix, width))
+	}
 	name := fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(selected)
 	return muted.Render(sideCorner+sidePrefix) + name.Render(cut(t.Shown(), width-lead))
 }
