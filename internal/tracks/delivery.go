@@ -171,18 +171,22 @@ func (s *Service) Deliver(ctx context.Context) error {
 				break
 			}
 		}
-		if typed || held && len(instructions[t.ID]) > 0 {
+		if typed {
 			continue
 		}
-		if err := s.deliver(ctx, t, window); err != nil {
+		// One held back waits ahead of the pointer, which still stalls,
+		// and still shows held for Collect messages.
+		if err := s.deliver(ctx, t, window, !held); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// deliver points t's agent, in window, to its new messages.
-func (s *Service) deliver(ctx context.Context, t track.Track, window string) error {
+// deliver points t's agent, in window, to its new messages; with paste
+// false, an instruction waiting ahead of it, it only notes what's held
+// and lets a stalled pointer go.
+func (s *Service) deliver(ctx context.Context, t track.Track, window string, paste bool) error {
 	now := s.now()
 	s.mu.Lock()
 	s.deliveryMaps()
@@ -216,6 +220,10 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 	// anything. Held, its messages offer Collect messages on the
 	// Platform.
 	if now.Before(retry) || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+		s.setHeld(t.ID, due)
+		return nil
+	}
+	if !paste {
 		s.setHeld(t.ID, due)
 		return nil
 	}
@@ -471,13 +479,18 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 		p.at = s.now()
 		s.pointing[t.ID] = p
 	}
+	sent := false
 	if in.Kind == settings.EventReviewThreads && s.comments[t.ID] != nil {
-		if _, ok := s.comments[t.ID][in.PR]; ok {
+		if c, ok := s.comments[t.ID][in.PR]; ok && !c.Sent {
 			s.setSent(t.ID, in.PR, true)
+			sent = true
 		}
 	}
 	s.mu.Unlock()
-	s.Changes.Notify()
+	if sent {
+		// Signals shows them sent.
+		s.Changes.Notify()
+	}
 	// It's in: marked so even if the daemon stops meanwhile.
 	return true, false, s.Store.InstructionTyped(context.WithoutCancel(ctx), in.ID, s.now())
 }

@@ -472,3 +472,50 @@ func TestAPolicyChangeDropsWhatWaits(t *testing.T) {
 		t.Errorf("after the policy changed: side %q, main %q; want the main track's question only", side, asks)
 	}
 }
+
+// With a second instruction waiting, one the agent didn't take still
+// stalls and frees the track; the second goes after the back-off.
+func TestAStallWithAnotherInstructionWaiting(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	for _, in := range []struct{ kind, body string }{{settings.EventConflicts, "Rebase."}, {settings.EventCIFailed, "Fix CI."}} {
+		if err := f.svc.instruct(ctx, "a", in.kind, "pr", in.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := deliver(t, f); len(got) != 1 || got[0] != "@a Rebase." {
+		t.Fatalf("pasted %q; want the first", got)
+	}
+	*now = now.Add(pointerStall)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pasted %q at the stall", got)
+	}
+	f.svc.mu.Lock()
+	_, waiting := f.svc.pointing["a"]
+	f.svc.mu.Unlock()
+	if waiting {
+		t.Fatal("the stalled paste still holds the track")
+	}
+	*now = now.Add(pointerRetry)
+	if got := deliver(t, f); len(got) != 1 || got[0] != "@a Fix CI." {
+		t.Errorf("after the back-off pasted %q; want the second", got)
+	}
+}
+
+// Held messages show for Collect messages while an instruction waits.
+func TestHeldWhileAnInstructionWaits(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	post(t, f, relay.Message{From: relay.GitHubHandle, To: "track", Kind: relay.Event, Body: "PR merged.", At: *now})
+	*now = now.Add(pointerGrace)
+	if err := f.svc.instruct(ctx, "a", settings.EventConflicts, "pr", "Rebase."); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pasted %q into a turn", got)
+	}
+	if !f.svc.heldFrom("a", relay.GitHubHandle) {
+		t.Error("@github's event isn't shown held while the instruction waits")
+	}
+}
