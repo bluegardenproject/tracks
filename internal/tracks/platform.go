@@ -33,9 +33,9 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.Windows.FitPlatforms(); err != nil {
-		return err
-	}
+	// A Platform that couldn't be fitted, its window closing meanwhile,
+	// doesn't hold the rest back.
+	fitErr := s.Windows.FitPlatforms()
 	// The reviewers' panes and runs are read together, as StartReview
 	// and CloseReviewer change them together.
 	reviewers := map[string]ReviewerState{}
@@ -68,7 +68,7 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	}
 	seen := map[string]string{}
 	live, windowed := map[string]bool{}, map[string]bool{}
-	var errs []error
+	errs := []error{fitErr}
 	for _, in := range infos {
 		if in.Track == "" {
 			continue
