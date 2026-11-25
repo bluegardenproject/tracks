@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -61,5 +62,43 @@ func TestInstructions(t *testing.T) {
 	var typed int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM instructions WHERE typed_at IS NOT NULL").Scan(&typed); err != nil || typed != 1 {
 		t.Errorf("typed rows %d, %v; want the typed one kept", typed, err)
+	}
+}
+
+func TestDropInstructionAndSetBase(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.UnixMilli(1_790_000_000_000)
+	if err := s.AddTrack(ctx, track.Track{ID: "a", Kind: track.Work, Name: "a", Engine: "claude", CreatedAt: now,
+		Repos: []track.Repo{{Name: "api", Path: "/src/api", Base: "side/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"typed", "waiting"} {
+		if err := s.AddInstruction(ctx, Instruction{TrackID: "a", Kind: body, PR: "pr", Body: body, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, _ := s.WaitingInstructions(ctx)
+	if err := s.InstructionTyped(ctx, all[0].ID, now); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range all {
+		if err := s.DropInstruction(ctx, in.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var left int
+	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM instructions").Scan(&left); err != nil || left != 1 {
+		t.Errorf("%d rows left, %v; want the typed one kept", left, err)
+	}
+
+	if err := s.SetBase(ctx, "a", "api", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Track(ctx, "a"); err != nil || got.Repos[0].Base != "main" {
+		t.Errorf("base %q, %v; want main", got.Repos[0].Base, err)
+	}
+	if err := s.SetBase(ctx, "gone", "api", "main"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetBase on a track that isn't there: %v", err)
 	}
 }

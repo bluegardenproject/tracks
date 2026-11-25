@@ -216,7 +216,12 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 		return err
 	}
 	if !safe {
-		return s.postGitHub(ctx, mainID, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
+		to := mainID
+		if main, err := s.Store.Track(ctx, mainID); err == nil && !main.Open() && upper.Open() {
+			// No main track to decide: the side track hears it.
+			to = upper.ID
+		}
+		return s.postGitHub(ctx, to, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
 	}
 	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
 		return err
