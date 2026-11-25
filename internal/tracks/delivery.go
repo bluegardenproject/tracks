@@ -9,6 +9,8 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/hooks"
 	"github.com/bluegardenproject/tracks/internal/relay"
+	"github.com/bluegardenproject/tracks/internal/settings"
+	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -134,6 +136,14 @@ func (s *Service) Deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	waiting, err := s.Store.WaitingInstructions(ctx)
+	if err != nil {
+		return err
+	}
+	instructions := map[string][]store.Instruction{}
+	for _, in := range waiting {
+		instructions[in.TrackID] = append(instructions[in.TrackID], in)
+	}
 	var errs []error
 	for _, t := range open {
 		window, ok := windows[t.ID]
@@ -145,6 +155,17 @@ func (s *Service) Deliver(ctx context.Context) error {
 			// exited to): nothing to collect either.
 			s.setHeld(t.ID, nil)
 			continue
+		}
+		if ins := instructions[t.ID]; len(ins) > 0 {
+			// An instruction goes first, and alone in its tick: the
+			// agent's turn it starts holds the pointer back.
+			typed, err := s.typeInstruction(ctx, t, window, ins[0])
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
+			}
+			if typed || err != nil {
+				continue
+			}
 		}
 		if err := s.deliver(ctx, t, window); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
@@ -383,4 +404,34 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 		}
 	}
 	return t.Name, s.point(id, window, due, pointed, true)
+}
+
+// typeInstruction types in, a waiting instruction, into t's agent in
+// window when it's free, by what holds a pointer back, and reports
+// whether it did. It starts the agent's turn, as the user's prompt
+// would. One about review threads marks their Signals button sent.
+func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (bool, error) {
+	s.mu.Lock()
+	_, pointing := s.pointing[t.ID]
+	s.mu.Unlock()
+	if pointing || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+		return false, nil
+	}
+	if err := s.Windows.Prompt(window, in.Body); err != nil {
+		return false, err
+	}
+	if err := s.Store.InstructionTyped(ctx, in.ID, s.now()); err != nil {
+		return true, err
+	}
+	s.mu.Lock()
+	s.deliveryMaps()
+	s.turns[t.ID] = true
+	if in.Kind == settings.EventReviewThreads && s.comments[t.ID] != nil {
+		if _, ok := s.comments[t.ID][in.PR]; ok {
+			s.setSent(t.ID, in.PR, true)
+		}
+	}
+	s.mu.Unlock()
+	s.Changes.Notify()
+	return true, nil
 }

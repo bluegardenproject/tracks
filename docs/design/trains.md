@@ -677,35 +677,61 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 
 ### Side tracks and GitHub's events
 
-A side track's PR is its own: `@github`'s events on it (above) go to the
-side track and wake its agent. Its main track has to know too, to keep
-track of the work and to tell the user; what happens next is a policy.
+A side track's PR is its own, but its main track keeps track of the
+work and tells the user: `@github`'s events (above) on a side track's
+PR go to the **main track**, and the side track hears what its main
+track's policy has Tracks tell it (built, step 4).
 
-- **Copied to the main track**: each event on a side track's PR also goes
-  to its main track's relay, naming the side track: "@side-000123's PR
-  acme/api#231 has conflicts with main." The main track's agent gets the
-  pointer, as for any message.
-- **A policy per kind of event**, under Settings → GitHub:
+- **Facts go to the main track**, naming the side track: "@side-000123,
+  side track relay-store: PR acme/api#231 has conflicts with main." Not
+  to the side track: an agent told a fact acts on it (a conflict alone
+  had a track rebase), so on "main track decides" it would act before
+  its main track decided. A side track whose main track is gone or
+  ended hears its events itself, as any track.
+- **A policy per kind of event**, in `settings.yaml`'s `github:` section
+  (`conflicts`, `ci_failed`, `review_threads`: `auto`, `main` or `ask`),
+  to be drawn in Settings → GitHub:
 
-  | Event | Handle automatically | Main track decides | Ask me | Default |
+  | Event | Handle automatically (`auto`) | Main track decides (`main`) | Ask me (`ask`) | Default |
   |---|---|---|---|---|
   | Conflicts with its base | Tracks tells the side track to rebase and solve them | | | Handle automatically |
-  | CI failed | Tracks tells the side track to investigate and fix the checks, naming them | | | Handle automatically |
+  | CI failed | Tracks tells the side track to investigate the checks, naming them | | | Handle automatically |
   | New review threads | Tracks tells the side track to work through them | The main track's agent chooses, and may ask the user | The main track asks the user with its question tool | Main track decides |
 
-  Each row offers the three; "Handle automatically" still tells the main
-  track, as information. Merged and closed aren't a setting: the main
-  track decides (restack the next side track, promote, tell the user).
+  Each row offers the three. On `auto` the main track gets the fact as a
+  notice ("… Tracks tells it to handle it, once its agent is free"),
+  which wakes no one; on `main` as an event, which wakes its agent; on
+  `ask` as a notice, and Tracks has its agent ask the user. Merged and
+  closed aren't a setting: the main track decides (restack the next side
+  track, promote, tell the user).
+- **Tracks types the instructions** into the agent, as the Signals'
+  PR comments button does: the user's authority, not a relay message
+  (which stays data, never instructions). They're Tracks' own words,
+  agreed with the user, golden files in `actions/testdata`:
+  - Conflicts: "Your PR acme/api#231 has conflicts with main. Rebase onto
+    main, solve the conflicts, run the tests, and push."
+  - CI failed: "CI failed on your PR acme/api#231 at 0123abc: lint, test.
+    Investigate the failing checks. If your changes caused them, fix them
+    and push. If they didn't, don't re-run the checks: tell your main
+    track with `tracks relay send --to track` what fails, what likely
+    causes it, and why your changes don't." Re-running checks is left to
+    the user, for now.
+  - Review threads: "3 review threads on your PR acme/api#231 wait for an
+    answer." and the PR comments button's prompt.
+  - Ask me, to the main track: "@side-000123, your side track relay-cli:
+    <the fact> Ask the user with your question tool whether and how it
+    should handle this, then tell it with `tracks relay send --to
+    side-000123`."
+- **Typed once the agent is free**: an instruction waits in the store
+  (`instructions`; a newer one of the same kind and PR replaces one that
+  waits) until the agent isn't in a turn, a dialog, the user's typing, a
+  draft or scrollback, as a pointer waits; it goes before the pointer,
+  alone in its tick, and starts the agent's turn.
 - **Ask before replying to human comments on PRs**, on by default: the
   comments flow (the PR comments skill and its prompt) asks the user
   before it replies to a person, as it does now; off, it replies on its
-  own. A bot's comments never ask.
-- **Tracks sends the instructions**, not the main track's agent, so they
-  don't hang on how a prompt is read: "Rebase onto main and solve the
-  conflicts, then push.", "Investigate the failing checks (lint, test)
-  and fix them, then push." They're Tracks' own words, from the side
-  track's main track, and golden files: their wording is agreed with the
-  user first.
+  own. A bot's comments never ask. To come, its own PR: it changes the
+  skill's text.
 - **Policies are rules Tracks runs**: a trigger (an `@github` event on a
   side track's PR), and an effect (instruct the side track, tell the main
   track, have the main track ask the user). A fixed table in Tracks, not
@@ -713,7 +739,14 @@ track of the work and to tell the user; what happens next is a policy.
   [protocol.md](protocol.md), built so that a plugin can later declare
   them (there: "Plugins, settings and policies").
 - **A track that isn't a side track** keeps today's events: facts that
-  wake its own agent, which decides. The policies may extend to it later.
+  wake its own agent, which decides, and usually acts.
+- **To keep in mind**: facts-only messages carry implicit instructions.
+  `@github`'s "has conflicts" alone had an agent rebase. Nothing prevents
+  it now, and for a track's own PRs it's what's wanted; any message that
+  reaches an agent should be written knowing it may act on it.
+- **Open**: an instruction waits behind an agent whose turn Tracks
+  doesn't know (after a restart, until it ends one), with no Collect
+  messages for it yet.
 
 ### Order
 
@@ -759,9 +792,10 @@ track of the work and to tell the user; what happens next is a policy.
    show only its own relay, not its traffic with its main track; and a
    pointer held for `@track` (in a side track) or `@side-…` (in a main
    track) has no row to offer Collect messages under.
-4. Side tracks and GitHub's events: copied to the main track, the
-   policies and Settings → GitHub; the instructions' wording agreed
-   first. Before drafts and stacking, which lean on it.
+4. Side tracks and GitHub's events (built): facts to the main track, the
+   policies in `settings.yaml`, the instructions typed into the agents.
+   To come: Settings → GitHub's frame, and "ask before replying to human
+   comments".
 5. Draft PRs the main track promotes, as the repo's rule allows.
    Built: a side track's prompt ends with a "Side track" paragraph
    (`agents.SideTrackContract`, golden-checked, in place of the plain

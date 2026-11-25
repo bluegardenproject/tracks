@@ -1,0 +1,1 @@
+Your PR {pr} has conflicts with {base}. Rebase onto {base}, solve the conflicts, run the tests, and push.

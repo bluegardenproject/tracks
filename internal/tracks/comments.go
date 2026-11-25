@@ -78,8 +78,8 @@ func (s *Service) threadsEvents(ctx context.Context, t track.Track, counts map[s
 		if err != nil {
 			return err
 		}
-		if e := threadsEvent(pr, was, n); known && e != "" && t.Kind == track.Work {
-			if err := s.postGitHub(ctx, t.ID, e); err != nil {
+		if e, ok := threadsEvent(pr, was, n); known && ok && t.Kind == track.Work {
+			if err := s.githubEvent(ctx, t, e); err != nil {
 				return err
 			}
 		}
