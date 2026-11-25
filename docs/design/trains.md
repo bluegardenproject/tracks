@@ -47,8 +47,8 @@ see Phase 2. The rest of this document, up to it, is about trains.
   in its overlay.
 - **User-defined agents.** Later.
 - **The Investigator and the Watcher in v1.** v1 builds trains with the
-  Reviewer as the only one. The other two are defined in a design of their
-  own at the end of Order.
+  Reviewer as the only one. The other two come in v2, as the first plugins
+  ([protocol.md](protocol.md)).
 - **Pinning a train beside the agent** (`join-pane`, as the reviewer pane
   does now). The overlay only, at first.
 - **A cap.** None at first; a setting if trying it shows the need.
@@ -516,12 +516,13 @@ Each step a PR of its own.
     comes). Done, for Work and Review tracks; Plan tracks may get it later.
 11. The "started from" note on independent tracks. Independent of the rest.
     Done: `parent_id` on `tracks`; a parent that's deleted leaves no note.
-12. The Investigator and the Watcher: their design (purpose, briefs,
-    commands, the Watcher's finish condition, Cursor, the worktree check
-    for any train, which runs in the caller's sandbox as the reviewer's
-    does: the daemon runs no git), then a step each,
-    with `tracks train new`, their Settings frames and the Trains paragraph
-    of the track's prompt.
+12. The Investigator and the Watcher: **moved to v2**, built as the first
+    plugins on the open interface of [protocol.md](protocol.md), maybe in
+    a repo of plugins. What's settled here still holds for them: their
+    commands (prevented where the engine can, detected everywhere), the
+    worktree check in the caller's sandbox (the daemon runs no git), the
+    Watcher's finish condition in its task. v1 ends with the Reviewer as
+    the only train.
 
 Later: a cap setting, user-defined agents, pinning beside. Writing in
 parallel is Phase 2, side tracks.
@@ -671,6 +672,7 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 
 - Claude on a machine without managed settings: the train switches its
   sandbox on and auto-allows it itself, through `--settings`; to confirm
-  in step 12.
+  with the first plugins that run commands (v2).
 - The hosts a command-running train's sandbox lets it reach (`gh`, `curl`).
-- The Investigator's and the Watcher's design (step 12).
+- The Investigator's and the Watcher's design: v2, in
+  [protocol.md](protocol.md).

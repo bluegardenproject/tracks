@@ -16,10 +16,15 @@ the v2.0.0 release; git history keeps them.
 - **Trains** ([docs/design/trains.md](design/trains.md)): read-only agents a
   track hands tasks to, on the track's Platform, talking through Tracks'
   relay. Steps 1–8 (the Platform, the overlay, Collect messages), 9a, 10
-  and 11 are built; v1 makes the Reviewer the first train, the
-  Investigator and the Watcher come last. Phase 2: side tracks, child
+  and 11 are built, 9b in review; v1 has the Reviewer as its only train.
+  Phase 2: side tracks, child
   tracks a main track orchestrates to write code in parallel, on its
   relay, grouped under it in the Station.
+- **Agent protocol (v2)** ([docs/design/protocol.md](design/protocol.md)):
+  exploring. Plugins (the Investigator and the Watcher as the first,
+  maybe in a repo of plugins), a manifest, a versioned message envelope,
+  Tracks as an MCP server for its tools, and programmable messages that
+  Tracks runs with the user as the final say. Needs planning first.
 - **GitHub on the relay** (in [trains](design/trains.md), Phase 2): poll
   the notifications endpoint and one GraphQL query instead of each PR,
   and post `@github` events (merged, conflicts, CI failed, new comments)
