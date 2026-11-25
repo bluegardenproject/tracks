@@ -235,6 +235,8 @@ func (w *fakeWindows) Platforms() (map[string]string, error) {
 	return out, nil
 }
 
+func (w *fakeWindows) FitPlatforms() error { return nil }
+
 func (w *fakeWindows) OpenPlatform(window, command string) error {
 	if w.platforms == nil {
 		w.platforms = map[string]string{}

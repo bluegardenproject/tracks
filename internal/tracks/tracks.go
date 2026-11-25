@@ -134,6 +134,9 @@ type Windows interface {
 	// OpenPlatform opens window's running command.
 	Platforms() (map[string]string, error)
 	OpenPlatform(window, command string) error
+	// FitPlatforms puts each Platform back to its width, which tmux
+	// changes as it scales the panes with their window.
+	FitPlatforms() error
 }
 
 // Service creates, lists and ends tracks.
@@ -341,6 +344,7 @@ type TmuxWindows struct {
 		trackwin.TrainTmux
 		RefreshStatus(client string) error
 		ListSessionPanes(session string) ([]tmux.Pane, error)
+		ResizePaneWidth(pane string, cols int) error
 		KillPane(pane string) error
 		KillWindow(window string) error
 		CapturePane(pane string) (string, error)

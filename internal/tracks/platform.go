@@ -33,6 +33,9 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := s.Windows.FitPlatforms(); err != nil {
+		return err
+	}
 	// The reviewers' panes and runs are read together, as StartReview
 	// and CloseReviewer change them together.
 	reviewers := map[string]ReviewerState{}
@@ -194,6 +197,18 @@ func (w TmuxWindows) Platforms() (map[string]string, error) {
 		}
 	}
 	return out, nil
+}
+
+func (w TmuxWindows) FitPlatforms() error {
+	panes, err := w.Tmux.ListSessionPanes(w.Session)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, pane := range trackwin.Unfit(panes) {
+		errs = append(errs, w.Tmux.ResizePaneWidth(pane, trackwin.PlatformWidth))
+	}
+	return errors.Join(errs...)
 }
 
 // OpenPlatform kills a pane it opened but couldn't label: unlabelled,
