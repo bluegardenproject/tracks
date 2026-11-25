@@ -14,6 +14,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
+	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
 const (
@@ -104,9 +105,13 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 	return m, m.act(actionEnd)
 }
 
-var columns = []string{"Name", "Type", "Status", "Model"}
+// columns are the list's headers. The PR status and the errors' status
+// have columns of their own, so each lines up, but no header: they read
+// as part of Status.
+var columns = []string{"Name", "Type", "Status", "", "", "Model"}
 
-// statusColumn is drawn as badges.
+// statusColumn is the first of the columns drawn as badges: the track's
+// status, its PR status and its errors' status.
 const statusColumn = 2
 
 func cells(t source.Track) []string {
@@ -116,7 +121,11 @@ func cells(t source.Track) []string {
 	} else if t.Model != "" {
 		model = t.Model
 	}
-	return []string{shownInList(t), t.Kind, statusText(t), model}
+	out := []string{shownInList(t), t.Kind}
+	for _, st := range statuses(t) {
+		out = append(out, badgeText(st))
+	}
+	return append(out, model)
 }
 
 func (m Model) loadTracks() tea.Cmd {
@@ -369,9 +378,9 @@ func (m Model) list(width, height int) []string {
 		rows[i] = cells(t)
 	}
 	cell := func(row, col, width int, fill lipgloss.Style) string {
-		switch {
-		case col == statusColumn:
-			return m.statusBadges(s.tracks[row], fill)
+		switch all := statuses(s.tracks[row]); {
+		case col >= statusColumn && col < statusColumn+len(all) && all[col-statusColumn].Label != "":
+			return widget.Badge(m.palette, all[col-statusColumn])
 		case col == 0 && s.tracks[row].Under:
 			return m.sideName(s.tracks[row], width, row == s.selected, fill)
 		}
@@ -382,7 +391,7 @@ func (m Model) list(width, height int) []string {
 		filter = []string{m.filterLine(width)}
 	}
 	lines := table{header: columns, rows: rows, right: -1, selected: s.selected, hover: s.hover, offset: s.offset,
-		cell: cell}.draw(m, width, height-len(filter))
+		cell: cell, snug: []int{statusColumn, statusColumn + 1, statusColumn + 2}}.draw(m, width, height-len(filter))
 	switch {
 	case len(s.tracks) == 0 && s.filter.On():
 		return m.noMatch(append(filter, lines[:min(1, len(lines))]...), width, height)

@@ -29,11 +29,22 @@ func TestPRStatus(t *testing.T) {
 		tracksMsg{tracks: []source.Track{withPRs(prs), merged, {ID: "c", Number: 2, Name: "no-pr", Kind: "ask", Status: track.Active}}})
 
 	view := plainView(m)
-	for _, want := range []string{" active   2 PRs open ", " done   PR merged ", "work   active   2 PRs open ",
+	for _, want := range []string{" active   2 PRs open ", " done ", " PR merged ", "work   active   2 PRs open ",
 		"web#6 merged, web#7 open, api#8 draft"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q:\n%s", want, view)
 		}
+	}
+	column := func(label string) int {
+		for _, line := range strings.Split(view, "\n") {
+			if i := strings.Index(line, label); i >= 0 {
+				return len([]rune(line[:i]))
+			}
+		}
+		return -1
+	}
+	if open, merged := column(" 2 PRs open "), column(" PR merged "); open < 0 || open != merged {
+		t.Errorf("the PR statuses start at %d and %d, want them in one column", open, merged)
 	}
 	listEnd := m.panes().listX + m.panes().listWidth
 	for _, line := range strings.Split(view, "\n") {

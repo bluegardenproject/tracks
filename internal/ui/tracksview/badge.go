@@ -7,26 +7,32 @@ import (
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
-// statusBadges are t's track status and, when it has them, its PR
-// status and its errors' status, as badges with a gap in fill between
-// them.
+// statuses are t's track status, its PR status and its errors' status;
+// the last two have no Label when it has none.
+func statuses(t source.Track) []track.Status {
+	return []track.Status{t.Status, t.PRStatus, t.FailureStatus}
+}
+
+// statusBadges are t's statuses as badges, those it has, with a gap in
+// fill between them.
 func (m Model) statusBadges(t source.Track, fill lipgloss.Style) string {
-	out := widget.Badge(m.palette, t.Status)
-	for _, s := range []track.Status{t.PRStatus, t.FailureStatus} {
-		if s.Label != "" {
-			out += fill.Render(" ") + widget.Badge(m.palette, s)
+	out := ""
+	for _, s := range statuses(t) {
+		if s.Label == "" {
+			continue
 		}
+		if out != "" {
+			out += fill.Render(" ")
+		}
+		out += widget.Badge(m.palette, s)
 	}
 	return out
 }
 
-// statusText is statusBadges as plain text, as wide.
-func statusText(t source.Track) string {
-	out := " " + t.Status.Label + " "
-	for _, s := range []track.Status{t.PRStatus, t.FailureStatus} {
-		if s.Label != "" {
-			out += "  " + s.Label + " "
-		}
+// badgeText is s's badge as plain text, as wide; "" when s has no label.
+func badgeText(s track.Status) string {
+	if s.Label == "" {
+		return ""
 	}
-	return out
+	return " " + s.Label + " "
 }

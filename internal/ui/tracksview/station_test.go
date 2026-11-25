@@ -139,7 +139,7 @@ func TestModelCell(t *testing.T) {
 		{"Cursor", "gpt-5", "gpt-5"},
 		{"Cursor", "", "default"},
 	} {
-		if got := cells(source.Track{Engine: c.engine, Model: c.model})[3]; got != c.want {
+		if got := cells(source.Track{Engine: c.engine, Model: c.model})[len(columns)-1]; got != c.want {
 			t.Errorf("%s %q shows %q, want %q", c.engine, c.model, got, c.want)
 		}
 	}
