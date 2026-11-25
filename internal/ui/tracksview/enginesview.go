@@ -128,7 +128,7 @@ func (b *engineBody) draw(en agents.Engine, width int) {
 			b.add("")
 		case check.err != nil:
 			b.add(m.fg(theme.StateDangerText).Render(cut(checkProblem(en, check.err), width)))
-			b.add(cut(m.fg(theme.TextMuted).Render("Install it with ")+m.fg(theme.TextDefault).Render(en.Install), width))
+			b.add(cut(m.installHint(en), width))
 			b.add("")
 			b.buttons("", 0, []int{ctlCheck}, widget.NewButton("Check again", widget.ButtonAccent))
 		default:
@@ -194,6 +194,15 @@ func (b *engineBody) remove(en agents.Engine, width int) {
 	b.buttons("", 0, []int{ctlRemove}, widget.NewButton("Remove "+en.Name, widget.ButtonDanger))
 }
 
+// installHint says how to install en: its command, or its docs.
+func (m Model) installHint(en agents.Engine) string {
+	if en.Install == "" {
+		return m.fg(theme.TextMuted).Render("See ") + m.fg(theme.TextDefault).Render(en.InstallDocs) +
+			m.fg(theme.TextMuted).Render(" to install it.")
+	}
+	return m.fg(theme.TextMuted).Render("Install it with ") + m.fg(theme.TextDefault).Render(en.Install)
+}
+
 // status is the badge, with where the CLI is or why it isn't there.
 func (b *engineBody) status(en agents.Engine, check engineCheck, width int) {
 	m := b.m
@@ -207,7 +216,7 @@ func (b *engineBody) status(en agents.Engine, check engineCheck, width int) {
 		prefix := b.label("Status") + badge(theme.StateDangerBgAccent, theme.StateDangerTextAccent, "not found") + "  "
 		b.buttons(prefix, lipgloss.Width(prefix), []int{ctlCheck}, widget.NewButton("Check again", widget.ButtonDefault))
 		b.wrapped(theme.StateDangerText, checkProblem(en, check.err), width-engineLabelWidth)
-		b.add(strings.Repeat(" ", engineLabelWidth) + cut(m.fg(theme.TextMuted).Render("Install it with ")+m.fg(theme.TextDefault).Render(en.Install), width-engineLabelWidth))
+		b.add(strings.Repeat(" ", engineLabelWidth) + cut(m.installHint(en), width-engineLabelWidth))
 	default:
 		where := check.found.Path
 		if v := check.found.Version; v != "" {
