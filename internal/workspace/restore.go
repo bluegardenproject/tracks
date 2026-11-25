@@ -97,3 +97,14 @@ func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// Pushed reports whether origin of the repo checked out at path has
+// branch: a stacked side track's worktree starts from it.
+func (w *Worktrees) Pushed(ctx context.Context, path, branch string) (bool, error) {
+	primary := git.NewPrimaryRepoClient(path)
+	heads, _, err := primary.Runner.Run(ctx, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil {
+		return false, fmt.Errorf("look for %s on origin: %w", branch, err)
+	}
+	return strings.TrimSpace(heads) != "", nil
+}

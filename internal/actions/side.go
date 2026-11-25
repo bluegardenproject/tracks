@@ -50,3 +50,10 @@ func fill(prompt string, pairs ...string) string {
 	}
 	return strings.NewReplacer(pairs...).Replace(strings.TrimSpace(string(b)))
 }
+
+// SideRestack has a side track stacked on the PR pr of the track named
+// name, merged into base at commit head, rebase its own commits onto
+// base.
+func SideRestack(pr, name, base, head string) string {
+	return fill("side-restack", "{pr}", pr, "{name}", name, "{base}", base, "{head}", head)
+}

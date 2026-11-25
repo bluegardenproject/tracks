@@ -29,6 +29,7 @@ var (
 		settings.EventConflicts:     "conflicts",
 		settings.EventCIFailed:      "a CI failure",
 		settings.EventReviewThreads: "review threads",
+		instructionRestack:          "a restack",
 	}
 )
 

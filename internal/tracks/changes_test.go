@@ -142,7 +142,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		"RelayUnread": true, "RelayMessage": true, "RelayLog": true, "RelayUnseen": true,
 		// A write no screen shows, so it needn't notify.
 		"ClaimPorts": true, "SavePRHealth": true, "SavePRThreads": true,
-		"AddInstruction": true, "WaitingInstructions": true, "InstructionTyped": true, "DropInstructions": true, "InstructionWaiting": true}
+		"AddInstruction": true, "WaitingInstructions": true, "InstructionTyped": true, "DropInstructions": true, "InstructionWaiting": true, "SetBase": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {

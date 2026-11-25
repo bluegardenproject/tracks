@@ -546,7 +546,7 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Phase 2: Side tracks
 
-**Status:** agreed in discussion; steps 1 to 6 and 8 built, the rest not yet.
+**Status:** agreed in discussion; steps 1 to 8 built, the rest not yet.
 
 Tracks running side by side, each on its own worktree and branch with its
 own review and PR, while one track plans, checks for overlaps and merges,
@@ -597,14 +597,44 @@ own. "Side track" is always two words: "sidetracked" means something else.
   task it gave and marks it ready, unless the repo's own rule (the
   Repositories tab's Draft PRs) says PRs stay drafts: then the main track
   never promotes it, and the user does.
-- **Restacking**: when the PR below a stacked one merges or changes, the
-  side track's own agent rebases, woken by `@github`'s event ("#232
-  merged: rebase onto main"); GitHub on the relay comes first for this.
-- **Stacked when the work builds up**: a side track can be based on the
-  main track's branch or on an earlier side track's, its PR on that
-  branch, so GitHub's stacked pull requests carry the order and retarget
-  each PR as the one below it merges. `tracks side new --on <side track>`
-  stacks; without it, a side track branches from the repo's base.
+- **Stacked only when a part needs another's code** (built, step 7).
+  Most side tracks don't stack: independent parts branch from the repo's
+  base, open their PRs against it, and merge in any order. `tracks side
+  new --on` picks, per side track:
+
+  | Started with | Branches from | PR against | Merges |
+  |---|---|---|---|
+  | no `--on` (the default) | the repo's base | the repo's base | on its own, in any order |
+  | `--on track`, its main track | the main track's branch | the main track's branch | into the main track's branch when done (fan-in); the main track merges it, never into the repo's base |
+  | `--on <side track>` | that side track's branch | that branch | after the one below, then restacked |
+
+  - For each repo the two share, the new side track's base is the other
+    track's branch, which must be pushed: its worktree starts from it on
+    origin, and its pre-push review diffs against it. A side track whose
+    PRs are all merged or closed can't be stacked on.
+  - Its prompt says where its PR goes (golden, agreed): "Your branch
+    builds on relay-store's branch `side/relay-store` in api: open its
+    pull request against it (`gh pr create --base side/relay-store`),
+    not main."
+  - The fan-in case keeps the main track's big job from holding small
+    ones back: they merge into its branch as they finish, and its own PR
+    carries them all. That the main track merges them, once their review
+    passed and they fit the task, goes in its "Side tracks" paragraph
+    (step 9).
+- **Restacking**, always, whatever the policies: when a PR merges, Tracks
+  tells each open side track stacked on its branch to rebase its own
+  commits onto what it merged into, and records that as its base (golden,
+  agreed): "The PR below yours, acme/api#232 (relay-store), was merged
+  into main. Restack: rebase onto main keeping only your own commits
+  (`git rebase --onto origin/main 0123abc`), run the tests, push with
+  `--force-with-lease`, and point your PR at main (`gh pr edit --base
+  main`) if GitHub hasn't already." The commit is the merged PR's last
+  head, which the poll kept, so a squash merge or a deleted branch
+  doesn't matter. It's typed as the policies' instructions are, and the
+  main track gets a notice; a stacked side track that ended is the main
+  track's to decide. A PR below that only changes needs no restack of its
+  own: if the one above then conflicts, the conflicts policy has it
+  rebase onto the branch below.
 - The main track sees its side tracks' PRs on its Platform, with their
   state, as a track's own PRs show in the Station.
 
@@ -829,7 +859,8 @@ track's policy has Tracks tell it (built, step 4).
    the selection follows its track when a reload moves it. Ended and
    archived tracks are in the same list, so they group the same; Settings'
    Tracks History lists no tracks.
-7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
+7. Stacking (built): `--on`, the PR's base; restacking when the PR below
+   merges.
 8. Side tracks talking to each other (built): a side track sends
    another side track of its main track a `question` or an `answer`,
    by handle or prefix (`side` names the other side track when there's

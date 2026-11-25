@@ -73,6 +73,9 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		model = conf.Model
 	}
 
+	if req.On != "" && !req.Side {
+		return Created{}, Problem("--on stacks side tracks only.")
+	}
 	var mainName string
 	if req.Side {
 		done, err := s.makingSide(req.Parent)
@@ -93,6 +96,19 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 			return Created{}, err
 		}
 		t.ParentName = mainName
+		if req.On != "" {
+			main, err := s.Store.Track(ctx, t.Parent)
+			if err != nil {
+				return Created{}, err
+			}
+			lower, err := s.stackOn(ctx, main, req.On)
+			if err != nil {
+				return Created{}, err
+			}
+			if err := s.stack(ctx, &t, lower); err != nil {
+				return Created{}, err
+			}
+		}
 	}
 	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, model, s.now()
 	name, release, err := s.claimName(t)
@@ -128,7 +144,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		return Created{}, err
 	}
 	start, err := engine.Command(agents.Spec{
-		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: sideSpec(t),
+		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: s.sideSpec(ctx, t),
 		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
 		DevServers: s.hasDevServers(ctx, t.Repos),
 	})
