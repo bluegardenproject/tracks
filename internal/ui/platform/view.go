@@ -72,9 +72,6 @@ func (m Model) layout() ([]string, []target) {
 	frame("Platform", body, items, top)
 	body, items = m.signalsBody()
 	frame("Signals", body, items, m.height-top)
-	if len(lines) > m.height {
-		lines = lines[:m.height]
-	}
 	return lines, targets
 }
 

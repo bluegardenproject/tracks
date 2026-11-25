@@ -351,7 +351,7 @@ func TestHalfAndHalf(t *testing.T) {
 	if strings.Contains(view(m), "watch-000001") {
 		t.Errorf("the second train fits no more, yet shows:\n%s", view(m))
 	}
-	for y := 1; y <= 3; y++ {
+	for y := range 11 {
 		if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: y, Button: tea.MouseLeft}); cmd != nil {
 			cmd()
 		}
