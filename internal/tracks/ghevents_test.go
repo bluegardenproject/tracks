@@ -185,6 +185,9 @@ func TestCountCommentsPostsGitHubEvents(t *testing.T) {
 	count := func(n int) {
 		t.Helper()
 		gh.threads = map[string]int{url: n}
+		if err := f.svc.PollPRs(ctx); err != nil {
+			t.Fatal(err)
+		}
 		if err := f.svc.CountComments(ctx); err != nil {
 			t.Fatal(err)
 		}

@@ -217,6 +217,11 @@ type Service struct {
 	// comments are the open tracks' review threads, as CountComments
 	// last counted them and RunAction sent them.
 	comments map[string]map[string]actions.Comments // by track, then PR URL
+	// threads are the open review threads on each PR, as the last poll
+	// read them, by URL; repoNames the GitHub repo of each repo's
+	// checkout, by its path, as gh resolved it.
+	threads   map[string]int
+	repoNames map[string]string
 	// badges are the badges last written into each train's overlay
 	// header, by session.
 	badges map[string]string

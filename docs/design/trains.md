@@ -638,13 +638,18 @@ Tracks learns about its PRs by polling GitHub: a laptop's daemon can't
 take webhooks without a tunnel, repo admin rights and a fallback for
 while it sleeps. The polling gets cheaper and its news reaches the agents:
 
-- **Polling**: one call to the notifications endpoint
-  (`GET /notifications`, with `If-Modified-Since`, honouring
-  `X-Poll-Interval`; an answer that changed nothing is a `304`, free of
-  the rate limit) says which PRs had activity; then one GraphQL query
-  reads just those: state, mergeability, CI checks, unresolved review
-  threads. It replaces the per-PR polling, and the footer's PR buttons
-  read the same.
+- **Polling** (built): one GraphQL query a minute reads every branch's
+  PRs and every PR not merged or closed (state, mergeability, CI checks,
+  open review threads), in aliases of 25 per call, where there were a
+  `gh pr list` per branch, a `gh pr view` per PR and a threads query per
+  PR. Signals' PR buttons count from the same answer. A repo's GitHub
+  name is asked of gh once per checkout.
+- **Not the notifications endpoint**: it was the plan, but it misses what
+  matters most here. A PR that starts to conflict as its base moves
+  notifies nobody, CI notifies only for runs the user triggered and only
+  if they turned that on, and the rest only for threads the user
+  subscribes to. It could still wake a poll early (its `304`s are free of
+  the rate limit) if a minute proves slow.
 - **`@github` on the relay** (built): a sender of its own, reserved as
   `track` and `tracks` are, posting `event` messages to the open Work
   track (or side track) whose PR it is, once per change: "PR acme/api#231
@@ -668,10 +673,9 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 
 ### Order
 
-1. GitHub on the relay: `@github`'s events, read by the per-PR polling
-   (built); then the notifications endpoint and one GraphQL query in its
-   place. First: it's useful for a track's own PRs, and restacking needs
-   it.
+1. GitHub on the relay: `@github`'s events, and one GraphQL query a
+   poll in place of the per-PR calls (built). First: it's useful for a
+   track's own PRs, and restacking needs it.
 2. The model: a side track is a track with a main track (the step 11
    link) on its main track's relay; `tracks side new|list`; no nesting;
    the main track can't end while a side track is unsettled.
