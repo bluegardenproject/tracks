@@ -35,7 +35,7 @@ type Track struct {
 	Side string
 	// Under says the Station draws t under its main track.
 	Under bool
-	Repos  []Repo
+	Repos []Repo
 	// Engine is the agent CLI, Model its model; Session is the agent's
 	// session ID, which resumes it.
 	Engine, Model, Session string
