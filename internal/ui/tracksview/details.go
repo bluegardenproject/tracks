@@ -166,7 +166,11 @@ func (m Model) details(width int) ([]string, []hit) {
 	}
 	lines := []string{name + strings.Repeat(" ", gap) + about}
 	if t.Parent != "" {
-		lines = append(lines, muted("Started from ")+value(cut(t.Parent, width-len("Started from "))))
+		from := "Started from "
+		if t.Side != "" {
+			from = "Side track of "
+		}
+		lines = append(lines, muted(from)+value(cut(t.Parent, width-len(from))))
 	}
 	lines = append(lines, "", label("Slug")+value(t.Name), label("ID")+number, label("Created")+created)
 

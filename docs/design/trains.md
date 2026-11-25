@@ -546,7 +546,7 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Phase 2: Side tracks
 
-**Status:** agreed in discussion; steps 1 to 5 built, the rest not yet.
+**Status:** agreed in discussion; steps 1 to 6 built, the rest not yet.
 
 Tracks running side by side, each on its own worktree and branch with its
 own review and PR, while one track plans, checks for overlaps and merges,
@@ -816,7 +816,15 @@ track's policy has Tracks tell it (built, step 4).
    pr ready <url>`, but leave the rule's repos to the user. A restart
    that starts a new session gets the paragraph again; a resume keeps
    its session's prompt.
-6. The Station's grouping.
+6. The Station's grouping (built): each side track right after its main
+   track, oldest first, its name after a muted "└ side: " that a narrow
+   list keeps as it cuts the name. One whose main track isn't listed
+   (filtered out, archived, gone) keeps its place on its own; a side
+   track's details say "Side track of <name>" where others say "Started
+   from". The rows are ordinary rows to keys, clicks and the filter, and
+   the selection follows its track when a reload moves it. Ended and
+   archived tracks are in the same list, so they group the same; the
+   History tab lists no tracks.
 7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
 8. Side tracks talking to each other.
 9. The main track's prompt: a "Side tracks" paragraph, its wording agreed
