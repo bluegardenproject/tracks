@@ -47,7 +47,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if len(msgs) != 2 || msgs[1].From != handle || msgs[1].To != relay.TrackHandle || msgs[1].Kind != relay.Report || msgs[1].Body != "Fine.\nREVIEW OUTCOME: pass" {
 		t.Fatalf("after the report: %+v", msgs)
 	}
-	if report, err := f.svc.WaitReview(ctx, "r"); err != nil || !strings.Contains(report, "Fine.") {
+	if report, err := f.svc.WaitReview(ctx, "r", ""); err != nil || !strings.Contains(report, "Fine.") {
 		t.Fatalf("WaitReview = %q, %v", report, err)
 	}
 	if unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle); err != nil || len(unread) != 0 {
@@ -67,7 +67,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if err := f.svc.ReviewReply(ctx, "r", run, "Because it's hot."); err != nil {
 		t.Fatal(err)
 	}
-	if answer, err := f.svc.WaitReview(ctx, "r"); err != nil || answer != "Because it's hot." {
+	if answer, err := f.svc.WaitReview(ctx, "r", ""); err != nil || answer != "Because it's hot." {
 		t.Fatalf("the answer: %q, %v", answer, err)
 	}
 	msgs = relayOf(t, f)
@@ -78,7 +78,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Errorf("the printed answer is still unread: %+v, %v", unread, err)
 	}
 
-	if err := f.svc.AskReview(ctx, "r", "And the lock?"); err != nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "And the lock?"); err != nil {
 		t.Fatal(err)
 	}
 	if last := relayOf(t, f)[len(relayOf(t, f))-1]; last.Kind != relay.Question || last.Body != "And the lock?" || last.To != handle {
@@ -91,7 +91,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if err := f.svc.ReviewReply(ctx, "r", run, "It's held briefly."); err != nil {
 		t.Fatal(err)
 	}
-	if answer, err := f.svc.WaitReview(ctx, "r"); err != nil || answer != "It's held briefly." {
+	if answer, err := f.svc.WaitReview(ctx, "r", ""); err != nil || answer != "It's held briefly." {
 		t.Fatalf("the second answer: %q, %v", answer, err)
 	}
 	unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle)
@@ -117,7 +117,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if last := msgs[len(msgs)-1]; last.Body != "@"+second+" left: it was ended." || last.Kind != relay.Notice {
 		t.Errorf("ending it: %+v", last)
 	}
-	if _, err := f.svc.CloseReviewer(ctx, "r"); err != nil {
+	if _, err := f.svc.CloseReviewer(ctx, "r", second); err != nil {
 		t.Fatal(err)
 	}
 	if again := relayOf(t, f); len(again) != len(msgs) {

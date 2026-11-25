@@ -28,16 +28,28 @@ func TestCloseEndsTrains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, track := range []string{"t1", "t2"} {
-		spec := trackwin.TrainSpec{Track: track, Handle: "reviewer-1", Role: trackwin.RoleReviewer, Dir: dir,
+	for _, tr := range [][2]string{{"t1", "reviewer-1"}, {"t1", "reviewer-2"}, {"t2", "reviewer-1"}} {
+		spec := trackwin.TrainSpec{Track: tr[0], Handle: tr[1], Role: trackwin.RoleReviewer, Dir: dir,
 			Process: trackwin.Process{Command: "sleep 60"}}
 		if _, err := trackwin.OpenTrain(c, spec); err != nil {
 			t.Fatal(err)
 		}
 	}
 	windows := TmuxWindows{Tmux: c, Session: "tracks"}
-	if r, err := windows.Reviewer("t1"); err != nil || r.Pane == "" || r.Attached || r.Exited {
+	if r, err := windows.Reviewer("t1", "reviewer-1"); err != nil || r.Pane == "" || r.Handle != "reviewer-1" || r.Attached || r.Exited {
 		t.Errorf("Reviewer = %+v, %v; want t1's, running, no overlay", r, err)
+	}
+	if all, err := windows.Reviewers(); err != nil || len(all["t1"]) != 2 || len(all["t2"]) != 1 {
+		t.Errorf("Reviewers = %+v, %v; want t1's two and t2's one", all, err)
+	}
+	if err := windows.CloseReviewer("t1", "reviewer-2"); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := windows.Reviewer("t1", "reviewer-2"); r.Pane != "" {
+		t.Errorf("reviewer-2 outlived CloseReviewer: %+v", r)
+	}
+	if r, _ := windows.Reviewer("t1", "reviewer-1"); r.Pane == "" {
+		t.Error("closing reviewer-2 closed reviewer-1 too")
 	}
 	if err := windows.Close(w.ID); err != nil {
 		t.Fatal(err)

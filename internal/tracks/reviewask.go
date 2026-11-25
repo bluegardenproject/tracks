@@ -74,8 +74,8 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 	}.Script()
 }
 
-// AskReview asks track id's reviewer question, about its review, once
-// it has reported and while no overlay is attached to it: a user who
+// AskReview asks track id's reviewer to, as WaitReview picks it,
+// question, about its review, once it has reported and while no overlay is attached to it: a user who
 // opened it talks to it there, and a reply of theirs would pass for the
 // answer.
 // WaitReview then waits for the answer. A Claude reviewer gets it typed
@@ -83,14 +83,15 @@ func (r reviewSession) cursorTurn(prompt, out string, answer bool) string {
 // carry its replies when it runs interactively, so its pane is started
 // again on a print-mode turn on the question, in the same chat, which
 // ends what's typed in the pane but not sent.
-func (s *Service) AskReview(ctx context.Context, id, question string) error {
-	_, err := s.askReview(ctx, id, question)
-	return err
+// It returns the handle of the reviewer asked.
+func (s *Service) AskReview(ctx context.Context, id, to, question string) (string, error) {
+	m, err := s.askReview(ctx, id, to, question)
+	return m.To, err
 }
 
 // askReview is AskReview; it returns the question as posted on the
 // track's relay.
-func (s *Service) askReview(ctx context.Context, id, question string) (relay.Message, error) {
+func (s *Service) askReview(ctx context.Context, id, to, question string) (relay.Message, error) {
 	if s.Reviewers == nil {
 		return relay.Message{}, errors.New("reviews need tmux")
 	}
@@ -110,24 +111,28 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	dir := s.reviewDir(id)
-	r, err := s.Reviewers.Reviewer(id)
+	st, err := s.pickReviewer(t, to)
+	if err != nil {
+		return relay.Message{}, err
+	}
+	dir := st.Dir
+	r, err := s.Reviewers.Reviewer(id, st.Handle)
 	if err != nil {
 		return relay.Message{}, err
 	}
 	sess, sessErr := loadSession(dir)
 	switch {
 	case r.Pane == "" || sessErr != nil:
-		return relay.Message{}, Problem(t.Name + " has no reviewer: tracks review starts one.")
+		return relay.Message{}, Problem("@" + st.Handle + " of " + t.Name + " has no session: tracks review starts a new reviewer.")
 	case r.Exited:
-		return relay.Message{}, Problem("The reviewer's agent has exited: tracks review starts a new one.")
+		return relay.Message{}, Problem("@" + st.Handle + "'s agent has exited: tracks review starts a new one.")
 	case r.Attached:
-		return relay.Message{}, Problem("The user has the reviewer's overlay open, so they may be talking to it: " +
+		return relay.Message{}, Problem("The user has @" + st.Handle + "'s overlay open, so they may be talking to it: " +
 			"ask again once they've closed it.")
 	case !exists(filepath.Join(dir, "report.md")):
-		return relay.Message{}, Problem("The reviewer hasn't reported yet: tracks review --wait waits for its report.")
-	case s.asking(id):
-		return relay.Message{}, Problem("The reviewer is still on the last question: tracks review --wait waits for its answer.")
+		return relay.Message{}, Problem("@" + st.Handle + " hasn't reported yet: tracks review --wait --to " + st.Handle + " waits for its report.")
+	case asking(dir):
+		return relay.Message{}, Problem("@" + st.Handle + " is still on the last question: tracks review --wait --to " + st.Handle + " waits for its answer.")
 	}
 	// The question first, so a WaitReview meanwhile never takes the
 	// report for the answer.
@@ -161,10 +166,9 @@ func (s *Service) askReview(ctx context.Context, id, question string) (relay.Mes
 // pane outside any sandbox; behind the lead it's only ever a message.
 const questionLead = "A question about your review: "
 
-// asking reports whether track id's reviewer was asked a question it
-// hasn't answered. The caller holds s.reviewMu.
-func (s *Service) asking(id string) bool {
-	dir := s.reviewDir(id)
+// asking reports whether the reviewer whose folder is dir was asked a
+// question it hasn't answered. The caller holds s.reviewMu.
+func asking(dir string) bool {
 	return exists(filepath.Join(dir, "question.md")) && !exists(filepath.Join(dir, "answer.md"))
 }
 

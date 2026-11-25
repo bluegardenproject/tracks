@@ -16,7 +16,6 @@ import (
 	"github.com/bluegardenproject/tracks/internal/tmux"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 	"github.com/bluegardenproject/tracks/internal/trackwin"
-	"github.com/bluegardenproject/tracks/internal/train"
 	"github.com/spf13/cobra"
 )
 
@@ -175,7 +174,7 @@ func closePanes(ctx context.Context, out io.Writer, t *tmux.Client, w trackwin.I
 		case p.Role == trackwin.RoleReviewer:
 			// Through the daemon, which ends its review and says so on
 			// the relay; the pane closes whatever it says.
-			if err = endReviewer(ctx, w.Track); err != nil {
+			if err = endReviewer(ctx, w.Track, trackwin.HandleOf(w.Track, p.Session)); err != nil {
 				err = windows.EndPane(p)
 			}
 		default:
@@ -216,41 +215,35 @@ func stopServer(ctx context.Context, id, key string) error {
 	return err
 }
 
-// endReviewer ends track id's reviewer through the daemon, by its
-// handle, whatever prefix it took.
-func endReviewer(ctx context.Context, id string) error {
+// endReviewer ends track id's reviewer handle through the daemon.
+func endReviewer(ctx context.Context, id, handle string) error {
+	if handle == "" {
+		return errors.New("the pane isn't one of this track's reviewers")
+	}
 	paths, err := platform.Resolve()
 	if err != nil {
 		return err
 	}
-	client := rpc.Client{Socket: paths.Socket}
-	trains, err := client.TrainList(ctx, id)
-	if err != nil {
-		return err
-	}
-	for _, t := range trains {
-		if t.Agent == train.Reviewer.Name() {
-			return client.TrainEnd(ctx, id, t.Handle)
-		}
-	}
-	return errors.New("the daemon knows no reviewer of this track")
+	return rpc.Client{Socket: paths.Socket}.TrainEnd(ctx, id, handle)
 }
 
-// trackPanes are the panes beside w's agent, and its reviewer, in a
-// session of its own, last: closing it ends the reviewer too.
+// trackPanes are the panes beside w's agent, and its reviewers, each in
+// a session of its own, last: closing one ends that reviewer too.
 func trackPanes(t *tmux.Client, w trackwin.Info) ([]tmux.Pane, error) {
 	column, err := trackwin.Column(t, w.Window)
 	if err != nil {
 		return nil, err
 	}
-	reviewer, err := trackwin.FindTrain(t, w.Track, trackwin.RoleReviewer)
-	switch {
-	case errors.Is(err, trackwin.ErrNoTrain):
-		return column, nil
-	case err != nil:
+	trains, err := trackwin.Trains(t, w.Track)
+	if err != nil {
 		return nil, err
 	}
-	return append(column, reviewer), nil
+	for _, p := range trains {
+		if p.Role == trackwin.RoleReviewer {
+			column = append(column, p)
+		}
+	}
+	return column, nil
 }
 
 // paneLabel names p's role, and its server or setup.
@@ -260,6 +253,8 @@ func paneLabel(p tmux.Pane) string {
 		return "dev server " + p.Key
 	case p.Role == trackwin.RoleDevServer:
 		return "dev server"
+	case p.Role == trackwin.RoleReviewer && trackwin.HandleOf(p.Track, p.Session) != "":
+		return "reviewer @" + trackwin.HandleOf(p.Track, p.Session)
 	}
 	return p.Role
 }

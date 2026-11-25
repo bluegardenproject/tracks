@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/review"
+	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -164,5 +165,30 @@ func TestOwnedPacket(t *testing.T) {
 	}
 	if _, err := ownedPacket(ctx, dir, p, "@someone"); err == nil || !strings.Contains(err.Error(), "owns none") {
 		t.Errorf("an owner of nothing: %v", err)
+	}
+}
+
+// --wait and --ask check the checkout of the reviewer they address.
+func TestReviewerTarget(t *testing.T) {
+	trains := []rpc.Train{
+		{Handle: "reviewer-111111", Agent: "Reviewer", Target: "/w/api"},
+		{Handle: "reviewer-222222", Agent: "Reviewer", Target: "/w/fix"},
+		{Handle: "w-1", Agent: "Worker"},
+	}
+	for _, c := range []struct {
+		trains []rpc.Train
+		to     string
+		want   string
+	}{
+		{trains, "reviewer-222222", "/w/fix"},
+		{trains, "@reviewer-111111", "/w/api"},
+		{trains, "reviewer", ""},
+		{trains, "", ""},
+		{trains[:1], "", "/w/api"},
+		{trains[2:], "", ""},
+	} {
+		if got := reviewerTarget(c.trains, c.to); got != c.want {
+			t.Errorf("reviewerTarget(%d trains, %q) = %q, want %q", len(c.trains), c.to, got, c.want)
+		}
 	}
 }

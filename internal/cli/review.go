@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/rpc"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/tracks"
+	"github.com/bluegardenproject/tracks/internal/train"
 	"github.com/spf13/cobra"
 )
 
@@ -25,17 +28,18 @@ import (
 const askTimeout = 5 * time.Second
 
 func newReviewCmd() *cobra.Command {
-	var base, ask, brief, owner string
+	var base, ask, brief, owner, to string
 	var wait, stale, all bool
 	cmd := &cobra.Command{
 		Use:   "review",
 		Short: "review this track's branch with the track's reviewer",
 		Long: "Starts the track's reviewer on the branch's diff and waits for its report. The reviewer is a " +
 			"session of its own, on the agent and model picked under Settings → Trains (agents) → Reviewer, in a tmux " +
-			"session of its own that the user opens in an overlay (tracks train show reviewer). It only reads. A review " +
-			"ends the reviewer that's there and starts a fresh one. --ask asks the reviewer that's there about " +
+			"session of its own that the user opens in an overlay (tracks train show <handle>). It only reads. A review " +
+			"ends the reviewer of the same checkout that's there and starts a fresh one; reviewers of other checkouts " +
+			"run on beside it. It prints the reviewer's handle as it starts. --ask asks the reviewer that's there about " +
 			"its review and prints its answer; --wait waits for the report of the one that's running, or its " +
-			"answer to the last question. A review covers the whole change. --owner alone narrows it to the " +
+			"answer to the last question; with more than one reviewer, --to names the one meant. A review covers the whole change. --owner alone narrows it to the " +
 			"files the repo's Code owner owns by CODEOWNERS, as the Repositories tab sets it; --owner <handle> to " +
 			"another's.",
 		Args: func(c *cobra.Command, args []string) error {
@@ -68,6 +72,8 @@ func newReviewCmd() *cobra.Command {
 			switch {
 			case wait && asking:
 				return errors.New("--wait and --ask can't go together")
+			case c.Flags().Changed("to") && !wait && !asking:
+				return errors.New("--to names the reviewer for --wait or --ask; a new review starts a reviewer of its own")
 			case c.Flags().Changed("owner") && strings.TrimSpace(owner) == "":
 				return errors.New("--owner needs a code owner, such as @org/team")
 			case all && c.Flags().Changed("owner"):
@@ -108,6 +114,11 @@ func newReviewCmd() *cobra.Command {
 			// The worktree is checked here, in the agent's sandbox: the
 			// daemon runs no git, since a repo's config can make git run
 			// commands. --wait checks the time it waits.
+			if wait || asking {
+				// What's checked is the checkout of the reviewer
+				// addressed, which needn't be where this runs.
+				dir = cmp.Or(addressedTarget(c.Context(), client, id, to), dir)
+			}
 			before, err := worktreeState(c.Context(), dir)
 			if err != nil {
 				return err
@@ -115,9 +126,9 @@ func newReviewCmd() *cobra.Command {
 			var report string
 			switch {
 			case wait:
-				report, err = client.ReviewWait(c.Context(), id, progress)
+				report, err = client.ReviewWait(c.Context(), id, to, progress)
 			case asking:
-				report, err = client.ReviewAsk(c.Context(), id, ask, progress)
+				report, err = client.ReviewAsk(c.Context(), id, to, ask, progress)
 			default:
 				report, err = client.Review(c.Context(), tracks.ReviewRequest{ID: id, Dir: dir, Packet: packet.Fit(), Stale: stale}, progress)
 			}
@@ -150,6 +161,8 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().Lookup("owner").NoOptDefVal = repoOwner
 	cmd.Flags().BoolVar(&all, "all", false, "review the whole change, as without --owner")
 	cmd.Flags().BoolVar(&stale, "stale", false, "review a pull request's worktree that's behind the pull request")
+	cmd.Flags().StringVar(&to, "to", "", "with --wait or --ask: the reviewer meant, by handle or a prefix only it has, "+
+		"when more than one runs")
 	cmd.Flags().StringVar(&ask, "ask", "", "ask the reviewer that's there about its review, and print its answer")
 	return cmd
 }
@@ -210,6 +223,42 @@ func fileState(path string) string {
 		return "unreadable"
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// addressedTarget is the checkout of track id's reviewer that --to
+// addresses, its only one for "", as the daemon has it; "" when it
+// can't say.
+func addressedTarget(ctx context.Context, client rpc.Client, id, to string) string {
+	ctx, cancel := context.WithTimeout(ctx, askTimeout)
+	defer cancel()
+	trains, err := client.TrainList(ctx, id)
+	if err != nil {
+		return ""
+	}
+	return reviewerTarget(trains, to)
+}
+
+// reviewerTarget is the target of the reviewer among trains that to
+// names, as train.Resolve resolves it, the only one for ""; "" for none.
+func reviewerTarget(trains []rpc.Train, to string) string {
+	var reviewers []rpc.Train
+	var handles []string
+	for _, t := range trains {
+		if t.Agent == train.Reviewer.Name() && t.Target != "" {
+			reviewers, handles = append(reviewers, t), append(handles, t.Handle)
+		}
+	}
+	if to == "" {
+		if len(reviewers) == 1 {
+			return reviewers[0].Target
+		}
+		return ""
+	}
+	h, err := train.Resolve(to, handles)
+	if err != nil {
+		return ""
+	}
+	return reviewers[slices.Index(handles, h)].Target
 }
 
 // askTrack is the track with id as the daemon has it, or an empty one

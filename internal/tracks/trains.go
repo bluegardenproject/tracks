@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
 	"github.com/bluegardenproject/tracks/internal/store"
-	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
-// Trains are track id's trains, with their status: its reviewer, while
-// its session is open.
+// Trains are track id's trains, with their status: its reviewers,
+// while their sessions are open.
 func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) {
 	if _, err := s.Store.Track(ctx, id); errors.Is(err, store.ErrNotFound) {
 		return nil, Problem("That track is gone.")
@@ -25,71 +25,90 @@ func (s *Service) Trains(ctx context.Context, id string) ([]train.Train, error) 
 	if s.Reviewers == nil || s.HooksDir == "" {
 		return nil, nil
 	}
-	// The pane and the run are read together, as StartReview and
+	// The panes and the runs are read together, as StartReview and
 	// CloseReviewer change them together.
 	s.reviewMu.Lock()
-	r, err := s.Reviewers.Reviewer(id)
+	panes, err := s.Reviewers.Reviewers()
 	if err != nil {
 		s.reviewMu.Unlock()
 		return nil, err
 	}
-	run := s.reviewerRun(id, r)
+	runs, err := s.reviewerRuns(id, panes[id])
 	s.reviewMu.Unlock()
-	return s.reviewerTrains(id, r, run), nil
+	if err != nil {
+		return nil, err
+	}
+	return s.reviewerTrains(id, runs), nil
 }
 
-// reviewerRunState is what a reviewer's run says of it.
+// reviewerRunState is what a reviewer's pane and run say of it.
 type reviewerRunState struct {
+	r       ReviewerState
 	facts   train.ReviewerFacts
 	sess    reviewSession
 	sessErr error
 	handle  string
+	target  string
 	// run names the review run, for telling a train waiting on the
 	// user once a run.
 	run string
 }
 
-// reviewerRun reads the run of track id's reviewer, whose pane is r's.
-// It reads none, so there's no train, when r is the pane of another
-// review than the one in its folder, read before a review started or
-// ended. The caller holds s.reviewMu.
-func (s *Service) reviewerRun(id string, r ReviewerState) reviewerRunState {
-	if r.Pane == "" {
-		return reviewerRunState{}
+// reviewerRuns are the runs of track id's reviewers whose panes are
+// panes, by handle. A pane without a run in its folder, read before a
+// review started or ended, has none, so it's no train. The caller holds
+// s.reviewMu.
+func (s *Service) reviewerRuns(id string, panes []ReviewerState) ([]reviewerRunState, error) {
+	states, err := s.trainStates(id, train.Reviewer)
+	if err != nil {
+		return nil, err
 	}
-	dir := s.reviewDir(id)
-	run := reviewerRunState{facts: train.ReviewerFacts{Pane: true, Exited: r.Exited}, handle: reviewHandle(dir)}
-	if b, err := os.ReadFile(filepath.Join(dir, "run")); err == nil {
-		run.run = string(b)
+	var out []reviewerRunState
+	for _, st := range states {
+		i := slices.IndexFunc(panes, func(r ReviewerState) bool { return r.Handle == st.Handle && r.Pane != "" })
+		if i < 0 || st.Run == "" {
+			continue
+		}
+		r := panes[i]
+		run := reviewerRunState{r: r, facts: train.ReviewerFacts{Pane: true, Exited: r.Exited}, handle: st.Handle,
+			target: reviewTarget(st.Dir), run: st.Run}
+		if b, err := os.ReadFile(filepath.Join(st.Dir, "report.md")); err == nil {
+			run.facts.Report = string(b)
+		}
+		run.facts.Asking = asking(st.Dir)
+		run.sess, run.sessErr = loadSession(st.Dir)
+		out = append(out, run)
 	}
-	if run.run == "" || r.Session != trackwin.TrainSession(id, run.handle) {
-		return reviewerRunState{}
-	}
-	if b, err := os.ReadFile(filepath.Join(dir, "report.md")); err == nil {
-		run.facts.Report = string(b)
-	}
-	run.facts.Asking = s.asking(id)
-	run.sess, run.sessErr = loadSession(dir)
-	return run
+	return out, nil
 }
 
-// reviewerTrains are track id's trains from its reviewer r and run:
-// the reviewer, while its session is open.
-func (s *Service) reviewerTrains(id string, r ReviewerState, run reviewerRunState) []train.Train {
+// reviewerTrains are track id's trains from its reviewers' runs.
+func (s *Service) reviewerTrains(id string, runs []reviewerRunState) []train.Train {
+	var out []train.Train
+	for _, run := range runs {
+		if tr, ok := s.reviewerTrain(id, run); ok {
+			out = append(out, tr)
+		}
+	}
+	return out
+}
+
+// reviewerTrain is the train of track id's reviewer on run.
+func (s *Service) reviewerTrain(id string, run reviewerRunState) (train.Train, bool) {
 	f := run.facts
 	// Claude asks for trust as it starts, before any report: a report
 	// that quotes the question isn't one.
-	if f.Pane && !r.Exited && f.Report == "" && run.sessErr == nil && run.sess.Engine == agents.Claude.ID {
-		if screen, err := s.Reviewers.CaptureReviewer(r.Pane); err == nil {
+	if f.Pane && !f.Exited && f.Report == "" && run.sessErr == nil && run.sess.Engine == agents.Claude.ID {
+		if screen, err := s.Reviewers.CaptureReviewer(run.r.Pane); err == nil {
 			f.AsksTrust = claude.AsksTrust(screen)
 		}
 	}
 	status, outcome, ok := train.ReviewerStatus(f)
 	if !ok {
-		return nil
+		return train.Train{}, false
 	}
-	return []train.Train{{Track: id, Handle: run.handle, Agent: train.Reviewer,
-		Engine: engineName(run.sess), Status: status, Outcome: outcome, Held: s.heldFrom(id, run.handle)}}
+	return train.Train{Track: id, Handle: run.handle, Agent: train.Reviewer, Engine: engineName(run.sess),
+		Target: run.target, Status: status, Outcome: outcome, Held: s.heldFrom(id, run.handle)}, true
 }
 
 // EndTrain ends track id's train handle and closes its pane, as its End
@@ -109,27 +128,36 @@ func (s *Service) EndTrain(ctx context.Context, id, handle string) (string, erro
 	for i, tr := range trains {
 		handles[i] = tr.Handle
 	}
-	if _, err := train.Resolve(handle, handles); err != nil {
+	h, err := train.Resolve(handle, handles)
+	if err != nil {
 		return t.Name, Problem(fmt.Sprintf("%s: %v. tracks train list lists them.", t.Name, err))
 	}
-	// The reviewer is its only train.
-	return s.CloseReviewer(ctx, id)
+	// Reviewers are its only trains.
+	return s.CloseReviewer(ctx, id, h)
 }
 
-// dropReview removes track id's review: its run, report and brief, once
-// its reviewer has gone with the track's window or the tmux server.
-// A review there says on the relay that its reviewer left, and why.
+// dropReview removes track id's reviews: their runs, reports and
+// briefs, once their reviewers have gone with the track's window or the
+// tmux server. Each says on the relay that its reviewer left, and why.
 func (s *Service) dropReview(ctx context.Context, id, why string) error {
 	if s.HooksDir == "" {
 		return nil
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	dir := s.reviewDir(id)
-	if err := s.leftNotice(ctx, id, dir, why); err != nil {
+	states, err := s.trainStates(id, train.Reviewer)
+	if err != nil {
 		return err
 	}
-	return os.RemoveAll(dir)
+	for _, st := range states {
+		if err := s.leftNotice(ctx, id, st.Dir, why); err != nil {
+			return err
+		}
+		if err := os.RemoveAll(st.Dir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // engineName is the agent and model a reviewer session runs on, for

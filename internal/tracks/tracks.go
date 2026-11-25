@@ -230,7 +230,7 @@ type Service struct {
 	// badges are the badges last written into each train's overlay
 	// header, by session.
 	badges map[string]string
-	// trainTold is the review run, by track, whose reviewer the user
+	// trainTold is the review run, by train session, whose reviewer the user
 	// was told waits on them.
 	trainTold map[string]string
 	// info is what SyncInfo last showed, by window.
@@ -398,18 +398,21 @@ func (w TmuxWindows) OpenReviewer(s trackwin.TrainSpec) error {
 	return err
 }
 
-func (w TmuxWindows) Reviewer(track string) (ReviewerState, error) {
-	p, err := trackwin.FindTrain(w.Tmux, track, trackwin.RoleReviewer)
-	if errors.Is(err, trackwin.ErrNoTrain) {
-		return ReviewerState{}, nil
-	} else if err != nil {
+func (w TmuxWindows) Reviewer(track, handle string) (ReviewerState, error) {
+	panes, err := trackwin.Trains(w.Tmux, track)
+	if err != nil {
 		return ReviewerState{}, err
 	}
-	attached, err := trackwin.Attached(w.Tmux, p.Session)
-	return ReviewerState{Pane: p.ID, Session: p.Session, Exited: p.Dead, Attached: attached}, err
+	for _, r := range reviewerStates(panes)[track] {
+		if r.Handle == handle {
+			r.Attached, err = trackwin.Attached(w.Tmux, r.Session)
+			return r, err
+		}
+	}
+	return ReviewerState{}, nil
 }
 
-func (w TmuxWindows) Reviewers() (map[string]ReviewerState, error) {
+func (w TmuxWindows) Reviewers() (map[string][]ReviewerState, error) {
 	panes, err := trackwin.Trains(w.Tmux, "")
 	if err != nil {
 		return nil, err
@@ -436,16 +439,18 @@ func (w TmuxWindows) RespawnReviewer(pane, dir, command string) error {
 	return w.Tmux.RespawnPane(pane, dir, command)
 }
 
-func (w TmuxWindows) CloseReviewer(track string) error {
-	return trackwin.CloseTrains(w.Tmux, track, trackwin.RoleReviewer)
+func (w TmuxWindows) CloseReviewer(track, handle string) error {
+	return trackwin.CloseTrain(w.Tmux, track, handle)
 }
 
-// reviewerStates are the tracks' reviewers among the trains' panes.
-func reviewerStates(panes []tmux.Pane) map[string]ReviewerState {
-	out := map[string]ReviewerState{}
+// reviewerStates are the tracks' reviewers among the trains' panes, by
+// track.
+func reviewerStates(panes []tmux.Pane) map[string][]ReviewerState {
+	out := map[string][]ReviewerState{}
 	for _, p := range panes {
 		if p.Role == trackwin.RoleReviewer && p.Track != "" {
-			out[p.Track] = ReviewerState{Pane: p.ID, Session: p.Session, Exited: p.Dead}
+			out[p.Track] = append(out[p.Track], ReviewerState{Handle: trackwin.HandleOf(p.Track, p.Session),
+				Pane: p.ID, Session: p.Session, Exited: p.Dead})
 		}
 	}
 	return out

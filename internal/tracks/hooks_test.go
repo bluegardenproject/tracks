@@ -33,7 +33,7 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	}
 	f.engine.spec = agents.Spec{}
 	// A review left by a build that kept it after the track ended.
-	run := filepath.Join(f.svc.reviewDir(id), "run")
+	run := filepath.Join(f.svc.legacyReviewDir(id), "run")
 	if err := os.MkdirAll(filepath.Dir(run), 0o700); err != nil {
 		t.Fatal(err)
 	}

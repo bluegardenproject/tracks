@@ -111,9 +111,11 @@ type PingResult struct {
 	ExeModified int64  `json:"exe_modified,omitempty"` // Unix nanoseconds
 }
 
-// ReviewIDParams names the track whose review to wait for.
+// ReviewIDParams names the track whose review to wait for, and its
+// reviewer To, a handle or prefix, "" when it has only one.
 type ReviewIDParams struct {
 	ID string `json:"id"`
+	To string `json:"to,omitempty"`
 }
 
 // ReviewOwnerParams names a track and the worktree it reviews.
@@ -127,9 +129,11 @@ type ReviewOwnerResult struct {
 	Owner string `json:"owner"`
 }
 
-// ReviewAskParams is a question for track ID's reviewer.
+// ReviewAskParams is a question for track ID's reviewer To, "" when it
+// has only one.
 type ReviewAskParams struct {
 	ID       string `json:"id"`
+	To       string `json:"to,omitempty"`
 	Question string `json:"question"`
 }
 

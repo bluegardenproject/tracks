@@ -122,3 +122,16 @@ func TestTrainPaneStaysAfterExit(t *testing.T) {
 		t.Errorf("Trains = %+v, %v; want t2's left", all, err)
 	}
 }
+
+func TestHandleOf(t *testing.T) {
+	for _, c := range []struct{ track, session, want string }{
+		{"t1", trackwin.TrainSession("t1", "reviewer-1"), "reviewer-1"},
+		{"t1", trackwin.TrainSession("t12", "reviewer-1"), ""},
+		{"t2", trackwin.TrainSession("t1", "reviewer-1"), ""},
+		{"t1", "tracks", ""},
+	} {
+		if got := trackwin.HandleOf(c.track, c.session); got != c.want {
+			t.Errorf("HandleOf(%q, %q) = %q, want %q", c.track, c.session, got, c.want)
+		}
+	}
+}

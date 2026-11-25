@@ -232,9 +232,9 @@ func (c Client) Review(ctx context.Context, p tracks.ReviewRequest, progress fun
 
 // ReviewWait waits for the report of track id's running review, or
 // its answer to the last question.
-func (c Client) ReviewWait(ctx context.Context, id string, progress func(string)) (string, error) {
+func (c Client) ReviewWait(ctx context.Context, id, to string, progress func(string)) (string, error) {
 	var r ReviewResult
-	return r.Report, c.Call(ctx, ReviewWait, ReviewIDParams{ID: id}, &r, progress)
+	return r.Report, c.Call(ctx, ReviewWait, ReviewIDParams{ID: id, To: to}, &r, progress)
 }
 
 // ReviewOwner is the Code owner of the repo of dir, a worktree of track
@@ -246,9 +246,9 @@ func (c Client) ReviewOwner(ctx context.Context, id, dir string) (string, error)
 
 // ReviewAsk asks track id's reviewer question and waits for its
 // answer.
-func (c Client) ReviewAsk(ctx context.Context, id, question string, progress func(string)) (string, error) {
+func (c Client) ReviewAsk(ctx context.Context, id, to, question string, progress func(string)) (string, error) {
 	var r ReviewResult
-	return r.Report, c.Call(ctx, ReviewAsk, ReviewAskParams{ID: id, Question: question}, &r, progress)
+	return r.Report, c.Call(ctx, ReviewAsk, ReviewAskParams{ID: id, To: to, Question: question}, &r, progress)
 }
 
 // ReviewReply hands the daemon a reply of a track's reviewer.

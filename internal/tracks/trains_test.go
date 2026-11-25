@@ -116,7 +116,7 @@ func TestEndTrain(t *testing.T) {
 		}
 	}
 	name, err := f.svc.EndTrain(ctx, "r", "reviewer")
-	if err != nil || name != "r" || len(panes.closed) != 2 {
+	if err != nil || name != "r" || len(panes.closed) != 1 {
 		t.Fatalf("ending the reviewer: %q, %v, closed %v", name, err, panes.closed)
 	}
 	if trains, err := f.svc.Trains(ctx, "r"); err != nil || len(trains) != 0 {

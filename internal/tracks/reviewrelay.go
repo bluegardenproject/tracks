@@ -15,24 +15,39 @@ import (
 // it posts its report and answers as its messages, types the track's
 // questions into its session, and says when it joins and leaves.
 
-// reviewHandle is the handle of the review in dir: its own, given as it
-// started, or the reviewer's prefix alone for a review from before.
+// reviewHandle is the handle of the reviewer whose folder is dir: the
+// folder's name, or for a review's folder from before trains had
+// folders of their own, the handle it kept, the reviewer's prefix alone
+// for an older one still.
 func reviewHandle(dir string) string {
-	b, err := os.ReadFile(filepath.Join(dir, "handle"))
-	if err != nil || train.CheckHandle(string(b)) != nil {
-		return train.ReviewerHandle
+	if filepath.Base(filepath.Dir(dir)) == "trains" {
+		return filepath.Base(dir)
 	}
-	return string(b)
+	if h := readTrim(filepath.Join(dir, "handle")); train.CheckHandle(h) == nil {
+		return h
+	}
+	return train.ReviewerHandle
 }
 
-// newReviewHandle is a handle for a new review that isn't old's, the
-// handle of the review it replaces. prefix is the setting's, the
-// reviewer's name when it's unset or isn't one.
-func newReviewHandle(prefix, old string) (string, error) {
+// reviewTarget is the checkout the reviewer whose folder is dir
+// reviews: as it was kept, or, for a review from before, the worktree
+// its session runs in.
+func reviewTarget(dir string) string {
+	if t := readTrim(filepath.Join(dir, "target")); t != "" {
+		return t
+	}
+	sess, _ := loadSession(dir)
+	return sess.Workspace
+}
+
+// newReviewHandle is a handle for a new reviewer that taken doesn't
+// hold. prefix is the setting's, the reviewer's name when it's unset or
+// isn't one.
+func newReviewHandle(prefix string, taken func(string) bool) (string, error) {
 	if train.CheckPrefix(prefix) != nil {
 		prefix = train.Reviewer.Prefix()
 	}
-	return train.NewHandle(prefix, func(h string) bool { return h == old })
+	return train.NewHandle(prefix, taken)
 }
 
 // postReview posts text, the report or an answer of track id's reviewer,
@@ -70,8 +85,8 @@ func printedMessage(path string) int64 {
 	return msg
 }
 
-// leftNotice says on track id's relay that the reviewer of the review in
-// dir left, and why, when one joined: its handle is kept as it joins. It
+// leftNotice says on track id's relay that the reviewer whose folder
+// is dir left, and why, when one joined: its handle is kept as it joins. It
 // follows what tmux did, so a caller hanging up doesn't stop it. The
 // caller holds s.reviewMu.
 func (s *Service) leftNotice(ctx context.Context, id, dir, why string) error {
