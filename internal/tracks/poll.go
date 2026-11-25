@@ -16,10 +16,16 @@ import (
 // whatever its track's status, with their review threads, which
 // CountComments counts. What changed on an open Work track's PR goes
 // to its relay as @github's events. ErrNoGH means nothing was asked.
-func (s *Service) PollPRs(ctx context.Context) error {
+func (s *Service) PollPRs(ctx context.Context) (err error) {
 	if s.GitHub == nil {
 		return nil
 	}
+	// What the PRs saved say, restacked and told whichever way the poll
+	// ends: a merge or an event saved is never seen again.
+	found := &pollFound{}
+	defer func() {
+		err = errors.Join(err, s.restackMerged(ctx, found.merged), s.tellEvents(ctx, found.events))
+	}()
 	tracks, err := s.branchTracks(ctx)
 	if err != nil {
 		return err
@@ -109,7 +115,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			if b.t.Open() || side.Is(b.t) {
 				post = &b.t
 			}
-			if err := s.prHealth(ctx, b.t.ID, pr, was, post); err != nil {
+			if err := s.prHealth(ctx, b.t.ID, pr, was, post, found); err != nil {
 				return err
 			}
 			asked[[2]string{b.t.ID, pr.URL}] = true
@@ -147,17 +153,18 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		if err := s.notifyPR(ctx, p.TrackID, p.PR, was); err != nil {
 			return err
 		}
-		if err := s.prHealth(ctx, p.TrackID, p.PR, was, post); err != nil {
+		if err := s.prHealth(ctx, p.TrackID, p.PR, was, post, found); err != nil {
 			return err
 		}
 	}
-	if err := s.restackMerged(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	if err := s.tellEvents(ctx); err != nil {
-		errs = append(errs, err)
-	}
 	return errors.Join(errs...)
+}
+
+// pollFound is what a poll found on the PRs it saved: their merges, to
+// restack on, and their events, to tell once it restacked.
+type pollFound struct {
+	merged []mergedPR
+	events []polledEvent
 }
 
 // mergedPR is a PR a poll saw merge, track id's.
@@ -166,13 +173,9 @@ type mergedPR struct {
 	pr track.PR
 }
 
-// restackMerged restacks on the PRs the poll saw merge, once it saved
-// them all.
-func (s *Service) restackMerged(ctx context.Context) error {
-	s.mu.Lock()
-	merged := s.merged
-	s.merged = nil
-	s.mu.Unlock()
+// restackMerged restacks on merged, the PRs a poll saw merge, once it
+// saved them all.
+func (s *Service) restackMerged(ctx context.Context, merged []mergedPR) error {
 	var errs []error
 	for _, m := range merged {
 		pr := m.pr
@@ -258,16 +261,14 @@ func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
 // drops the instructions it made moot, and posts @github's events on
 // what changed when post is the track: an open Work track, or a side
 // track that ended with its PR open, whose main track hears them.
-func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post *track.Track) error {
+func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post *track.Track, found *pollFound) error {
 	if err := s.dropDone(ctx, pr); err != nil {
 		return err
 	}
 	if pr.State == track.PRMerged && (was == track.PROpen || was == track.PRDraft) {
 		// After the whole poll is saved: a side track stacked on it whose
 		// own PR merged in the same poll has nothing to restack.
-		s.mu.Lock()
-		s.merged = append(s.merged, mergedPR{id, pr})
-		s.mu.Unlock()
+		found.merged = append(found.merged, mergedPR{id, pr})
 	}
 	before := pr.Health
 	if !pr.State.Settled() {
@@ -281,11 +282,9 @@ func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was trac
 	}
 	// Told once the poll queued its restacks: a conflict a restack
 	// solves, as a merge below retargets a PR, is no event of its own.
-	s.mu.Lock()
 	for _, e := range prEvents(pr, was, before) {
-		s.events = append(s.events, polledEvent{*post, e})
+		found.events = append(found.events, polledEvent{*post, e})
 	}
-	s.mu.Unlock()
 	return nil
 }
 
@@ -295,12 +294,8 @@ type polledEvent struct {
 	e ghEvent
 }
 
-// tellEvents tells the events the poll found, once it restacked.
-func (s *Service) tellEvents(ctx context.Context) error {
-	s.mu.Lock()
-	events := s.events
-	s.events = nil
-	s.mu.Unlock()
+// tellEvents tells events, which a poll found, once it restacked.
+func (s *Service) tellEvents(ctx context.Context, events []polledEvent) error {
 	var errs []error
 	for _, pe := range events {
 		errs = append(errs, s.githubEvent(ctx, pe.t, pe.e))

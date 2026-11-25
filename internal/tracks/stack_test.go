@@ -85,13 +85,14 @@ func TestRestack(t *testing.T) {
 	if _, err := f.store.SavePR(ctx, lower.ID, pr, f.svc.now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.prHealth(ctx, lower.ID, pr, track.PROpen, nil); err != nil {
+	found := &pollFound{}
+	if err := f.svc.prHealth(ctx, lower.ID, pr, track.PROpen, nil, found); err != nil {
 		t.Fatal(err)
 	}
 	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
 		t.Errorf("restacked before the poll saved every PR: %q", got)
 	}
-	if err := f.svc.restackMerged(ctx); err != nil {
+	if err := f.svc.restackMerged(ctx, found.merged); err != nil {
 		t.Fatal(err)
 	}
 	now, err := f.store.Track(ctx, upper.ID)
