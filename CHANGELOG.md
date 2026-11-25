@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.8.0](https://github.com/bluegardenproject/tracks/compare/v3.7.0...v3.8.0) (2026-11-25)
+
+
+### Features
+
+* **platform:** the Platform and Signals share the pane half and half ([adeb921](https://github.com/bluegardenproject/tracks/commit/adeb9214f50011d09a8837db13a5190df2fed0a1))
+
+
+### Bug Fixes
+
+* **platform:** keep the Platform 26 columns wide ([1099a36](https://github.com/bluegardenproject/tracks/commit/1099a36fb58fad3d139fde9fec1c671b7456d48b))
+* **platform:** the review's findings on the Platform's size ([f9f0b8f](https://github.com/bluegardenproject/tracks/commit/f9f0b8f8df7451c72f103234082716d4e9f084fe))
+
+
+### Documentation
+
+* **platform:** SyncTrains fits the Platforms ([f62e337](https://github.com/bluegardenproject/tracks/commit/f62e3374488633315c64235621566946c205c244))
+
 ## [3.7.0](https://github.com/bluegardenproject/tracks/compare/v3.6.0...v3.7.0) (2026-11-25)
 
 
