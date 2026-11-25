@@ -1,12 +1,13 @@
 # Built-in theme, read-only. Copy it with Save as new in the Theme Creator.
 display_name: Default Light
 tokens:
-  text.default:       "#27272a"
-  text.muted:         "#52525b"
-  text.faint:         "#a1a1aa"
-  text.inverse:       "#fafafa"
-  text.accent:        "#0e7490"
-  text.track.default: "#27272a"
+  text.default:          "#27272a"
+  text.muted:            "#52525b"
+  text.faint:            "#a1a1aa"
+  text.inverse:          "#fafafa"
+  text.accent:           "#0e7490"
+  text.track.default:    "#27272a"
+  text.accent.attention: "#0891b2"
 
   bg.base:            "#fafafa"
   bg.surface:         "#f4f4f5"

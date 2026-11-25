@@ -154,9 +154,9 @@ func (m Model) signalsBody() ([]string, []item) {
 	line := m.item("Relay Station")
 	switch n := m.signals.RelayNew; {
 	case n > 99:
-		line += m.mutedText(" · 99+")
+		line += m.mutedText(" · ") + m.attentionText("99+")
 	case n > 0:
-		line += m.mutedText(" · " + strconv.Itoa(n) + " new")
+		line += m.mutedText(" · ") + m.attentionText(strconv.Itoa(n)+" new")
 	}
 	body := []string{line}
 	// The whole line opens it, from the body's first column.
@@ -188,6 +188,11 @@ func (m Model) signalsBody() ([]string, []item) {
 // item is a list item's name, as the Station shows a track's.
 func (m Model) item(text string) string {
 	return lipgloss.NewStyle().Foreground(m.palette.Color(theme.TableTextDefault)).Render(text)
+}
+
+// attentionText is text that asks to be seen.
+func (m Model) attentionText(text string) string {
+	return lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextAccentAttention)).Render(text)
 }
 
 func (m Model) mutedText(text string) string {
