@@ -53,8 +53,13 @@ func (s *Service) stackOn(ctx context.Context, main track.Track, on string) (tra
 // to origin, where t's worktrees start from. lower's branches are read
 // from its worktrees, which its agent may have renamed, and kept.
 func (s *Service) stack(ctx context.Context, t *track.Track, lower track.Track) error {
+	if lower.Kind != track.Work {
+		// A Review track's checkout is someone else's branch, a Plan's
+		// or an Ask's none: nothing Tracks restacks on.
+		return Problem(shown(lower) + " is a " + string(lower.Kind) + " track, with no branch of its own to build on.")
+	}
 	live := lower.Repos
-	if lower.Kind.Worktrees() && !lower.Cleaned() {
+	if !lower.Cleaned() {
 		live = s.Worktrees.Branches(ctx, lower)
 		for i, r := range live {
 			if i < len(lower.Repos) && r.Branch != "" && r.Branch != lower.Repos[i].Branch {
@@ -82,9 +87,6 @@ func (s *Service) stack(ctx context.Context, t *track.Track, lower track.Track) 
 		}
 	}
 	if !stacked {
-		if !lower.Kind.Worktrees() {
-			return Problem(shown(lower) + " is a " + string(lower.Kind) + " track, with no branch to build on.")
-		}
 		return Problem(shown(lower) + " has none of the side track's repos to build on.")
 	}
 	return nil
@@ -114,7 +116,7 @@ func (s *Service) sideSpec(ctx context.Context, t track.Track) *agents.SideTrack
 			continue
 		}
 		for _, other := range family {
-			if other.ID == t.ID {
+			if other.ID == t.ID || other.Kind != track.Work {
 				continue
 			}
 			if i := slices.IndexFunc(other.Repos, func(o track.Repo) bool { return o.Name == r.Name && o.Branch != "" && o.Branch == r.Base }); i >= 0 {
@@ -210,16 +212,17 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 	}
 	named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(pr.Health.Base))
 	if !safe {
-		return s.postGitHub(ctx, mainID, named+" Its branch's name isn't one Tracks puts into a command: you decide.", relay.Event)
+		return s.postGitHub(ctx, mainID, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
+	}
+	// What waits for it about the branch below is moot, ended or not.
+	if err := s.dropBeforeRestack(ctx, upper, mainID, pr.Repo); err != nil {
+		return err
 	}
 	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
 		return err
 	}
 	if !upper.Open() {
 		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event)
-	}
-	if err := s.dropBeforeRestack(ctx, upper, mainID, pr.Repo); err != nil {
-		return err
 	}
 	if err := s.instruct(ctx, upper.ID, instructionRestack, pr.URL, actions.SideRestack(ref, gitHubText(lowerName), base, head)); err != nil {
 		return err
@@ -274,3 +277,18 @@ func settledIn(t track.Track, repo string) bool {
 
 // shown is t's name as the Station shows it.
 func shown(t track.Track) string { return cmp.Or(t.Title, t.Name) }
+
+// restackWaits reports whether a restack waits for side track id in
+// GitHub repo: a conflicts event there is the one the restack solves.
+func (s *Service) restackWaits(ctx context.Context, id, repo string) (bool, error) {
+	waiting, err := s.Store.WaitingInstructions(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, in := range waiting {
+		if below, ok := track.ParsePR(in.PR); ok && in.TrackID == id && in.Kind == instructionRestack && strings.EqualFold(below.Repo, repo) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
