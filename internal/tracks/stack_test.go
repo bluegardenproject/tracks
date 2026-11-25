@@ -429,3 +429,38 @@ func TestAMergeAndItsConflictInOnePoll(t *testing.T) {
 		}
 	}
 }
+
+// An unsafe name with the main track ended goes to the side track.
+func TestAnUnsafeBaseWithTheMainTrackEnded(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.store.SetState(ctx, main.ID, main.State.Apply(track.Ended, f.svc.now())); err != nil {
+		t.Fatal(err)
+	}
+	pr := mergedBelow(lower)
+	pr.Health.Base = "main;evil"
+	if err := f.svc.restack(ctx, lower.ID, pr); err != nil {
+		t.Fatal(err)
+	}
+	if got := fromGitHub(t, f, upper.ID); len(got) != 1 || !strings.Contains(got[0], "you decide") {
+		t.Errorf("the side track's relay: %q", got)
+	}
+}
+
+// A release PR from the repo's base doesn't restack the side tracks on
+// that base.
+func TestAMergeFromTheBaseRestacksNothing(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	pr := mergedBelow(main)
+	pr.Health.HeadBranch, pr.Health.Base = "main", "release"
+	if err := f.svc.restack(ctx, main.ID, pr); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, lower.ID); len(got) != 0 {
+		t.Errorf("an unstacked side track was restacked: %q", got)
+	}
+	_ = upper
+}

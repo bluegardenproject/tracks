@@ -646,7 +646,10 @@ own. "Side track" is always two words: "sidetracked" means something else.
   rewrote its history after the upper branched makes `--onto` replay or
   fail, which the agent sees and solves, as does a three-deep stack
   whose merges land in two polls while the top's restack still waits
-  (the second restack names the newer merge's head); a PR above that
+  (the second restack names the newer merge's head), and a lower PR
+  that got a commit on GitHub (a suggestion, "Update branch") and was
+  squash-merged, whose last head the upper's checkout may never have
+  fetched; a PR above that
   GitHub reports conflicting only after its restack was typed, while the
   agent still rebases, gets the conflicts' rebase too, which finds it
   done; the base is

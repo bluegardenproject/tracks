@@ -177,23 +177,31 @@ func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
 	head := strings.ToLower(pr.Health.Head[:min(7, len(pr.Health.Head))])
 	safe := okBase && shortSHA.MatchString(head)
 	ref := fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
+	defaults := map[string]string{}
+	if repos, err := s.Store.Repos(ctx); err == nil {
+		for _, r := range repos {
+			defaults[r.Name] = r.BaseBranch
+		}
+	}
+	var errs []error
 	for _, upper := range family {
 		if upper.ID == lower.ID || !side.Is(upper) {
 			continue
 		}
 		for _, r := range upper.Repos {
-			if r.Base != from {
+			// On the repo's base it isn't stacked, whatever merged from
+			// that branch (a release PR, say).
+			if r.Base != from || r.Base == defaults[r.Name] {
 				continue
 			}
 			if repo, err := s.gitHubRepo(ctx, r.Path); err != nil || !strings.EqualFold(repo, pr.Repo) {
 				continue
 			}
-			if err := s.restackOne(ctx, upper.ID, r.Name, mainID, pr, ref, shown(lower), base, head, safe); err != nil {
-				return err
-			}
+			// One failing leaves the others to restack.
+			errs = append(errs, s.restackOne(ctx, upper.ID, r.Name, mainID, pr, ref, shown(lower), base, head, safe))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // restackOne restacks side track id's repo name, under Report's lock and

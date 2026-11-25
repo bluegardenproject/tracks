@@ -24,7 +24,9 @@ func (s *Service) PollPRs(ctx context.Context) (err error) {
 	// ends: a merge or an event saved is never seen again.
 	found := &pollFound{}
 	defer func() {
-		err = errors.Join(err, s.restackMerged(ctx, found.merged), s.tellEvents(ctx, found.events))
+		// Saved is saved: told even when the poll is cancelled.
+		done := context.WithoutCancel(ctx)
+		err = errors.Join(err, s.restackMerged(done, found.merged), s.tellEvents(done, found.events))
 	}()
 	tracks, err := s.branchTracks(ctx)
 	if err != nil {
