@@ -3,8 +3,10 @@ package tracks
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,11 +21,13 @@ import (
 )
 
 type fakeReviewers struct {
-	opened    []trackwin.Process
-	specs     []trackwin.TrainSpec
-	dirs      []string
-	closed    []string
+	opened []trackwin.Process
+	specs  []trackwin.TrainSpec
+	dirs   []string
+	closed []string
+	// state is the reviewer opened last, more those before it, still open.
 	state     ReviewerState
+	more      []ReviewerState
 	typed     []string
 	respawned []string
 	screen    string
@@ -49,25 +53,60 @@ func (f *fakeReviewers) OpenReviewer(s trackwin.TrainSpec) error {
 		return f.openErr
 	}
 	f.opened, f.dirs, f.specs = append(f.opened, s.Process), append(f.dirs, s.Dir), append(f.specs, s)
-	f.state = ReviewerState{Pane: "%9", Session: trackwin.TrainSession(s.Track, s.Handle)}
-	return nil
-}
-
-func (f *fakeReviewers) CloseReviewer(track string) error {
-	f.closed = append(f.closed, track)
-	f.state = ReviewerState{}
-	return nil
-}
-
-func (f *fakeReviewers) Reviewer(string) (ReviewerState, error) { return f.state, nil }
-
-func (f *fakeReviewers) Reviewers() (map[string]ReviewerState, error) {
-	if f.state.Pane == "" {
-		return map[string]ReviewerState{}, nil
+	if f.state.Pane != "" {
+		f.more = append(f.more, f.state)
 	}
-	r := f.state
-	r.Attached = false
-	return map[string]ReviewerState{"r": r}, nil
+	f.state = ReviewerState{Handle: s.Handle, Pane: fmt.Sprintf("%%%d", 8+len(f.specs)), Session: trackwin.TrainSession(s.Track, s.Handle)}
+	return nil
+}
+
+func (f *fakeReviewers) CloseReviewer(track, handle string) error {
+	f.closed = append(f.closed, track+" "+handle)
+	f.more = slices.DeleteFunc(f.more, func(r ReviewerState) bool { return r.Handle == handle })
+	if f.state.Handle == handle {
+		f.state = ReviewerState{}
+		if n := len(f.more); n > 0 {
+			f.state, f.more = f.more[n-1], f.more[:n-1]
+		}
+	}
+	return nil
+}
+
+func (f *fakeReviewers) all() []ReviewerState {
+	if f.state.Pane == "" {
+		return slices.Clone(f.more)
+	}
+	return append(slices.Clone(f.more), f.state)
+}
+
+func (f *fakeReviewers) Reviewer(_, handle string) (ReviewerState, error) {
+	for _, r := range f.all() {
+		if r.Handle == handle {
+			return r, nil
+		}
+	}
+	return ReviewerState{}, nil
+}
+
+func (f *fakeReviewers) Reviewers() (map[string][]ReviewerState, error) {
+	out := map[string][]ReviewerState{}
+	for _, r := range f.all() {
+		r.Attached = false
+		out["r"] = append(out["r"], r)
+	}
+	return out, nil
+}
+
+// reviewDir is the folder of track id's reviewer, when it has one; a
+// folder that isn't there when it has none.
+func (s *Service) reviewDir(id string) string {
+	s.reviewMu.Lock()
+	defer s.reviewMu.Unlock()
+	states, _ := s.trainStates(id, train.Reviewer)
+	if len(states) == 0 {
+		return filepath.Join(s.trainsDir(id), "none")
+	}
+	return states[len(states)-1].Dir
 }
 
 func (f *fakeReviewers) TrainBadge(session, badges string) error {
@@ -100,12 +139,12 @@ func TestReview(t *testing.T) {
 	if err := os.Mkdir(sub, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	name, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+changed\n"}}}})
+	started, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+changed\n"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "Cursor (gpt-5)" || len(panes.opened) != 1 || panes.dirs[0] != worktree || len(panes.closed) != 1 || panes.closed[0] != "r" {
-		t.Fatalf("name %q, opened %+v in %v, closed %v; want Cursor's reviewer in the worktree, after the one there", name, panes.opened, panes.dirs, panes.closed)
+	if name := started.Name; name != "Cursor (gpt-5)" || len(panes.opened) != 1 || panes.dirs[0] != worktree || len(panes.closed) != 0 {
+		t.Fatalf("name %q, opened %+v in %v, closed %v; want Cursor's reviewer in the worktree", name, panes.opened, panes.dirs, panes.closed)
 	}
 	cmd := panes.opened[0].Command
 	for _, want := range []string{"TRACKS_ID='r'", "TRACKS_REVIEW=1", "sh -c", "agent", "--mode", "ask", "gpt-5", "brief.md", "--reply-file"} {
@@ -128,7 +167,7 @@ func TestReview(t *testing.T) {
 
 	done := make(chan string, 1)
 	go func() {
-		report, err := f.svc.WaitReview(ctx, "r")
+		report, err := f.svc.WaitReview(ctx, "r", "")
 		if err != nil {
 			report = err.Error()
 		}
@@ -156,15 +195,15 @@ func TestReview(t *testing.T) {
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: sub, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+again\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if len(panes.closed) != 2 {
+	if len(panes.closed) != 1 {
 		t.Error("a new review didn't end the reviewer that was there")
 	}
 	defer func(d time.Duration) { reviewWait = d }(reviewWait)
 	reviewWait = time.Second
-	if _, err := f.svc.WaitReview(ctx, "r"); err == nil || !strings.Contains(err.Error(), "No report after") {
+	if _, err := f.svc.WaitReview(ctx, "r", ""); err == nil || !strings.Contains(err.Error(), "No report after") {
 		t.Errorf("a new review returned the old report, or waited on: %v", err)
 	}
-	if _, err := f.svc.WaitReview(ctx, "../x"); err == nil {
+	if _, err := f.svc.WaitReview(ctx, "../x", ""); err == nil {
 		t.Error("a track that isn't there was waited for")
 	}
 
@@ -174,6 +213,7 @@ func TestReview(t *testing.T) {
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+claude\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
+	dir = f.svc.reviewDir("r")
 	run, _ = os.ReadFile(filepath.Join(dir, "run"))
 	settingsFile, _ := os.ReadFile(filepath.Join(dir, "hooks", "claude-settings.json"))
 	if cmd := panes.opened[len(panes.opened)-1].Command; !strings.Contains(cmd, "--permission-mode") || !strings.Contains(cmd, "plan") ||
@@ -244,7 +284,7 @@ func TestReviewerTrain(t *testing.T) {
 	if _, err := f.svc.EndTrain(ctx, "r", "reviewer"); err != nil {
 		t.Fatal(err)
 	}
-	if panes.state.Pane != "" || len(panes.closed) != 2 {
+	if panes.state.Pane != "" || len(panes.closed) != 1 {
 		t.Errorf("reviewer %+v after End train; want it ended", panes.state)
 	}
 	if _, err := os.Stat(f.svc.reviewDir("r")); !os.IsNotExist(err) {
@@ -253,10 +293,11 @@ func TestReviewerTrain(t *testing.T) {
 }
 
 func TestReviewerStates(t *testing.T) {
-	panes := []tmux.Pane{{ID: "%3"}, {ID: "%4", Role: trackwin.RoleReviewer, Track: "b", Session: "s", Dead: true},
+	session := trackwin.TrainSession("b", "reviewer-1")
+	panes := []tmux.Pane{{ID: "%3"}, {ID: "%4", Role: trackwin.RoleReviewer, Track: "b", Session: session, Dead: true},
 		{ID: "%5", Role: trackwin.RoleReviewer}}
 	got := reviewerStates(panes)
-	if len(got) != 1 || got["b"] != (ReviewerState{Pane: "%4", Session: "s", Exited: true}) {
+	if len(got) != 1 || len(got["b"]) != 1 || got["b"][0] != (ReviewerState{Handle: "reviewer-1", Pane: "%4", Session: session, Exited: true}) {
 		t.Errorf("reviewerStates = %+v; want b's", got)
 	}
 }
@@ -276,13 +317,13 @@ func TestAskReview(t *testing.T) {
 	f.svc.Reviewers = panes
 	f.svc.Settings = func() (settings.Settings, error) { return settings.Settings{Engines: f.engines}, nil }
 
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "Why?"); err == nil {
 		t.Error("a track without a reviewer was asked")
 	}
 	if _, err := f.svc.StartReview(ctx, ReviewRequest{ID: "r", Dir: worktree, Packet: review.Packet{Diffs: []review.FileDiff{{Path: "a", Text: "+x\n"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "hasn't reported") {
+	if _, err := f.svc.AskReview(ctx, "r", "", "Why?"); err == nil || !strings.Contains(err.Error(), "hasn't reported") {
 		t.Errorf("a reviewer still on its review was asked: %v", err)
 	}
 	run, _ := os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
@@ -295,21 +336,21 @@ func TestAskReview(t *testing.T) {
 	reply("Report.\nREVIEW OUTCOME: blocked")
 	reply("Talk in the pane, before any question.")
 	for _, bad := range []string{"", "  ", "line\nbreak", "esc\x1b[A"} {
-		if err := f.svc.AskReview(ctx, "r", bad); err == nil {
+		if _, err := f.svc.AskReview(ctx, "r", "", bad); err == nil {
 			t.Errorf("question %q was asked", bad)
 		}
 	}
 	panes.state.Attached = true
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "overlay open") {
+	if _, err := f.svc.AskReview(ctx, "r", "", "Why?"); err == nil || !strings.Contains(err.Error(), "overlay open") {
 		t.Errorf("a reviewer in an open overlay was asked: %v", err)
 	}
 	panes.state.Attached = false
 	panes.state.Exited = true
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err == nil || !strings.Contains(err.Error(), "exited") {
+	if _, err := f.svc.AskReview(ctx, "r", "", "Why?"); err == nil || !strings.Contains(err.Error(), "exited") {
 		t.Errorf("a reviewer whose agent exited was asked: %v", err)
 	}
 	panes.state.Exited = false
-	if err := f.svc.AskReview(ctx, "r", "  Is finding 1 real?  "); err != nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "  Is finding 1 real?  "); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "question.md")); !strings.HasPrefix(string(b), questionLead) {
@@ -318,12 +359,12 @@ func TestAskReview(t *testing.T) {
 	if len(panes.typed) != 1 || panes.typed[0] != "%9 "+questionLead+"Is finding 1 real?" {
 		t.Errorf("typed %q; want the question in the reviewer's pane", panes.typed)
 	}
-	if err := f.svc.AskReview(ctx, "r", "And 2?"); err == nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "And 2?"); err == nil {
 		t.Error("a second question went in before the first was answered")
 	}
 	reply("Yes: the cache is never cleared.\nREVIEW OUTCOME: blocked")
 	reply("Later talk.")
-	answer, err := f.svc.WaitReview(ctx, "r")
+	answer, err := f.svc.WaitReview(ctx, "r", "")
 	if err != nil || answer != "Yes: the cache is never cleared.\nREVIEW OUTCOME: blocked" {
 		t.Errorf("answer %q, %v; want the first reply after the question", answer, err)
 	}
@@ -336,13 +377,13 @@ func TestAskReview(t *testing.T) {
 	}
 	run, _ = os.ReadFile(filepath.Join(f.svc.reviewDir("r"), "run"))
 	reply("Report.\nREVIEW OUTCOME: pass")
-	if err := f.svc.AskReview(ctx, "r", "What about tests?"); err != nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "What about tests?"); err != nil {
 		t.Fatal(err)
 	}
 	if len(panes.respawned) != 1 {
 		t.Fatalf("respawned %q; want Cursor's pane started again on the question", panes.respawned)
 	}
-	for _, want := range []string{"%9 " + worktree, "-p", "--resume", "What about tests?", "answer.out", "--answer", "exec"} {
+	for _, want := range []string{panes.state.Pane + " " + worktree, "-p", "--resume", "What about tests?", "answer.out", "--answer", "exec"} {
 		if !strings.Contains(panes.respawned[0], want) {
 			t.Errorf("Cursor's turn on the question lacks %s: %s", want, panes.respawned[0])
 		}

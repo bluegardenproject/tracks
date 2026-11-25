@@ -26,6 +26,19 @@ func TestPrintTrains(t *testing.T) {
 	if out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
+	out.Reset()
+	err = printTrains(&out, []rpc.Train{
+		{Handle: "reviewer-1", Agent: "Reviewer", Engine: "Claude", Status: "active", Target: "/w/api"},
+		{Handle: "reviewer-2", Agent: "Reviewer", Engine: "Claude", Status: "active", Target: "/w/api-fix"},
+		{Handle: "detective", Agent: "Investigator", Status: "active"},
+	})
+	want = "NAME        AGENT         ON      STATUS  REVIEWS\n" +
+		"reviewer-1  Reviewer      Claude  active  /w/api\n" +
+		"reviewer-2  Reviewer      Claude  active  /w/api-fix\n" +
+		"detective   Investigator  -       active  -\n"
+	if err != nil || out.String() != want {
+		t.Errorf("with targets: got\n%s\nwant\n%s", out.String(), want)
+	}
 }
 
 func TestPlatformEntries(t *testing.T) {

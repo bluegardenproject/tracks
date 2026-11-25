@@ -57,6 +57,8 @@ type Train struct {
 	Agent         Agent
 	// Engine is the agent CLI and model it runs on, for people.
 	Engine string
+	// Target is the checkout a reviewer reviews, "" for another train.
+	Target string
 	// Status is a Station status; Outcome a second badge, such as a
 	// review's, or none.
 	Status, Outcome track.Status

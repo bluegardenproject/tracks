@@ -51,6 +51,19 @@ type TrainSpec struct {
 // TrainSession is the name of the session of track's train handle.
 func TrainSession(track, handle string) string { return TrainPrefix + track + "-" + handle }
 
+// HandleOf is the handle of track's train in session, "" when session
+// isn't one of track's.
+func HandleOf(track, session string) string {
+	if track == "" {
+		return ""
+	}
+	h, ok := strings.CutPrefix(session, TrainSession(track, ""))
+	if !ok {
+		return ""
+	}
+	return h
+}
+
 // IsTrainSession says whether session is a train's.
 func IsTrainSession(session string) bool { return strings.HasPrefix(session, TrainPrefix) }
 
@@ -130,6 +143,22 @@ func CloseTrains(t TrainTmux, track, role string) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// CloseTrain ends track's train handle with its session, nil when it
+// has none.
+func CloseTrain(t TrainTmux, track, handle string) error {
+	panes, err := Trains(t, track)
+	if err != nil {
+		return err
+	}
+	session := TrainSession(track, handle)
+	for _, p := range panes {
+		if p.Session == session {
+			return t.KillSession(session)
+		}
+	}
+	return nil
 }
 
 // Attached says whether a client is attached to session, as an

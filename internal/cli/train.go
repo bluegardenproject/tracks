@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"text/tabwriter"
 
 	"github.com/bluegardenproject/tracks/internal/platform"
@@ -69,14 +71,19 @@ func newTrainEndCmd() *cobra.Command {
 }
 
 // printTrains writes trains as a table: name, agent, what it runs on,
-// status and outcome.
+// status and outcome, and the checkout a reviewer reviews.
 func printTrains(w io.Writer, trains []rpc.Train) error {
 	if len(trains) == 0 {
 		_, err := fmt.Fprintln(w, "No trains on this track.")
 		return err
 	}
+	targets := slices.ContainsFunc(trains, func(t rpc.Train) bool { return t.Target != "" })
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tAGENT\tON\tSTATUS")
+	head := "NAME\tAGENT\tON\tSTATUS"
+	if targets {
+		head += "\tREVIEWS"
+	}
+	fmt.Fprintln(tw, head)
 	for _, t := range trains {
 		status := t.Status
 		if t.Outcome != "" {
@@ -86,7 +93,11 @@ func printTrains(w io.Writer, trains []rpc.Train) error {
 		if on == "" {
 			on = "-"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", t.Handle, t.Agent, on, status)
+		line := t.Handle + "\t" + t.Agent + "\t" + on + "\t" + status
+		if targets {
+			line += "\t" + cmp.Or(t.Target, "-")
+		}
+		fmt.Fprintln(tw, line)
 	}
 	return tw.Flush()
 }

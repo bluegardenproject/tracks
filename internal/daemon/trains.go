@@ -18,7 +18,7 @@ func (c Config) trainList(ctx context.Context, call *rpc.Call) (any, error) {
 	}
 	out := rpc.TrainListResult{Trains: []rpc.Train{}}
 	for _, t := range trains {
-		out.Trains = append(out.Trains, rpc.Train{Handle: t.Handle, Agent: t.Agent.Name(), Engine: t.Engine,
+		out.Trains = append(out.Trains, rpc.Train{Handle: t.Handle, Agent: t.Agent.Name(), Engine: t.Engine, Target: t.Target,
 			Status: t.Status.Label, Outcome: t.Outcome.Label, StatusID: t.Status.ID, OutcomeID: t.Outcome.ID, Held: t.Held})
 	}
 	return out, nil

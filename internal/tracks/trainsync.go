@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 
+	"github.com/bluegardenproject/tracks/internal/trackwin"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
@@ -28,13 +29,14 @@ func (s *Service) showBadge(session, badges string) {
 // on them: once a run, so a question left unanswered isn't told on
 // every tick.
 func (s *Service) tellWaiting(ctx context.Context, id string, tr train.Train, run string) {
+	session := trackwin.TrainSession(id, tr.Handle)
 	s.mu.Lock()
-	told := s.trainTold[id] == run
+	told := s.trainTold[session] == run
 	if !told {
 		if s.trainTold == nil {
 			s.trainTold = map[string]string{}
 		}
-		s.trainTold[id] = run
+		s.trainTold[session] = run
 	}
 	s.mu.Unlock()
 	if told || s.Notify == nil {

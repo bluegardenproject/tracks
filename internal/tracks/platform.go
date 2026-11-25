@@ -39,17 +39,19 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 	fitErr := s.Windows.FitPlatforms()
 	// The reviewers' panes and runs are read together, as StartReview
 	// and CloseReviewer change them together.
-	reviewers := map[string]ReviewerState{}
-	runs := map[string]reviewerRunState{}
+	runs := map[string][]reviewerRunState{}
 	if s.Reviewers != nil && s.HooksDir != "" {
 		// A review starting holds the lock across a network call; the
 		// tick doesn't wait for it, the next one catches up.
 		if !s.reviewMu.TryLock() {
 			return nil
 		}
-		reviewers, err = s.Reviewers.Reviewers()
-		for id, r := range reviewers {
-			runs[id] = s.reviewerRun(id, r)
+		reviewers, err := s.Reviewers.Reviewers()
+		for id, panes := range reviewers {
+			if err != nil {
+				break
+			}
+			runs[id], err = s.reviewerRuns(id, panes)
 		}
 		s.reviewMu.Unlock()
 		if err != nil {
@@ -68,24 +70,27 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		tracks[t.ID] = t
 	}
 	seen := map[string]string{}
-	live, windowed := map[string]bool{}, map[string]bool{}
+	live := map[string]bool{}
 	errs := []error{fitErr}
 	for _, in := range infos {
 		if in.Track == "" {
 			continue
 		}
-		windowed[in.Track] = true
 		// A busy track, being restarted or promoted, keeps what was seen
 		// of it: its Platform is left as it is meanwhile.
 		if s.isBusy(in.Track) {
 			if key, ok := last[in.Track]; ok {
 				seen[in.Track] = key
 			}
+			// Its trains run on: what was written and told of them stays.
+			for _, r := range runs[in.Track] {
+				live[trackwin.TrainSession(in.Track, r.handle)] = true
+			}
 			continue
 		}
 		// A track whose agent exited is still synced: its window and its
 		// trains run on, and the Platform types nothing into the agent.
-		trains := s.reviewerTrains(in.Track, reviewers[in.Track], runs[in.Track])
+		trains := s.reviewerTrains(in.Track, runs[in.Track])
 		s.mu.Lock()
 		prs := prSignals(tracks[in.Track], s.comments[in.Track])
 		s.mu.Unlock()
@@ -93,11 +98,11 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 			seen[in.Track] = trainsKey(trains) + fmt.Sprint(prs)
 		}
 		for _, tr := range trains {
-			session := reviewers[in.Track].Session
+			session := trackwin.TrainSession(in.Track, tr.Handle)
 			live[session] = true
 			s.showBadge(session, actions.Badges(tr.Status, tr.Outcome))
 			if tr.Status == track.ActionRequired {
-				s.tellWaiting(ctx, in.Track, tr, runs[in.Track].run)
+				s.tellWaiting(ctx, in.Track, tr, runOf(runs[in.Track], tr.Handle))
 			}
 		}
 		if platforms[in.Window] == "" {
@@ -117,9 +122,9 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 			delete(s.badges, session)
 		}
 	}
-	for id := range s.trainTold {
-		if !windowed[id] {
-			delete(s.trainTold, id)
+	for session := range s.trainTold {
+		if !live[session] {
+			delete(s.trainTold, session)
 		}
 	}
 	s.mu.Unlock()
@@ -127,6 +132,16 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		s.Changes.Notify()
 	}
 	return errors.Join(errs...)
+}
+
+// runOf is the run of the reviewer handle among runs, "" for none.
+func runOf(runs []reviewerRunState, handle string) string {
+	for _, r := range runs {
+		if r.handle == handle {
+			return r.run
+		}
+	}
+	return ""
 }
 
 // Signals are what a track's Platform shows under Signals: its PRs with
@@ -159,7 +174,7 @@ func (s *Service) Signals(ctx context.Context, id string) (Signals, error) {
 func trainsKey(trains []train.Train) string {
 	var b strings.Builder
 	for _, t := range trains {
-		fmt.Fprintf(&b, "%s %s %s %s %v|", t.Handle, t.Engine, t.Status.ID, t.Outcome.ID, t.Held)
+		fmt.Fprintf(&b, "%s %s %s %s %s %v|", t.Handle, t.Engine, t.Target, t.Status.ID, t.Outcome.ID, t.Held)
 	}
 	return b.String()
 }

@@ -86,7 +86,7 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 		case tr.Handle != handle || tr.Agent.ReadsRelay():
 		case tr.Agent == train.Reviewer && kind == relay.Question:
 			// It runs no commands: Tracks types the question to it.
-			return s.askReview(ctx, id, body)
+			return s.askReview(ctx, id, handle, body)
 		case tr.Agent == train.Reviewer:
 			return relay.Message{}, Problem("The reviewer takes questions: send it --kind question.")
 		default:

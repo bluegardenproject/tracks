@@ -1,7 +1,7 @@
 # Reviews
 
 **Status:** being built, one PR per step under Order. Steps 1 to 9 are
-built. The reviewer is a train ([trains.md](trains.md)): since its step 7
+built; step 12, several reviewers, is being built. The reviewer is a train ([trains.md](trains.md)): since its step 7
 it runs in a tmux session of its own, seen in its overlay; its footer
 buttons and showing it for the trust question are gone.
 
@@ -98,7 +98,7 @@ pane of its own, which the user sees only in its overlay.
   its engine's own permissions and sandbox for its commands.
 - **A train's session.** Its pane is the one pane of a tmux session of its
   own, `tracks-train-<track>-<handle>`, so it never shows among the tracks.
-  `tracks train show reviewer` opens it in an overlay over the track, with
+  `tracks train show <handle>` opens it in an overlay over the track, with
   a header (its handle, its badges, Hide and End train); Hide or `Ctrl+b
   Esc` closes the overlay and the reviewer runs on (see The overlay in
   [trains.md](trains.md)). The pane stays when the agent exits, so the
@@ -146,10 +146,12 @@ retired, and a theme file that still sets it loads, the token skipped.
 
 ### Lifetime
 
-- **One reviewer per track.** It stays until the track ends, the user clicks
-  **End train** in its overlay, or `tracks train end reviewer` ends it.
-- **A new review starts fresh.** `tracks review` ends a reviewer that's there
-  and starts a new session, after the branch changed or for another scope.
+- **One reviewer per target** (see Several reviewers). It stays until the
+  track ends, the user clicks **End train** in its overlay, or `tracks train
+  end <handle>` ends it.
+- **A new review starts fresh.** `tracks review` ends the reviewer of the
+  same target that's there and starts a new session, after the branch
+  changed or for another scope.
 - **Closing its pane ends it**, such as the orchestrator running
   `tracks close` when the user asks, which ends it as End train does.
 - **Interaction is limited.** The reviewer answers questions about its review
@@ -309,7 +311,9 @@ Everything that needs the code read again goes back to the reviewer:
 
 | Command | Does |
 |---|---|
-| `tracks review` | Starts a reviewer session on the track's branch, ending one that's there, and prints its report |
+| `tracks review` | Starts a reviewer session on the track's branch, ending the one of the same target, and prints its handle, then its report |
+| `--dir <path>` | Reviews another checkout of one of the track's repos instead |
+| `--to <handle>` | With `--ask` or `--wait`: the reviewer meant, when more than one runs |
 | `--brief <file>` | Adds the orchestrator's brief to the packet |
 | `--owner [<handle>]` | Reviews only the files `<handle>` owns; alone, the repo's Code owner's |
 | `--all` | Reviews the whole change, as without `--owner` |
@@ -317,6 +321,95 @@ Everything that needs the code read again goes back to the reviewer:
 | `--wait` | Waits for the report of the review that's running, or its answer to the last question |
 | `--base <ref>` | As now |
 | `--stale` | Reviews a PR's worktree that's behind the PR |
+
+## Several reviewers
+
+A track can run more than one reviewer at once: one per target, with no cap.
+An agent that made a second worktree for an independent fix reviews it
+beside the track's branch, each with a reviewer of its own.
+
+### Targets
+
+- **The track's branch**, as before: `tracks review` in one of the track's
+  worktrees. The target is that worktree's top folder, so a track with
+  two repos has a target per repo.
+- **Another checkout**: `tracks review --dir <path>` reviews the checkout
+  `<path>` is in, a worktree or clone of one of the track's repos, such as
+  a worktree the agent added itself. Its top folder is the target.
+  - The CLI gathers the packet there and checks it before and after the
+    review, as it does the track's worktree.
+  - The daemon runs no git, so it checks the checkout is one of the
+    track's repos by reading files: its `.git` (a folder, or a file naming
+    one) leads to the repository's common folder, which must be one of the
+    track's worktrees'.
+  - Its base is found as `reviewBase` finds the track's: the track's repo
+    whose worktree it is, else the track's repo it's a checkout of, its
+    `origin/<base>`; else the guess. `--base` still overrides.
+- Not now: reviewing someone's pull request from inside a track (`--pr`).
+
+### Keys
+
+Every train kind will run as several instances in a track or side track,
+the track picking the agent for a task (a research agent on three topics
+at once, say; see [trains.md](trains.md)). So a train's state is keyed by
+its handle, the same way for any kind, and the reviewer's own parts sit
+on top:
+
+- **Any train** has a folder, `hooks/<track>/trains/<handle>/`, holding
+  its kind (`agent`), its run marker (`run`), and `handle` once it has
+  joined the relay, so its left notice pairs with its joined one. Its
+  session is `tracks-train-<track>-<handle>`, and its relay identity
+  `@<handle>`.
+- **A reviewer** adds its brief, session, target, report, question and
+  answer, and its relay messages' numbers, in the same folder.
+- **Replies find their train by run.** The hook command names the run
+  only, as before; the daemon looks for the train whose run it is. A
+  reply of an ended reviewer matches none and is dropped.
+- A new handle is one no train of the track has, nor the one it
+  replaces.
+
+### A second `tracks review`
+
+- **Same target**: it replaces that target's reviewer, as before: the old
+  one is ended, `@<old> left: a new review replaces it.`, and a new one
+  starts with a new handle.
+- **Another target**: a new reviewer starts beside the running ones.
+- `tracks review` prints the reviewer it started, its handle and target,
+  before it waits for its report: `Started @reviewer-527192 on <path>.`
+- Its joined notice names the target when it isn't one of the track's
+  worktrees: `@reviewer-527192 joined: Reviewer on Claude, reviewing the
+  change in <path>.`
+
+### Addressing
+
+- `tracks review --wait` and `--ask` take `--to <handle or prefix>`. With
+  one reviewer they work without it, as before; with several and no
+  `--to` they stop and list them with their targets, for the agent to
+  name one. `tracks review` itself waits for the reviewer it started.
+- `tracks train show|list|end` work with any of them by handle, or by a
+  prefix only one has. `tracks train list` shows each reviewer's target.
+- `tracks close <number>` on a reviewer's pane ends that reviewer.
+- The relay, the Platform and the overlay already deal with trains by
+  handle: each reviewer has its badges, its Collect messages, its joined
+  and left notices and its lines in the Relay Station. Tracks tells the
+  user once a run per reviewer when one asks for trust.
+
+### Migration
+
+A review's folder doesn't outlast the tmux server: Tracks drops it when
+the server stops. A daemon restarted under a running reviewer, such as by
+`tracks update`, finds its folder at `hooks/<track>/review/`. It's read
+where it is, as that reviewer's, its handle the one it kept and its
+target its session's workspace, and goes when the reviewer ends. It isn't
+moved: a Cursor reviewer started before writes its report into that
+folder by its path. Its hook still finds it by its run. No schema change:
+reviews aren't in the store.
+
+### Pull requests
+
+1. Reviewers by handle: the folders, the migration, replacing by target,
+   `--to`, the trains, Platform and relay with several.
+2. `--dir`: the target checks and the base.
 
 ## Order
 
@@ -343,6 +436,8 @@ can be reviewed and merged while the next is built.
    and warns, with a Path line; hints carry none.
 10. The verify pass (experiment 2).
 11. Structured findings and calibration (experiments 3 and 4).
+12. Several reviewers, one per target (see Several reviewers), in two
+    PRs.
 
 ## Open
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,19 +25,19 @@ import (
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
-// ReviewerPanes runs a track's reviewer in a train's session of its
-// own, which the user sees in its overlay.
+// ReviewerPanes runs a track's reviewers, each in a train's session of
+// its own, which the user sees in its overlay.
 type ReviewerPanes interface {
 	// OpenReviewer starts s as a track's reviewer.
 	OpenReviewer(s trackwin.TrainSpec) error
-	// CloseReviewer ends track's reviewer and its session.
-	CloseReviewer(track string) error
-	// Reviewer is track's reviewer: its pane, "" for none, and whether
-	// an overlay is attached to it.
-	Reviewer(track string) (ReviewerState, error)
+	// CloseReviewer ends track's reviewer handle and its session.
+	CloseReviewer(track, handle string) error
+	// Reviewer is track's reviewer handle: its pane, "" for none, and
+	// whether an overlay is attached to it.
+	Reviewer(track, handle string) (ReviewerState, error)
 	// Reviewers are every track's reviewers, by track, read at once,
 	// without whether an overlay is attached.
-	Reviewers() (map[string]ReviewerState, error)
+	Reviewers() (map[string][]ReviewerState, error)
 	// TrainBadge sets the badges in the header of the train in session,
 	// a tmux format, and redraws its overlay's header.
 	TrainBadge(session, badges string) error
@@ -49,12 +50,18 @@ type ReviewerPanes interface {
 	CaptureReviewer(pane string) (string, error)
 }
 
-// ReviewerState is a track's reviewer: its pane, "" for none, and its
-// session; whether an overlay is attached to it, and whether its agent
-// exited, its pane left.
+// ReviewerState is a track's reviewer: its handle, its pane, "" for
+// none, and its session; whether an overlay is attached to it, and
+// whether its agent exited, its pane left.
 type ReviewerState struct {
-	Pane, Session    string
-	Attached, Exited bool
+	Handle, Pane, Session string
+	Attached, Exited      bool
+}
+
+// Started is the reviewer StartReview started: its handle, the agent
+// and model it runs on, for people, and the checkout it reviews.
+type Started struct {
+	Handle, Name, Target string
 }
 
 // ReviewRequest is a review of the changes in Dir, a worktree of track
@@ -72,74 +79,69 @@ type ReviewRequest struct {
 // reviewPoll is how often WaitReview looks for the report.
 const reviewPoll = 500 * time.Millisecond
 
-// reviewDir holds track id's review: its brief, its run and its report.
-// It sits with the track's hooks, which go when the track ends.
-func (s *Service) reviewDir(id string) string { return filepath.Join(s.HooksDir, id, "review") }
-
 // StartReview starts a reviewer of req's diff in a train's session of track
-// req.ID, on the agent and model the settings pick, ending one that's
-// there: a new review starts fresh. It returns the reviewer's name for
-// people.
-func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, error) {
+// req.ID, on the agent and model the settings pick. It ends the reviewer
+// of the same target that's there, a new review starting fresh, and
+// leaves the others running.
+func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (Started, error) {
 	if s.Reviewers == nil || s.HooksDir == "" {
-		return "", errors.New("reviews need tmux and a hooks folder")
+		return Started{}, errors.New("reviews need tmux and a hooks folder")
 	}
 	t, err := s.Store.Track(ctx, req.ID)
 	if errors.Is(err, store.ErrNotFound) {
-		return "", Problem("That track is gone.")
+		return Started{}, Problem("That track is gone.")
 	} else if err != nil {
-		return "", err
+		return Started{}, err
 	}
 	if req.Packet.Empty() {
-		return "", Problem("There are no changes to review.")
+		return Started{}, Problem("There are no changes to review.")
 	}
 	worktree, ok := "", filepath.IsAbs(req.Dir)
 	if ok {
 		worktree, ok = ownWorktree(t, req.Dir)
 	}
 	if !ok {
-		return "", Problem("Run tracks review in one of the track's worktrees.")
+		return Started{}, Problem("Run tracks review in one of the track's worktrees.")
 	}
 	if req.Packet, err = s.addPR(ctx, t, req.Packet, req.Stale); err != nil {
-		return "", err
+		return Started{}, err
 	}
 	set, err := s.Settings()
 	if err != nil {
-		return "", fmt.Errorf("the reviewer setting can't be read: %w", err)
+		return Started{}, fmt.Errorf("the reviewer setting can't be read: %w", err)
 	}
 	id, model := set.ReviewerOn(t.Engine)
 	e, ok := agents.ByID(id)
 	if !ok {
-		return "", Problem(fmt.Sprintf("Tracks doesn't know the reviewer's agent %q.", id))
+		return Started{}, Problem(fmt.Sprintf("Tracks doesn't know the reviewer's agent %q.", id))
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	dir := s.reviewDir(t.ID)
-	oldHandle := reviewHandle(dir)
-	if err := s.Reviewers.CloseReviewer(t.ID); err != nil {
-		return "", fmt.Errorf("end the reviewer that's there: %w", err)
-	}
-	if err := s.leftNotice(ctx, t.ID, dir, "a new review replaces it"); err != nil {
-		return "", err
-	}
-
-	if err := os.RemoveAll(dir); err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	handle, err := newReviewHandle(set.Agents.ReviewerPrefix(), oldHandle)
+	handle, err := s.replaceReviewer(ctx, t.ID, worktree, set.Agents.ReviewerPrefix())
 	if err != nil {
-		return "", err
+		return Started{}, err
 	}
+	dir := s.trainDir(t.ID, handle)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return Started{}, err
+	}
+	// A reviewer that didn't start leaves no folder: one would pass
+	// for a reviewer to --wait and --ask.
+	opened := false
+	defer func() {
+		if !opened {
+			_ = os.RemoveAll(dir)
+		}
+	}()
 	run := newRun()
 	brief := filepath.Join(dir, "brief.md")
 	if err := os.WriteFile(brief, []byte(review.Brief(claude.ReviewerInstructions(), t.Candor, req.Packet.Fit())), 0o600); err != nil {
-		return "", err
+		return Started{}, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "run"), []byte(run), 0o600); err != nil {
-		return "", err
+	for name, text := range map[string]string{"agent": string(train.Reviewer), "target": worktree, "run": run} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+			return Started{}, err
+		}
 	}
 	reply := hooks.ReviewerCommand(filepath.Join(s.BinDir, "tracks"), id, t.ID, run)
 	sess := reviewSession{Engine: id, Program: e.Program, Model: model, Workspace: worktree, Reply: reply,
@@ -150,25 +152,25 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		// Claude's Stop hook carries its reply.
 		hookFile, err := hooks.Install(filepath.Join(dir, "hooks"), id, reply, s.Socket)
 		if err != nil {
-			return "", err
+			return Started{}, err
 		}
 		script = string(claude.ReviewerLine(e.Program, model, hookFile, brief, review.PromptGiven))
 	case agents.Cursor.ID:
 		engine, ok := s.engine(id)
 		if !ok {
-			return "", Problem(fmt.Sprintf("Tracks doesn't know the reviewer's agent %q.", id))
+			return Started{}, Problem(fmt.Sprintf("Tracks doesn't know the reviewer's agent %q.", id))
 		}
 		chat, err := engine.Session(ctx, e.Program)
 		if err != nil {
-			return "", fmt.Errorf("start the reviewer's chat: %w", err)
+			return Started{}, fmt.Errorf("start the reviewer's chat: %w", err)
 		}
 		sess.Chat = chat
 		script = sess.cursorTurn(review.Prompt(brief), filepath.Join(dir, "report.out"), false)
 	default:
-		return "", Problem(e.Name + " can't review yet.")
+		return Started{}, Problem(e.Name + " can't review yet.")
 	}
 	if err := sess.save(dir); err != nil {
-		return "", err
+		return Started{}, err
 	}
 	name := e.Name
 	if model != "" {
@@ -178,19 +180,56 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 		Process: trackwin.Process{Title: "reviewer: " + name, Command: s.reviewerCommand(t.ID, script)},
 		Header:  actions.TrainHeader(handle, train.Reviewer.Name(), trackwin.TrainBadgeOption)}
 	if err := s.Reviewers.OpenReviewer(spec); err != nil {
-		return "", err
+		return Started{}, err
 	}
+	opened = true
 	s.showBadge(trackwin.TrainSession(t.ID, handle), actions.Badges(track.Active))
 	// Kept once it runs, as joined is posted: a left notice goes with
 	// the handle, so the two pair up.
 	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
-		return "", err
+		return Started{}, err
 	}
 	if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
+		return Started{}, err
+	}
+	return Started{Handle: handle, Name: name, Target: worktree}, nil
+}
+
+// replaceReviewer ends track id's reviewers of target, saying so on its
+// relay, and returns a handle for the new one: one no reviewer of the
+// track has, nor had, the ended ones included. The caller holds
+// s.reviewMu.
+func (s *Service) replaceReviewer(ctx context.Context, id, target, prefix string) (string, error) {
+	states, err := s.trainStates(id, "")
+	if err != nil {
 		return "", err
 	}
-	return name, nil
+	taken := map[string]bool{}
+	for _, st := range states {
+		taken[st.Handle] = true
+		if st.Agent != train.Reviewer || !samePath(reviewTarget(st.Dir), target) {
+			continue
+		}
+		if err := s.Reviewers.CloseReviewer(id, st.Handle); err != nil {
+			return "", fmt.Errorf("end the reviewer that's there: %w", err)
+		}
+		if err := s.leftNotice(ctx, id, st.Dir, "a new review replaces it"); err != nil {
+			return "", err
+		}
+		if err := os.RemoveAll(st.Dir); err != nil {
+			return "", err
+		}
+	}
+	if panes, err := s.Reviewers.Reviewers(); err == nil {
+		for _, r := range panes[id] {
+			taken[r.Handle] = true
+		}
+	}
+	return newReviewHandle(prefix, func(h string) bool { return taken[h] })
 }
+
+// samePath says whether a and b are the same folder.
+func samePath(a, b string) bool { return a != "" && resolvedPath(a) == resolvedPath(b) }
 
 // ReviewOwner is the Code owner of dir's repo, dir a worktree of track
 // id: what a review narrows to when asked for the code owner's part
@@ -237,25 +276,25 @@ func (s *Service) reviewerCommand(id, script string) string {
 	return env + " sh -c " + shellx.Quote(script)
 }
 
-// ReviewReply takes a reply of track id's reviewer from its hook: the
-// one that ends a review is its report, the first after it while a
-// question of AskReview waits is its answer, and the others are the
-// user's talk with it in its pane. A reply of another run, from a
-// reviewer since ended, is dropped.
+// ReviewReply takes a reply of one of track id's reviewers, the one on
+// run, from its hook: the one that ends a review is its report, the
+// first after it while a question of AskReview waits is its answer,
+// and the others are the user's talk with it in its pane. A reply of
+// another run, from a reviewer since ended, is dropped.
 func (s *Service) ReviewReply(ctx context.Context, id, run, text string) error {
 	if _, err := s.Store.Track(ctx, id); err != nil {
 		return err
 	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
-	dir := s.reviewDir(id)
-	current, err := os.ReadFile(filepath.Join(dir, "run"))
-	if err != nil || string(current) != run {
-		return nil
+	st, ok, err := s.trainByRun(id, run)
+	if err != nil || !ok {
+		return err
 	}
+	dir := st.Dir
 	path := filepath.Join(dir, "report.md")
 	if _, err := os.Stat(path); err == nil {
-		if !s.asking(id) {
+		if !asking(dir) {
 			return nil
 		}
 		path = filepath.Join(dir, "answer.md")
@@ -288,19 +327,27 @@ func writeWhole(path, text string) error {
 // for good.
 var reviewWait = 30 * time.Minute
 
-// WaitReview waits for the report of track id's current review, or,
-// once it was asked a question, for its answer to the last one.
-func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
-	if _, err := s.Store.Track(ctx, id); err != nil {
+// WaitReview waits for the report of the current review of track id's
+// reviewer to, or, once it was asked a question, for its answer to the
+// last one. to is a handle or a prefix only one has; "" when the track
+// has only one reviewer.
+func (s *Service) WaitReview(ctx context.Context, id, to string) (string, error) {
+	t, err := s.Store.Track(ctx, id)
+	if err != nil {
 		return "", err
 	}
 	ctx, cancel := context.WithTimeout(ctx, reviewWait)
 	defer cancel()
 	// Picked under the lock, so an AskReview on its way is seen whole.
 	s.reviewMu.Lock()
-	path, what := filepath.Join(s.reviewDir(id), "report.md"), "report"
-	if exists(filepath.Join(s.reviewDir(id), "question.md")) {
-		path, what = filepath.Join(s.reviewDir(id), "answer.md"), "answer"
+	st, err := s.pickReviewer(t, to)
+	if err != nil {
+		s.reviewMu.Unlock()
+		return "", err
+	}
+	path, what := filepath.Join(st.Dir, "report.md"), "report"
+	if exists(filepath.Join(st.Dir, "question.md")) {
+		path, what = filepath.Join(st.Dir, "answer.md"), "answer"
 	}
 	s.reviewMu.Unlock()
 	for {
@@ -316,19 +363,75 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 			}
 			return string(b), s.markReplyRead(ctx, id, msg)
 		}
-		if _, err := os.Stat(filepath.Join(s.reviewDir(id), "run")); err != nil {
-			return "", Problem("This track has no review running: start one with tracks review.")
+		if readTrim(filepath.Join(st.Dir, "run")) != st.Run {
+			return "", Problem("@" + st.Handle + " was ended or replaced: tracks train list lists the reviewers that run.")
 		}
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", Problem(fmt.Sprintf("No %s after %s. tracks train list says whether the reviewer still "+
-					"runs or its agent exited; the user can look at it in its overlay (tracks train show reviewer).", what, reviewWait))
+				return "", Problem(fmt.Sprintf("No %s after %s. tracks train list says whether @%s still "+
+					"runs or its agent exited; the user can look at it in its overlay (tracks train show %s).",
+					what, reviewWait, st.Handle, st.Handle))
 			}
 			return "", ctx.Err()
 		case <-time.After(reviewPoll):
 		}
 	}
+}
+
+// liveReviews are track id's reviews with a run and a pane, as Trains
+// lists them: a folder whose pane was closed some other way is no
+// reviewer to wait for or ask. The caller holds s.reviewMu.
+func (s *Service) liveReviews(id string) ([]trainState, error) {
+	states, err := s.trainStates(id, train.Reviewer)
+	if err != nil {
+		return nil, err
+	}
+	var panes map[string][]ReviewerState
+	if s.Reviewers != nil {
+		if panes, err = s.Reviewers.Reviewers(); err != nil {
+			return nil, err
+		}
+	}
+	var out []trainState
+	for _, st := range states {
+		if st.Run != "" && (s.Reviewers == nil || slices.ContainsFunc(panes[id], func(r ReviewerState) bool { return r.Handle == st.Handle })) {
+			out = append(out, st)
+		}
+	}
+	return out, nil
+}
+
+// pickReviewer is track t's reviewer to, a handle or a prefix only one
+// has; with to "", its only one. Several and no to is a Problem that
+// lists them, for the caller to name one. The caller holds s.reviewMu.
+func (s *Service) pickReviewer(t track.Track, to string) (trainState, error) {
+	states, err := s.liveReviews(t.ID)
+	if err != nil {
+		return trainState{}, err
+	}
+	switch {
+	case len(states) == 0:
+		return trainState{}, Problem("This track has no review running: start one with tracks review.")
+	case to == "" && len(states) == 1:
+		return states[0], nil
+	case to == "":
+		names := make([]string, len(states))
+		for i, st := range states {
+			names[i] = "@" + st.Handle + " on " + reviewTarget(st.Dir)
+		}
+		return trainState{}, Problem(fmt.Sprintf("%s has %d reviewers: %s. Name one with --to <handle>.",
+			t.Name, len(states), strings.Join(names, ", ")))
+	}
+	handles := make([]string, len(states))
+	for i, st := range states {
+		handles[i] = st.Handle
+	}
+	h, err := train.Resolve(to, handles)
+	if err != nil {
+		return trainState{}, Problem(fmt.Sprintf("%v: tracks train list lists the reviewers.", err))
+	}
+	return states[slices.IndexFunc(states, func(st trainState) bool { return st.Handle == h })], nil
 }
 
 // newRun names a review run, so a reply of an ended reviewer is told
@@ -365,10 +468,10 @@ func resolvedPath(path string) string {
 	return filepath.Clean(path)
 }
 
-// CloseReviewer ends track id's reviewer and closes its session: what
-// End train does. A tracks review --wait on it stops, since its run is
-// gone. It returns the track's name.
-func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) {
+// CloseReviewer ends track id's reviewer handle and closes its
+// session: what End train does. A tracks review --wait on it stops,
+// since its run is gone. It returns the track's name.
+func (s *Service) CloseReviewer(ctx context.Context, id, handle string) (string, error) {
 	if s.Reviewers == nil {
 		return "", errors.New("reviews need tmux")
 	}
@@ -376,12 +479,22 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	if err != nil {
 		return "", err
 	}
+	if train.CheckHandle(handle) != nil {
+		return t.Name, Problem(fmt.Sprintf("%q isn't a reviewer of %s.", handle, t.Name))
+	}
 	s.reviewMu.Lock()
 	defer s.reviewMu.Unlock()
+	st, ok, err := s.trainByHandle(id, handle)
+	if err != nil {
+		return t.Name, err
+	}
 	// The run goes whatever tmux says: the user asked for the review
 	// to end.
-	closeErr := s.Reviewers.CloseReviewer(id)
-	return t.Name, errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
+	closeErr := s.Reviewers.CloseReviewer(id, handle)
+	if !ok {
+		return t.Name, closeErr
+	}
+	return t.Name, errors.Join(closeErr, s.leftNotice(ctx, id, st.Dir, "it was ended"), os.RemoveAll(st.Dir))
 }
 
 // markReplyRead marks the reviewer's reply, message msg on track id's

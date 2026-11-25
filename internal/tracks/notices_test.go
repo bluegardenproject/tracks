@@ -108,10 +108,10 @@ func TestTrainNotices(t *testing.T) {
 	if err := f.svc.ReviewReply(ctx, "r", run, "Two blocks in the cache.\n\nREVIEW OUTCOME: blocked"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.WaitReview(ctx, "r"); err != nil {
+	if _, err := f.svc.WaitReview(ctx, "r", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.AskReview(ctx, "r", "Why?"); err != nil {
+	if _, err := f.svc.AskReview(ctx, "r", "", "Why?"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.ReviewReply(ctx, "r", run, "Because it's hot."); err != nil {

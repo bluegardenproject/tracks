@@ -21,6 +21,8 @@ type Train struct {
 	Agent  string `json:"agent"`
 	// Engine is the agent CLI and model it runs on, "" when unknown.
 	Engine string `json:"engine,omitempty"`
+	// Target is the checkout a reviewer reviews, "" for another train.
+	Target string `json:"target,omitempty"`
 	// Status and Outcome are badge labels; Outcome "" for none.
 	// StatusID and OutcomeID name them, for drawing their badges.
 	Status    string `json:"status"`
