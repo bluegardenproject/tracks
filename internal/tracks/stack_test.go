@@ -355,3 +355,45 @@ func TestAnEndingSideTracksMootRestackGoesQuietly(t *testing.T) {
 		t.Errorf("the main track heard of a moot restack: %q", got[before:])
 	}
 }
+
+// --on track builds only on a Work main track's branch.
+func TestStackingOnlyOnAWorkTrack(t *testing.T) {
+	ctx := context.Background()
+	for _, kind := range []track.Kind{track.Plan, track.Review} {
+		f := newFixture(t)
+		req := Request{Kind: kind, Name: "main-" + string(kind), Repos: []string{"api"}, Prompt: "Look"}
+		if kind == track.Review {
+			req.ReviewRef = "feat/x"
+		}
+		main, err := f.svc.Create(ctx, req, func(string) {})
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		f.worktrees.pushed = map[string]bool{"feat/x": true}
+		_, err = f.svc.Create(ctx, Request{Kind: track.Work, Prompt: "Part", Parent: main.Track.ID, Side: true, NoDraft: true, On: "track"}, func(string) {})
+		if !errors.As(err, new(Problem)) || !strings.Contains(err.Error(), "no branch of its own") {
+			t.Errorf("--on track from a %s track: %v", kind, err)
+		}
+	}
+}
+
+// A conflicts event a waiting restack solves is no event of its own.
+func TestConflictsWhileARestackWaits(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
+		t.Fatal(err)
+	}
+	before := len(fromGitHub(t, f, main.ID))
+	own, _ := track.ParsePR("https://github.com/acme/api/pull/240")
+	if err := f.svc.githubEvent(ctx, upper, ghEvent{Kind: settings.EventConflicts, PR: own, Body: "conflicts"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 1 || !strings.HasPrefix(got[0], "restack: ") {
+		t.Errorf("waiting: %q; want the restack alone", got)
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != before {
+		t.Errorf("the main track heard of it: %q", got[before:])
+	}
+}
