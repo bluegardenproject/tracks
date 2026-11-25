@@ -13,11 +13,15 @@ const (
 // SideTrack is one of a main track's side tracks, as tracks side list
 // shows it.
 type SideTrack struct {
+	ID     string `json:"id,omitempty"`
 	Name   string `json:"name"`
 	Handle string `json:"handle"`
-	// Status and PR are badge labels; PR "" for none.
-	Status string `json:"status"`
-	PR     string `json:"pr,omitempty"`
+	// Status and PR are badge labels; PR "" for none. StatusID and PRID
+	// name them, for the Platform's badges.
+	Status   string `json:"status"`
+	PR       string `json:"pr,omitempty"`
+	StatusID string `json:"status_id,omitempty"`
+	PRID     string `json:"pr_id,omitempty"`
 	// PRs are its pull requests' links.
 	PRs []string `json:"prs,omitempty"`
 }
