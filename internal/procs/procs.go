@@ -113,8 +113,13 @@ type Listener struct {
 // at depth 0, by depth then port.
 func (s Snapshot) Below(pid int) []Listener {
 	var out []Listener
+	visited := map[int]bool{}
 	var walk func(pid, depth int)
 	walk = func(pid, depth int) {
+		if visited[pid] {
+			return
+		}
+		visited[pid] = true
 		for _, port := range s.Ports[pid] {
 			out = append(out, Listener{PID: pid, Port: port, Depth: depth})
 		}

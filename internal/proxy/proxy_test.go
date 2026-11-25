@@ -131,3 +131,17 @@ func TestWebSocket(t *testing.T) {
 		t.Errorf("after the upgrade got %q", line)
 	}
 }
+
+func TestProxyIgnoresHTTPProxyEnv(t *testing.T) {
+	rp := reverse(8080)
+	tr, ok := rp.Transport.(*http.Transport)
+	if !ok || tr == nil {
+		t.Fatalf("reverse().Transport = %T, want *http.Transport", rp.Transport)
+	}
+	if tr == http.DefaultTransport {
+		t.Error("reverse().Transport must not alias http.DefaultTransport")
+	}
+	if tr.Proxy != nil {
+		t.Error("reverse().Transport.Proxy must be nil so HTTP_PROXY cannot intercept loopback traffic")
+	}
+}

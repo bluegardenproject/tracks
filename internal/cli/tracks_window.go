@@ -3,6 +3,7 @@ package cli
 import (
 	"cmp"
 	"context"
+	"path/filepath"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
@@ -104,7 +105,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				ReposErr:      dbErr,
 				Themes:        themes{c: c, paths: paths, version: version, command: command},
 				ThemesDir:     paths.ThemesDir,
-				Engines:       engines{path: paths.Settings},
+				Engines:       engines{path: paths.Settings, mcpDir: filepath.Join(paths.DataDir, "mcp")},
 				TrackTypes:    trackTypes{path: paths.Settings},
 				Agents:        agentSettings{path: paths.Settings},
 				History:       history{path: paths.Settings},

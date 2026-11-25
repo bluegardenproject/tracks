@@ -159,6 +159,7 @@ func found(t track.Track, panes []tmux.Pane, snap procs.Snapshot) []Server {
 // agentOf is the agent process below pane process pid, nearest first;
 // 0 once the agent exited and the pane runs its shell.
 func agentOf(snap procs.Snapshot, pid int) int {
+	visited := map[int]bool{pid: true}
 	queue := []int{pid}
 	for len(queue) > 0 {
 		p := queue[0]
@@ -166,7 +167,12 @@ func agentOf(snap procs.Snapshot, pid int) int {
 		if isAgent(snap.Procs[p].Command) {
 			return p
 		}
-		queue = append(queue, snap.Children(p)...)
+		for _, child := range snap.Children(p) {
+			if !visited[child] {
+				visited[child] = true
+				queue = append(queue, child)
+			}
+		}
 	}
 	return 0
 }

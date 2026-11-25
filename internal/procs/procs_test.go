@@ -35,6 +35,19 @@ garbage line
 	if got := s.Below(12345); got != nil {
 		t.Errorf("Below of an unknown process = %+v", got)
 	}
+
+	// Cycles in a non-atomic ps snapshot must terminate instead of overflowing the stack.
+	cyclic := New(map[int]Proc{
+		1: {PID: 1, PPID: 1, Command: "self"},
+		2: {PID: 2, PPID: 3, Command: "a"},
+		3: {PID: 3, PPID: 2, Command: "b"},
+	}, map[int][]int{1: {8001}, 2: {8002}, 3: {8003}})
+	if got := cyclic.Below(1); len(got) != 1 || got[0].Port != 8001 {
+		t.Errorf("Below(self-cycle) = %+v", got)
+	}
+	if got := cyclic.Below(2); len(got) != 2 {
+		t.Errorf("Below(2-cycle) = %+v, want 2 listeners", got)
+	}
 }
 
 func TestKind(t *testing.T) {

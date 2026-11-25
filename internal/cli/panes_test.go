@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bluegardenproject/tracks/internal/procs"
 	"github.com/bluegardenproject/tracks/internal/tmux"
@@ -69,6 +70,18 @@ func TestPaneActivity(t *testing.T) {
 		if got := paneActivity(tc.pane, snap); got != tc.want {
 			t.Errorf("paneActivity(%+v) = %q, want %q", tc.pane, got, tc.want)
 		}
+	}
+
+	// Cycle in shell process tree must terminate, and long UTF-8 commands must not split runes.
+	longCmd := strings.Repeat("日", maxCommand+5)
+	cyclic := procs.New(map[int]procs.Proc{
+		1: {PID: 1, PPID: 2, Command: "-zsh"},
+		2: {PID: 2, PPID: 1, Command: "-zsh"},
+		3: {PID: 3, PPID: 2, Command: longCmd},
+	}, nil)
+	got := paneActivity(tmux.Pane{Role: trackwin.RoleTerminal, PID: 1}, cyclic)
+	if !utf8.ValidString(got) || utf8.RuneCountInString(got) != maxCommand {
+		t.Errorf("paneActivity(long UTF-8) = %q (valid=%v, runes=%d)", got, utf8.ValidString(got), utf8.RuneCountInString(got))
 	}
 }
 

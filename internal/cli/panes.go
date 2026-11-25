@@ -298,8 +298,8 @@ func paneActivity(p tmux.Pane, snap procs.Snapshot) string {
 			parts = append(parts, "idle shell")
 		}
 		for _, c := range cmds {
-			if len(c) > maxCommand {
-				c = c[:maxCommand-1] + "…"
+			if r := []rune(c); len(r) > maxCommand {
+				c = string(r[:maxCommand-1]) + "…"
 			}
 			parts = append(parts, c)
 		}
@@ -323,12 +323,21 @@ func paneActivity(p tmux.Pane, snap procs.Snapshot) string {
 // aren't shells: what a terminal's shell runs.
 func programs(snap procs.Snapshot, pid int) []string {
 	var out []string
-	for _, c := range snap.Children(pid) {
-		if procs.IsShell(snap.Procs[c].Command) {
-			out = append(out, programs(snap, c)...)
-			continue
+	visited := map[int]bool{pid: true}
+	var walk func(int)
+	walk = func(cur int) {
+		for _, c := range snap.Children(cur) {
+			if visited[c] {
+				continue
+			}
+			visited[c] = true
+			if procs.IsShell(snap.Procs[c].Command) {
+				walk(c)
+				continue
+			}
+			out = append(out, snap.Procs[c].Command)
 		}
-		out = append(out, snap.Procs[c].Command)
 	}
+	walk(pid)
 	return out
 }

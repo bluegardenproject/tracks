@@ -91,3 +91,14 @@ func with(s Server, set func(*Server)) Server {
 	set(&s)
 	return s
 }
+
+func TestAgentOfHandlesCycle(t *testing.T) {
+	ps := map[int]procs.Proc{
+		10: {PID: 10, PPID: 20, Command: "zsh"},
+		20: {PID: 20, PPID: 10, Command: "node helper.js"},
+	}
+	snap := procs.New(ps, nil)
+	if got := agentOf(snap, 10); got != 0 {
+		t.Errorf("agentOf(cyclic snapshot) = %d, want 0", got)
+	}
+}

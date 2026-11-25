@@ -3,6 +3,8 @@ package tracks
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -35,6 +37,19 @@ func TestParsePRView(t *testing.T) {
 	}
 	if _, job := actionsJobOf("https://ci.example/1"); job != "" {
 		t.Error("an Actions job's link wasn't told from another")
+	}
+	if repo, job := actionsJobOf("https://github.com/o/.github/actions/runs/1/job/42"); repo != "o/.github" || job != "42" {
+		t.Errorf("dot-prefixed repo: got (%q, %q), want (o/.github, 42)", repo, job)
+	}
+	for _, bad := range []string{
+		"https://github.com/-evil/r/actions/runs/1/job/42",
+		"https://github.com/o/./actions/runs/1/job/42",
+		"https://github.com/o/../actions/runs/1/job/42",
+		"https://github.com/o/r/actions/runs/1/job/42evil",
+	} {
+		if repo, job := actionsJobOf(bad); repo != "" || job != "" {
+			t.Errorf("actionsJobOf(%q) = (%q, %q), want empty", bad, repo, job)
+		}
 	}
 }
 
@@ -91,5 +106,44 @@ func TestAddPR(t *testing.T) {
 	gh.reviewErr = errors.New("gh isn't logged in")
 	if p, err := s.addPR(ctx, review_, review.Packet{}, false); err != nil || p.PR != nil || len(p.Notes) != 1 {
 		t.Errorf("GitHub out of reach: %+v, %v; want the review to go on, with a note", p, err)
+	}
+}
+
+func TestReviewPRSkipsCrossRepoActionsLog(t *testing.T) {
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "calls.txt")
+	t.Setenv("TEST_GH_CALLS", logFile)
+	ghBin := filepath.Join(dir, "gh")
+	script := `#!/bin/sh
+echo "$*" >> "$TEST_GH_CALLS"
+case "$1" in
+pr)
+  echo '{"url":"https://github.com/acme/public/pull/7","title":"Fix","body":"","headRefOid":"abc","statusCheckRollup":[{"__typename":"CheckRun","name":"secret","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/acme/private/actions/runs/1/job/999"},{"__typename":"CheckRun","name":"own","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/ACME/PUBLIC/actions/runs/2/job/111"}]}'
+  ;;
+api)
+  echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"totalCount":0,"nodes":[]}}}}}'
+  ;;
+run)
+  echo "OWN_LOG"
+  ;;
+esac
+`
+	if err := os.WriteFile(ghBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pr, ok := track.ParsePR("https://github.com/acme/public/pull/7")
+	if !ok {
+		t.Fatal("ParsePR failed")
+	}
+	got, _, _, err := (GH{Program: ghBin}).ReviewPR(context.Background(), pr)
+	if err != nil {
+		t.Fatalf("ReviewPR: %v", err)
+	}
+	if len(got.Checks) != 2 || got.Checks[0].Log != "" || got.Checks[1].Log != "OWN_LOG\n" {
+		t.Errorf("checks = %+v; want cross-repo log empty and same-repo log fetched", got.Checks)
+	}
+	calls, _ := os.ReadFile(logFile)
+	if strings.Contains(string(calls), "acme/private") {
+		t.Errorf("gh fetched cross-repo job log:\n%s", calls)
 	}
 }

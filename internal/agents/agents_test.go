@@ -130,11 +130,172 @@ func TestParseMCPList(t *testing.T) {
 
 func TestListMCP(t *testing.T) {
 	path := fakePath(t, "agent", `[ "$1 $2" = "mcp list" ] && echo "linear: ready"`)
-	if got, err := ListMCP(context.Background(), path); err != nil || len(got) != 1 || got[0].Name != "linear" {
+	mcpDir := filepath.Join(t.TempDir(), "mcp")
+	if got, err := ListMCP(context.Background(), path, mcpDir); err != nil || len(got) != 1 || got[0].Name != "linear" {
 		t.Errorf("ListMCP = %+v, %v; want linear", got, err)
 	}
 	failing := fakePath(t, "agent", `echo "Failed to list MCP servers: no network"; exit 1`)
-	if _, err := ListMCP(context.Background(), failing); err == nil || !strings.Contains(err.Error(), "no network") {
+	if _, err := ListMCP(context.Background(), failing, mcpDir); err == nil || !strings.Contains(err.Error(), "no network") {
 		t.Errorf("a failing list should say why, got %v", err)
+	}
+
+	// Explicit dir is created 0700 and reused across calls to avoid per-project config churn.
+	cwdOut := filepath.Join(t.TempDir(), "cwd.txt")
+	t.Setenv("TEST_MCP_CWD_OUT", cwdOut)
+	pwdCLI := fakePath(t, "agent", `pwd > "$TEST_MCP_CWD_OUT"; echo "linear: ready"`)
+	if _, err := ListMCP(context.Background(), pwdCLI, mcpDir); err != nil {
+		t.Fatalf("ListMCP stable dir (1): %v", err)
+	}
+	cwd1, err := os.ReadFile(cwdOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ListMCP(context.Background(), pwdCLI, mcpDir); err != nil {
+		t.Fatalf("ListMCP stable dir (2): %v", err)
+	}
+	cwd2, err := os.ReadFile(cwdOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(cwd1)) != strings.TrimSpace(string(cwd2)) {
+		t.Errorf("ListMCP changed cwd across calls: %q vs %q", cwd1, cwd2)
+	}
+	if info, err := os.Lstat(mcpDir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("mcpDir stat = %v, %v; want 0700 dir", info, err)
+	}
+	// A symlink at dir is refused.
+	badLink := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), badLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ListMCP(context.Background(), path, badLink); err == nil {
+		t.Error("ListMCP accepted symlink as working dir")
+	}
+
+	// Empty dir falls back to a private temp dir (never shared os.TempDir()) and cleans it up.
+	if _, err := ListMCP(context.Background(), pwdCLI, ""); err != nil {
+		t.Fatalf("ListMCP fallback temp dir: %v", err)
+	}
+	cwdBytes, err := os.ReadFile(cwdOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd := strings.TrimSpace(string(cwdBytes))
+	tmpReal, _ := filepath.EvalSymlinks(os.TempDir())
+	if cwd == filepath.Clean(os.TempDir()) || cwd == tmpReal {
+		t.Errorf("ListMCP ran directly in shared temp dir %q", cwd)
+	}
+	if _, err := os.Stat(cwd); !os.IsNotExist(err) {
+		t.Errorf("ListMCP temp dir %q was not cleaned up", cwd)
+	}
+
+	// Cancelled context returns a readable message instead of bare "context canceled".
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ListMCP(cancelled, path, mcpDir); err == nil || !strings.Contains(err.Error(), "cancelled") {
+		t.Errorf("ListMCP(cancelled) = %v; want readable cancellation message", err)
+	}
+}
+
+func TestMCPState(t *testing.T) {
+	for status, want := range map[string]MCPState{
+		"ready":                   MCPReady,
+		"✔ Connected":             MCPReady,
+		"connected":               MCPReady,
+		"disconnected":            MCPAttention,
+		"Disconnected":            MCPAttention,
+		"not connected":           MCPAttention,
+		"not-connected":           MCPAttention,
+		"requires_authentication": MCPAttention,
+		"Failed to connect":       MCPFailed,
+		"Error: timeout":          MCPFailed,
+	} {
+		if got := mcpState(status); got != want {
+			t.Errorf("mcpState(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
+
+func TestWriteAndRemoveManagedHardening(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "target.md")
+	managed := []byte("---\nx-tracks-managed: \"1\"\n---\nbody\n")
+
+	// Dangling symlink must neither be overwritten nor create its target.
+	dangling := filepath.Join(dir, "dangling.md")
+	if err := os.Symlink(outside, dangling); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := WriteManaged(dangling, managed); err != nil || ok {
+		t.Fatalf("WriteManaged(dangling symlink) = %v, %v; want false, nil", ok, err)
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Errorf("WriteManaged created target through dangling symlink")
+	}
+
+	// Symlink to a file containing the marker must not be overwritten or removed.
+	if err := os.WriteFile(outside, managed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := WriteManaged(dangling, append(managed, 'x')); err != nil || ok {
+		t.Fatalf("WriteManaged(symlink to managed) = %v, %v; want false, nil", ok, err)
+	}
+	if err := RemoveManaged(dangling); err != nil {
+		t.Fatalf("RemoveManaged(symlink): %v", err)
+	}
+	if _, err := os.Lstat(dangling); err != nil {
+		t.Errorf("RemoveManaged deleted symlink: %v", err)
+	}
+
+	// Prose mentioning the marker outside frontmatter, indented lines,
+	// or false values must not be treated as managed.
+	for name, body := range map[string]string{
+		"prose.md":         "This doc mentions x-tracks-managed: \"1\" in prose.\n",
+		"after-fm.md":      "---\nname: user\n---\nx-tracks-managed: \"1\"\n",
+		"indented.md":      "---\ndescription: |\n  x-tracks-managed: \"1\"\n---\nuser content\n",
+		"false-flag.md":    "---\nx-tracks-managed: false\n---\nuser content\n",
+		"false-comment.md": "---\nx-tracks-managed: false # keep\n---\nuser content\n",
+	} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := WriteManaged(p, managed); err != nil || ok {
+			t.Errorf("WriteManaged(%s) = %v, %v; want false, nil", name, ok, err)
+		}
+		if err := RemoveManaged(p); err != nil {
+			t.Errorf("RemoveManaged(%s): %v", name, err)
+		}
+		if got, _ := os.ReadFile(p); string(got) != body {
+			t.Errorf("%s was modified or removed", name)
+		}
+	}
+
+	// Regular managed file is atomically updated (preserving its mode) and removed.
+	own := filepath.Join(dir, "managed.md")
+	if ok, err := WriteManaged(own, managed); err != nil || !ok {
+		t.Fatalf("WriteManaged(new) = %v, %v; want true, nil", ok, err)
+	}
+	if info, err := os.Lstat(own); err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("new managed file mode = %v, %v; want 0644", info, err)
+	}
+	if err := os.Chmod(own, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	updated := []byte("---\nx-tracks-managed: \"2\"\n---\nupdated body\n")
+	if ok, err := WriteManaged(own, updated); err != nil || !ok {
+		t.Fatalf("WriteManaged(update) = %v, %v; want true, nil", ok, err)
+	}
+	if got, err := os.ReadFile(own); err != nil || string(got) != string(updated) {
+		t.Fatalf("after update: %q, %v; want %q", got, err, updated)
+	}
+	if info, err := os.Lstat(own); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("updated managed file mode = %v, %v; want preserved 0600", info, err)
+	}
+	if err := RemoveManaged(own); err != nil {
+		t.Fatalf("RemoveManaged(managed): %v", err)
+	}
+	if _, err := os.Stat(own); !os.IsNotExist(err) {
+		t.Errorf("RemoveManaged did not remove managed file")
 	}
 }
