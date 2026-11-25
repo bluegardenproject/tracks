@@ -1,0 +1,12 @@
+=== ready
+Opened side track relay-store (@side-000123), a Work track on api. It reports to you on the relay. It opens its pull request as a draft: when it reports one, check the PR against the task you gave, then mark it ready with `gh pr ready <url>`.
+
+=== drafts kept
+Opened side track relay-store (@side-000123), a Work track on api. It reports to you on the relay. It opens its pull request as a draft: when it reports one, check the PR against the task you gave, and leave it a draft: the repo's rule keeps it one for the user.
+
+=== some drafts kept
+Opened side track relay-store (@side-000123), a Work track on api, web. It reports to you on the relay. It opens its pull request as a draft: when it reports one, check the PR against the task you gave, then mark it ready with `gh pr ready <url>`. PRs in web stay drafts by the repo's rule: leave those for the user.
+
+=== no repos from an older daemon
+Opened side track relay-store (@side-000123). It reports to you on the relay.
+

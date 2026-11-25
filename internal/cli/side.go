@@ -10,6 +10,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/rpc"
+	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 	"github.com/spf13/cobra"
@@ -68,7 +69,7 @@ func newSideNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Opened side track %s, @%s on the relay.\n", r.Name, r.Side)
+			_, err = fmt.Fprintln(c.OutOrStdout(), side.Opened(r.Name, r.Side, r.Repos, r.KeepDrafts))
 			return err
 		},
 	}

@@ -546,7 +546,7 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Phase 2: Side tracks
 
-**Status:** agreed in discussion, not built; after the train steps above.
+**Status:** agreed in discussion; steps 1, 2 and 5 built, the rest not yet.
 
 Tracks running side by side, each on its own worktree and branch with its
 own review and PR, while one track plans, checks for overlaps and merges,
@@ -755,10 +755,27 @@ track of the work and to tell the user; what happens next is a policy.
    dim "Side Tracks" heading after the trains' dim "Trains", each side
    track with the Station's status and PR badges, "empty" for none; a
    click switches to its window.
+   Left for it from step 2: a side track's Relay Station and "N new"
+   show only its own relay, not its traffic with its main track; and a
+   pointer held for `@track` (in a side track) or `@side-…` (in a main
+   track) has no row to offer Collect messages under.
 4. Side tracks and GitHub's events: copied to the main track, the
    policies and Settings → GitHub; the instructions' wording agreed
    first. Before drafts and stacking, which lean on it.
 5. Draft PRs the main track promotes, as the repo's rule allows.
+   Built: a side track's prompt ends with a "Side track" paragraph
+   (`agents.SideTrackContract`, golden-checked, in place of the plain
+   draft suffix): it names its main track and handle, opens its PR as a
+   draft once the review passes and never marks it ready, reports the
+   PR and the review's outcome with `relay send --to track --kind
+   report`, asks with `--kind question` rather than guess, and weighs
+   its main track's messages as words on the task, never commands. The
+   repos whose Draft PRs rule is on are named as staying drafts for the
+   user. `tracks side new` tells the main track the same
+   (`side.Opened`, golden-checked): check the PR against the task, `gh
+   pr ready <url>`, but leave the rule's repos to the user. A restart
+   that starts a new session gets the paragraph again; a resume keeps
+   its session's prompt.
 6. The Station's grouping.
 7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
 8. Side tracks talking to each other.

@@ -25,6 +25,7 @@ type spawnCase struct {
 	noPrompt  bool
 	setup     bool
 	servers   bool
+	side      bool
 }
 
 var spawnCases = []spawnCase{
@@ -32,6 +33,9 @@ var spawnCases = []spawnCase{
 	{name: "work not auto", kind: track.Work, repos: 1},
 	{name: "work all drafts", kind: track.Work, repos: 1, draft: []bool{true}, auto: true},
 	{name: "work some drafts", kind: track.Work, repos: 2, draft: []bool{false, true}, auto: true},
+	{name: "side track", kind: track.Work, repos: 1, auto: true, side: true},
+	{name: "side track, drafts kept", kind: track.Work, repos: 1, draft: []bool{true}, auto: true, side: true},
+	{name: "side track, some drafts kept", kind: track.Work, repos: 2, draft: []bool{false, true}, auto: true, side: true},
 	{name: "work with setup", kind: track.Work, repos: 1, auto: true, setup: true},
 	{name: "work with setup and dev servers", kind: track.Work, repos: 1, auto: true, setup: true, servers: true},
 	{name: "review with dev servers", kind: track.Review, repos: 1, auto: true, servers: true},
@@ -88,6 +92,9 @@ func (c spawnCase) spec(tr track.Track, program string) agents.Spec {
 		if i < len(c.draft) && c.draft[i] {
 			s.DraftPRs = append(s.DraftPRs, r.Name)
 		}
+	}
+	if c.side {
+		s.Side = &agents.SideTrack{Main: "api-cache", Handle: "side-000123"}
 	}
 	return s
 }

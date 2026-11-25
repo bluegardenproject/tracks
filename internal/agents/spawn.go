@@ -22,8 +22,11 @@ type Spec struct {
 	// prompt and model, so neither is passed.
 	Resume bool
 	// DraftPRs names the track's repos that open pull requests as
-	// drafts.
+	// drafts: for a side track, those whose pull requests stay drafts.
 	DraftPRs []string
+	// Side is set for a side track: it gets SideTrackContract, which
+	// takes DraftPRs' place.
+	Side *SideTrack
 	// Setup says the track's repos have a setup for the agent to wait
 	// for.
 	Setup bool

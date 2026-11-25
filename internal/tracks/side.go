@@ -1,9 +1,11 @@
 package tracks
 
 import (
+	"cmp"
 	"context"
 	"errors"
 
+	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -61,6 +63,19 @@ func (s *Service) sideHandle(ctx context.Context, id string) (string, error) {
 		taken[tr.Handle] = true
 	}
 	return train.NewHandle(side.Prefix, func(h string) bool { return taken[h] })
+}
+
+// sideSpec is what side track t's prompt names, nil for any other
+// track: its main track, as shown, and its handle.
+func (s *Service) sideSpec(ctx context.Context, t track.Track) *agents.SideTrack {
+	if !side.Is(t) {
+		return nil
+	}
+	main := t.ParentName
+	if m, err := s.Store.Track(ctx, t.Parent); err == nil {
+		main = cmp.Or(m.Title, m.Name)
+	}
+	return &agents.SideTrack{Main: main, Handle: t.Side}
 }
 
 // SideTracks are main track id's side tracks, oldest first.

@@ -62,7 +62,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 		}
 	default:
 		prompt += "\n\n" + taskSuffix
-		if len(s.DraftPRs) > 0 {
+		if len(s.DraftPRs) > 0 && s.Side == nil {
 			prompt += agents.DraftPRSuffix(s.DraftPRs, len(t.Repos))
 		}
 		if s.Setup {
@@ -70,6 +70,9 @@ func Command(s agents.Spec) (agents.Start, error) {
 		}
 		if s.DevServers {
 			prompt += "\n\n" + agents.DevServersContract
+		}
+		if s.Side != nil && t.Kind == track.Work {
+			prompt += "\n\n" + agents.SideTrackContract(*s.Side, s.DraftPRs, len(t.Repos))
 		}
 		if t.Kind == track.Review {
 			prompt += agents.ReviewCandor(track.CandorLevel(t.Candor)) + "\n\n" + agents.ReviewOnlyContract
