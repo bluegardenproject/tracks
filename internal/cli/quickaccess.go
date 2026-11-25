@@ -97,7 +97,7 @@ func askInPopup(c *tmux.Client, paths platform.Paths, client, args string, w, h 
 
 var closeQuestion = confirm.Question{
 	Title:  "Close Tracks?",
-	Text:   []string{"Every window closes and the agents stop.", "Tracks offers to reopen the tracks when it starts again."},
+	Text:   []string{"Every window closes and the agents stop.", "Tracks reopens the tracks when it starts again."},
 	Action: "Close Tracks",
 }
 

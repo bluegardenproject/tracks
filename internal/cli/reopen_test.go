@@ -38,6 +38,7 @@ func TestReopen(t *testing.T) {
 		reopens     bool
 		window      string
 		says        []string
+		silent      string
 	}{
 		"nothing interrupted": {},
 		"two": {
@@ -59,6 +60,7 @@ func TestReopen(t *testing.T) {
 			interrupted: two[1:], reopens: true,
 			reopening: []tracks.Reopening{{ID: "b", Name: "why", Error: "boom"}},
 			says:      []string{"Couldn't reopen why: boom"},
+			silent:    "Reopened",
 		},
 	}
 	for name, tt := range tests {
@@ -77,6 +79,9 @@ func TestReopen(t *testing.T) {
 			}
 			if strings.Contains(out.String(), "?") {
 				t.Errorf("output %q asks a question", out.String())
+			}
+			if tt.silent != "" && strings.Contains(out.String(), tt.silent) {
+				t.Errorf("output %q says %q", out.String(), tt.silent)
 			}
 			for _, s := range tt.says {
 				if !strings.Contains(out.String(), s) {
