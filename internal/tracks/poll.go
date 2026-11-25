@@ -29,21 +29,28 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	}
 	var branches []branch
 	var q Query
+	asking := map[BranchQuery]bool{}
+	// A checkout gh couldn't place is asked about once a poll.
+	unplaced := map[string]bool{}
 	for _, t := range tracks {
 		for _, r := range t.Repos {
-			if r.Branch == "" {
+			if r.Branch == "" || unplaced[r.Path] {
 				continue
 			}
 			repo, err := s.gitHubRepo(ctx, r.Path)
 			if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 				return errors.Join(err, ctx.Err())
 			} else if err != nil {
+				unplaced[r.Path] = true
 				errs = append(errs, fmt.Errorf("%s in %s: %w", t.Name, r.Name, err))
 				continue
 			}
 			b := branch{t, BranchQuery{Repo: repo, Branch: r.Branch}}
 			branches = append(branches, b)
-			q.Branches = append(q.Branches, b.q)
+			if !asking[b.q] {
+				asking[b.q] = true
+				q.Branches = append(q.Branches, b.q)
+			}
 		}
 	}
 	unsettled, err := s.Store.UnsettledPRs(ctx)
