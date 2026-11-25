@@ -21,7 +21,7 @@ func CheckPeerSend(from, to string, kind Kind, body string, sent int) error {
 	case from == "" || to == "":
 		return errors.New("a message has a sender and a recipient")
 	case reserved(from) || reserved(to):
-		return errors.New("side tracks send each other, never to @track, @tracks or @github")
+		return errors.New("side tracks send each other, never as or to @track, @tracks or @github")
 	case from == to:
 		return errors.New("a message goes to someone else")
 	case kind != Question && kind != Answer:
