@@ -46,6 +46,7 @@ type ghPR struct {
 	IsDraft   bool
 	Base      string
 	Head      string
+	HeadRef   string
 	Mergeable string
 	Checks    []ghCheck
 }
@@ -78,7 +79,7 @@ func (p ghPR) pr() (track.PR, bool) {
 		return track.PR{}, false
 	}
 	pr.State = p.state()
-	pr.Health = track.Health{Base: p.Base, Head: p.Head, Mergeable: mergeable(p.Mergeable)}
+	pr.Health = track.Health{Base: p.Base, Head: p.Head, HeadBranch: p.HeadRef, Mergeable: mergeable(p.Mergeable)}
 	pr.Health.Checks, pr.Health.Failing = rollup(p.Checks)
 	return pr, true
 }

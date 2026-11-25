@@ -145,3 +145,22 @@ func TestRemoveAndRestoreReview(t *testing.T) {
 		t.Errorf("restored review is at %q, want the pull request fetched again", s)
 	}
 }
+
+func TestPushed(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	api := repo(t, root, "api")
+	w := &Worktrees{Root: filepath.Join(root, "worktrees")}
+	run(t, api.Path, "branch", "side/pushed")
+	run(t, api.Path, "branch", "side/local")
+	run(t, api.Path, "push", "-q", "origin", "side/pushed")
+	for branch, want := range map[string]bool{"side/pushed": true, "side/local": false, "side/none": false} {
+		if got, err := w.Pushed(ctx, api.Path, branch); err != nil || got != want {
+			t.Errorf("Pushed(%s) = %v, %v; want %v", branch, got, err, want)
+		}
+	}
+	if _, err := w.Pushed(ctx, t.TempDir(), "side/pushed"); err == nil {
+		t.Error("a folder without a repo has branches on origin")
+	}
+}

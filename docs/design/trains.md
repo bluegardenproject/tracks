@@ -622,8 +622,13 @@ own. "Side track" is always two words: "sidetracked" means something else.
     passed and they fit the task, goes in its "Side tracks" paragraph
     (step 9).
 - **Restacking**, always, whatever the policies: when a PR merges, Tracks
-  tells each open side track stacked on its branch to rebase its own
-  commits onto what it merged into, and records that as its base (golden,
+  tells each open side track whose repo, in the PR's GitHub repo, builds
+  on the PR's head branch (as GitHub names it, so a renamed branch is
+  found) to rebase its own commits onto what it merged into, and records
+  that as its base. A side track that's archived, or whose PRs there are
+  merged or closed already (a fan-in into its main track's branch), has
+  nothing to restack. `--on` stacks on the lower track's branch as its
+  worktree has it, renamed or not (golden,
   agreed): "The PR below yours, acme/api#232 (relay-store), was merged
   into main. Restack: rebase onto main keeping only your own commits
   (`git rebase --onto origin/main 0123abc`), run the tests, push with

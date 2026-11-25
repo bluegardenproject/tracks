@@ -3,13 +3,16 @@ package tracks
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/side"
+	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/train"
 )
@@ -46,11 +49,23 @@ func (s *Service) stackOn(ctx context.Context, main track.Track, on string) (tra
 }
 
 // stack builds t's repos that lower has too on lower's branches, pushed
-// to origin, where t's worktrees start from.
+// to origin, where t's worktrees start from. lower's branches are read
+// from its worktrees, which its agent may have renamed, and kept.
 func (s *Service) stack(ctx context.Context, t *track.Track, lower track.Track) error {
+	live := lower.Repos
+	if lower.Kind.Worktrees() && !lower.Cleaned() {
+		live = s.Worktrees.Branches(ctx, lower)
+		for i, r := range live {
+			if i < len(lower.Repos) && r.Branch != "" && r.Branch != lower.Repos[i].Branch {
+				if err := s.Store.SetBranch(ctx, lower.ID, i, r.Branch); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	stacked := false
 	for i, r := range t.Repos {
-		for _, lr := range lower.Repos {
+		for _, lr := range live {
 			if lr.Name != r.Name || lr.Branch == "" {
 				continue
 			}
@@ -117,58 +132,97 @@ func (s *Service) family(ctx context.Context, id string) ([]track.Track, error) 
 	return append([]track.Track{main}, sides...), nil
 }
 
-// restack tells the side tracks stacked on track id's branches, whose
-// PR pr merged, to rebase their own commits onto what it merged into,
-// and records that as their base. Always, whatever the policies: it's
-// mechanical. One that ended is its main track's to decide.
+// restack tells the side tracks stacked on the branch of track id's
+// PR pr, which merged, to rebase their own commits onto what it merged
+// into, and records that as their base: those of id's family whose repo
+// in pr's GitHub repo builds on pr's head branch. Always, whatever the
+// policies: it's mechanical. A side track that's archived, or whose PRs
+// there are merged or closed, as a fan-in's into its main track's
+// branch, has nothing to restack; one that ended is its main track's to
+// decide.
 func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
-	lower, err := s.Store.Track(ctx, id)
-	if err != nil {
+	from, base := gitHubRef(pr.Health.HeadBranch), gitHubRef(pr.Health.Base)
+	if from == "" || base == "" || len(pr.Health.Head) < 7 {
 		return nil
+	}
+	lower, err := s.Store.Track(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	} else if err != nil {
+		return err
 	}
 	mainID := lower.ID
 	if side.Is(lower) {
 		mainID = lower.Parent
 	}
 	family, err := s.family(ctx, mainID)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
 		return nil
+	} else if err != nil {
+		return err
 	}
-	base := gitHubText(pr.Health.Base)
-	if base == "" || len(pr.Health.Head) < 7 {
-		return nil
-	}
-	head := pr.Health.Head[:7]
+	head := gitHubRef(pr.Health.Head[:7])
 	ref := fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
 	for _, upper := range family {
 		if upper.ID == lower.ID || !side.Is(upper) {
 			continue
 		}
 		for _, r := range upper.Repos {
-			if !slices.ContainsFunc(lower.Repos, func(lr track.Repo) bool {
-				return lr.Name == r.Name && lr.Branch != "" && lr.Branch == r.Base
-			}) {
+			if r.Base != from {
 				continue
 			}
-			if err := s.Store.SetBase(ctx, upper.ID, r.Name, base); err != nil {
-				return err
-			}
-			named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), base)
-			if !upper.Open() {
-				if err := s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event); err != nil {
-					return err
-				}
+			if repo, err := s.gitHubRepo(ctx, r.Path); err != nil || !strings.EqualFold(repo, pr.Repo) {
 				continue
 			}
-			if err := s.instruct(ctx, upper.ID, instructionRestack, pr.URL, actions.SideRestack(ref, gitHubText(shown(lower)), base, head)); err != nil {
-				return err
-			}
-			if err := s.postGitHub(ctx, mainID, named+" Tracks tells it to restack, once its agent is free.", relay.Notice); err != nil {
+			if err := s.restackOne(ctx, upper.ID, r.Name, mainID, pr, ref, shown(lower), base, head); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// restackOne restacks side track id's repo name, under Report's lock and
+// read again, so one ending meanwhile hands the instruction over.
+func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr track.PR, ref, lowerName, base, head string) error {
+	s.reporting.Lock()
+	defer s.reporting.Unlock()
+	upper, err := s.Store.Track(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if upper.Archived() || settledIn(upper, pr.Repo) {
+		return nil
+	}
+	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
+		return err
+	}
+	named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(base))
+	if !upper.Open() {
+		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event)
+	}
+	if err := s.instruct(ctx, upper.ID, instructionRestack, pr.URL, actions.SideRestack(ref, gitHubText(lowerName), base, head)); err != nil {
+		return err
+	}
+	return s.postGitHub(ctx, mainID, named+" Tracks tells it to restack, once its agent is free.", relay.Notice)
+}
+
+// settledIn reports whether t has PRs in GitHub repo and all of them
+// are merged or closed.
+func settledIn(t track.Track, repo string) bool {
+	some := false
+	for _, pr := range t.PRs {
+		if !strings.EqualFold(pr.Repo, repo) {
+			continue
+		}
+		if !pr.State.Settled() {
+			return false
+		}
+		some = true
+	}
+	return some
 }
 
 // shown is t's name as the Station shows it.

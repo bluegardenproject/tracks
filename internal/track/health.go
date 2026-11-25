@@ -23,10 +23,11 @@ const (
 // Health is what a PR's agent may have to act on: conflicts with its
 // base, and failing checks.
 type Health struct {
-	Base      string // the branch it merges into
-	Head      string // the commit the checks ran on
-	Mergeable Mergeable
-	Checks    Checks
+	Base       string // the branch it merges into
+	Head       string // the commit the checks ran on
+	HeadBranch string // the branch it's from
+	Mergeable  Mergeable
+	Checks     Checks
 	// Failing names the checks that failed, when Checks is failing.
 	Failing []string
 }

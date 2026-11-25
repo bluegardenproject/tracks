@@ -78,9 +78,8 @@ func TestStackedSideTrack(t *testing.T) {
 func TestRestack(t *testing.T) {
 	ctx := context.Background()
 	f, main, lower, upper := stackedFixture(t)
-	pr, _ := track.ParsePR("https://github.com/acme/api/pull/232")
-	pr.State = track.PRMerged
-	pr.Health = track.Health{Base: "main", Head: "0123456789"}
+	f.svc.GitHub = &fakeGitHub{}
+	pr := mergedBelow(lower)
 	if _, err := f.store.SavePR(ctx, lower.ID, pr, f.svc.now()); err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +111,8 @@ func TestAnEndedStackedSideTrackIsTheMainTracks(t *testing.T) {
 	if err := f.svc.Report(ctx, upper.ID, track.Ended); err != nil {
 		t.Fatal(err)
 	}
-	pr, _ := track.ParsePR("https://github.com/acme/api/pull/232")
-	pr.State = track.PRMerged
-	pr.Health = track.Health{Base: "main", Head: "0123456789"}
-	if err := f.svc.restack(ctx, lower.ID, pr); err != nil {
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
 		t.Fatal(err)
 	}
 	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
@@ -123,5 +120,82 @@ func TestAnEndedStackedSideTrackIsTheMainTracks(t *testing.T) {
 	}
 	if got := fromGitHub(t, f, main.ID); len(got) == 0 || !strings.HasPrefix(got[len(got)-1], "event: @"+upper.Side) {
 		t.Errorf("the main track's relay: %q; want an event, for it to decide", got)
+	}
+}
+
+// mergedBelow is lower's PR in acme/api, merged into main from its
+// branch.
+func mergedBelow(lower track.Track) track.PR {
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/232")
+	pr.State = track.PRMerged
+	pr.Health = track.Health{Base: "main", Head: "0123456789", HeadBranch: lower.Repos[0].Branch}
+	return pr
+}
+
+// A restack goes only to the repo the PR is in, and not to a side track
+// whose PRs there are merged already, as a fan-in's, nor to an
+// archived one.
+func TestRestackOnlyWhatIsStacked(t *testing.T) {
+	ctx := context.Background()
+	f, _, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	other := mergedBelow(lower)
+	other.Repo, other.URL = "acme/web", "https://github.com/acme/web/pull/9"
+	if err := f.svc.restack(ctx, lower.ID, other); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("a PR in another repo restacked it: %q", got)
+	}
+	own, _ := track.ParsePR("https://github.com/acme/api/pull/240")
+	own.State = track.PRMerged
+	if _, err := f.store.SavePR(ctx, upper.ID, own, f.svc.now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("a side track whose PR merged already was restacked: %q", got)
+	}
+}
+
+// Two side tracks stacked on the same PR: one ending keeps the other's
+// restack.
+func TestAnEndingSiblingKeepsTheOthersRestack(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	second, err := f.svc.Create(ctx, Request{Kind: track.Work, Name: "relay-docs", Prompt: "Docs", Parent: main.ID, Side: true, NoDraft: true, On: lower.Side}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Report(ctx, upper.ID, track.Ended); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, second.Track.ID); len(got) != 1 {
+		t.Errorf("the other side track's restack: %q; want it kept", got)
+	}
+}
+
+// A lower track whose agent renamed its branch is stacked on the new
+// one, which is kept.
+func TestStackingOnARenamedBranch(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower := sideFixture(t)
+	f.worktrees.renamed = map[string]string{"api": "side/relay-store"}
+	f.worktrees.pushed = map[string]bool{"side/relay-store": true}
+	created, err := f.svc.Create(ctx, Request{Kind: track.Work, Prompt: "A CLI", Parent: main.ID, Side: true, NoDraft: true, On: lower.Side}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := created.Track.Repos[0].Base; got != "side/relay-store" {
+		t.Errorf("stacked on %q, want the renamed branch", got)
+	}
+	if now, err := f.store.Track(ctx, lower.ID); err != nil || now.Repos[0].Branch != "side/relay-store" {
+		t.Errorf("the lower track's branch is %q, %v; want the renamed one kept", now.Repos[0].Branch, err)
 	}
 }

@@ -136,3 +136,10 @@ func gitHubText(s string) string {
 	}
 	return s
 }
+
+// gitHubRef is ref, a branch's name read on GitHub, for a git or gh
+// command: on one line of printable characters, never cut.
+func gitHubRef(ref string) string {
+	ref = escapes.ReplaceAllString(ref, "")
+	return strings.Join(strings.FieldsFunc(ref, func(r rune) bool { return !unicode.IsPrint(r) || unicode.IsSpace(r) }), "")
+}
