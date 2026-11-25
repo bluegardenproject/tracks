@@ -130,7 +130,11 @@ func TestInvalidThemesCantBeChosen(t *testing.T) {
 
 func TestCreatorLoadsThroughThePicker(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey, enterKey, themecreator.LoadMsg{})
+	m = settle(m, downKey, downKey, downKey, downKey, downKey, enterKey)
+	if !m.creatorFocused() {
+		t.Fatal("Enter on Theme Creator should focus it")
+	}
+	m = settle(m, themecreator.LoadMsg{})
 	if m.picker == nil || m.pickerFor != pickLoad {
 		t.Fatal("the creator's Load should open the picker")
 	}
@@ -161,7 +165,7 @@ func TestCreatorSavesThroughTheHost(t *testing.T) {
 
 func TestUnsavedEditsAskBeforeLeaving(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey, downKey, enterKey)
+	m = settle(m, downKey, downKey, downKey, downKey, downKey, enterKey)
 	if !m.creatorFocused() {
 		t.Fatal("Enter on Theme Creator should focus it")
 	}
@@ -201,7 +205,7 @@ func TestFastTracksEmptyState(t *testing.T) {
 	if !strings.Contains(plainView(m), "Track type default models") {
 		t.Error("Tracks should show the track types' defaults")
 	}
-	m = settle(m, downKey, downKey)
+	m = settle(m, downKey, downKey, downKey)
 	view := plainView(m)
 	for _, want := range []string{newButton.Label, "user defined template", fastTracksCreate} {
 		if !strings.Contains(view, want) {
@@ -220,7 +224,7 @@ func TestFastTracksEmptyState(t *testing.T) {
 
 func TestFirstClickInTheScrolledCreator(t *testing.T) {
 	m := openSettings(t, newFakeThemes())
-	m = settle(m, downKey, downKey, downKey, downKey)
+	m = settle(m, downKey, downKey, downKey, downKey, downKey)
 	for range 10 {
 		m = settle(m, tea.MouseWheelMsg{X: 60, Y: 20, Button: tea.MouseWheelDown})
 	}

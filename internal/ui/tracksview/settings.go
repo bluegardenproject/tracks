@@ -16,13 +16,14 @@ const (
 	sectionGeneral    = iota
 	sectionTracks     // each track type's defaults
 	sectionAgents     // the agents beside a track's own: the reviewer
+	sectionGitHub     // the side tracks' policies for GitHub's events
 	sectionFastTracks // empty until Fast Tracks are built
 	sectionCreator
 	sectionKeys
 	sectionAbout
 )
 
-var sectionTitles = []string{"General", "Tracks", "Trains (agents)", "Fast Tracks", "Theme Creator", "Keys", "About"}
+var sectionTitles = []string{"General", "Tracks", "Trains (agents)", "GitHub", "Fast Tracks", "Theme Creator", "Keys", "About"}
 
 // settingsTab is the Settings tab's state.
 type settingsTab struct {
@@ -36,6 +37,7 @@ type settingsTab struct {
 	agents         agentsState
 	history        historyState
 	notify         notifyState
+	github         githubState
 	// generalFocus is General's field with focus, generalHover the one
 	// under the mouse: see notifyRows.
 	generalFocus, generalHover int
@@ -78,7 +80,7 @@ type (
 )
 
 func newSettingsTab(applied theme.Theme) settingsTab {
-	return settingsTab{hover: -1, generalHover: -1, types: typesState{hover: typeHit{-1, -1}}, agents: agentsState{hover: -1}, creator: themecreator.New(applied, applied)}
+	return settingsTab{hover: -1, generalHover: -1, types: typesState{hover: typeHit{-1, -1}}, agents: agentsState{hover: -1}, github: githubState{hover: githubHit{-1, -1}}, creator: themecreator.New(applied, applied)}
 }
 
 func (m Model) loadThemes() tea.Cmd {
@@ -315,6 +317,8 @@ func (m Model) settingsKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.typesKey(key)
 	case sectionAgents:
 		return m.agentsKey(msg)
+	case sectionGitHub:
+		return m.githubKey(key)
 	case sectionKeys:
 		switch key {
 		case "up", "k":

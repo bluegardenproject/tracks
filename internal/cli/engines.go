@@ -101,6 +101,24 @@ func (n notifications) Save(notify settings.Notifications) error {
 	return settings.Save(n.path, s)
 }
 
+type githubSettings struct{ path string }
+
+var _ source.GitHub = githubSettings{}
+
+func (g githubSettings) Load() (settings.GitHub, error) {
+	s, err := settings.Load(g.path)
+	return s.GitHub, err
+}
+
+func (g githubSettings) Save(gh settings.GitHub) error {
+	s, err := settings.Load(g.path)
+	if err != nil {
+		return err
+	}
+	s.GitHub = gh
+	return settings.Save(g.path, s)
+}
+
 func (engines) Check(ctx context.Context, e agents.Engine) (agents.Found, error) {
 	return agents.Check(ctx, e)
 }

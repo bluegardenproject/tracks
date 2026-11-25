@@ -123,6 +123,9 @@ func (m Model) sectionBody(width, height int) []string {
 		return m.typesView(width)
 	case sectionAgents:
 		return m.agentsView(width)
+	case sectionGitHub:
+		lines, _ := m.githubView(width)
+		return lines
 	case sectionFastTracks:
 		return m.fastTracks(width)
 	}
@@ -270,6 +273,9 @@ func (m Model) settingsClick(x, y int) (Model, tea.Cmd) {
 	case sectionAgents:
 		s.editing = true
 		return m.agentsClick(bx, by)
+	case sectionGitHub:
+		s.editing = true
+		return m.githubClick(bx, by)
 	}
 	return m, nil
 }
@@ -317,6 +323,12 @@ func (m Model) settingsHover(x, y int) Model {
 	if s.section == sectionAgents {
 		if bx, by, ok := m.inSection(x, y); ok {
 			s.agents.hover = m.agentAt(bx, by)
+		}
+	}
+	s.github.hover = githubHit{-1, -1}
+	if s.section == sectionGitHub {
+		if bx, by, ok := m.inSection(x, y); ok {
+			s.github.hover = m.githubAt(bx, by)
 		}
 	}
 	s.fastHover = m.fastButtonAt(x, y)

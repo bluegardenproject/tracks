@@ -83,6 +83,8 @@ type Config struct {
 	History source.History
 	// Notifications keeps Settings → General → Notifications.
 	Notifications source.Notifications
+	// GitHub keeps Settings → GitHub, the side tracks' policies.
+	GitHub source.GitHub
 	// About is what the Settings tab's About section lists, label and
 	// value.
 	About [][2]string
@@ -121,6 +123,7 @@ type Model struct {
 	agentSource     source.Agents
 	historySource   source.History
 	notifySource    source.Notifications
+	githubSource    source.GitHub
 	aboutFacts      [][2]string
 	width, height   int
 	tab             int
@@ -147,7 +150,7 @@ func New(c Config) Model {
 		proxySource: c.Proxy, proxy: newProxyTab(),
 		repoSource: c.Repos, reposErr: c.ReposErr, repos: repoTab{selected: -1, hover: -1, hoverField: -1},
 		themeSource: c.Themes, themesDir: c.ThemesDir, aboutFacts: c.About, settings: newSettingsTab(c.Theme),
-		engineSource: c.Engines, typeSource: c.TrackTypes, agentSource: c.Agents, historySource: c.History, notifySource: c.Notifications, engines: newEnginesTab()}
+		engineSource: c.Engines, typeSource: c.TrackTypes, agentSource: c.Agents, historySource: c.History, notifySource: c.Notifications, githubSource: c.GitHub, engines: newEnginesTab()}
 	if c.Watch != nil {
 		m.watchFn, m.changes = c.Watch, make(chan watchMsg, 1)
 	}
@@ -158,7 +161,7 @@ func New(c Config) Model {
 // changes.
 func (m Model) Init() tea.Cmd {
 	_, proxy := m.loadProxy(false)
-	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify(),
+	return tea.Batch(m.loadTracks(), m.watch(), m.nextChange(), m.loadRepos(), m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify(), m.loadGitHub(),
 		proxy, m.nextProxyTick())
 }
 
@@ -236,6 +239,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.setNotify(msg), nil
 	case notifySavedMsg:
 		return m.notifySaved(msg)
+	case githubMsg:
+		return m.setGitHub(msg), nil
+	case githubSavedMsg:
+		return m.githubSaved(msg)
 	case agentsMsg:
 		return m.setAgents(msg), nil
 	case agentsSavedMsg:
@@ -488,7 +495,7 @@ func (m Model) switchTab(i int) (Model, tea.Cmd) {
 		m.engines.input.Blur()
 		return m.loadEngines()
 	case tabSettings:
-		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify())
+		return m, tea.Batch(m.loadThemes(), m.loadTypes(), m.loadAgents(), m.loadHistory(), m.loadNotify(), m.loadGitHub())
 	}
 	return m, nil
 }

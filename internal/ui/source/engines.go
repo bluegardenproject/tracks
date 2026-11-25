@@ -32,6 +32,13 @@ type Notifications interface {
 	Save(settings.Notifications) error
 }
 
+// GitHub keeps Settings → GitHub: the side tracks' policies for
+// GitHub's events on their PRs.
+type GitHub interface {
+	Load() (settings.GitHub, error)
+	Save(settings.GitHub) error
+}
+
 // Engines keeps the engines' settings and asks their CLIs.
 type Engines interface {
 	Load() (settings.Engines, error)
