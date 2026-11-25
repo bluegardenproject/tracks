@@ -578,15 +578,25 @@ own. "Side track" is always two words: "sidetracked" means something else.
 - **It reports through the relay**: "PR #231 is ready, review passed",
   "blocked on …", questions. The main track gets the pointer, checks the
   PR against the task it gave, and tells the user.
-- **Lifetime**: its own. It doesn't end when the main track pauses; it's
-  ended or archived with the main track, and its PR stays open as any
-  track's does.
+- **Lifetime**: its own. It doesn't end when the main track pauses, and
+  its PR stays open as any track's does.
+- **The main track waits for its side tracks**: it can't be ended while
+  a side track is unsettled, so none is left headless, linked to a main
+  track that's gone. Settled is ended, its PR merged or closed, or none
+  opened. Ending it says which side tracks are left, for the user to
+  settle (or end) first.
 - **No nesting**: a side track starts no side tracks of its own.
 
 ### Pull requests
 
 - **One PR per side track**, opened as the track rules say (after its
-  review passes).
+  review passes), **as a draft**. The main track checks it against the
+  task it gave and marks it ready, unless the repo's own rule (the
+  Repositories tab's Draft PRs) says PRs stay drafts: then the main track
+  never promotes it, and the user does.
+- **Restacking**: when the PR below a stacked one merges or changes, the
+  side track's own agent rebases, woken by `@github`'s event ("#232
+  merged: rebase onto main"); GitHub on the relay comes first for this.
 - **Stacked when the work builds up**: a side track can be based on the
   main track's branch or on an earlier side track's, its PR on that
   branch, so GitHub's stacked pull requests carry the order and retarget
@@ -597,12 +607,6 @@ own. "Side track" is always two words: "sidetracked" means something else.
 
 ### Conflicts
 
-- **Tracks spots them**, no model involved: it compares the side tracks'
-  changed files (`git diff --name-only` against their base, run in a
-  caller's sandbox, as the reviewer's checks are: the daemon runs no git)
-  and posts a notice to the side tracks that overlap and to the main
-  track: "@side-000123 and @side-000456 both change internal/relay/
-  relay.go".
 - **Side tracks talk to each other** to settle them, under the rules
   parked for trains above: only questions and answers between them, the
   main track sees every message, at most 5 messages a pair, messages stay
@@ -653,24 +657,31 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 
 ### Order
 
-1. The model: a side track is a track with a main track (the step 11
-   link) on its main track's relay; `tracks side new|list`; no nesting.
-2. The Platform's "Side tracks" list; a click switches to the window.
-3. The Station's grouping.
-4. Stacking: `--on`, the PR's base.
-5. Overlap notices.
-6. Side tracks talking to each other.
-7. The main track's prompt: a "Side tracks" paragraph, its wording agreed
+1. GitHub on the relay: the notifications endpoint and one GraphQL query
+   in place of the per-PR polling; then `@github`'s events. First: it's
+   useful for a track's own PRs, and restacking needs it.
+2. The model: a side track is a track with a main track (the step 11
+   link) on its main track's relay; `tracks side new|list`; no nesting;
+   the main track can't end while a side track is unsettled.
+3. Draft PRs the main track promotes, as the repo's rule allows.
+4. The Platform's "Side tracks" list; a click switches to the window.
+5. The Station's grouping.
+6. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
+7. Side tracks talking to each other.
+8. The main track's prompt: a "Side tracks" paragraph, its wording agreed
    with the user first, as every prompt.
-8. GitHub on the relay: the notifications endpoint and one GraphQL query
-   in place of the per-PR polling; then `@github`'s events. It can come
-   before the side tracks, for a track's own PRs.
 
-### Open
+### Later (v3)
 
-- Whether a side track's PR is opened directly or as a draft the main
-  track promotes once it has checked it.
-- The default number of side tracks running at once, if any.
+- **Overlap notices**: Tracks spotting side tracks that change the same
+  files, with no model involved, and telling them and the main track
+  ("@side-000123 and @side-000456 both change internal/relay/relay.go").
+  It needs its own planning: where the changed files come from (the
+  daemon runs no git, so each side track's hooks might report them from
+  its own sandbox), how often, generated files, and what a notice asks
+  of the agents.
+- **A cap** on side tracks running at once, a setting: each is a full
+  agent with its own reviewer, and the cost adds up.
 
 ## Open
 
