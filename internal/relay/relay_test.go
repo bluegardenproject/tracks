@@ -106,3 +106,61 @@ func TestBlockersWhy(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckPeerSend(t *testing.T) {
+	for _, tc := range []struct {
+		from, to string
+		kind     Kind
+		body     string
+		sent     int
+		ok       bool
+	}{
+		{"side-1", "side-2", Question, "Who owns relay.go?", 0, true},
+		{"side-2", "side-1", Answer, "I do.", PairLimit - 1, true},
+		{"side-1", "side-2", Question, "Again?", PairLimit, false},
+		{"side-1", "side-2", Report, "Done.", 0, false},
+		{"side-1", "side-2", Event, "Saw it.", 0, false},
+		{"side-1", "side-2", Notice, "Pretending", 0, false},
+		{"side-1", "side-1", Question, "Me?", 0, false},
+		{"side-1", "", Question, "To everyone", 0, false},
+		{"side-1", "side-2", Question, " ", 0, false},
+	} {
+		if err := CheckPeerSend(tc.from, tc.to, tc.kind, tc.body, tc.sent); (err == nil) != tc.ok {
+			t.Errorf("%s → %s %s after %d: %v, want ok %v", tc.from, tc.to, tc.kind, tc.sent, err, tc.ok)
+		}
+	}
+	if err := CheckPeerSend("side-1", "side-2", Report, "x", 0); err == nil || !strings.Contains(err.Error(), "--to track") {
+		t.Errorf("a report to a side track: %v; want it sent to the main track", err)
+	}
+	if err := CheckPeerSend("side-1", "side-2", Question, "x", PairLimit); err == nil || !strings.Contains(err.Error(), "go through your main track") {
+		t.Errorf("past the limit: %v; want it sent through the main track", err)
+	}
+}
+
+func TestBetween(t *testing.T) {
+	msgs := []Message{
+		{From: "side-1", To: "side-2"}, {From: "side-2", To: "side-1"}, {From: "track", To: "side-1"},
+		{From: "side-1", To: "track"}, {From: "side-1", To: "side-3"}, {From: TracksHandle},
+	}
+	if n := Between(msgs, "side-1", "side-2"); n != 2 {
+		t.Errorf("Between side-1 and side-2 = %d, want 2", n)
+	}
+}
+
+func TestSideTracksReadEachOther(t *testing.T) {
+	m := Message{From: "side-1", To: "side-2", Kind: Question}
+	for _, tc := range []struct {
+		reader string
+		ok     bool
+	}{{"track", true}, {"side-1", true}, {"side-2", true}, {"side-3", false}, {"reviewer-1", false}} {
+		if got := CanRead(tc.reader, m); got != tc.ok {
+			t.Errorf("CanRead(%s) = %v", tc.reader, got)
+		}
+	}
+	if For(TrackHandle, m) || !For("side-2", m) || !For("side-3", Message{From: TracksHandle}) {
+		t.Error("For: a message is addressed to its recipient and a notice to everyone")
+	}
+	if got := Waiting([]Message{m, {ID: 2, From: "side-1", To: "track"}}, 0); len(got) != 1 || got[0] != 2 {
+		t.Errorf("Waiting = %v; want the message to the track alone", got)
+	}
+}

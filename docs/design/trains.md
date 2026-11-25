@@ -546,7 +546,7 @@ Trains talking to each other, if a case needs it, with these rules:
 
 ## Phase 2: Side tracks
 
-**Status:** agreed in discussion; steps 1 to 6 built, the rest not yet.
+**Status:** agreed in discussion; steps 1 to 6 and 8 built, the rest not yet.
 
 Tracks running side by side, each on its own worktree and branch with its
 own review and PR, while one track plans, checks for overlaps and merges,
@@ -830,7 +830,22 @@ track's policy has Tracks tell it (built, step 4).
    archived tracks are in the same list, so they group the same; Settings'
    Tracks History lists no tracks.
 7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
-8. Side tracks talking to each other.
+8. Side tracks talking to each other (built): a side track sends
+   another side track of its main track a `question` or an `answer`,
+   by handle or prefix, on the main track's relay under its own
+   handle; other kinds are refused, naming `--to track`, and so is an
+   ended side track. The recipient is pointed to it as to its main
+   track's messages. The main track reads every one in `relay read`,
+   without a pointer, and `relay wait` doesn't wake for them; its Relay
+   Station shows them as `@side-… → @side-…`, never "not delivered".
+   The cap is Tracks', not the prompt's: 5 messages a pair, both ways
+   counted together, for the life of the tracks (it never resets);
+   messages to or from the main track don't count. Past it the sender
+   gets a Problem: go through your main track, `--to track`.
+   `relay who` in a side track lists the other side tracks after its
+   own trains. The "Side track" paragraph (golden) tells the agent to
+   ask another side track directly to settle a conflict, a shared file
+   or an interface, that its main track sees these, and the cap.
 9. The main track's prompt: a "Side tracks" paragraph, its wording agreed
    with the user first, as every prompt.
 
