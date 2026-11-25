@@ -212,6 +212,8 @@ func (m Model) targetGone(kind int) bool {
 		return !m.anyHeld()
 	case targetCollectSignals:
 		return !m.signals.Held
+	case targetSide:
+		return len(m.sides) == 0
 	case targetSolve:
 		for _, pr := range m.signals.PRs {
 			if !pr.Sent {

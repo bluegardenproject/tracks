@@ -10,7 +10,7 @@ import (
 
 func TestPlatformSides(t *testing.T) {
 	sides, err := platformSides([]rpc.SideTrack{
-		{ID: "a", Name: "relay-store", Status: "active", StatusID: "active"},
+		{ID: "a", Name: "relay-store", Status: "active", StatusID: "active", PRID: "none"},
 		{ID: "b", Name: "relay-cli", Status: "done", StatusID: "done", PR: "2 PRs open", PRID: "open"},
 	}, nil)
 	if err != nil || len(sides) != 2 {

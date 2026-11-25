@@ -387,19 +387,38 @@ func TestSideTracks(t *testing.T) {
 		t.Errorf("want relay-cli's badges, and no empty:\n%s", v)
 	}
 	for _, text := range []string{"relay-store", "relay-cli"} {
-		_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, text), Button: tea.MouseLeft})
+		next, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, text), Button: tea.MouseLeft})
 		if cmd == nil {
 			t.Fatalf("a click on %s did nothing", text)
 		}
-		m = update(t, m, cmd())
+		m = update(t, next, cmd())
 	}
 	if strings.Join(opened, " ") != "a b" {
 		t.Errorf("switched to %q, want a b", opened)
 	}
-	if !strings.Contains(view(m), "its window is closed") {
-		t.Errorf("why it couldn't switch isn't shown:\n%s", view(m))
+	v = view(m)
+	if n := strings.Count(v, "its window is closed"); n != 1 || strings.Index(v, "its window is closed") > strings.Index(v, "Signals") {
+		t.Errorf("why it couldn't switch shows %d times, want once, under Side Tracks:\n%s", n, v)
+	}
+	if v := view(update(t, m, loadedMsg{})); strings.Contains(v, "its window is closed") {
+		t.Errorf("with the side tracks gone, their notice stayed:\n%s", v)
 	}
 	if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Side Tracks"), Button: tea.MouseLeft}); cmd != nil {
 		t.Error("a click on the heading did something")
+	}
+}
+
+// A long status leaves a side track's PR badge a row of its own, not
+// cut, and that row switches too.
+func TestASideTracksLongStatus(t *testing.T) {
+	var opened int
+	m := update(t, New(Config{Theme: theme.Default(), OpenSide: func(string) error { opened++; return nil }}), size,
+		loadedMsg{sides: []Side{{ID: "a", Name: "relay-cli", Status: track.ActionRequired, PR: track.PRsOpen}}})
+	v := view(m)
+	if !strings.Contains(v, " action required ") || !strings.Contains(v, "│   PR open ") {
+		t.Fatalf("want the status, then the PR's badge on a row of its own:\n%s", v)
+	}
+	if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "PR open"), Button: tea.MouseLeft}); cmd == nil {
+		t.Error("a click on the PR's row did nothing")
 	}
 }
