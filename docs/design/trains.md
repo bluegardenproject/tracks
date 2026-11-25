@@ -725,8 +725,14 @@ track's policy has Tracks tell it (built, step 4).
 - **Typed once the agent is free**: an instruction waits in the store
   (`instructions`; a newer one of the same kind and PR replaces one that
   waits) until the agent isn't in a turn, a dialog, the user's typing, a
-  draft or scrollback, as a pointer waits; it goes before the pointer,
-  alone in its tick, and starts the agent's turn.
+  draft or scrollback, as a pointer waits; it's pasted as a pointer is,
+  before the pointer, alone in its tick, and starts the agent's turn.
+  One made moot meanwhile is dropped: conflicts' once the PR merges
+  cleanly, a CI failure's once its checks don't fail, review threads'
+  once they're answered or the user clicked Signals' button, all of a
+  PR's once it's merged or closed.
+- **An ended side track** with an open PR still tells its main track,
+  which decides: there's no agent to instruct.
 - **Ask before replying to human comments on PRs**, on by default: the
   comments flow (the PR comments skill and its prompt) asks the user
   before it replies to a person, as it does now; off, it replies on its

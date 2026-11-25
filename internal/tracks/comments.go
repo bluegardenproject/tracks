@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -36,9 +37,6 @@ func (s *Service) CountComments(ctx context.Context) error {
 			continue
 		}
 		counts := s.polledThreads(t)
-		if err := s.threadsEvents(ctx, t, counts); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
-		}
 		s.mu.Lock()
 		was := s.comments[t.ID]
 		now := map[string]actions.Comments{}
@@ -55,6 +53,11 @@ func (s *Service) CountComments(ctx context.Context) error {
 		s.mu.Unlock()
 		if changed {
 			s.Changes.Notify()
+		}
+		// After the counts: an instruction typed meanwhile marks them
+		// sent, which Next would undo.
+		if err := s.threadsEvents(ctx, t, counts); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 		}
 		// The footer has no buttons of its own now: a window opened
 		// before the PRs' buttons moved to Signals loses its old ones.
@@ -77,6 +80,12 @@ func (s *Service) threadsEvents(ctx context.Context, t track.Track, counts map[s
 		was, known, err := s.Store.SavePRThreads(ctx, t.ID, pr.URL, n)
 		if err != nil {
 			return err
+		}
+		if n == 0 {
+			// Answered: nothing to work through.
+			if err := s.Store.DropInstructions(ctx, pr.URL, instructionKinds(settings.EventReviewThreads)...); err != nil {
+				return err
+			}
 		}
 		if e, ok := threadsEvent(pr, was, n); known && ok && t.Kind == track.Work {
 			if err := s.githubEvent(ctx, t, e); err != nil {
@@ -196,7 +205,8 @@ func (s *Service) RunAction(ctx context.Context, id, button string) (string, err
 	}
 	// Signals shows it sent.
 	s.Changes.Notify()
-	return t.Name, nil
+	// The user sent what a waiting instruction would.
+	return t.Name, s.Store.DropInstructions(ctx, pr.URL, instructionKinds(settings.EventReviewThreads)...)
 }
 
 // setSent marks the comments on track id's PR at url sent, or not. The

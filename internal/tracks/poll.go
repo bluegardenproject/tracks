@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -86,7 +87,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			}
 			s.notify(prNotice(b.t.ID, b.t.Name, pr, was))
 			var post *track.Track
-			if b.t.Open() {
+			if b.t.Open() || side.Is(b.t) {
 				post = &b.t
 			}
 			if err := s.prHealth(ctx, b.t.ID, pr, was, post); err != nil {
@@ -107,10 +108,23 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			working[t.ID] = &t
 		}
 	}
+	// An ended side track's PRs still tell its main track.
+	sides := map[string]*track.Track{}
 	for _, p := range unsettled {
 		f, ok := answer.PRs[p.URL]
 		if !ok || asked[[2]string{p.TrackID, p.URL}] {
 			continue
+		}
+		post := working[p.TrackID]
+		if post == nil {
+			t, seen := sides[p.TrackID]
+			if !seen {
+				if found, err := s.Store.Track(ctx, p.TrackID); err == nil && found.Kind == track.Work && side.Is(found) {
+					t = &found
+				}
+				sides[p.TrackID] = t
+			}
+			post = t
 		}
 		p.State, p.Health, p.CheckedAt = f.State, f.Health, s.now()
 		was, err := s.Store.SavePR(ctx, p.TrackID, p.PR, p.CheckedAt)
@@ -120,7 +134,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		if err := s.notifyPR(ctx, p.TrackID, p.PR, was); err != nil {
 			return err
 		}
-		if err := s.prHealth(ctx, p.TrackID, p.PR, was, working[p.TrackID]); err != nil {
+		if err := s.prHealth(ctx, p.TrackID, p.PR, was, post); err != nil {
 			return err
 		}
 	}
@@ -178,6 +192,9 @@ func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
 // and posts @github's events on what changed when post is the track,
 // an open Work track, whose agent acts on them.
 func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post *track.Track) error {
+	if err := s.dropDone(ctx, pr); err != nil {
+		return err
+	}
 	before := pr.Health
 	if !pr.State.Settled() {
 		var err error

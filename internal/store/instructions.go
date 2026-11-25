@@ -60,3 +60,14 @@ func (s *Store) InstructionTyped(ctx context.Context, id int64, at time.Time) er
 	_, err := s.db.ExecContext(ctx, "UPDATE instructions SET typed_at = ? WHERE id = ?", at.UnixMilli(), id)
 	return err
 }
+
+// DropInstructions drops the waiting instructions about the PR at pr of
+// the kinds given: what they'd ask for is done, or no longer so.
+func (s *Store) DropInstructions(ctx context.Context, pr string, kinds ...string) error {
+	for _, kind := range kinds {
+		if _, err := s.db.ExecContext(ctx, "DELETE FROM instructions WHERE pr_url = ? AND kind = ? AND typed_at IS NULL", pr, kind); err != nil {
+			return err
+		}
+	}
+	return nil
+}
