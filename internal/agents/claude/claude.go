@@ -60,8 +60,11 @@ func Command(s agents.Spec) (agents.Start, error) {
 		if s.DevServers {
 			prompt += "\n\n" + agents.DevServersContract
 		}
-		if s.Side != nil && t.Kind == track.Work {
+		switch {
+		case s.Side != nil && t.Kind == track.Work:
 			prompt += "\n\n" + agents.SideTrackContract(*s.Side, s.DraftPRs, len(t.Repos))
+		case t.Kind == track.Work:
+			prompt += "\n\n" + agents.MainTrackContract
 		}
 		if t.Kind == track.Review {
 			prompt += agents.ReviewCandor(track.CandorLevel(t.Candor)) + "\n\n" + agents.ReviewOnlyContract
