@@ -88,7 +88,9 @@ nothing did. Don't cite commit hashes: amending and rebasing change them.
 - **Bots:** post the reply, then resolve the thread.
 - **People:** don't post yet. Show the user every draft in a table (author,
   comment, your reply) and post only those they approve, as they worded
-  them. Leave people's threads for them to resolve.
+  them. When the prompt that sent you here says you may reply to people on
+  your own, post your replies without asking. Either way, leave people's
+  threads for them to resolve.
 
 Reply to a review thread, then resolve it:
 

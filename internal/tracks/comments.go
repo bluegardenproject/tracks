@@ -205,7 +205,7 @@ func (s *Service) RunAction(ctx context.Context, id, button string) (string, err
 		return t.Name, Problem(t.Name + " has no such PR.")
 	}
 	pr := t.PRs[i]
-	prompt, ok := actions.Prompt(t.Engine, pr.URL)
+	prompt, ok := actions.Prompt(t.Engine, pr.URL, s.asksBeforeHumanReplies())
 	if !ok {
 		return t.Name, Problem(t.Name + "'s engine has no prompt for this.")
 	}

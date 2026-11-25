@@ -175,6 +175,9 @@ func (m Model) hints() string {
 			}
 			return "  " + joinKeys(key, text, agentKeys)
 		case sectionGitHub:
+			if s.github.focus == githubToggle {
+				return "  " + joinKeys(key, text, githubToggleKeys)
+			}
 			return "  " + joinKeys(key, text, githubKeys)
 		}
 		return "  " + joinKeys(key, text, scrollKeys)

@@ -23,10 +23,10 @@ func SideCIFailed(pr, head, checks string) string {
 }
 
 // SideThreads has a side track on engine work through the n review
-// threads on its PR pr, at url, as the PR comments button does; false
-// when engine has no prompt for that.
-func SideThreads(engine, pr, url string, n int) (string, bool) {
-	work, ok := Prompt(engine, url)
+// threads on its PR pr, at url, as the PR comments button does, ask as
+// Prompt's; false when engine has no prompt for that.
+func SideThreads(engine, pr, url string, n int, ask bool) (string, bool) {
+	work, ok := Prompt(engine, url, ask)
 	if !ok {
 		return "", false
 	}

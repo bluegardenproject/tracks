@@ -7,6 +7,15 @@ type GitHub struct {
 	Conflicts     Policy `yaml:"conflicts,omitempty"`
 	CIFailed      Policy `yaml:"ci_failed,omitempty"`
 	ReviewThreads Policy `yaml:"review_threads,omitempty"`
+	// AskBeforeHumanReplies has the PR comments flow show the user its
+	// replies to people before posting them; nil means on.
+	AskBeforeHumanReplies *bool `yaml:"ask_before_human_replies,omitempty"`
+}
+
+// AsksBeforeHumanReplies reports whether the PR comments flow asks the
+// user before it replies to a person. A bot's comments never ask.
+func (g GitHub) AsksBeforeHumanReplies() bool {
+	return g.AskBeforeHumanReplies == nil || *g.AskBeforeHumanReplies
 }
 
 // Policy is what happens on an event.
