@@ -82,6 +82,9 @@ func (s *Service) stack(ctx context.Context, t *track.Track, lower track.Track) 
 		}
 	}
 	if !stacked {
+		if !lower.Kind.Worktrees() {
+			return Problem(shown(lower) + " is a " + string(lower.Kind) + " track, with no branch to build on.")
+		}
 		return Problem(shown(lower) + " has none of the side track's repos to build on.")
 	}
 	return nil
@@ -240,7 +243,8 @@ func (s *Service) dropBeforeRestack(ctx context.Context, upper track.Track, main
 		}
 	}
 	for _, in := range waiting {
-		drop := in.TrackID == upper.ID && in.Kind == instructionRestack ||
+		below, _ := track.ParsePR(in.PR)
+		drop := in.TrackID == upper.ID && in.Kind == instructionRestack && strings.EqualFold(below.Repo, repo) ||
 			in.TrackID == upper.ID && in.Kind == settings.EventConflicts && mine[in.PR] ||
 			in.TrackID == mainID && in.Kind == askKind(settings.EventConflicts) && mine[in.PR]
 		if drop {

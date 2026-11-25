@@ -312,3 +312,46 @@ func TestARestackDropsWhatItMakesMoot(t *testing.T) {
 		t.Errorf("waiting for the main track: %q", got)
 	}
 }
+
+// A restack in one repo keeps a waiting one in another.
+func TestRestacksInTwoReposAreKept(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.svc.instruct(ctx, upper.ID, instructionRestack, "https://github.com/acme/web/pull/7", "web's restack"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.dropBeforeRestack(ctx, upper, main.ID, "acme/api"); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 1 {
+		t.Errorf("api's restack dropped web's: %q", got)
+	}
+	_ = lower
+}
+
+// A side track that ends with a restack its own merged PR made moot
+// drops it without troubling its main track.
+func TestAnEndingSideTracksMootRestackGoesQuietly(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	if err := f.svc.restack(ctx, lower.ID, mergedBelow(lower)); err != nil {
+		t.Fatal(err)
+	}
+	own, _ := track.ParsePR("https://github.com/acme/api/pull/240")
+	own.State = track.PRMerged
+	if _, err := f.store.SavePR(ctx, upper.ID, own, f.svc.now()); err != nil {
+		t.Fatal(err)
+	}
+	before := len(fromGitHub(t, f, main.ID))
+	if err := f.svc.Report(ctx, upper.ID, track.Ended); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("still waiting: %q", got)
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != before {
+		t.Errorf("the main track heard of a moot restack: %q", got[before:])
+	}
+}
