@@ -66,6 +66,13 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	if err := s.Store.DropInstructions(ctx, e.PR.URL, instructionKinds(e.Kind)...); err != nil {
 		return err
 	}
+	if e.Kind == settings.EventConflicts {
+		// A merge below retargets the PR, which GitHub then reports
+		// conflicting: the waiting restack solves that.
+		if waits, err := s.restackWaits(ctx, t.ID, e.PR.Repo); err != nil || waits {
+			return err
+		}
+	}
 	main, err := s.Store.Track(ctx, t.Parent)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && !main.Open():
@@ -77,13 +84,6 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 		return s.postGitHub(ctx, t.ID, e.Body, relay.Event)
 	case err != nil:
 		return err
-	}
-	if e.Kind == settings.EventConflicts {
-		// A merge below retargets the PR, which GitHub then reports
-		// conflicting: the waiting restack solves that.
-		if waits, err := s.restackWaits(ctx, t.ID, e.PR.Repo); err != nil || waits {
-			return err
-		}
 	}
 	name := gitHubText(cmp.Or(t.Title, t.Name))
 	named := fmt.Sprintf("@%s, side track %s: %s", t.Side, name, e.Body)

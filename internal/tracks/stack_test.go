@@ -397,3 +397,34 @@ func TestConflictsWhileARestackWaits(t *testing.T) {
 		t.Errorf("the main track heard of it: %q", got[before:])
 	}
 }
+
+// The poll that sees the PR below merge, and the PR above conflict as
+// GitHub retargets it, restacks it and tells no conflict.
+func TestAMergeAndItsConflictInOnePoll(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	gh := &fakeGitHub{}
+	f.svc.GitHub = gh
+	below, _ := track.ParsePR("https://github.com/acme/api/pull/232")
+	below.Health = track.Health{Base: "main", Head: "0123456789", HeadBranch: lower.Repos[0].Branch, Mergeable: track.MergeClean}
+	above, _ := track.ParsePR("https://github.com/acme/api/pull/240")
+	above.Health = track.Health{Base: lower.Repos[0].Branch, Head: "abcdef0123", HeadBranch: upper.Repos[0].Branch, Mergeable: track.MergeClean}
+	gh.branches = map[string][]track.PR{lower.Repos[0].Branch: {below}, upper.Repos[0].Branch: {above}}
+	if err := f.svc.PollPRs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	below.State = track.PRMerged
+	above.Health.Base, above.Health.Mergeable = "main", track.MergeConflicts
+	gh.branches = map[string][]track.PR{lower.Repos[0].Branch: {below}, upper.Repos[0].Branch: {above}}
+	if err := f.svc.PollPRs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 1 || !strings.HasPrefix(got[0], "restack: ") {
+		t.Errorf("waiting for the side track above: %q; want the restack alone", got)
+	}
+	for _, m := range fromGitHub(t, f, main.ID) {
+		if strings.Contains(m, "has conflicts") {
+			t.Errorf("the main track heard of the conflict the restack solves: %q", m)
+		}
+	}
+}
