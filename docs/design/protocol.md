@@ -55,7 +55,7 @@ needs and starts as many as it takes. So a train's state (its folder, its
 hidden session, its run marker, its place on the relay) is per instance,
 keyed by its handle, for every kind alike; the manifest says what an
 agent is, not how many may run. Several reviewers in a track (one per
-target, `docs/design/review.md`) is the first.
+target, [review.md](review.md)) is the first.
 
 ## Three layers, and a fourth to invent
 

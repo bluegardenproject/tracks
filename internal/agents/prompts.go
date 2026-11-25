@@ -106,7 +106,8 @@ const MainTrackContract = "" +
 	"<handle>` builds on that side track's branch. Push the branch it " +
 	"builds on first. Never merge into the repo's base yourself.\n\n" +
 	"Side tracks report and ask on your relay (`tracks relay read`); answer " +
-	"with `tracks relay send --to <handle>`. Their pull requests open as " +
+	"with `tracks relay send --to <handle> --kind answer`, the message on " +
+	"stdin. Their pull requests open as " +
 	"drafts: check each against the task you gave it and mark it ready " +
 	"(`gh pr ready`), unless the repo keeps drafts for the user. Tracks " +
 	"tells you what happens on their pull requests (conflicts, failing " +
