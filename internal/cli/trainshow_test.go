@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,8 +36,8 @@ func TestTrainPopup(t *testing.T) {
 	}
 }
 
-// End train in a train's header ends that train; a click elsewhere, or
-// Hide without a client, does nothing.
+// End train in a train's header ends that train once the user confirms;
+// a click elsewhere, or Hide without a client, does nothing.
 func TestTrainAction(t *testing.T) {
 	c := tmux.New(tmuxtest.Socket(t))
 	dir := t.TempDir()
@@ -53,13 +54,25 @@ func TestTrainAction(t *testing.T) {
 	}
 	window := "=" + trackwin.TrainSession("t1", "reviewer-1") + ":"
 	daemon := &fakeTrains{}
-	if msg := trainAction(context.Background(), c, daemon, actions.HideTrainRange, window, ""); msg != "" || len(daemon.ended) != 0 {
+	var asked []string
+	answer := false
+	confirmEnd := func(handle string) (bool, error) { asked = append(asked, handle); return answer, nil }
+	if msg := trainAction(context.Background(), c, daemon, actions.HideTrainRange, window, "", confirmEnd); msg != "" || len(daemon.ended) != 0 {
 		t.Errorf("Hide without a client: %q, ended %v", msg, daemon.ended)
 	}
-	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, sessionName+":", ""); msg != "" || len(daemon.ended) != 0 {
-		t.Errorf("End train outside a train: %q, ended %v", msg, daemon.ended)
+	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, sessionName+":", "", confirmEnd); msg != "" || len(daemon.ended) != 0 || len(asked) != 0 {
+		t.Errorf("End train outside a train: %q, ended %v, asked %v", msg, daemon.ended, asked)
 	}
-	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, window, "/dev/ttys001"); msg != "" ||
+	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, window, "/dev/ttys001", confirmEnd); msg != "" || len(daemon.ended) != 0 ||
+		len(asked) != 1 || asked[0] != "reviewer-1" {
+		t.Errorf("End train, cancelled: %q, ended %v, asked %v; want reviewer-1 asked about and kept", msg, daemon.ended, asked)
+	}
+	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, window, "/dev/ttys001",
+		func(string) (bool, error) { return false, errors.New("no client") }); !strings.Contains(msg, "no client") || len(daemon.ended) != 0 {
+		t.Errorf("End train, couldn't ask: %q, ended %v", msg, daemon.ended)
+	}
+	answer = true
+	if msg := trainAction(context.Background(), c, daemon, actions.EndTrainRange, window, "/dev/ttys001", confirmEnd); msg != "" ||
 		len(daemon.ended) != 1 || daemon.ended[0] != "t1 reviewer-1" {
 		t.Errorf("End train: %q, ended %v; want t1's reviewer-1", msg, daemon.ended)
 	}
