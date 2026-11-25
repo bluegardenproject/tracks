@@ -68,8 +68,8 @@ func start(version string) error {
 	client, err := ensureDaemon(ctx, c, paths, version)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "tracks:", err)
-	} else if action == startCreate && stdinIsTerminal() {
-		window, err := offerReopen(ctx, client, os.Stdin, os.Stdout)
+	} else if action == startCreate {
+		window, err := reopen(ctx, client, os.Stdout)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "tracks: reopening the tracks:", err)
 		}

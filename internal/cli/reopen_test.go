@@ -27,7 +27,7 @@ func (f *fakeReopener) Reopen(_ context.Context, progress func(string)) ([]track
 	return f.reopening, nil
 }
 
-func TestOfferReopen(t *testing.T) {
+func TestReopen(t *testing.T) {
 	two := []track.Track{
 		{ID: "a", Name: "fix-it", Kind: track.Work, Repos: []track.Repo{{Name: "api"}, {Name: "web"}}},
 		{ID: "b", Name: "why", Kind: track.Ask},
@@ -35,33 +35,37 @@ func TestOfferReopen(t *testing.T) {
 	tests := map[string]struct {
 		interrupted []track.Track
 		reopening   []tracks.Reopening
-		answer      string
 		reopens     bool
 		window      string
 		says        []string
 	}{
-		"nothing interrupted": {answer: "y\n"},
-		"Enter": {
-			interrupted: two, answer: "\n", reopens: true,
+		"nothing interrupted": {},
+		"two": {
+			interrupted: two, reopens: true,
 			reopening: []tracks.Reopening{{ID: "a", Name: "fix-it", Window: "@1"}, {ID: "b", Name: "why", Window: "@2"}},
-			says:      []string{"2 tracks were open when Tracks closed:", "  fix-it  work · api, web", "  why     ask", "Reopen them? [Y/n]", "  Reopening why…", "Reopened 2 tracks."},
+			says:      []string{"Reopening 2 tracks that were open when Tracks closed:", "  fix-it  work · api, web", "  why     ask", "  Reopening why…", "Reopened 2 tracks."},
 		},
-		"yes with one failing": {
-			interrupted: two, answer: "Yes\n", reopens: true, window: "@2",
+		"one": {
+			interrupted: two[1:], reopens: true, window: "@2",
+			reopening: []tracks.Reopening{{ID: "b", Name: "why", Window: "@2"}},
+			says:      []string{"Reopening 1 track that was open when Tracks closed:", "Reopened 1 track."},
+		},
+		"one failing": {
+			interrupted: two, reopens: true, window: "@2",
 			reopening: []tracks.Reopening{{ID: "a", Name: "fix-it", Error: "the worktree couldn't be found for api"}, {ID: "b", Name: "why", Window: "@2"}},
 			says:      []string{"Couldn't reopen fix-it: the worktree couldn't be found for api", "Reopened 1 track."},
 		},
-		"no": {
-			interrupted: two[1:], answer: "n\n",
-			says: []string{"1 track was open when Tracks closed:", "Reopen it? [Y/n]", "Left as they are"},
+		"all failing": {
+			interrupted: two[1:], reopens: true,
+			reopening: []tracks.Reopening{{ID: "b", Name: "why", Error: "boom"}},
+			says:      []string{"Couldn't reopen why: boom"},
 		},
-		"closed input": {interrupted: two, answer: "", says: []string{"Left as they are"}},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			daemon := &fakeReopener{interrupted: tt.interrupted, reopening: tt.reopening}
 			var out strings.Builder
-			window, err := offerReopen(context.Background(), daemon, strings.NewReader(tt.answer), &out)
+			window, err := reopen(context.Background(), daemon, &out)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,6 +74,9 @@ func TestOfferReopen(t *testing.T) {
 			}
 			if tt.interrupted == nil && out.Len() > 0 {
 				t.Errorf("said %q with nothing to reopen", out.String())
+			}
+			if strings.Contains(out.String(), "?") {
+				t.Errorf("output %q asks a question", out.String())
 			}
 			for _, s := range tt.says {
 				if !strings.Contains(out.String(), s) {
