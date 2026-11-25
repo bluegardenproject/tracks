@@ -83,8 +83,8 @@ func TestSideTracksSendEachOtherNoTasks(t *testing.T) {
 	if _, err := f.svc.RelaySend(ctx, a.ID, a.Side, relay.Question, "Me?"); !errors.As(err, &problem) {
 		t.Errorf("a side track sent to itself: %v, want a Problem", err)
 	}
-	if _, err := f.svc.RelaySend(ctx, a.ID, "side", relay.Question, "Anyone?"); !errors.As(err, &problem) {
-		t.Errorf("a prefix of two side tracks: %v, want a Problem", err)
+	if m, err := f.svc.RelaySend(ctx, a.ID, "side", relay.Question, "Anyone?"); err != nil || m.To != b.Side {
+		t.Errorf("the prefix sent %+v, %v; want it to the one other side track", m, err)
 	}
 }
 
@@ -162,5 +162,24 @@ func TestATrackStartedFromAnotherKeepsItsSideTracks(t *testing.T) {
 	}
 	if _, err := f.svc.RelaySend(ctx, child.Track.ID, st.Track.Side, relay.Report, "Your task."); err != nil {
 		t.Errorf("it sent its side track a report: %v", err)
+	}
+}
+
+func TestMainTrackWaitsThroughSideTracksTalking(t *testing.T) {
+	ctx := context.Background()
+	f, main, a, b := siblingsFixture(t)
+	if _, err := f.svc.RelayRead(ctx, main.ID, relay.TrackHandle); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.RelaySend(ctx, a.ID, b.Side, relay.Question, "Who owns relay.go?"); err != nil {
+		t.Fatal(err)
+	}
+	wait, cancel := context.WithTimeout(ctx, 3*relayPoll)
+	defer cancel()
+	if msgs, err := f.svc.RelayWait(wait, main.ID, relay.TrackHandle); err == nil {
+		t.Errorf("side tracks talking woke the main track: %+v", msgs)
+	}
+	if msgs, err := f.svc.RelayWait(ctx, b.ID, relay.TrackHandle); err != nil || len(msgs) == 0 || msgs[len(msgs)-1].From != a.Side {
+		t.Errorf("the recipient's wait: %+v, %v; want the question", msgs, err)
 	}
 }

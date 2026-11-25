@@ -124,6 +124,8 @@ func TestCheckPeerSend(t *testing.T) {
 		{"side-1", "side-1", Question, "Me?", 0, false},
 		{"side-1", "", Question, "To everyone", 0, false},
 		{"side-1", "side-2", Question, " ", 0, false},
+		{"side-1", "track", Question, "Main?", 0, false},
+		{"github", "side-2", Question, "Pretending", 0, false},
 	} {
 		if err := CheckPeerSend(tc.from, tc.to, tc.kind, tc.body, tc.sent); (err == nil) != tc.ok {
 			t.Errorf("%s → %s %s after %d: %v, want ok %v", tc.from, tc.to, tc.kind, tc.sent, err, tc.ok)
@@ -148,7 +150,7 @@ func TestBetween(t *testing.T) {
 }
 
 func TestSideTracksReadEachOther(t *testing.T) {
-	m := Message{From: "side-1", To: "side-2", Kind: Question}
+	m := Message{ID: 1, From: "side-1", To: "side-2", Kind: Question}
 	for _, tc := range []struct {
 		reader string
 		ok     bool

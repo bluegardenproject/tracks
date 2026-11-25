@@ -832,9 +832,9 @@ track's policy has Tracks tell it (built, step 4).
 7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
 8. Side tracks talking to each other (built): a side track sends
    another side track of its main track a `question` or an `answer`,
-   by handle or prefix, on the main track's relay under its own
-   handle; other kinds are refused, naming `--to track`, and so is an
-   ended side track. The recipient is pointed to it as to its main
+   by handle or prefix (`side` names the other side track when there's
+   one), on the main track's relay under its own handle; other kinds
+   are refused, naming `--to track`, and so is an ended side track. The recipient is pointed to it as to its main
    track's messages. The main track reads every one in `relay read`,
    without a pointer, and `relay wait` doesn't wake for them; its Relay
    Station shows them as `@side-… → @side-…`, never "not delivered".

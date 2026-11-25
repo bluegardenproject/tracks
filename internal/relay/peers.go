@@ -20,6 +20,8 @@ func CheckPeerSend(from, to string, kind Kind, body string, sent int) error {
 		return fmt.Errorf("%q isn't a kind of message: question or answer, to another side track", kind)
 	case from == "" || to == "":
 		return errors.New("a message has a sender and a recipient")
+	case reserved(from) || reserved(to):
+		return errors.New("side tracks send each other, never to @track, @tracks or @github")
 	case from == to:
 		return errors.New("a message goes to someone else")
 	case kind != Question && kind != Answer:
@@ -42,3 +44,6 @@ func Between(msgs []Message, a, b string) int {
 	}
 	return n
 }
+
+// reserved reports whether h is a handle no side track has.
+func reserved(h string) bool { return h == TrackHandle || h == TracksHandle || h == GitHubHandle }

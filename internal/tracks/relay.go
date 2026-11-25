@@ -46,6 +46,9 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 		}
 		return s.Store.AddRelayMessage(ctx, t.Parent, relay.Message{From: t.Side, To: relay.TrackHandle, Kind: kind, Body: body, At: s.now()})
 	}
+	if side.Is(t) && strings.TrimPrefix(to, "@") == t.Side {
+		return relay.Message{}, Problem("A message goes to someone else.")
+	}
 	trains, err := s.Trains(ctx, id)
 	if err != nil {
 		return relay.Message{}, err
@@ -54,6 +57,8 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 	if err != nil {
 		return relay.Message{}, err
 	}
+	// A side track's prefix names another side track, never itself.
+	sides = slices.DeleteFunc(sides, func(st track.Track) bool { return st.ID == t.ID })
 	handles := make([]string, 0, len(trains)+len(sides))
 	for _, tr := range trains {
 		handles = append(handles, tr.Handle)
@@ -181,6 +186,10 @@ func (s *Service) RelayShow(ctx context.Context, id, reader string, msg int64) (
 // than a notice, which wakes no one, and returns what it hadn't read,
 // marked read, as RelayRead does.
 func (s *Service) RelayWait(ctx context.Context, id, reader string) ([]relay.Message, error) {
+	t, err := s.relayTrack(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, relayWait)
 	defer cancel()
 	timedOut := func() bool { return errors.Is(ctx.Err(), context.DeadlineExceeded) }
@@ -193,7 +202,7 @@ func (s *Service) RelayWait(ctx context.Context, id, reader string) ([]relay.Mes
 			var msgs []relay.Message
 			msgs, err = s.RelayRead(ctx, id, reader)
 			read = append(read, msgs...)
-			if err == nil && slices.ContainsFunc(msgs, func(m relay.Message) bool { return m.Kind != relay.Notice }) {
+			if err == nil && slices.ContainsFunc(msgs, func(m relay.Message) bool { return wakes(t, reader, m) }) {
 				return read, nil
 			}
 		}
@@ -212,6 +221,16 @@ func (s *Service) RelayWait(ctx context.Context, id, reader string) ([]relay.Mes
 		case <-time.After(relayPoll):
 		}
 	}
+}
+
+// wakes reports whether m, read by reader in t's inboxes, wakes it: not
+// a notice, and addressed to it, on its own relay or, in a side track,
+// on its main track's under its handle.
+func wakes(t track.Track, reader string, m relay.Message) bool {
+	if m.Kind == relay.Notice {
+		return false
+	}
+	return relay.For(reader, m) || reader == relay.TrackHandle && side.Is(t) && relay.For(t.Side, m)
 }
 
 // woken reports whether reader has an unread message on track id's
