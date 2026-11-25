@@ -72,8 +72,9 @@ func TestThePlatformShowsWithoutTrains(t *testing.T) {
 	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{})
 	v := view(m)
 	lines := strings.Split(v, "\n")
-	if !strings.HasPrefix(lines[0], "╭─ Platform ") || !strings.Contains(lines[1], "│ empty ") || !strings.HasPrefix(lines[10], "╭─ Signals ") {
-		t.Errorf("without trains, the Platform says empty over Signals, each half the pane:\n%s", v)
+	if !strings.HasPrefix(lines[0], "╭─ Platform ") || !strings.Contains(lines[1], "│ Trains ") || !strings.Contains(lines[2], "│ empty ") ||
+		!strings.Contains(lines[4], "│ Side Tracks ") || !strings.Contains(lines[5], "│ empty ") || !strings.HasPrefix(lines[10], "╭─ Signals ") {
+		t.Errorf("without trains or side tracks, the Platform says empty under each heading, over Signals, each half the pane:\n%s", v)
 	}
 	if !strings.Contains(lines[11], "│ Relay Station ") {
 		t.Errorf("without messages, Signals still shows the Relay Station:\n%s", v)
@@ -290,11 +291,12 @@ func TestAClickOpensTheTrain(t *testing.T) {
 			}
 		}
 	}
-	for _, y := range []int{0, 1, 2, 4, 5, 6, 7, 8, 11} {
+	// Row 1 is the Trains heading, 4 Collect messages.
+	for _, y := range []int{0, 1, 2, 3, 5, 6, 7, 8, 11} {
 		click(y)
 	}
 	for _, x := range []int{0, 25} {
-		if _, cmd := tm.Update(tea.MouseClickMsg{X: x, Y: 1, Button: tea.MouseLeft}); cmd != nil {
+		if _, cmd := tm.Update(tea.MouseClickMsg{X: x, Y: 2, Button: tea.MouseLeft}); cmd != nil {
 			t.Errorf("a click on the frame's border, column %d, opened a train", x)
 		}
 	}
@@ -313,13 +315,13 @@ func TestAClickWhileOpeningIsDropped(t *testing.T) {
 	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, loadedMsg{trains: []Entry{{Handle: "reviewer-527192"}}}} {
 		tm, _ = tm.Update(msg)
 	}
-	tm, first := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft})
-	tm, second := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft})
+	tm, first := tm.Update(tea.MouseClickMsg{X: 3, Y: 2, Button: tea.MouseLeft})
+	tm, second := tm.Update(tea.MouseClickMsg{X: 3, Y: 2, Button: tea.MouseLeft})
 	if first == nil || second != nil {
 		t.Fatalf("first %v, second %v; want the first click only", first != nil, second != nil)
 	}
 	tm, _ = tm.Update(first())
-	if _, again := tm.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft}); again == nil || opened != 1 {
+	if _, again := tm.Update(tea.MouseClickMsg{X: 3, Y: 2, Button: tea.MouseLeft}); again == nil || opened != 1 {
 		t.Errorf("after the overlay closed: a click opens again (%v), opened %d", again != nil, opened)
 	}
 }
@@ -358,5 +360,46 @@ func TestHalfAndHalf(t *testing.T) {
 	}
 	if got := strings.Join(opened, " "); got != "reviewer-527192 reviewer-527192" {
 		t.Errorf("opened %q; want the first train's two rows only", got)
+	}
+}
+
+// Side tracks show under their heading, after the trains, with the
+// Station's badges; a click on one switches to its window, and why it
+// couldn't shows.
+func TestSideTracks(t *testing.T) {
+	var opened []string
+	m := update(t, New(Config{Theme: theme.Default(), OpenSide: func(id string) error {
+		opened = append(opened, id)
+		return errors.New("its window is closed")
+	}}), tea.WindowSizeMsg{Width: 26, Height: 30}, loadedMsg{
+		trains: []Entry{{Handle: "reviewer-527192", Status: track.Done}},
+		sides: []Side{
+			{ID: "a", Name: "relay-store", Status: track.Active},
+			{ID: "b", Name: "relay-cli", Status: track.Done, PR: track.PRsOpen},
+		},
+	})
+	v := view(m)
+	trains, sides := strings.Index(v, "Trains"), strings.Index(v, "Side Tracks")
+	if trains < 0 || sides < trains || strings.Index(v, "reviewer-527192") > sides || strings.Index(v, "relay-store") < sides {
+		t.Fatalf("want the trains under Trains, then the side tracks under Side Tracks:\n%s", v)
+	}
+	if !strings.Contains(v, " done   PR open ") || strings.Contains(v, "empty") {
+		t.Errorf("want relay-cli's badges, and no empty:\n%s", v)
+	}
+	for _, text := range []string{"relay-store", "relay-cli"} {
+		_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, text), Button: tea.MouseLeft})
+		if cmd == nil {
+			t.Fatalf("a click on %s did nothing", text)
+		}
+		m = update(t, m, cmd())
+	}
+	if strings.Join(opened, " ") != "a b" {
+		t.Errorf("switched to %q, want a b", opened)
+	}
+	if !strings.Contains(view(m), "its window is closed") {
+		t.Errorf("why it couldn't switch isn't shown:\n%s", view(m))
+	}
+	if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Side Tracks"), Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click on the heading did something")
 	}
 }

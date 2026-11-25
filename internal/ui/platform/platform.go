@@ -34,6 +34,13 @@ type Entry struct {
 	Held bool
 }
 
+// Side is a side track as the Platform shows it: its name and the
+// Station's badges, its status and its PRs'; ID names it for OpenSide.
+type Side struct {
+	ID, Name   string
+	Status, PR track.Status
+}
+
 // PR is a PR with open comments, under Signals: its name, what its
 // button does, and whether that's done; Index names it for Solve.
 type PR struct {
@@ -54,8 +61,10 @@ type Signals struct {
 // Config is what the Platform reads, what its clicks do, and how.
 type Config struct {
 	Theme theme.Theme
-	// Trains lists the track's trains; Signals reads its Signals.
+	// Trains lists the track's trains, Sides its side tracks; Signals
+	// reads its Signals.
 	Trains  func() ([]Entry, error)
+	Sides   func() ([]Side, error)
 	Signals func() (Signals, error)
 	// Watch calls changed once connected to the daemon and after each
 	// change, until the stream breaks.
@@ -70,14 +79,17 @@ type Config struct {
 	OpenRelayStation func() error
 	Solve            func(index int) error
 	// Open opens a train, by its handle, in its overlay over the user's
-	// client.
-	Open func(handle string)
+	// client; OpenSide switches the user's client to a side track's
+	// window, by its ID.
+	Open     func(handle string)
+	OpenSide func(id string) error
 }
 
 // Model is the Platform.
 type Model struct {
 	palette       style.Palette
 	trains        []Entry
+	sides         []Side
 	signals       Signals
 	err           error
 	width, height int
@@ -94,6 +106,7 @@ type Model struct {
 type (
 	loadedMsg struct {
 		trains  []Entry
+		sides   []Side
 		signals Signals
 		err     error
 	}
@@ -121,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case loadedMsg:
-		m.trains, m.signals, m.err = msg.trains, msg.signals, msg.err
+		m.trains, m.sides, m.signals, m.err = msg.trains, msg.sides, msg.signals, msg.err
 		if !m.acting && m.targetGone(m.noticeFor) {
 			// What it said was of a button that's gone.
 			m.notice = ""
@@ -174,6 +187,11 @@ func (m Model) actionAt(x, y int) (func() error, int, string) {
 			if m.c.Solve != nil {
 				index, solve := t.index, m.c.Solve
 				return func() error { return solve(index) }, t.kind, "Sending…"
+			}
+		case targetSide:
+			if m.c.OpenSide != nil && t.index < len(m.sides) {
+				id, open := m.sides[t.index].ID, m.c.OpenSide
+				return func() error { return open(id) }, t.kind, ""
 			}
 		case targetTrain:
 			if m.c.Open != nil && t.index < len(m.trains) {
@@ -240,14 +258,18 @@ func (m Model) load() tea.Cmd {
 	if m.c.Trains == nil {
 		return nil
 	}
-	trains, signals := m.c.Trains, m.c.Signals
+	trains, sides, signals := m.c.Trains, m.c.Sides, m.c.Signals
 	return func() tea.Msg {
 		ts, err := trains()
+		var ss []Side
+		if err == nil && sides != nil {
+			ss, err = sides()
+		}
 		var sig Signals
 		if err == nil && signals != nil {
 			sig, err = signals()
 		}
-		return loadedMsg{ts, sig, err}
+		return loadedMsg{ts, ss, sig, err}
 	}
 }
 

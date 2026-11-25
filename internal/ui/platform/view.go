@@ -18,13 +18,14 @@ const (
 	targetRelayStation
 	targetSolve
 	targetTrain
+	targetSide
 )
 
 // target is a clickable span of the pane: row y, columns x0 to x1.
 type target struct {
 	y, x0, x1 int
 	kind      int
-	index     int // a PR's for targetSolve, a train's for targetTrain
+	index     int // a PR's for targetSolve, a train's for targetTrain, a side track's for targetSide
 }
 
 // item is a clickable line of a frame's body: its row, the pane's
@@ -75,12 +76,18 @@ func (m Model) layout() ([]string, []target) {
 	return lines, targets
 }
 
-// platformBody is the Platform frame's inside: each train, its badges
-// and its Collect messages; "empty" for no trains.
+// platformBody is the Platform frame's inside: under a dim Trains each
+// train, its badges and its Collect messages, then under a dim Side
+// Tracks each side track and its badges; "empty" for none.
 func (m Model) platformBody() ([]string, []item) {
 	inner := m.width - 4
 	var body []string
 	var items []item
+	if m.err != nil {
+		body = append(body, m.muted("Couldn't read the Platform: "+m.err.Error(), inner)...)
+		return body, items
+	}
+	body = append(body, m.mutedText("Trains"))
 	for i, t := range m.trains {
 		// Its rows, name and badges, open its overlay, from border to
 		// border.
@@ -100,13 +107,29 @@ func (m Model) platformBody() ([]string, []item) {
 		}
 		body = append(body, "")
 	}
-	if len(m.trains) == 0 && m.err == nil {
+	if len(m.trains) == 0 {
 		body = append(body, m.mutedText("empty"), "")
 	}
-	if m.err != nil {
-		body = append(body, m.muted("Couldn't read the Platform: "+m.err.Error(), inner)...)
-	}
 	if m.notice != "" && m.noticeFor == targetCollect {
+		body = append(body, m.muted(m.notice, inner)...)
+	}
+
+	body = append(body, m.mutedText("Side Tracks"))
+	for i, s := range m.sides {
+		// Its rows, name and badges, switch to its window.
+		items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
+		body = append(body, m.item(cutTo(s.Name, inner)))
+		badges := widget.Badge(m.palette, s.Status)
+		if s.PR.Label != "" {
+			badges += " " + widget.Badge(m.palette, s.PR)
+		}
+		items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
+		body = append(body, " "+badges, "")
+	}
+	if len(m.sides) == 0 {
+		body = append(body, m.mutedText("empty"))
+	}
+	if m.notice != "" && m.noticeFor == targetSide {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
 	return body, items

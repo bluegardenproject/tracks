@@ -64,6 +64,10 @@ var (
 // PRStatuses are every PR status shown, by priority.
 var PRStatuses = []Status{PRsOpen, PRsMerged, PRsClosed}
 
+// PRStatusByID is the PR status whose ID is id, none for one it doesn't
+// know; its label is the one for a single PR.
+func PRStatusByID(id string) Status { return byID(PRStatuses, id) }
+
 // PRStatus is the PR status prs give: open while one is (a draft
 // counts), else merged when one was, else closed.
 func PRStatus(prs []PR) Status {

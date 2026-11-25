@@ -39,6 +39,19 @@ var (
 // Statuses are every track status, by priority.
 var Statuses = []Status{Error, ActionRequired, Exited, Active, Done, Closed, Draft}
 
+// StatusByID is the track status whose ID is id, none for one it
+// doesn't know.
+func StatusByID(id string) Status { return byID(Statuses, id) }
+
+func byID(statuses []Status, id string) Status {
+	for _, s := range statuses {
+		if s.ID == id {
+			return s
+		}
+	}
+	return Status{}
+}
+
 // How the agent exited, in State.Exit: with code 0, or any other.
 const (
 	ExitOK     = "exited"
