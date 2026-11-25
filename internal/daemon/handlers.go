@@ -365,7 +365,14 @@ func (c Config) create(ctx context.Context, call *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID, Side: created.Track.Side}, nil
+	r := rpc.CreateResult{ID: created.Track.ID, Name: created.Track.Name, Window: created.Window.ID, Side: created.Track.Side}
+	if r.Side != "" {
+		for _, repo := range created.Track.Repos {
+			r.Repos = append(r.Repos, repo.Name)
+		}
+		r.KeepDrafts = created.DraftPRs
+	}
+	return r, nil
 }
 
 // outcome is how a creation went, for a status line.

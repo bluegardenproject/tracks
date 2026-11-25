@@ -297,3 +297,22 @@ func TestSideTrackLeavesWhenTracksStops(t *testing.T) {
 		t.Errorf("main track's relay holds %+v, %v; want joined, left as Tracks stopped, joined again", msgs, err)
 	}
 }
+
+func TestSideTrackPromptNamesItsMainTrack(t *testing.T) {
+	ctx := context.Background()
+	f, _, st := sideFixture(t)
+	spec := f.engine.spec
+	if spec.Side == nil || spec.Side.Main != "api-cache" || spec.Side.Handle != st.Side {
+		t.Errorf("side track started with %+v; want its main track api-cache and its handle", spec.Side)
+	}
+	if len(spec.DraftPRs) != 1 || spec.DraftPRs[0] != "api" {
+		t.Errorf("side track's repos keeping drafts %v; want api, by its rule", spec.DraftPRs)
+	}
+	got, err := f.svc.Create(ctx, Request{Kind: track.Work, Prompt: "Plain", Repos: []string{"web"}}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.engine.spec.Side != nil || got.DraftPRs != nil {
+		t.Errorf("a track that isn't a side track started with %+v, drafts %v", f.engine.spec.Side, got.DraftPRs)
+	}
+}

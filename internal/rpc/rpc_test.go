@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestProgressThenResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (CreateResult{ID: "id-1", Name: "rate-bug", Window: "@3"}) {
+	if !reflect.DeepEqual(got, CreateResult{ID: "id-1", Name: "rate-bug", Window: "@3"}) {
 		t.Errorf("result = %+v", got)
 	}
 	if !slices.Equal(steps, []string{"Fetching…", "Starting Claude Code…"}) {

@@ -15,6 +15,9 @@ import (
 type Created struct {
 	Track  track.Track
 	Window trackwin.Window
+	// DraftPRs are its repos that open pull requests as drafts by
+	// their rule, when it was made.
+	DraftPRs []string
 }
 
 // Create makes the track req asks for, as v1 does: check, ID, session,
@@ -119,7 +122,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		return Created{}, err
 	}
 	start, err := engine.Command(agents.Spec{
-		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
+		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: s.sideSpec(ctx, t),
 		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
 		DevServers: s.hasDevServers(ctx, t.Repos),
 	})
@@ -141,7 +144,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	}
 	s.sideNotice(undo, t, track.Created)
 	s.startEager(undo, t)
-	return Created{Track: t, Window: win}, nil
+	return Created{Track: t, Window: win, DraftPRs: drafts}, nil
 }
 
 // open opens t's window with the agent start runs, and its Platform;

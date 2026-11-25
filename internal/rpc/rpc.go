@@ -159,8 +159,12 @@ type CreateResult struct {
 	Window string `json:"window"`
 	// Title is the name it's shown under, when that isn't Name.
 	Title string `json:"title,omitempty"`
-	// Side is a side track's handle on its main track's relay.
-	Side string `json:"side,omitempty"`
+	// Side is a side track's handle on its main track's relay; Repos
+	// are its repos, and KeepDrafts those whose rule keeps its pull
+	// requests drafts.
+	Side       string   `json:"side,omitempty"`
+	Repos      []string `json:"repos,omitempty"`
+	KeepDrafts []string `json:"keep_drafts,omitempty"`
 }
 
 // ListParams asks for Station's list: under its filter, when one is on.
