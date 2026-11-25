@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/actions"
@@ -112,7 +114,8 @@ func platformSides(sides []rpc.SideTrack, err error) ([]uiplatform.Side, error) 
 	}
 	out := make([]uiplatform.Side, len(sides))
 	for i, s := range sides {
-		out[i] = uiplatform.Side{ID: s.ID, Name: s.Name, Status: track.StatusByID(s.StatusID)}
+		// Named as the Station names it.
+		out[i] = uiplatform.Side{ID: s.ID, Name: cmp.Or(s.Title, s.Name), Status: track.StatusByID(s.StatusID)}
 		// Only a PR status the Platform knows gets a badge.
 		if pr := track.PRStatusByID(s.PRID); pr.ID != "" {
 			pr.Label = s.PR
@@ -130,8 +133,8 @@ func switchFromPlatform(t *tmux.Client, id string) error {
 		return err
 	}
 	for _, in := range infos {
-		if in.Track == id {
-			return switchToWindow(t, in.Window)
+		if id != "" && in.Track == id {
+			return trackwin.Switch(t, sessionName, strconv.Itoa(in.Number), 0)
 		}
 	}
 	return errors.New("its window is closed: open it from the Station")

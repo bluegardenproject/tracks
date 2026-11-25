@@ -418,7 +418,11 @@ func TestASideTracksLongStatus(t *testing.T) {
 	if !strings.Contains(v, " action required ") || !strings.Contains(v, "│   PR open ") {
 		t.Fatalf("want the status, then the PR's badge on a row of its own:\n%s", v)
 	}
-	if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "PR open"), Button: tea.MouseLeft}); cmd == nil {
-		t.Error("a click on the PR's row did nothing")
+	_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "PR open"), Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("a click on the PR's row did nothing")
+	}
+	if cmd(); opened != 1 {
+		t.Errorf("switched %d times, want once", opened)
 	}
 }

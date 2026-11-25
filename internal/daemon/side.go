@@ -32,7 +32,7 @@ func (c Config) sideList(ctx context.Context, call *rpc.Call) (any, error) {
 	out := rpc.SideListResult{Sides: []rpc.SideTrack{}}
 	for _, t := range sides {
 		status, pr := t.Status(), track.PRStatus(t.PRs)
-		st := rpc.SideTrack{ID: t.ID, Name: t.Name, Handle: t.Side, Status: status.Label, PR: pr.Label,
+		st := rpc.SideTrack{ID: t.ID, Name: t.Name, Title: t.Title, Handle: t.Side, Status: status.Label, PR: pr.Label,
 			StatusID: status.ID, PRID: pr.ID}
 		for _, pr := range t.PRs {
 			st.PRs = append(st.PRs, pr.URL)

@@ -15,6 +15,7 @@ const (
 type SideTrack struct {
 	ID     string `json:"id,omitempty"`
 	Name   string `json:"name"`
+	Title  string `json:"title,omitempty"` // what the user calls it, "" for its name
 	Handle string `json:"handle"`
 	// Status and PR are badge labels; PR "" for none. StatusID and PRID
 	// name them, for the Platform's badges.
