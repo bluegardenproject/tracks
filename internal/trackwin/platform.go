@@ -2,6 +2,8 @@ package trackwin
 
 import (
 	"fmt"
+
+	"github.com/bluegardenproject/tracks/internal/tmux"
 )
 
 // RolePlatform is the Platform, the pane on a track window's left that
@@ -43,4 +45,18 @@ func Platform(t Tmux, window string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// Unfit are the Platform panes among panes that aren't PlatformWidth
+// wide. tmux scales panes with their window: a Platform opened in a
+// window not shown yet, at tmux's default size, widens with it once a
+// client shows it.
+func Unfit(panes []tmux.Pane) []string {
+	var out []string
+	for _, p := range panes {
+		if p.Role == RolePlatform && p.Width != PlatformWidth {
+			out = append(out, p.ID)
+		}
+	}
+	return out
 }

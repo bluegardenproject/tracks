@@ -225,6 +225,12 @@ func (c *Client) SendKey(pane, key string) error {
 	return err
 }
 
+// ResizePaneWidth sets pane's width in columns.
+func (c *Client) ResizePaneWidth(pane string, cols int) error {
+	_, err := c.run("resize-pane", "-t", pane, "-x", strconv.Itoa(cols))
+	return err
+}
+
 // ResizePaneHeight sets pane's height in rows.
 func (c *Client) ResizePaneHeight(pane string, rows int) error {
 	_, err := c.run("resize-pane", "-t", pane, "-y", strconv.Itoa(rows))

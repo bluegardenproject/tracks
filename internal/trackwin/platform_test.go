@@ -93,3 +93,45 @@ func TestTheRightColumnLeavesThePlatformItsWidth(t *testing.T) {
 		t.Errorf("the terminal %+v isn't right of the agent", term)
 	}
 }
+
+// A Platform opened in a window at tmux's default size widens as tmux
+// scales the panes once a client shows the window wider: Unfit finds
+// it, and a resize puts it back.
+func TestAWidenedPlatformIsUnfit(t *testing.T) {
+	socket := tmuxtest.Socket(t)
+	c := tmux.New(socket)
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := (tmux.Conf{DefaultTerminal: "screen-256color", Command: "true"}).Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.NewSession(conf, "tracks", "Tracks", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	w, err := trackwin.Open(c, "tracks", trackwin.Spec{
+		Name: "api", Dir: dir, Agent: trackwin.Process{Title: "agent", Command: "sleep 60"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane, err := trackwin.OpenPlatform(c, w.ID, dir, trackwin.Process{Command: "sleep 60"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unfit := trackwin.Unfit(mustPanes(t, c, w.ID)); len(unfit) != 0 {
+		t.Fatalf("a Platform just opened is unfit: %v", unfit)
+	}
+	if out, err := exec.Command("tmux", "-L", socket, "resize-window", "-t", w.ID, "-x", "250", "-y", "50").CombinedOutput(); err != nil {
+		t.Fatalf("resize: %v %s", err, out)
+	}
+	unfit := trackwin.Unfit(mustPanes(t, c, w.ID))
+	if len(unfit) != 1 || unfit[0] != pane {
+		t.Fatalf("after the window widened, unfit %v; want the Platform %s", unfit, pane)
+	}
+	if err := c.ResizePaneWidth(pane, trackwin.PlatformWidth); err != nil {
+		t.Fatal(err)
+	}
+	if p := byRole(mustPanes(t, c, w.ID), trackwin.RolePlatform); p.Width != trackwin.PlatformWidth {
+		t.Errorf("the Platform is %d wide after the resize, want %d", p.Width, trackwin.PlatformWidth)
+	}
+}
