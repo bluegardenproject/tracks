@@ -156,16 +156,23 @@ func (s *Service) Deliver(ctx context.Context) error {
 			s.setHeld(t.ID, nil)
 			continue
 		}
-		if ins := instructions[t.ID]; len(ins) > 0 {
-			// An instruction goes first, and alone in its tick: the
-			// agent's turn it starts holds the pointer back.
-			typed, err := s.typeInstruction(ctx, t, window, ins[0])
+		// An instruction goes first, and alone in its tick: the agent's
+		// turn it starts holds the pointer back. One moot meanwhile gives
+		// way to the next.
+		typed, held := false, false
+		for _, in := range instructions[t.ID] {
+			var err error
+			typed, held, err = s.typeInstruction(ctx, t, window, in)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
+				held = true
 			}
-			if typed || err != nil {
-				continue
+			if typed || held {
+				break
 			}
+		}
+		if typed || held && len(instructions[t.ID]) > 0 {
+			continue
 		}
 		if err := s.deliver(ctx, t, window); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
@@ -412,28 +419,32 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 // the lock, and kept as pointing until the agent's turn starts, so no
 // pointer goes meanwhile and one the agent didn't take stalls as a
 // pointer's does. One about review threads marks their Signals button
-// sent.
-func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (bool, error) {
-	if t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
-		return false, nil
+// sent. held says the agent isn't free; neither typed nor held, in was
+// moot.
+func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (typed, held bool, err error) {
+	s.mu.Lock()
+	retry := s.retryAt[t.ID]
+	s.mu.Unlock()
+	// After a stall, it waits as long as a pointer would.
+	if s.now().Before(retry) || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+		return false, true, nil
 	}
 	// Read a while ago: dropped or replaced since, it's moot.
 	if still, err := s.Store.InstructionWaiting(ctx, in.ID); err != nil || !still {
-		return false, err
+		return false, err != nil, err
 	}
 	s.mu.Lock()
 	s.deliveryMaps()
 	if in.Kind == settings.EventReviewThreads && s.comments[t.ID][in.PR].Sent {
 		// The user sent them from Signals.
 		s.mu.Unlock()
-		return false, s.Store.DropInstructions(ctx, in.PR, in.Kind)
+		return false, false, s.Store.DropInstructions(ctx, in.PR, in.Kind)
 	}
 	_, waiting := s.pointing[t.ID]
 	inTurn, known := s.turns[t.ID]
 	if s.busy[t.ID] || waiting || !known || inTurn || s.now().Before(s.retryAt[t.ID]) {
-		// After a stall, it waits as long as a pointer would.
 		s.mu.Unlock()
-		return false, nil
+		return false, true, nil
 	}
 	delete(s.retryAt, t.ID)
 	s.pointerGen++
@@ -442,7 +453,7 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 	delete(s.turns, t.ID)
 	s.mu.Unlock()
 
-	err := s.Windows.Paste(window, in.Body)
+	err = s.Windows.Paste(window, in.Body)
 	s.mu.Lock()
 	p, ours := s.pointing[t.ID]
 	ours = ours && p.gen == gen
@@ -453,7 +464,7 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 			s.turns[t.ID] = false
 		}
 		s.mu.Unlock()
-		return false, err
+		return false, true, err
 	}
 	if ours {
 		// The stall's wait starts once it's in.
@@ -468,5 +479,5 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 	s.mu.Unlock()
 	s.Changes.Notify()
 	// It's in: marked so even if the daemon stops meanwhile.
-	return true, s.Store.InstructionTyped(context.WithoutCancel(ctx), in.ID, s.now())
+	return true, false, s.Store.InstructionTyped(context.WithoutCancel(ctx), in.ID, s.now())
 }

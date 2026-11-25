@@ -366,7 +366,7 @@ func TestAnEndingSideTrackHandsOverItsInstructions(t *testing.T) {
 		t.Errorf("still waiting: side %q, main %q", side, asks)
 	}
 	got := fromGitHub(t, f, main.ID)
-	if len(got) != 2 || !strings.Contains(got[0], "ended before Tracks' word about PR acme/api#231 went out") {
+	if len(got) != 2 || !strings.Contains(got[0], "ended before Tracks' word about conflicts on PR acme/api#231 went out") {
 		t.Errorf("the main track's relay: %q; want an event for each", got)
 	}
 }
@@ -421,7 +421,54 @@ func TestThreadsInstructionsGoWhenMoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	*now = now.Add(time.Minute)
-	if typed, err := f.svc.typeInstruction(ctx, track.Track{ID: "a"}, "@a", waiting[0]); err != nil || typed {
-		t.Errorf("pasted one dropped meanwhile: %v, %v", typed, err)
+	if typed, held, err := f.svc.typeInstruction(ctx, track.Track{ID: "a"}, "@a", waiting[0]); err != nil || typed || held {
+		t.Errorf("one dropped meanwhile: typed %v, held %v, %v; want it moot", typed, held, err)
+	}
+}
+
+// A moot instruction, threads the user sent from Signals meanwhile,
+// gives way to the next, ahead of the pointer.
+func TestTheNextInstructionGoesWhenOneIsMoot(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	const url = "https://github.com/acme/api/pull/1"
+	f.svc.mu.Lock()
+	f.svc.comments = map[string]map[string]actions.Comments{"a": {url: {Open: 2, Sent: true}}}
+	f.svc.mu.Unlock()
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	if err := f.svc.instruct(ctx, "a", settings.EventReviewThreads, url, "Work through them."); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.instruct(ctx, "a", settings.EventCIFailed, url, "Fix CI."); err != nil {
+		t.Fatal(err)
+	}
+	if got := deliver(t, f); len(got) != 1 || got[0] != "@a Fix CI." {
+		t.Errorf("pasted %q; want the next instruction, not the pointer", got)
+	}
+	if got := waitingFor(t, f, "a"); len(got) != 0 {
+		t.Errorf("still waiting: %q", got)
+	}
+}
+
+func TestAPolicyChangeDropsWhatWaits(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/231")
+	e := ghEvent{Kind: settings.EventReviewThreads, PR: pr, Threads: 2, Body: "2 review threads on PR acme/api#231 wait for an answer."}
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{ReviewThreads: settings.PolicyAuto}}, nil
+	}
+	if err := f.svc.githubEvent(ctx, st, e); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{ReviewThreads: settings.PolicyAsk}}, nil
+	}
+	if err := f.svc.githubEvent(ctx, st, e); err != nil {
+		t.Fatal(err)
+	}
+	if side, asks := waitingFor(t, f, st.ID), waitingFor(t, f, main.ID); len(side) != 0 || len(asks) != 1 {
+		t.Errorf("after the policy changed: side %q, main %q; want the main track's question only", side, asks)
 	}
 }

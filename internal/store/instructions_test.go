@@ -22,7 +22,12 @@ func TestInstructions(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	add("ci_failed", "pr1", "only")
+	only, _ := s.WaitingInstructions(ctx)
 	add("ci_failed", "pr1", "first")
+	if still, err := s.InstructionWaiting(ctx, only[0].ID); err != nil || still {
+		t.Errorf("a replaced instruction's ID still waits: %v, %v; its replacement took it", still, err)
+	}
 	add("conflicts", "pr1", "rebase")
 	add("ci_failed", "pr1", "second")
 	add("ci_failed", "pr2", "other")
