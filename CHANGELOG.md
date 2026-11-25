@@ -1,5 +1,81 @@
 # Changelog
 
+## [3.9.0](https://github.com/bluegardenproject/tracks/compare/v3.8.0...v3.9.0) (2026-11-25)
+
+
+### Features
+
+* **agents:** Copilot's card points to GitHub's install docs ([e230bb9](https://github.com/bluegardenproject/tracks/commit/e230bb935e955ca2f2718294a0ddda48fa451311))
+* **agents:** find and add GitHub Copilot on the Engines tab ([8fa29ab](https://github.com/bluegardenproject/tracks/commit/8fa29abeec5c1784d7d457a58ec6b83d43e12be8))
+* **agents:** the main track's "Side tracks" paragraph ([c78bb15](https://github.com/bluegardenproject/tracks/commit/c78bb15f5b5532090924c6f4742a7df09c10d061))
+* **cli:** reopen the tracks open when Tracks closed, without asking ([46ea5b2](https://github.com/bluegardenproject/tracks/commit/46ea5b2ca2037a542851aaf253e82d4388872454))
+* **github:** ask before replying to human comments, a setting ([d83503b](https://github.com/bluegardenproject/tracks/commit/d83503b05226f6087ad45748df4f5a463c0e891e))
+* **github:** one GraphQL query a poll for every PR ([9f41360](https://github.com/bluegardenproject/tracks/commit/9f413606114a9e3eb766117283ea71b72703c81d))
+* **platform:** a main track's side tracks on its Platform ([0ae5bcc](https://github.com/bluegardenproject/tracks/commit/0ae5bcc5581187abd233767adcca5fef98c1eef1))
+* **repos:** an optional prefix before the names of a repo's tracks ([e89cdbb](https://github.com/bluegardenproject/tracks/commit/e89cdbbec1de59b40a14ed053bcd9ac41b64c316))
+* **review:** several reviewers in a track, one per target ([de98926](https://github.com/bluegardenproject/tracks/commit/de989263de683179121ad1ad99a466e91c98260c))
+* **review:** the repo's Code owner narrows a review only when asked ([4bfaf3d](https://github.com/bluegardenproject/tracks/commit/4bfaf3d785492923e6644c2b7cd963e6826f8cce))
+* **review:** tracks review --dir reviews another checkout of a track's repo ([e30b99e](https://github.com/bluegardenproject/tracks/commit/e30b99e5526b1691b1e4ceb77d9d82165d0b1e4f))
+* **settings:** Settings → GitHub, the side tracks' policies ([18dcab4](https://github.com/bluegardenproject/tracks/commit/18dcab463737e4dc22589652a52d9d92689d7f17))
+* **side:** GitHub's events on a side track's PR, by policy ([07b806f](https://github.com/bluegardenproject/tracks/commit/07b806f2e2bf2a89bb6d8479c2668bf7b88447d4))
+* **side:** side tracks ask each other ([75e0879](https://github.com/bluegardenproject/tracks/commit/75e087978061f962f6af8b45c1cecdc7b7c1e71d))
+* **side:** side tracks on their main track's relay ([dad83f1](https://github.com/bluegardenproject/tracks/commit/dad83f19f20f9d87e485f1a0b441482132912fd3))
+* **side:** side tracks open draft PRs their main track promotes ([bbff9a6](https://github.com/bluegardenproject/tracks/commit/bbff9a6a0d8ef65a59bde456c8b13c6baf2ecd99))
+* **side:** side tracks' model and tracks side new|list ([94e56f5](https://github.com/bluegardenproject/tracks/commit/94e56f55c6c1de7134464b76d73dfcfeb1d89c0b))
+* **side:** stacked side tracks, and restacking ([14045aa](https://github.com/bluegardenproject/tracks/commit/14045aac9b7d266cbd95e71b6020f115f6a554f2))
+* **station:** side tracks grouped under their main track ([f1c0692](https://github.com/bluegardenproject/tracks/commit/f1c069275b04a3aa2a26ad789e1ac1c811ad6d02))
+
+
+### Bug Fixes
+
+* **agents:** the main track answers with --kind answer, on stdin ([a6bc8fe](https://github.com/bluegardenproject/tracks/commit/a6bc8fe649f82f07ef34b17f9727a5787369de73))
+* **cli:** the review's findings on reopening without asking ([e43ed5d](https://github.com/bluegardenproject/tracks/commit/e43ed5dabb3c845619dc157ed34e5a8cd0531737))
+* **github:** a poll defines only the fragments it uses ([5c8549d](https://github.com/bluegardenproject/tracks/commit/5c8549de749493ab324199432e31c11cddb7e137))
+* **github:** the poll's cost, and its partial answers ([a6b65cc](https://github.com/bluegardenproject/tracks/commit/a6b65cc24485cdcff026e26406d3dbc5d2334a00))
+* **github:** the review's hints on the poll ([d392474](https://github.com/bluegardenproject/tracks/commit/d39247447194a1ccb70550bf3eb2ace901670da9))
+* **platform:** the Relay Station's new count in a new attention colour ([db65e01](https://github.com/bluegardenproject/tracks/commit/db65e0144dc221510035bffdc6fbd250dc6e1061))
+* **platform:** the review's findings on the side tracks ([14e5084](https://github.com/bluegardenproject/tracks/commit/14e508468f9c9f16a2296c2e1de7fe0270efb4ec))
+* **platform:** the review's warnings on the side tracks ([aecbca6](https://github.com/bluegardenproject/tracks/commit/aecbca6448e87f7a070211e5c47c3b5805d093bf))
+* **side:** a held instruction lets a stalled paste go ([e13ea62](https://github.com/bluegardenproject/tracks/commit/e13ea62b08965cd45d0213e4255b3c25cc0af637))
+* **side:** a poll restacks before it tells its events ([f32baa1](https://github.com/bluegardenproject/tracks/commit/f32baa11d8e9d3b5d9fb087908e6936ab4725078))
+* **side:** a poll's merges and events are its own, and always told ([f8a6a3f](https://github.com/bluegardenproject/tracks/commit/f8a6a3fc21f18c6f053c9a4d30aca89ad0b5f85c))
+* **side:** a restack drops only its own repo's earlier one ([815ed01](https://github.com/bluegardenproject/tracks/commit/815ed01fd97121c6060edeedaa2c1e33e34991aa))
+* **side:** a side track's prefix names another, and sibling talk wakes no main track ([01f2bc3](https://github.com/bluegardenproject/tracks/commit/01f2bc37f17df1c6331e69d20d47a5eeea4951c6))
+* **side:** an instruction waits as a pointer does; ended side tracks' threads ([dfb67f0](https://github.com/bluegardenproject/tracks/commit/dfb67f0e5c6caaa5d30bebae2e2b150421c5b0be))
+* **side:** instruction IDs are never reused; the review's warnings ([e150961](https://github.com/bluegardenproject/tracks/commit/e150961b698ae4a53d9958f9c7b5ba1174864569))
+* **side:** name the main track from the lookup sideTrack made ([c545f51](https://github.com/bluegardenproject/tracks/commit/c545f51e8cb50b376c6933dac4401ffb20c8a9c1))
+* **side:** restack through merges in the same poll; drop what a restack makes moot ([e97d033](https://github.com/bluegardenproject/tracks/commit/e97d033f13f39af988a461e7cb13a9fa1ba76e78))
+* **side:** restacks only safe names, after the whole poll, with a fetch ([9d7d6ad](https://github.com/bluegardenproject/tracks/commit/9d7d6adc0d631ad776e6944b5f09abf7cb7facd4))
+* **side:** stack only on Work tracks; a waiting restack takes conflicts ([8707810](https://github.com/bluegardenproject/tracks/commit/87078107b67ec8d51181ea14408cfe137942f12d))
+* **side:** the review's findings on stacking ([cf18bfa](https://github.com/bluegardenproject/tracks/commit/cf18bfad0775dd1264fc7340bec93202f1f5085b))
+* **side:** the review's findings on the GitHub policies ([acedb45](https://github.com/bluegardenproject/tracks/commit/acedb45a86d2cee6ad69814529522209fa37c60e))
+* **side:** the review's last warnings on restacking ([1299aed](https://github.com/bluegardenproject/tracks/commit/1299aeda25b9dd57e64f2530d408e904cd15a225))
+* **side:** the review's warnings on waiting instructions ([71eeaa6](https://github.com/bluegardenproject/tracks/commit/71eeaa6a75bcf50f1feef35966f6e973f9b8272c))
+* **side:** unread settings act on nothing; archiving and derailing hand over ([0e53889](https://github.com/bluegardenproject/tracks/commit/0e53889e8742d18e41938a606137e3fa757aa200))
+* **station:** a side track's cut prefix stays muted ([469c211](https://github.com/bluegardenproject/tracks/commit/469c2113dbb863aae6c526c3e0063d9e906990cc))
+* **station:** the PR and errors statuses in columns of their own ([d1f3c63](https://github.com/bluegardenproject/tracks/commit/d1f3c632241dda7d85fd0593dfe00705a93cfcdf))
+* **station:** the review's warning on a side track's narrowest name ([db25dfa](https://github.com/bluegardenproject/tracks/commit/db25dfa1a355c9272fc81fb76765e3f5629ca343))
+* **store:** instructions' IDs AUTOINCREMENT in a migration of their own ([23a42ae](https://github.com/bluegardenproject/tracks/commit/23a42aea35867a9ceaea05a8e50fa8a2d410d483))
+* **train:** Hide in button variant 5, End train in variant 2 ([138da35](https://github.com/bluegardenproject/tracks/commit/138da353dc2b8fec3148f99eed14aee23cf8a8bd))
+
+
+### Code Refactoring
+
+* **tracksview:** keys, clicks and hovers move to input.go ([ab74db8](https://github.com/bluegardenproject/tracks/commit/ab74db8b4111eaa2f5a7d876b36c0da8ea2c66ba))
+
+
+### Documentation
+
+* **design:** side tracks and GitHub's events, and plugins' policies ([944c4a3](https://github.com/bluegardenproject/tracks/commit/944c4a3ec921d1d0601e89d23c130d845ffba0ac))
+* **protocol:** every train runs as many instances, picked by the track ([e66ed23](https://github.com/bluegardenproject/tracks/commit/e66ed23df20a47bb14471fb5df254360a8861e60))
+* **review:** step 12, several reviewers, is built ([31b65ac](https://github.com/bluegardenproject/tracks/commit/31b65ac021eb15d657d050749a1f87ebc76ad065))
+* **trains:** steps 1 to 9 built ([bed781b](https://github.com/bluegardenproject/tracks/commit/bed781ba60b2de2c142268bf678e8f0bfc93adc8))
+
+
+### Miscellaneous
+
+* **relay:** the pair limit in the help, reserved handles both ways ([8fa5922](https://github.com/bluegardenproject/tracks/commit/8fa592285538594da5cf55e0350a24f911a83a3e))
+
 ## [3.8.0](https://github.com/bluegardenproject/tracks/compare/v3.7.0...v3.8.0) (2026-11-25)
 
 
