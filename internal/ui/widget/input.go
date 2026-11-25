@@ -4,20 +4,42 @@ package widget
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 )
 
+// readClipboard reads the local system clipboard; overridden in tests.
+var readClipboard = clipboard.ReadAll
+
+// ReadClipboard reads the system clipboard into a ClipboardMsg, falling
+// back to OSC 52 when the local clipboard isn't available.
+func ReadClipboard() tea.Msg {
+	if s, err := readClipboard(); err == nil {
+		return tea.ClipboardMsg{Content: s}
+	}
+	return tea.ReadClipboard()
+}
+
+// UpdateInput updates in with msg, routing its Paste shortcut through
+// ReadClipboard so Ctrl+V uses the local clipboard with an OSC 52 fallback
+// and arrives as a ClipboardMsg.
+func UpdateInput(in textinput.Model, msg tea.Msg) (textinput.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyPressMsg); ok && key.Matches(k, in.KeyMap.Paste) {
+		return in, ReadClipboard
+	}
+	return in.Update(msg)
+}
+
 // tail cuts s from the left to fit width: the end of a path is the part
 // that tells paths apart.
 func tail(s string, width int) string {
-	r := []rune(s)
-	if width < 2 || len(r) <= width {
-		return s
-	}
-	return "…" + string(r[len(r)-width+1:])
+	return CutLeft(termtext.SingleLine(s), width)
 }
 
 // NewInput is a text input without prompt or blinking cursor.

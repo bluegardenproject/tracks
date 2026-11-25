@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
@@ -35,7 +36,7 @@ func (m Model) listHeight() int { return max(1, m.height-chromeLines) }
 
 // scrollToFocus keeps the focused token's line in view.
 func (m *Model) scrollToFocus() {
-	if m.focus >= len(m.fields) || m.mode == modeName {
+	if m.focus >= len(m.fields) || m.mode == modeName || m.mode == modeLeave {
 		return
 	}
 	lines, tokenLine := layout()
@@ -60,9 +61,9 @@ func (m Model) View() string {
 
 	about := "built-in, read-only: save a copy with Save as new"
 	if !m.edit.BuiltIn {
-		about = m.edit.ID + ".yaml"
+		about = termtext.SingleLine(m.edit.ID) + ".yaml"
 	}
-	title := fg(theme.TextDefault).Bold(true).Render(m.edit.DisplayName) + "  " + fg(theme.TextFaint).Render(about)
+	title := fg(theme.TextDefault).Bold(true).Render(termtext.SingleLine(m.edit.DisplayName)) + "  " + fg(theme.TextFaint).Render(about)
 	if m.Dirty() {
 		title += fg(theme.StateWarningText).Render("  · unsaved")
 	}
@@ -79,7 +80,7 @@ func (m Model) View() string {
 		status = fg(theme.StateDangerText)
 	}
 	lines := append([]string{cut(title, m.width), "", header}, list...)
-	lines = append(lines, "", m.bottom(p), status.Render(cut(m.status, m.width)))
+	lines = append(lines, "", m.bottom(p), status.Render(cut(termtext.SingleLine(m.status), m.width)))
 	for i := range lines {
 		lines[i] = pad(cut(lines[i], m.width), m.width)
 	}
@@ -265,6 +266,9 @@ func pad(s string, width int) string {
 
 // cut shortens a styled line to width cells.
 func cut(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	if lipgloss.Width(s) <= width {
 		return s
 	}

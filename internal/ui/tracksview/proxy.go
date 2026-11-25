@@ -63,9 +63,10 @@ type (
 	}
 	proxyTickMsg    struct{}
 	proxyChangedMsg struct {
-		view  source.ProxyView
-		err   error
-		added int // the port added, 0 for another change
+		view    source.ProxyView
+		err     error
+		added   int // the port added, 0 for another change
+		removed int // the port removed, 0 for another change
 	}
 )
 
@@ -161,20 +162,22 @@ func (m Model) proxyChanged(msg proxyChangedMsg) (Model, tea.Cmd) {
 			}
 		}
 		p.notice = notice{text: fmt.Sprintf("Added port %d. Pick what it forwards to.", msg.added)}
+	} else if msg.removed != 0 {
+		p.notice = notice{text: fmt.Sprintf("Removed port %d.", msg.removed)}
 	}
 	p.selected = min(p.selected, len(p.view.Ports))
 	return m.scrollProxy(), nil
 }
 
 // change runs fn on the proxy source and reports its result.
-func (m Model) change(added int, fn func(ctx context.Context, src source.Proxy) (source.ProxyView, error)) tea.Cmd {
+func (m Model) change(added, removed int, fn func(ctx context.Context, src source.Proxy) (source.ProxyView, error)) tea.Cmd {
 	if m.proxySource == nil {
 		return nil
 	}
 	src := m.proxySource
 	return func() tea.Msg {
 		v, err := fn(context.Background(), src)
-		return proxyChangedMsg{v, err, added}
+		return proxyChangedMsg{view: v, err: err, added: added, removed: removed}
 	}
 }
 
@@ -204,7 +207,7 @@ func (m Model) submitPort() (Model, tea.Cmd) {
 		p.inputErr = "Enter a port number, such as 3000."
 		return m, nil
 	}
-	return m, m.change(port, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) { return src.Add(ctx, port) })
+	return m, m.change(port, 0, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) { return src.Add(ctx, port) })
 }
 
 // removePort removes the port on row i.
@@ -213,8 +216,7 @@ func (m Model) removePort(i int) (Model, tea.Cmd) {
 		return m, nil
 	}
 	port := m.proxy.view.Ports[i].Port
-	m.proxy.notice = notice{text: fmt.Sprintf("Removed port %d.", port)}
-	return m, m.change(0, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) { return src.Remove(ctx, port) })
+	return m, m.change(0, port, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) { return src.Remove(ctx, port) })
 }
 
 // proxyKey handles a key on the Proxy tab. ok is false for keys it
@@ -233,7 +235,7 @@ func (m Model) proxyKey(msg tea.KeyPressMsg) (_ Model, _ tea.Cmd, ok bool) {
 			return next, cmd, true
 		}
 		var cmd tea.Cmd
-		p.input, cmd = p.input.Update(msg)
+		p.input, cmd = widget.UpdateInput(p.input, msg)
 		p.input.SetValue(digits(p.input.Value()))
 		p.inputErr = ""
 		return m, cmd, true
@@ -344,7 +346,7 @@ func (m Model) proxyPicked(r widget.PickerResult) (Model, tea.Cmd) {
 			in = source.InputOf(m.proxy.view.Inputs[i-1])
 		}
 		port := m.proxy.picking
-		return m, m.change(0, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) {
+		return m, m.change(0, 0, func(ctx context.Context, src source.Proxy) (source.ProxyView, error) {
 			return src.SetInput(ctx, port, in)
 		})
 	}

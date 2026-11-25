@@ -183,7 +183,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.repos.form.setWidth(m.inputWidth())
 		m.settings.creator.SetSize(m.sectionWidth(), m.sectionHeight())
-		m = m.scrollStation().scrollRepos().scrollForm()
+		if m.station.rename != nil {
+			m.station.rename.scroll(m.renameTextWidth())
+		}
+		return m.scrollStation().scrollRepos().scrollForm(), nil
 	case tracksMsg:
 		return m.setTracks(msg), nil
 	case watchMsg:
@@ -253,10 +256,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.creatorMsg(msg)
 	}
 	if m.station.rename != nil {
-		switch msg.(type) {
-		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseMsg:
-			return m.renameMsg(msg)
-		}
+		return m.renameMsg(msg)
 	}
 	if m.picker != nil {
 		switch msg := msg.(type) {
@@ -264,7 +264,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.pickerMouse(msg)
 		case tea.KeyPressMsg:
 			return m.pickerKey(msg.String())
-		case tea.PasteMsg:
+		case tea.PasteMsg, tea.ClipboardMsg:
 			return m, nil
 		}
 	}
@@ -321,10 +321,28 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.editingPrefix():
 			return m.agentsPaste(msg)
 		}
+	case tea.ClipboardMsg:
+		paste := tea.PasteMsg{Content: msg.Content}
+		switch {
+		case m.tab == tabStation && m.station.fast.Focused():
+			return m.fastPaste(msg)
+		case m.tab == tabProxy && m.proxy.adding:
+			return m.proxyPaste(paste)
+		case m.tab == tabRepositories && m.repos.editing:
+			return m.repoPaste(paste)
+		case m.tab == tabEngines:
+			return m.enginesPaste(paste)
+		case m.creatorFocused():
+			return m.creatorMsg(paste)
+		case m.editingPrefix():
+			return m.agentsPaste(paste)
+		}
 	case tea.KeyPressMsg:
 		return m.key(msg)
 	default:
 		switch {
+		case m.tab == tabStation && m.station.fast.Focused():
+			return m.fastPaste(msg)
 		case m.creatorFocused():
 			return m.creatorMsg(msg)
 		case m.tab == tabProxy && m.proxy.adding:

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
@@ -48,7 +49,7 @@ func (m Model) proxyView(width, height int) []string {
 	case m.proxySource == nil:
 		return m.message(width, height, m.fg(theme.TextMuted).Render("No daemon."))
 	case !m.proxy.loaded && m.proxy.err != nil:
-		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the proxy: "+m.proxy.err.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the proxy: "+termtext.SingleLine(m.proxy.err.Error())))
 	}
 	_, fw := m.proxyFrame()
 	body, _ := m.proxyBody(fw - 4)
@@ -56,7 +57,7 @@ func (m Model) proxyView(width, height int) []string {
 	title := "Ports"
 	if m.proxy.err != nil {
 		// What shows is the last view that could be read.
-		title += " · couldn't read the proxy: " + m.proxy.err.Error()
+		title += " · couldn't read the proxy: " + termtext.SingleLine(m.proxy.err.Error())
 	}
 	framed := m.frame(title, theme.BorderDefault, body, fw, height)
 	margin := strings.Repeat(" ", stationLeft)
@@ -94,7 +95,7 @@ func (m Model) proxyBody(width int) ([]string, []proxyHit) {
 		lines = append(lines, m.box(inner, width, true)...)
 		hits = append(hits, proxyHit{kind: hitInput, line: start + 1, x: 2, w: portCellW})
 		if p.inputErr != "" {
-			lines = append(lines, m.wrap(theme.StateDangerText, p.inputErr, width)...)
+			lines = append(lines, m.wrap(theme.StateDangerText, termtext.SingleLine(p.inputErr), width)...)
 		}
 	}
 	if len(lines) > 0 {
@@ -130,7 +131,7 @@ func (m Model) portRow(st source.ProxyStatus, i, width int) (string, []proxyHit)
 		m.fg(theme.BorderDefault).Render("]")
 	text, color := m.portState(st)
 	state := lipgloss.PlaceHorizontal(stateW, lipgloss.Center, m.fg(color).Render(cut(text, max(0, stateW-2))))
-	label := m.inputLabel(st)
+	label := termtext.SingleLine(m.inputLabel(st))
 	labelColor := theme.TextDefault
 	if st.Input.None() {
 		labelColor = theme.TextMuted
@@ -165,8 +166,8 @@ func (m Model) portState(st source.ProxyStatus) (string, theme.Token) {
 	case source.ProxyNoServer:
 		return "no server ⚠", theme.StateWarningText
 	case source.ProxyBlocked:
-		if st.Holder != "" {
-			return "blocked by " + st.Holder, theme.StateDangerText
+		if holder := termtext.SingleLine(st.Holder); holder != "" {
+			return "blocked by " + holder, theme.StateDangerText
 		}
 		return "blocked: its input is this port", theme.StateDangerText
 	}

@@ -21,9 +21,9 @@ var (
 )
 
 // derailQuestion is what Station asks before derailing t: the work in q
-// it would lose, then whether to delete t for good.
+// it would lose, then whether to delete q's track for good.
 func derailQuestion(t source.Track, q question) ([]string, []action) {
-	ask := append(slices.Clone(q.lines), "Derail "+t.Name+"? Its worktrees, branches and record are deleted for good.")
+	ask := append(slices.Clone(q.lines), "Derail "+q.name+"? Its worktrees, branches and record are deleted for good.")
 	if pr, ok := t.MainPR(); ok && (pr.State == string(track.PROpen) || pr.State == string(track.PRDraft)) {
 		ask = append(ask, "Its PR #"+strconv.Itoa(pr.Number)+" stays open on GitHub.")
 	}

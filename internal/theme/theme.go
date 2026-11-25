@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"gopkg.in/yaml.v3"
 )
 
@@ -89,7 +91,7 @@ func parse(data []byte, base *Theme) (Theme, error) {
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		return Theme{}, fmt.Errorf("not a theme file: %w", err)
 	}
-	t := Theme{DisplayName: file.Name, values: make(map[Token]string, len(All))}
+	t := Theme{DisplayName: strings.TrimSpace(termtext.SingleLine(file.Name)), values: make(map[Token]string, len(All))}
 	for name, v := range file.Tokens {
 		token := Token(name)
 		if slices.Contains(retired, name) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/review"
 	"github.com/bluegardenproject/tracks/internal/store"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // maxName is the longest name, in characters.
@@ -45,7 +46,7 @@ func (s Service) Suggest(ctx context.Context, path string) (Entry, error) {
 	}
 	base, _ := s.Git.DefaultBranch(ctx, top)
 	return Entry{
-		Repo:   store.Repo{Name: nameFrom(filepath.Base(top)), Path: top, BaseBranch: base},
+		Repo:   store.Repo{Name: nameFrom(filepath.Base(top)), Path: top, BaseBranch: strings.TrimSpace(termtext.SingleLine(base))},
 		Remote: s.remote(ctx, top),
 	}, nil
 }
@@ -67,12 +68,15 @@ func (s Service) check(ctx context.Context, r store.Repo) (store.Repo, error) {
 	if r.BaseBranch == "" {
 		r.BaseBranch = DefaultBase
 	}
+	if termtext.SingleLine(r.BaseBranch) != r.BaseBranch {
+		return r, &FieldError{"base", "No branch " + termtext.SingleLine(r.BaseBranch) + " here or on origin."}
+	}
 	if ok, err := s.Git.BranchExists(ctx, top, r.BaseBranch); err != nil {
 		return r, err
 	} else if !ok {
 		return r, &FieldError{"base", "No branch " + r.BaseBranch + " here or on origin."}
 	}
-	if strings.ContainsFunc(r.CodeOwner, unicode.IsSpace) {
+	if strings.ContainsFunc(r.CodeOwner, unicode.IsSpace) || termtext.SingleLine(r.CodeOwner) != r.CodeOwner {
 		return r, &FieldError{"owner", "Enter one code owner, such as @org/team, or leave it empty."}
 	}
 	if r.Prefix != "" && !printable(r.Prefix, maxPrefix) {
@@ -118,7 +122,7 @@ func nameFrom(folder string) string {
 			return -1
 		}
 		return r
-	}, strings.ToValidUTF8(folder, ""))
+	}, termtext.Multiline(folder))
 	name = strings.TrimSpace(name)
 	if r := []rune(name); len(r) > maxName {
 		name = strings.TrimSpace(string(r[:maxName]))

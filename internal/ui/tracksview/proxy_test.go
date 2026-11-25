@@ -20,9 +20,10 @@ func init() {
 // fakeProxy keeps output ports in memory; a port forwards when its
 // input is among inputs.
 type fakeProxy struct {
-	ports  []source.ProxyStatus
-	inputs []source.Server
-	fresh  int // fresh reads
+	ports     []source.ProxyStatus
+	inputs    []source.Server
+	fresh     int // fresh reads
+	removeErr error
 }
 
 func (f *fakeProxy) view() source.ProxyView {
@@ -58,6 +59,9 @@ func (f *fakeProxy) Add(_ context.Context, port int) (source.ProxyView, error) {
 }
 
 func (f *fakeProxy) Remove(_ context.Context, port int) (source.ProxyView, error) {
+	if f.removeErr != nil {
+		return source.ProxyView{}, f.removeErr
+	}
 	f.ports = slices.DeleteFunc(f.ports, func(p source.ProxyStatus) bool { return p.Port == port })
 	return f.view(), nil
 }
@@ -221,5 +225,24 @@ func TestThePickerSetsItsOwnPort(t *testing.T) {
 	m = settle(m, proxyTickMsg{}, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if len(f.ports) != 1 || f.ports[0].Port != 8081 || f.ports[0].Input != source.InputOf(web) {
 		t.Errorf("ports %+v; want 8081 forwarding to web", f.ports)
+	}
+}
+
+func TestRemovingAPortSetsNoticeOnlyOnSuccess(t *testing.T) {
+	f := &fakeProxy{ports: []source.ProxyStatus{{Port: 3000}}, removeErr: fmt.Errorf("daemon gone")}
+	m := proxyTabModel(t, f)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyDelete})
+	m = next.(Model)
+	if m.proxy.notice.text != "" {
+		t.Fatalf("notice set before remove finished: %q", m.proxy.notice.text)
+	}
+	m = update(m, cmd())
+	if !m.proxy.notice.err || !strings.Contains(m.proxy.notice.text, "daemon gone") {
+		t.Fatalf("failed remove notice = %+v, want error", m.proxy.notice)
+	}
+	f.removeErr = nil
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyDelete})
+	if m.proxy.notice.err || m.proxy.notice.text != "Removed port 3000." {
+		t.Errorf("successful remove notice = %+v, want Removed port 3000.", m.proxy.notice)
 	}
 }

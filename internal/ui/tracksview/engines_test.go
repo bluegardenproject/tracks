@@ -252,3 +252,21 @@ func TestAMissingEngineWithoutAnInstallCommandPointsToItsDocs(t *testing.T) {
 		t.Errorf("a missing Copilot should point to its install docs:\n%s", view)
 	}
 }
+
+func TestSetEnginesHandlesNilChecksAndPreservesSavingCheck(t *testing.T) {
+	m := New(Config{Version: "test", Theme: theme.Default()})
+	m.engines.checks["claude"] = engineCheck{checking: true}
+	// Nil checks map in enginesMsg must not panic and must keep in-flight Add check.
+	m = m.setEngines(enginesMsg{})
+	if !m.engines.checks["claude"].checking {
+		t.Fatalf("expected in-flight Add check preserved, got %+v", m.engines.checks)
+	}
+	// While saving an added engine, a stale load without it must keep its check.
+	m.engines.settings.Set("claude", &settings.Engine{})
+	m.engines.checks["claude"] = engineCheck{found: agents.Found{Path: "/bin/claude", Version: "2.1"}}
+	m.engines.saving = true
+	m = m.setEngines(enginesMsg{checks: map[string]engineCheck{}})
+	if got := m.engines.checks["claude"].found.Version; got != "2.1" {
+		t.Errorf("expected saving engine check preserved, got %+v", m.engines.checks["claude"])
+	}
+}

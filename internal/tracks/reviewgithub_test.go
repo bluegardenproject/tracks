@@ -54,7 +54,7 @@ func TestParsePRView(t *testing.T) {
 }
 
 func TestPlain(t *testing.T) {
-	if got := plain("\x1b[31mFAIL\x1b[0m\tx_test.go\r\n\x1b]0;title\x07ok\x00\u009b2J\n"); got != "FAIL\tx_test.go\nok2J\n" {
+	if got := plain("\x1b[31mFAIL\x1b[0m\tx_test.go\r\n\x1b]0;title\x07ok\x00\u009b2J\n"); got != "FAIL\tx_test.go\nok\n" {
 		t.Errorf("plain = %q", got)
 	}
 	w := &tail{limit: 4}

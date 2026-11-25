@@ -174,7 +174,7 @@ func TestStates(t *testing.T) {
 		t.Errorf("one message:\n%s", out)
 	}
 	if out := plain(run(60, 10, Loaded{Messages: []relay.Message{{ID: 1, From: "x-1", To: "track", Kind: relay.Event,
-		Body: "red\x1b[2J\x1b]0;title\x07\ttab", At: now}}})); strings.Contains(out, "\x1b") || !strings.Contains(out, "red[2J]0;title    tab") {
+		Body: "red\x1b[2J\x1b]0;title\x07\ttab", At: now}}})); strings.Contains(out, "\x1b") || !strings.Contains(out, "red    tab") {
 		t.Errorf("a message's control characters reach the screen:\n%q", out)
 	}
 }

@@ -141,3 +141,18 @@ func TestClicks(t *testing.T) {
 		t.Errorf("Result = %v, %+v; want %+v", action, f, want)
 	}
 }
+
+func TestClipboardPasteAndUnrelatedMsgInDateFields(t *testing.T) {
+	// Move focus to From without typing (started remains AnyTime).
+	m := run(track.Filter{}, down, down, down, down, tea.KeyPressMsg{Code: tea.KeyRight})
+	type unrelatedMsg struct{}
+	m = run2(m, unrelatedMsg{})
+	if m.started != track.AnyTime {
+		t.Fatalf("unrelated msg switched Started to %v", m.started)
+	}
+	m = run2(m, tea.ClipboardMsg{Content: "2026-09-12"}, enter)
+	action, f := m.Result()
+	if want := (track.Filter{Started: track.Between, From: "2026-09-12"}); action != Apply || !reflect.DeepEqual(f, want) {
+		t.Errorf("ClipboardMsg paste = %v, %+v; want Apply, %+v", action, f, want)
+	}
+}

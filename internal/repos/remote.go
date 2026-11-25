@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/url"
 	"strings"
+
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // remote is the web address of dir's origin, "" without one.
@@ -20,6 +22,9 @@ func (s Service) remote(ctx context.Context, dir string) string {
 // "".
 func webURL(remote string) string {
 	remote = strings.TrimSpace(remote)
+	if remote == "" || termtext.SingleLine(remote) != remote {
+		return ""
+	}
 	scheme, host, path := "https", "", ""
 	if !strings.Contains(remote, "://") {
 		// scp-like: [user@]host:path

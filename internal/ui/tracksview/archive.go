@@ -18,10 +18,11 @@ var (
 	}
 )
 
-// archiveQuestion is what Station asks before archiving t: the work in
-// q it would lose, then whether to remove its worktrees and branches.
-func archiveQuestion(t source.Track, q question) ([]string, []action) {
-	ask := append(slices.Clone(q.lines), "Archive "+t.Name+"? Its worktrees and local branches are removed; what was pushed stays.")
+// archiveQuestion is what Station asks before archiving q's track: the
+// work in q it would lose, then whether to remove its worktrees and
+// branches.
+func archiveQuestion(q question) ([]string, []action) {
+	ask := append(slices.Clone(q.lines), "Archive "+q.name+"? Its worktrees and local branches are removed; what was pushed stays.")
 	if len(q.lines) > 0 {
 		return ask, confirmArchiveAnyway
 	}

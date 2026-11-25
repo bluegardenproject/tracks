@@ -70,3 +70,36 @@ func TestFastReviewWithoutDaemon(t *testing.T) {
 		t.Error("a paste focused Fast Review without a daemon to open it")
 	}
 }
+
+func TestFastReviewClipboardPasteRequiresFocus(t *testing.T) {
+	m := New(Config{Version: "test", Theme: theme.Default(), FastReview: func(string, func(string)) (string, error) {
+		return "ok", nil
+	}})
+	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: demoTracks(3)})
+	// Unfocused clipboard message must not focus or populate Fast Review.
+	m = settle(m, tea.ClipboardMsg{Content: "https://github.com/acme/web/pull/1"})
+	if m.station.fast.Focused() || m.station.fast.Value() != "" {
+		t.Fatalf("unfocused clipboard paste touched Fast Review: focused=%v value=%q", m.station.fast.Focused(), m.station.fast.Value())
+	}
+	m = settle(m, tea.KeyPressMsg{Code: 'f'}, tea.ClipboardMsg{Content: " https://github.com/acme/web/pull/99 \n"})
+	if m.station.fast.Value() != "https://github.com/acme/web/pull/99" {
+		t.Errorf("focused clipboard paste = %q, want trimmed PR URL", m.station.fast.Value())
+	}
+
+	// Format-only (e.g. BiDi) input disables the Review button and Enter is a no-op.
+	opened := 0
+	m2 := New(Config{Version: "test", Theme: theme.Default(), FastReview: func(string, func(string)) (string, error) {
+		opened++
+		return "ok", nil
+	}})
+	m2 = update(m2, tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: demoTracks(3)})
+	m2.station.fast.Focus()
+	m2.station.fast.SetValue("\u202e")
+	if !m2.fastButton().Disabled {
+		t.Error("fastButton should be disabled for BiDi-only input")
+	}
+	m2 = settle(m2, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if opened != 0 {
+		t.Errorf("Enter opened %d reviews for BiDi-only input, want 0", opened)
+	}
+}

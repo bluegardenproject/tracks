@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
@@ -153,8 +154,8 @@ func (m Model) details(width int) ([]string, []hit) {
 	value := func(s string) string { return m.fg(theme.TextDefault).Render(s) }
 	muted := func(s string) string { return m.fg(theme.TextMuted).Render(s) }
 
-	about := muted(t.Kind+"  ") + m.statusBadges(t, lipgloss.NewStyle())
-	name := m.fg(theme.TextDefault).Bold(true).Render(t.Shown())
+	about := muted(termtext.SingleLine(t.Kind)+"  ") + m.statusBadges(t, lipgloss.NewStyle())
+	name := m.fg(theme.TextDefault).Bold(true).Render(termtext.SingleLine(t.Shown()))
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	number := muted("none")
 	if t.Number > 0 {
@@ -170,18 +171,18 @@ func (m Model) details(width int) ([]string, []hit) {
 		if t.Side != "" {
 			from = "Side track of "
 		}
-		lines = append(lines, muted(from)+value(cut(t.Parent, width-len(from))))
+		lines = append(lines, muted(from)+value(cut(termtext.SingleLine(t.Parent), width-len(from))))
 	}
-	lines = append(lines, "", label("Slug")+value(t.Name), label("ID")+number, label("Created")+created)
+	lines = append(lines, "", label("Slug")+value(termtext.SingleLine(t.Name)), label("ID")+number, label("Created")+created)
 
 	for i, r := range t.Repos {
 		l := label("")
 		if i == 0 {
 			l = label("Repo")
 		}
-		line := l + value(r.Name)
+		line := l + value(termtext.SingleLine(r.Name))
 		if r.Branch != "" {
-			line += "  " + m.fg(theme.TextAccent).Render(r.Branch)
+			line += "  " + m.fg(theme.TextAccent).Render(termtext.SingleLine(r.Branch))
 		}
 		path := muted(shorten(r.Path, width-labelWidth))
 		if r.Removed {
@@ -191,9 +192,9 @@ func (m Model) details(width int) ([]string, []hit) {
 	}
 	engine := muted("unknown")
 	if t.Engine != "" {
-		engine = value(t.Engine)
+		engine = value(termtext.SingleLine(t.Engine))
 		if t.Model != "" {
-			engine += muted(" · " + t.Model)
+			engine += muted(" · " + termtext.SingleLine(t.Model))
 		}
 	}
 	session, pr := muted("none"), muted("none")
@@ -211,7 +212,7 @@ func (m Model) details(width int) ([]string, []hit) {
 		var ask []string
 		switch {
 		case q.kind == askEnd:
-			ask, buttons = []string{"End " + t.Name + "? Its window and agent close."}, confirmEnd
+			ask, buttons = []string{"End " + termtext.SingleLine(q.name) + "? Its window and agent close."}, confirmEnd
 		case q.kind == askRecreate:
 			heading := "Worktree couldn't be found"
 			if len(q.lines) > 1 {
@@ -222,13 +223,13 @@ func (m Model) details(width int) ([]string, []hit) {
 				ask = append(ask, "A deleted branch comes back from origin, or starts again from the base.")
 			}
 		case q.kind == askArchive:
-			ask, buttons = archiveQuestion(t, *q)
+			ask, buttons = archiveQuestion(*q)
 		case q.kind == askDerail:
 			ask, buttons = derailQuestion(t, *q)
 		}
 		warn := m.fg(theme.StateWarningText).Width(width)
 		for _, a := range ask {
-			lines = append(lines, strings.Split(warn.Render(a), "\n")...)
+			lines = append(lines, strings.Split(warn.Render(termtext.SingleLine(a)), "\n")...)
 		}
 		lines = append(lines, "")
 	}
@@ -320,7 +321,7 @@ func (m Model) press(id actionID) (Model, tea.Cmd, bool) {
 	}
 	switch id {
 	case actionEnd:
-		m.station.asking = &question{id: t.ID, name: t.Name, kind: askEnd}
+		m.station.asking = &question{id: t.ID, name: t.Name, number: t.Number, kind: askEnd}
 		return m, nil, true
 	case actionCancel:
 		m.station.asking = nil
@@ -381,14 +382,28 @@ func (m Model) act(id actionID) tea.Cmd {
 	switch {
 	case id == actionOpen && m.open != nil:
 		return run(func() error { return m.open(t.Number) }, "", "Couldn't switch", false)
-	case id == actionEnd && m.end != nil:
-		return run(func() error { return m.end(t.Number) }, "Ended "+t.Name+".", "Couldn't end "+t.Name, true)
+	case id == actionEnd:
+		return m.endTrack(t.Number, t.Name)
 	case id == actionUnarchive && m.unarchive != nil:
 		return run(func() error { return m.unarchive(t.ID) }, "Unarchived "+t.Name+".", "Couldn't unarchive "+t.Name, true)
 	case id == actionDismissFailures && m.dismissFailures != nil:
 		return run(func() error { return m.dismissFailures(t.ID) }, "Dismissed "+t.Name+"'s errors.", "Couldn't dismiss the errors", true)
 	}
 	return nil
+}
+
+// endTrack ends track number, reporting its result under name.
+func (m Model) endTrack(number int, name string) tea.Cmd {
+	if m.end == nil {
+		return nil
+	}
+	end := m.end
+	return func() tea.Msg {
+		if err := end(number); err != nil {
+			return doneMsg{err: errors.New(failure("Couldn't end "+name, err))}
+		}
+		return doneMsg{ok: "Ended " + name + ".", reload: true}
+	}
 }
 
 // prList is prs as "#12 open", with each repo's name when they're in
@@ -402,22 +417,19 @@ func prList(prs []source.PR, value, muted func(string) string) string {
 	for i, p := range prs {
 		name := ""
 		if several {
-			_, name, _ = strings.Cut(p.Repo, "/")
+			_, name, _ = strings.Cut(termtext.SingleLine(p.Repo), "/")
 		}
-		parts[i] = value(fmt.Sprintf("%s#%d", name, p.Number)) + muted(" "+p.State)
+		parts[i] = value(fmt.Sprintf("%s#%d", name, p.Number)) + muted(" "+termtext.SingleLine(p.State))
 	}
 	return strings.Join(parts, muted(", "))
 }
 
 // shorten writes the home directory as ~ and cuts s from the left to
-// fit width.
+// fit width cells.
 func shorten(s string, width int) string {
+	s = termtext.SingleLine(s)
 	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(s, home) {
 		s = "~" + strings.TrimPrefix(s, home)
 	}
-	r := []rune(s)
-	if width < 2 || len(r) <= width {
-		return s
-	}
-	return "…" + string(r[len(r)-width+1:])
+	return widget.CutLeft(s, width)
 }

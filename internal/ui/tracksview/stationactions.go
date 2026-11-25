@@ -102,9 +102,11 @@ func (m Model) checked(msg checkedMsg) Model {
 	return m.ask(question{id: msg.id, name: msg.name, kind: msg.kind, lines: msg.lost})
 }
 
-// ask puts q to the user while its track is still the selected one.
+// ask puts q to the user while its track is still selected and q still
+// applies to it.
 func (m Model) ask(q question) Model {
-	if t, ok := m.selectedTrack(); ok && t.ID == q.id {
+	if t, ok := m.selectedTrack(); ok && q.validFor(t) {
+		q.number, q.name = t.Number, t.Name
 		m.station.asking = &q
 	}
 	return m

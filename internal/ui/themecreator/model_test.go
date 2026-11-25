@@ -270,3 +270,35 @@ func TestCtrlCCopiesTheValue(t *testing.T) {
 		t.Errorf("Ctrl+C on a button sent %v; want nothing", out)
 	}
 }
+
+func TestLeaveSaveErrorEmitsStayAndKeepsScroll(t *testing.T) {
+	m := creator(mine())
+	m.SetSize(90, 14)
+	m, _ = send(m, clearField()...)
+	m, _ = send(m, typed("#123456")...)
+	m, _ = send(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown}, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	beforeOffset := m.offset
+	if beforeOffset == 0 {
+		t.Fatal("expected non-zero scroll offset before Leave")
+	}
+	if m.Leave() {
+		t.Fatal("expected Leave to prompt on dirty theme")
+	}
+	if m.offset != beforeOffset {
+		t.Errorf("Leave jumped scroll offset from %d to %d", beforeOffset, m.offset)
+	}
+	m, _ = send(m, key("s"))
+	m, msgs := send(m, SavedMsg{Err: errors.New("disk full")})
+	if m.mode != modeEdit || m.saving {
+		t.Errorf("after failed save on leave: mode=%d saving=%v", m.mode, m.saving)
+	}
+	if m.focus != 0 || !m.fields[0].input.Focused() {
+		t.Errorf("after failed save on leave: focus=%d inputFocused=%v; want focus 0", m.focus, m.fields[0].input.Focused())
+	}
+	if _, ok := find[StayMsg](msgs); !ok {
+		t.Errorf("failed save on leave sent %v; want StayMsg", msgs)
+	}
+	if cut("hello", 0) != "" || cut("hello", -2) != "" {
+		t.Error("cut with non-positive width must return empty string")
+	}
+}

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
@@ -30,11 +31,11 @@ func (m Model) draftDetails(t source.Track, width int) ([]string, []hit) {
 		return strings.Split(m.fg(c).Width(max(1, width)).Render(s), "\n")
 	}
 
-	about := muted(t.Kind+"  ") + widget.Badge(m.palette, t.Status)
-	name := m.fg(theme.TextDefault).Bold(true).Render(cut(t.Shown(), max(1, width-lipgloss.Width(about)-1)))
+	about := muted(termtext.SingleLine(t.Kind)+"  ") + widget.Badge(m.palette, t.Status)
+	name := m.fg(theme.TextDefault).Bold(true).Render(cut(termtext.SingleLine(t.Shown()), max(1, width-lipgloss.Width(about)-1)))
 	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(about))
 	lines := []string{name + strings.Repeat(" ", gap) + about, ""}
-	lines = append(lines, wrap(theme.StateDangerText, t.Draft.Error)...)
+	lines = append(lines, wrap(theme.StateDangerText, termtext.Multiline(t.Draft.Error))...)
 	lines = append(lines, "", label("Failed")+value(t.Created.Local().Format(createdLayout)))
 
 	for i, r := range t.Repos {
@@ -42,17 +43,17 @@ func (m Model) draftDetails(t source.Track, width int) ([]string, []hit) {
 		if i == 0 {
 			l = label("Repo")
 		}
-		lines = append(lines, l+value(r.Name))
+		lines = append(lines, l+value(termtext.SingleLine(r.Name)))
 	}
 	engine := muted("the type's")
 	if t.Engine != "" {
-		engine = value(t.Engine)
+		engine = value(termtext.SingleLine(t.Engine))
 		if t.Model != "" {
-			engine += muted(" · " + t.Model)
+			engine += muted(" · " + termtext.SingleLine(t.Model))
 		}
 	}
 	lines = append(lines, label("Engine")+engine, "")
-	if prompt := strings.TrimSpace(t.Draft.Prompt); prompt != "" {
+	if prompt := strings.TrimSpace(termtext.Multiline(t.Draft.Prompt)); prompt != "" {
 		shown := wrap(theme.TextMuted, prompt)
 		if len(shown) > draftPromptLines {
 			shown = append(shown[:draftPromptLines-1], muted("…"))

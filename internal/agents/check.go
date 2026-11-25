@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // ErrNotFound is returned when an engine's program isn't on PATH.
@@ -36,7 +37,7 @@ func Check(ctx context.Context, e Engine) (Found, error) {
 	if err != nil {
 		return Found{Path: path}, nil
 	}
-	return Found{Path: path, Version: clean(version(string(out)))}, nil
+	return Found{Path: path, Version: strings.TrimSpace(clean(version(termtext.Multiline(string(out)))))}, nil
 }
 
 // version reads a version from --version output: its first line,
@@ -56,17 +57,9 @@ func version(out string) string {
 	return line
 }
 
-// escapes are the colour and title sequences CLIs print.
-var escapes = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)`)
-
 // clean drops escape sequences, control and invisible format characters
 // from CLI output before it's drawn: escapes would reach the terminal,
 // and zero-width spaces throw the columns off.
 func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, escapes.ReplaceAllString(s, ""))
+	return termtext.SingleLine(s)
 }

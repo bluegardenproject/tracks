@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
@@ -62,11 +63,11 @@ func (m Model) repoRows() int { return max(0, m.contentHeight()-3) }
 func (m Model) reposView(width, height int) []string {
 	switch {
 	case m.reposErr != nil:
-		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't open the database: "+m.reposErr.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't open the database: "+termtext.SingleLine(m.reposErr.Error())))
 	case m.repoSource == nil:
 		return m.message(width, height, m.fg(theme.TextMuted).Render("No database."))
 	case m.repos.err != nil:
-		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the repositories: "+m.repos.err.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the repositories: "+termtext.SingleLine(m.repos.err.Error())))
 	}
 	rp := m.repoPanes()
 	var left, right []string
@@ -120,7 +121,7 @@ func (m Model) repoList(width, height int) []string {
 	lines := []string{view, ""}
 	rows := make([][]string, len(r.entries))
 	for i, e := range r.entries {
-		rows[i] = []string{e.Name, e.BaseBranch}
+		rows[i] = []string{termtext.SingleLine(e.Name), termtext.SingleLine(e.BaseBranch)}
 	}
 	t := table{header: repoColumns, rows: rows, right: -1, selected: r.selected, hover: r.hover, offset: r.offset}
 	lines = append(lines, t.draw(m, width, height-2)...)
@@ -176,7 +177,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 		} else {
 			count := fmt.Sprintf("%d  ", len(f.tracks))
 			lines = append(lines,
-				m.fg(theme.TextDefault).Render(count)+m.fg(theme.TextMuted).Render(cut(strings.Join(f.tracks, ", "), width-len(count))))
+				m.fg(theme.TextDefault).Render(count)+m.fg(theme.TextMuted).Render(cut(termtext.SingleLine(strings.Join(f.tracks, ", ")), width-len(count))))
 			note := m.fg(theme.TextFaint).Width(max(1, width)).Render("Name and path can't change while tracks run here.")
 			lines = append(lines, strings.Split(note, "\n")...)
 		}
@@ -197,7 +198,7 @@ func (m Model) repoForm(width, height int) ([]string, []formHit) {
 		var bottomHits []formHit
 		buttons := []formButton{{fieldDelete, "Delete", widget.ButtonDanger}}
 		if f.confirming {
-			question := m.fg(theme.StateWarningText).Width(max(1, width)).Render("Delete " + f.original.Name + "? Past tracks keep their history.")
+			question := m.fg(theme.StateWarningText).Width(max(1, width)).Render("Delete " + termtext.SingleLine(f.original.Name) + "? Past tracks keep their history.")
 			bottom = strings.Split(question, "\n")
 			buttons = []formButton{{fieldConfirmDelete, "Delete repository", widget.ButtonDanger}, {fieldCancelDelete, "Cancel", widget.ButtonDefault}}
 		}

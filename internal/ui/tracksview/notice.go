@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 )
 
@@ -86,7 +87,7 @@ func (m Model) noticeView(n notice) string {
 	if n.err {
 		color = theme.StateDangerText
 	}
-	s := "  " + m.fg(color).Render(n.text)
+	s := "  " + m.fg(color).Render(termtext.SingleLine(n.text))
 	if n.closable() {
 		s += "  " + m.fg(theme.TextMuted).Render("✕")
 	}
@@ -100,6 +101,6 @@ func (m Model) onNoticeClose(x, y int) bool {
 	if n == nil || !n.closable() || y != m.height-1 {
 		return false
 	}
-	at := 2 + lipgloss.Width(n.text) + 2
+	at := 2 + lipgloss.Width(termtext.SingleLine(n.text)) + 2
 	return x >= at-1 && x <= at+1
 }

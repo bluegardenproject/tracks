@@ -426,3 +426,38 @@ func TestASideTracksLongStatus(t *testing.T) {
 		t.Errorf("switched %d times, want once", opened)
 	}
 }
+
+func TestLoadErrorPreservesStateAndSanitizes(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default(), OpenRelayStation: func() error { return errors.New("no client") }}), size, loadedMsg{
+		trains:  []Entry{{Handle: "日本語テスト-1234567890", Status: track.Active}},
+		sides:   []Side{{ID: "a", Name: "side\x1b]0;t\x07-name", Status: track.Active}},
+		signals: Signals{RelayNew: 4, PRs: []PR{{Index: 0, PR: "PR #12", Action: "solve 2 comments"}}},
+	})
+	loaded := view(m)
+	if strings.Contains(loaded, "\x1b") || !strings.Contains(loaded, "side-name") {
+		t.Errorf("loaded view leaked escape or lost sanitized side name:\n%q", loaded)
+	}
+	for i, line := range strings.Split(loaded, "\n") {
+		if w := lipgloss.Width(line); w != size.Width {
+			t.Errorf("loaded line %d width = %d, want %d: %q", i, w, size.Width, line)
+		}
+	}
+	m, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Relay Station"), Button: tea.MouseLeft})
+	m = update(t, m, cmd())
+	m = update(t, m, loadedMsg{err: errors.New("daemon\x1b[2J restarting")})
+	got := m.(Model)
+	if len(got.trains) != 1 || len(got.sides) != 1 || got.signals.RelayNew != 4 || got.notice != "no client" {
+		t.Fatalf("transient load error wiped state: trains=%d sides=%d signals=%+v notice=%q",
+			len(got.trains), len(got.sides), got.signals, got.notice)
+	}
+	v := view(m)
+	if strings.Contains(v, "\x1b") || strings.Contains(v, "[2J") || !strings.Contains(v, "Relay Station · 4 new") ||
+		!strings.Contains(v, "daemon") || !strings.Contains(v, "restarting") {
+		t.Errorf("error view:\n%q", v)
+	}
+	for i, line := range strings.Split(v, "\n") {
+		if w := lipgloss.Width(line); w != size.Width {
+			t.Errorf("line %d width = %d, want %d: %q", i, w, size.Width, line)
+		}
+	}
+}

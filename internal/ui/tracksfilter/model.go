@@ -137,6 +137,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.key(msg)
 	case tea.PasteMsg:
 		return m.typed(msg)
+	case tea.ClipboardMsg:
+		return m.typed(tea.PasteMsg{Content: msg.Content})
 	case tea.MouseClickMsg:
 		mouse := msg.Mouse()
 		if i, ok := m.controlAt(mouse.X, mouse.Y); ok && mouse.Button == tea.MouseLeft {
@@ -149,6 +151,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if i, ok := m.controlAt(mouse.X, mouse.Y); ok {
 			m.hover = i
 		}
+	default:
+		return m.typed(msg)
 	}
 	return m, nil
 }
@@ -193,9 +197,17 @@ func (m Model) typed(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+	before := in.Value()
 	var cmd tea.Cmd
-	*in, cmd = in.Update(msg)
-	m.started, m.err = track.Between, ""
+	*in, cmd = widget.UpdateInput(*in, msg)
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.PasteMsg:
+		m.started, m.err = track.Between, ""
+	default:
+		if in.Value() != before {
+			m.started, m.err = track.Between, ""
+		}
+	}
 	return m, cmd
 }
 

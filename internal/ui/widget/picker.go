@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 )
@@ -92,7 +93,7 @@ func (p *Picker) Size(width, height int) (w, h int) {
 	for _, it := range p.Items {
 		w = max(w, 4+markWidth+label+pickerGap+lipgloss.Width(p.detail(it)))
 	}
-	w = max(0, min(max(w, lipgloss.Width(p.Message)+4), width-4))
+	w = max(0, min(max(w, lipgloss.Width(termtext.SingleLine(p.Message))+4), width-4))
 	p.rows = max(1, min(len(p.Items), height-2-pickerChrome-p.footer()))
 	p.scroll()
 	return w, min(height, p.rows+pickerChrome+p.footer())
@@ -253,30 +254,30 @@ func (p *Picker) scroll() {
 func (p Picker) labelWidth() int {
 	w := 0
 	for _, it := range p.Items {
-		w = max(w, lipgloss.Width(it.Label))
+		w = max(w, lipgloss.Width(termtext.SingleLine(it.Label)))
 	}
 	return w
 }
 
 func (p Picker) detail(it PickerItem) string {
 	if it.Problem != "" {
-		return it.Problem
+		return termtext.SingleLine(it.Problem)
 	}
-	return it.Detail
+	return termtext.SingleLine(it.Detail)
 }
 
 // View draws the box, w by h cells as Size returned.
 func (p Picker) View(pal style.Palette, w, h int) string {
-	if w < 6 || h < pickerChrome {
+	if w < 4+markWidth || h < pickerChrome {
 		return ""
 	}
 	bg := lipgloss.NewStyle().Background(pal.Color(theme.OverlayBg))
 	border := bg.Foreground(pal.Color(theme.OverlayBorder))
-	title := p.Title
+	title := termtext.SingleLine(p.Title)
 	if p.query != "" {
-		title += " · " + p.query
+		title += " · " + termtext.SingleLine(p.query)
 	}
-	title = cutTo(title, w-6)
+	title = Cut(title, w-6)
 	lines := []string{border.Render("╭─ " + title + " " + strings.Repeat("─", max(0, w-5-lipgloss.Width(title))) + "╮")}
 	body := func(s string, fill lipgloss.Style) string {
 		return border.Render("│") + fill.Render(" ") + s + fill.Render(strings.Repeat(" ", max(0, w-3-lipgloss.Width(s)))) + border.Render("│")
@@ -290,9 +291,9 @@ func (p Picker) View(pal style.Palette, w, h int) string {
 			if p.Problem {
 				color = theme.StateDangerText
 			}
-			lines = append(lines, body(bg.Foreground(pal.Color(color)).Render(cutTo(p.Message, inner)), bg))
+			lines = append(lines, body(bg.Foreground(pal.Color(color)).Render(Cut(termtext.SingleLine(p.Message), inner)), bg))
 		case r == 0 && len(shown) == 0:
-			lines = append(lines, body(bg.Foreground(pal.Color(theme.OverlayTextFaint)).Render(cutTo("Nothing matches.", inner)), bg))
+			lines = append(lines, body(bg.Foreground(pal.Color(theme.OverlayTextFaint)).Render(Cut("Nothing matches.", inner)), bg))
 		case p.Message != "" || p.offset+r >= len(shown):
 			lines = append(lines, body("", bg))
 		default:
@@ -332,24 +333,15 @@ func (p Picker) row(pal style.Palette, i, inner int, bg lipgloss.Style) (string,
 		name = fill.Foreground(pal.Color(theme.OverlayTextFaint))
 		detail = fill.Foreground(pal.Color(theme.StateDangerText))
 	}
-	label := p.labelWidth()
-	room := max(0, inner-markWidth-label-pickerGap)
+	avail := max(0, inner-markWidth)
+	label := min(p.labelWidth(), avail)
+	gap := min(pickerGap, max(0, avail-label))
+	room := max(0, avail-label-gap)
 	row := fill.Foreground(pal.Color(theme.OverlayTextMuted)).Render(mark) +
-		name.Render(padTo(cutTo(it.Label, label), label+pickerGap)) + detail.Render(cutTo(p.detail(it), room))
+		name.Render(padTo(Cut(termtext.SingleLine(it.Label), label), label+gap)) + detail.Render(Cut(p.detail(it), room))
 	return row + fill.Render(strings.Repeat(" ", max(0, inner-lipgloss.Width(row)))), fill
 }
 
 func padTo(s string, width int) string {
 	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
-}
-
-func cutTo(s string, width int) string {
-	r := []rune(s)
-	if width < 1 {
-		return ""
-	}
-	if len(r) <= width {
-		return s
-	}
-	return string(r[:width-1]) + "…"
 }

@@ -130,3 +130,14 @@ func TestRenameNeedsTheDaemon(t *testing.T) {
 		t.Error("Rename opened without a way to save")
 	}
 }
+
+func TestRenameClipboardPasteAndSanitize(t *testing.T) {
+	var got []titled
+	m := withTitles(&got)
+	m = run(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
+	m = run(m, tea.ClipboardMsg{Content: "-pasted\x1b[31m"})
+	m = run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(got) != 1 || got[0] != (titled{"a", "track-01-pasted"}) {
+		t.Errorf("renamed %+v, want track-01-pasted", got)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/agents/claude"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
@@ -73,8 +74,35 @@ type station struct {
 // track, or when resuming one finds a worktree gone.
 type question struct {
 	id, name string // the track's
+	number   int    // the track's window number, for askEnd
 	kind     asked
 	lines    []string // the work that would be lost, or the missing worktrees
+}
+
+// matches reports whether q refers to t.
+func (q question) matches(t source.Track) bool {
+	if q.id != "" {
+		return t.ID == q.id
+	}
+	return t.ID == "" && t.Number == q.number && t.Name == q.name
+}
+
+// validFor reports whether q still applies to t.
+func (q question) validFor(t source.Track) bool {
+	if !q.matches(t) || t.Draft != nil {
+		return false
+	}
+	switch q.kind {
+	case askEnd:
+		return t.Open()
+	case askRecreate:
+		return !t.Open() && !t.Archived && t.Status != track.Closed
+	case askArchive:
+		return !t.Open() && !t.Archived
+	case askDerail:
+		return !t.Open()
+	}
+	return false
 }
 
 type asked int
@@ -102,7 +130,7 @@ func (m Model) confirm(q question) (Model, tea.Cmd) {
 	case askDerail:
 		return m, m.derail(q)
 	}
-	return m, m.act(actionEnd)
+	return m, m.endTrack(q.number, q.name)
 }
 
 // columns are the list's headers. The PR status and the errors' status
@@ -121,11 +149,11 @@ func cells(t source.Track) []string {
 	} else if t.Model != "" {
 		model = t.Model
 	}
-	out := []string{shownInList(t), t.Kind}
+	out := []string{shownInList(t), termtext.SingleLine(t.Kind)}
 	for _, st := range statuses(t) {
 		out = append(out, badgeText(st))
 	}
-	return append(out, model)
+	return append(out, termtext.SingleLine(model))
 }
 
 func (m Model) loadTracks() tea.Cmd {
@@ -150,6 +178,15 @@ func (m Model) setTracks(msg tracksMsg) Model {
 	if had && was.ID != "" {
 		if i := slices.IndexFunc(m.station.tracks, func(t source.Track) bool { return t.ID == was.ID }); i >= 0 {
 			m.station.selected = i
+		}
+	}
+	if q := m.station.asking; q != nil {
+		if cur, ok := m.selectedTrack(); ok && q.validFor(cur) {
+			next := *q
+			next.number, next.name = cur.Number, cur.Name
+			m.station.asking = &next
+		} else {
+			m.station.asking = nil
 		}
 	}
 	return m.scrollStation()
@@ -307,7 +344,7 @@ func (m Model) scrollStation() Model {
 // frame: width by height cells.
 func (m Model) stationView(width, height int) []string {
 	if m.station.err != nil {
-		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the tracks: "+m.station.err.Error()))
+		return m.message(width, height, m.fg(theme.StateDangerText).Render("Couldn't read the tracks: "+termtext.SingleLine(m.station.err.Error())))
 	}
 	p := m.panes()
 	list := m.frame("Tracks", theme.BorderDefault, m.list(p.listWidth-4, height-2), p.listWidth, height)

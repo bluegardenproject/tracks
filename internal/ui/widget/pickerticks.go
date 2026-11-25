@@ -30,7 +30,7 @@ func (p Picker) okAt(x, y int) bool {
 
 // tick flips item i, unless it has a problem.
 func (p *Picker) tick(i int) {
-	if i < 0 || i >= len(p.Ticked) || p.Items[i].Problem != "" {
+	if i < 0 || i >= len(p.Ticked) || i >= len(p.Items) || p.Items[i].Problem != "" {
 		return
 	}
 	p.Ticked = slices.Clone(p.Ticked)

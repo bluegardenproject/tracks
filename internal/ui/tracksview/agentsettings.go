@@ -167,7 +167,7 @@ func (m Model) updatePrefix(msg tea.Msg) (Model, tea.Cmd) {
 	a := &m.settings.agents
 	before := a.prefix.Value()
 	var cmd tea.Cmd
-	a.prefix, cmd = a.prefix.Update(msg)
+	a.prefix, cmd = widget.UpdateInput(a.prefix, msg)
 	if a.prefix.Value() != before {
 		a.prefixErr = ""
 	}

@@ -79,8 +79,14 @@ func TestStreamPieces(t *testing.T) {
 	if shown.String() != "**bold**" {
 		t.Errorf("shown %q; a piece equal to the text so far, followed by more, was dropped", shown.String())
 	}
-	if got := (&Stream{}).Feed(piece("red \x1b[31mtext\x1b]0;title\x07 \u202e👩\u200d💻")); got != "red [31mtext]0;title 👩\u200d💻" {
+	if got := (&Stream{}).Feed(piece("red \x1b[31mtext\x1b]0;title\x07 \u202e👩\u200d💻")); got != "red text 👩\u200d💻" {
 		t.Errorf("controls reached the pane: %q", got)
+	}
+	var dirty Stream
+	dirty.Feed(piece("ok \x1b[31mred\x1b[0m"))
+	dirty.Feed(`{"type":"result","result":"ok \u001b]0;title\u0007\u202edone"}`)
+	if dirty.Result != "ok done" || len(dirty.Segments) != 1 || dirty.Segments[0] != "ok red" {
+		t.Errorf("result/segments kept controls: result %q, segments %q", dirty.Result, dirty.Segments)
 	}
 	root := Stream{cwd: "/"}
 	if got := root.relative("read /a/b.go"); got != "read /a/b.go" {

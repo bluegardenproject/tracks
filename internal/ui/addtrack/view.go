@@ -406,12 +406,5 @@ func (m Model) hints() string {
 }
 
 func cut(s string, width int) string {
-	r := []rune(s)
-	switch {
-	case width < 1:
-		return ""
-	case len(r) <= width:
-		return s
-	}
-	return string(r[:width-1]) + "…"
+	return widget.Cut(s, width)
 }
