@@ -91,7 +91,7 @@ func TestSideTracksGitHubEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if got := waitingFor(t, f, main.ID); len(got) != 1 || got[0] != "ask: "+actions.AskMain(st.Side, "relay-store", conflicts.Body) {
+		if got := waitingFor(t, f, main.ID); len(got) != 1 || got[0] != "ask:conflicts: "+actions.AskMain(st.Side, "relay-store", conflicts.Body) {
 			t.Errorf("waiting for the main track: %q; want it to ask the user", got)
 		}
 		work, _ := actions.SideThreads("claude", "acme/api#231", pr.URL, 3)
@@ -134,11 +134,11 @@ func TestInstructionsAreTypedOnceTheAgentIsFree(t *testing.T) {
 	}
 	typed := func() []string {
 		t.Helper()
-		before := len(f.windows.prompts)
+		before := len(f.windows.pasted)
 		if err := f.svc.Deliver(ctx); err != nil {
 			t.Fatal(err)
 		}
-		return f.windows.prompts[before:]
+		return f.windows.pasted[before:]
 	}
 	f.svc.SetTurn(ctx, st.ID, hooks.TurnStart)
 	if got := typed(); len(got) != 0 {
@@ -157,5 +157,133 @@ func TestInstructionsAreTypedOnceTheAgentIsFree(t *testing.T) {
 	f.svc.SetTurn(ctx, st.ID, hooks.TurnEnd)
 	if got := typed(); len(got) != 0 {
 		t.Errorf("typed again: %q", got)
+	}
+}
+
+func TestAskInstructionsAreKeptApart(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{Conflicts: settings.PolicyAsk, CIFailed: settings.PolicyAsk}}, nil
+	}
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/231")
+	for _, e := range []ghEvent{
+		{Kind: settings.EventConflicts, PR: pr, Body: "conflicts"},
+		{Kind: settings.EventCIFailed, PR: pr, Body: "CI"},
+	} {
+		if err := f.svc.githubEvent(ctx, st, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := waitingFor(t, f, main.ID); len(got) != 2 {
+		t.Errorf("waiting for the main track: %q; want both questions, one of the same PR's not replacing the other", got)
+	}
+}
+
+func TestMootInstructionsAreDropped(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{CIFailed: settings.PolicyAsk}}, nil
+	}
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/231")
+	for _, e := range []ghEvent{
+		{Kind: settings.EventConflicts, PR: pr, Body: "conflicts"},
+		{Kind: settings.EventCIFailed, PR: pr, Body: "CI"},
+	} {
+		if err := f.svc.githubEvent(ctx, st, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending := pr
+	pending.Health = track.Health{Mergeable: track.MergeConflicts, Checks: track.ChecksPending}
+	if err := f.svc.dropDone(ctx, pending); err != nil {
+		t.Fatal(err)
+	}
+	if side, asks := waitingFor(t, f, st.ID), waitingFor(t, f, main.ID); len(side) != 1 || len(asks) != 0 {
+		t.Errorf("after CI started again: side %q, main %q; want the conflicts' only", side, asks)
+	}
+	clean := pr
+	clean.Health = track.Health{Mergeable: track.MergeClean, Checks: track.ChecksPassing}
+	if err := f.svc.dropDone(ctx, clean); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, st.ID); len(got) != 0 {
+		t.Errorf("after the conflicts were solved: %q", got)
+	}
+
+	if err := f.svc.instruct(ctx, st.ID, settings.EventReviewThreads, pr.URL, "threads"); err != nil {
+		t.Fatal(err)
+	}
+	merged := pr
+	merged.State = track.PRMerged
+	if err := f.svc.dropDone(ctx, merged); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, st.ID); len(got) != 0 {
+		t.Errorf("after the PR merged: %q", got)
+	}
+}
+
+func TestAnEndedSideTracksEventsGoToItsMainTrack(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	if err := f.store.SetState(ctx, st.ID, st.State.Apply(track.Ended, f.svc.now())); err != nil {
+		t.Fatal(err)
+	}
+	ended, err := f.store.Track(ctx, st.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/231")
+	if err := f.svc.githubEvent(ctx, ended, ghEvent{Kind: settings.EventConflicts, PR: pr, Body: "PR acme/api#231 has conflicts with main."}); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, st.ID); len(got) != 0 {
+		t.Errorf("instructed an ended side track: %q", got)
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != 1 || !strings.HasPrefix(got[0], "event: @"+st.Side) {
+		t.Errorf("the main track's relay: %q; want the event, for it to decide", got)
+	}
+}
+
+// An instruction goes before a due pointer, and marks the review
+// threads' Signals button sent; a pointer waits while it's pasted.
+func TestAnInstructionGoesFirst(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	const url = "https://github.com/acme/api/pull/1"
+	if err := f.svc.SeePRs(ctx, "a", []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.mu.Lock()
+	f.svc.comments = map[string]map[string]actions.Comments{"a": {url: {Open: 2}}}
+	f.svc.mu.Unlock()
+	post(t, f, relay.Message{From: "reviewer-1", To: "track", Kind: relay.Report, Body: "Fine.", At: *now})
+	*now = now.Add(pointerGrace)
+	if err := f.svc.instruct(ctx, "a", settings.EventReviewThreads, url, "Work through them."); err != nil {
+		t.Fatal(err)
+	}
+	if got := deliver(t, f); len(got) != 1 || got[0] != "@a Work through them." {
+		t.Fatalf("pasted %q; want the instruction alone", got)
+	}
+	f.svc.mu.Lock()
+	sent := f.svc.comments["a"][url].Sent
+	f.svc.mu.Unlock()
+	if !sent {
+		t.Error("the review threads' button isn't marked sent")
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if got := deliver(t, f); len(got) != 1 || !strings.Contains(got[0], "on the relay") {
+		t.Errorf("then pasted %q; want the pointer", got)
+	}
+
+	f.svc.mu.Lock()
+	f.svc.deliveryMaps()
+	f.svc.typing["a"] = true
+	pointed := f.svc.pointed["a"]
+	f.svc.mu.Unlock()
+	if err := f.svc.point("a", "@a", []relay.Message{{ID: pointed + 1}}, pointed, false); err != nil || len(f.windows.pasted) != 2 {
+		t.Errorf("a pointer went while an instruction was pasted: %v, %q", err, f.windows.pasted)
 	}
 }

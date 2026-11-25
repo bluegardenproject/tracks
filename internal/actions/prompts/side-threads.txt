@@ -1,1 +1,1 @@
-{threads} on your PR {pr} wait for an answer. {work}
+{threads} on your PR {pr} {wait} for an answer. {work}

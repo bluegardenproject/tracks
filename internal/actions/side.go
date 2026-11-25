@@ -30,11 +30,11 @@ func SideThreads(engine, pr, url string, n int) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	threads := fmt.Sprintf("%d review threads", n)
+	threads, wait := fmt.Sprintf("%d review threads", n), "wait"
 	if n == 1 {
-		threads = "1 review thread"
+		threads, wait = "1 review thread", "waits"
 	}
-	return fill("side-threads", "{threads}", threads, "{pr}", pr, "{work}", work), true
+	return fill("side-threads", "{threads}", threads, "{pr}", pr, "{wait}", wait, "{work}", work), true
 }
 
 // AskMain has a main track ask the user what its side track, handle

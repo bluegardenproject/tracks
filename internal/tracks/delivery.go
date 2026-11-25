@@ -226,6 +226,9 @@ func (s *Service) deliveryMaps() {
 	if s.held == nil {
 		s.held = map[string]map[string]bool{}
 	}
+	if s.typing == nil {
+		s.typing = map[string]bool{}
+	}
 }
 
 // dueMessages are t's unread messages a pointer goes for, a side
@@ -293,7 +296,7 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	// meanwhile.
 	in, known := s.turns[id]
 	_, waiting := s.pointing[id]
-	if s.busy[id] || s.pointed[id] != pointed || waiting || !collected && (!known || in) {
+	if s.busy[id] || s.pointed[id] != pointed || waiting || s.typing[id] || !collected && (!known || in) {
 		s.mu.Unlock()
 		if collected {
 			return Problem("The messages changed meanwhile: try again.")
@@ -406,26 +409,37 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 	return t.Name, s.point(id, window, due, pointed, true)
 }
 
-// typeInstruction types in, a waiting instruction, into t's agent in
+// typeInstruction pastes in, a waiting instruction, into t's agent in
 // window when it's free, by what holds a pointer back, and reports
-// whether it did. It starts the agent's turn, as the user's prompt
-// would. One about review threads marks their Signals button sent.
+// whether it did. As point does, it checks again under the lock and
+// claims the turn the instruction starts before the paste, so no
+// pointer or turn lands meanwhile. One about review threads marks their
+// Signals button sent.
 func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (bool, error) {
-	s.mu.Lock()
-	_, pointing := s.pointing[t.ID]
-	s.mu.Unlock()
-	if pointing || t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
+	if t.Waiting || s.blockers(t, window).Why() != "" {
 		return false, nil
-	}
-	if err := s.Windows.Prompt(window, in.Body); err != nil {
-		return false, err
-	}
-	if err := s.Store.InstructionTyped(ctx, in.ID, s.now()); err != nil {
-		return true, err
 	}
 	s.mu.Lock()
 	s.deliveryMaps()
+	_, pointing := s.pointing[t.ID]
+	inTurn, known := s.turns[t.ID]
+	if s.busy[t.ID] || pointing || s.typing[t.ID] || !known || inTurn {
+		s.mu.Unlock()
+		return false, nil
+	}
+	s.typing[t.ID] = true
 	s.turns[t.ID] = true
+	s.mu.Unlock()
+
+	err := s.Windows.Paste(window, in.Body)
+	s.mu.Lock()
+	delete(s.typing, t.ID)
+	if err != nil {
+		// It went to an idle agent, which stays so.
+		s.turns[t.ID] = false
+		s.mu.Unlock()
+		return false, err
+	}
 	if in.Kind == settings.EventReviewThreads && s.comments[t.ID] != nil {
 		if _, ok := s.comments[t.ID][in.PR]; ok {
 			s.setSent(t.ID, in.PR, true)
@@ -433,5 +447,5 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 	}
 	s.mu.Unlock()
 	s.Changes.Notify()
-	return true, nil
+	return true, s.Store.InstructionTyped(ctx, in.ID, s.now())
 }
