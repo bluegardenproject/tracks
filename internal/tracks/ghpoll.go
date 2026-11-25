@@ -163,11 +163,15 @@ func pollAnswer(out []byte, branches []BranchQuery, prs []track.PR, a Answer) er
 	// which would read as a change: it counts as unanswered.
 	failed := map[string]bool{}
 	for _, e := range r.Errors {
+		alias := ""
 		if len(e.Path) > 0 {
-			if alias, ok := e.Path[0].(string); ok {
-				failed[alias] = true
-			}
+			alias, _ = e.Path[0].(string)
 		}
+		if alias == "" {
+			// An error of no alias may be any one's.
+			return fmt.Errorf("gh api graphql: an error in the answer says not where")
+		}
+		failed[alias] = true
 	}
 	answer := func(alias string) json.RawMessage {
 		if failed[alias] {
@@ -226,8 +230,8 @@ func (g GH) Poll(ctx context.Context, q Query) (Answer, error) {
 		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 			return a, errors.Join(err, ctx.Err())
 		}
-		if err != nil && len(out) == 0 {
-			// Nothing came back: gh's error says why.
+		if err != nil && !hasData(out) {
+			// No answer came back: gh's error says why.
 			errs = append(errs, err)
 		} else if readErr := pollAnswer(out, branches[:nb], prs[:np], a); err != nil || readErr != nil {
 			// gh's own error says why, when it has one.
@@ -250,4 +254,11 @@ func (g GH) RepoOf(ctx context.Context, dir string) (string, error) {
 		return "", fmt.Errorf("gh repo view in %s: no repo to read", dir)
 	}
 	return r.NameWithOwner, nil
+}
+
+// hasData reports whether out is a GraphQL answer with data, which
+// gh prints with its error when only some of it failed.
+func hasData(out []byte) bool {
+	var r struct{ Data map[string]json.RawMessage }
+	return json.Unmarshal(out, &r) == nil && r.Data != nil
 }

@@ -28,7 +28,7 @@ func fakeGH(t *testing.T, script string) GH {
 // fails its checks, with two threads waiting; PR 9's repo wasn't found.
 const pollAnswerJSON = `{"data":{"viewer":{"login":"me"},
 "b0":{"pullRequests":{"nodes":[{"url":"https://github.com/a/b/pull/3","state":"MERGED","isDraft":false,
-  "mergeable":"UNKNOWN","baseRefName":"main","headRefOid":"aaa","commits":{"nodes":[]},"reviewThreads":{"nodes":[]}}]}},
+  "mergeable":"UNKNOWN","baseRefName":"main","headRefOid":"aaa","commits":{"nodes":[]}}]}},
 "p0":{"pullRequest":{"url":"https://github.com/a/b/pull/4","state":"OPEN","isDraft":true,"mergeable":"CONFLICTING",
   "baseRefName":"main","headRefOid":"0123456789abcdef","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
     {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE"},
@@ -110,11 +110,12 @@ func TestPollAnswerErrors(t *testing.T) {
 		out  string
 		read bool
 	}{
-		"whole":              {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `}}`, true},
-		"a field's error":    {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p0","pullRequest","commits"]}]}`, false},
-		"another's error":    {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p1"]}]}`, true},
-		"no viewer":          {`{"data":{"viewer":null,"p0":` + pr + `},"errors":[{"path":["viewer"]}]}`, false},
-		"not GraphQL at all": {`HTTP 502`, false},
+		"whole":                {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `}}`, true},
+		"a field's error":      {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p0","pullRequest","commits"]}]}`, false},
+		"another's error":      {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p1"]}]}`, true},
+		"an error of no alias": {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"message":"x"}]}`, false},
+		"no viewer":            {`{"data":{"viewer":null,"p0":` + pr + `},"errors":[{"path":["viewer"]}]}`, false},
+		"not GraphQL at all":   {`HTTP 502`, false},
 	} {
 		a := Answer{Branches: map[BranchQuery][]PRFacts{}, PRs: map[string]PRFacts{}}
 		err := pollAnswer([]byte(tc.out), nil, []track.PR{four}, a)
