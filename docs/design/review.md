@@ -1,9 +1,10 @@
 # Reviews
 
-**Status:** being built, one PR per step under Order. Steps 1 to 9 are
-built; step 12, several reviewers, is being built: reviewers by handle (#268), then `--dir`. The reviewer is a train ([trains.md](trains.md)): since its step 7
-it runs in a tmux session of its own, seen in its overlay; its footer
-buttons and showing it for the trust question are gone.
+**Status:** being built, one PR per step under Order. Steps 1 to 9 and
+12 are built; 10 and 11 wait. The reviewer is a train
+([trains.md](trains.md)): since its step 7 it runs in a tmux session of
+its own, seen in its overlay; its footer buttons and showing it for the
+trust question are gone.
 
 ## Problem
 
@@ -412,8 +413,8 @@ reviews aren't in the store.
 ### Pull requests
 
 1. Reviewers by handle: the folders, the migration, replacing by target,
-   `--to`, the trains, Platform and relay with several.
-2. `--dir`: the target checks and the base.
+   `--to`, the trains, Platform and relay with several. Built (#268).
+2. `--dir`: the target checks and the base. Built (#270).
 
 ## Order
 
@@ -441,7 +442,7 @@ can be reviewed and merged while the next is built.
 10. The verify pass (experiment 2).
 11. Structured findings and calibration (experiments 3 and 4).
 12. Several reviewers, one per target (see Several reviewers), in two
-    PRs.
+    PRs. Built.
 
 ## Open
 
