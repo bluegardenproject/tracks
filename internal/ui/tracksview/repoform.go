@@ -47,7 +47,7 @@ var inputs = []struct {
 	{fieldName, "Name", "How Tracks shows this repo. Spaces are fine.", "name", 64, "My repo"},
 	{fieldPath, "Path", "The repo's main checkout on this computer.", "path", 4096, "~/src/my-repo"},
 	{fieldBase, "Base branch", "New tracks branch off it; " + source.DefaultBase + " when left empty.", "base", 255, source.DefaultBase},
-	{fieldOwner, "Code owner", "Review tracks review only the files it owns by CODEOWNERS; the whole change when left empty.",
+	{fieldOwner, "Code owner", "Reviews narrow to the files it owns by CODEOWNERS when asked to; the whole change otherwise.",
 		"owner", 255, "@org/team"},
 	{fieldPrefix, "Prefix", "Goes before the name of its tracks with at most one other repo; none when left empty.",
 		"prefix", 24, "[WEB]"},

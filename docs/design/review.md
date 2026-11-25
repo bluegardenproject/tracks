@@ -207,10 +207,11 @@ setup stays lazy, as now.
 
 ## Scope: a code owner's part
 
-`tracks review --owner <handle>`, and a **Code owner** field per repo on the
-Repositories tab that sets it by default (empty: the whole diff). The
-default applies to Review tracks only: a Work track's pre-push review checks
-its own whole change. `--all` reviews the whole change despite the field.
+A review covers the whole change. `tracks review --owner <handle>` narrows
+it to a code owner's files; `--owner` alone to the repo's **Code owner**, a
+field per repo on the Repositories tab, and stops when the repo has none.
+The agent runs it when the user asks for only their own part, or the code
+owner's: the field never narrows a review by itself.
 
 - Tracks reads the repo's `CODEOWNERS` (`.github/`, the root, `docs/`, the
   first found) on the base branch, as GitHub does, so a branch can't change
@@ -310,8 +311,8 @@ Everything that needs the code read again goes back to the reviewer:
 |---|---|
 | `tracks review` | Starts a reviewer session on the track's branch, ending one that's there, and prints its report |
 | `--brief <file>` | Adds the orchestrator's brief to the packet |
-| `--owner <handle>` | Reviews only the files `<handle>` owns |
-| `--all` | Reviews the whole change, despite the repo's Code owner |
+| `--owner [<handle>]` | Reviews only the files `<handle>` owns; alone, the repo's Code owner's |
+| `--all` | Reviews the whole change, as without `--owner` |
 | `--ask <question>` | Asks the reviewer that's there, and prints its answer |
 | `--wait` | Waits for the report of the review that's running, or its answer to the last question |
 | `--base <ref>` | As now |

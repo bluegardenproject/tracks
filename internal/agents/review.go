@@ -39,8 +39,10 @@ const ReviewSteps = "" +
 	"reviewer and prints its answer; the user can also ask it in its " +
 	"overlay, which the track's Platform opens. A new review, or one of " +
 	"another scope, is always a new `tracks review`, never your own. " +
-	"When the user asks to review only a code owner's part, run " +
-	"`tracks review --owner <handle>`."
+	"A review covers the whole change. When the user asks to review " +
+	"only their own part, or the code owner's, run `tracks review " +
+	"--owner`, which narrows to the repo's Code owner; for another code " +
+	"owner, `tracks review --owner <handle>`."
 
 // ReviewTemplate is a Review track's task. The track's prompt also
 // holds ReviewSteps, which say how the review runs. The user's prompt,

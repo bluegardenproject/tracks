@@ -375,8 +375,8 @@ func TestReviewOwner(t *testing.T) {
 	if owner, err := f.svc.ReviewOwner(ctx, "rev", worktree); err != nil || owner != "@org/api" {
 		t.Errorf("a Review track: %q, %v; want its repo's Code owner", owner, err)
 	}
-	if owner, err := f.svc.ReviewOwner(ctx, "work", worktree); err != nil || owner != "" {
-		t.Errorf("a Work track: %q, %v; want none", owner, err)
+	if owner, err := f.svc.ReviewOwner(ctx, "work", worktree); err != nil || owner != "@org/api" {
+		t.Errorf("a Work track: %q, %v; want its repo's Code owner too", owner, err)
 	}
 	if _, err := f.svc.ReviewOwner(ctx, "rev", t.TempDir()); err == nil {
 		t.Error("a folder outside the track's worktrees was answered")

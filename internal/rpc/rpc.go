@@ -57,8 +57,8 @@ const (
 	Review     = "review"
 	ReviewWait = "review-wait"
 	ReviewAsk  = "review-ask"
-	// ReviewOwner is the code owner a track's review narrows to by
-	// default.
+	// ReviewOwner is the repo's Code owner a track's review narrows to
+	// when asked to.
 	ReviewOwner = "review-owner"
 	ReviewReply = "review-reply"
 	// Servers lists a track's dev servers and what listens in its panes,
@@ -122,7 +122,7 @@ type ReviewOwnerParams struct {
 	Dir string `json:"dir"`
 }
 
-// ReviewOwnerResult is a review's default code owner, "" for none.
+// ReviewOwnerResult is the repo's Code owner, "" for none.
 type ReviewOwnerResult struct {
 	Owner string `json:"owner"`
 }
