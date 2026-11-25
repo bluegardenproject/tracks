@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -51,11 +52,11 @@ func TestPRs(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(a.PRs) != 2 || a.PRs[0].URL != web.URL || a.PRs[0].State != track.PRMerged ||
-		!a.PRs[0].CheckedAt.Equal(merged.CheckedAt) || a.PRs[1] != api {
+		!a.PRs[0].CheckedAt.Equal(merged.CheckedAt) || !reflect.DeepEqual(a.PRs[1], api) {
 		t.Errorf("a's PRs = %+v; want web merged, then api open", a.PRs)
 	}
 	unsettled, err := s.UnsettledPRs(ctx)
-	if err != nil || len(unsettled) != 2 || unsettled[0].TrackID != "a" || unsettled[0].PR != api ||
+	if err != nil || len(unsettled) != 2 || unsettled[0].TrackID != "a" || !reflect.DeepEqual(unsettled[0].PR, api) ||
 		unsettled[1].TrackID != "b" || unsettled[1].URL != web.URL {
 		t.Errorf("UnsettledPRs = %+v, %v; want a's api and b's web", unsettled, err)
 	}
@@ -96,5 +97,45 @@ func TestDeleteTrack(t *testing.T) {
 	}
 	if err := s.DeleteTrack(ctx, "a"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("deleting it again: %v", err)
+	}
+}
+
+func TestPRHealthAndThreads(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	now := time.UnixMilli(1_790_000_000_000)
+	if err := s.AddTrack(ctx, track.Track{ID: "a", Kind: track.Work, Name: "a", Engine: "claude", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	pr, _ := track.ParsePR("https://github.com/acme/api/pull/3")
+	if _, err := s.AddPR(ctx, "a", pr, now); err != nil {
+		t.Fatal(err)
+	}
+
+	failing := track.Health{Base: "main", Head: "abc", Mergeable: track.MergeConflicts, Checks: track.ChecksFailing, Failing: []string{"lint"}}
+	if was, err := s.SavePRHealth(ctx, "a", pr.URL, failing); err != nil || !reflect.DeepEqual(was, track.Health{}) {
+		t.Errorf("first health = %+v, %v; want none before", was, err)
+	}
+	unknown := track.Health{Head: "def", Checks: track.ChecksPending}
+	want := track.Health{Head: "abc", Mergeable: track.MergeConflicts, Checks: track.ChecksFailing}
+	if was, err := s.SavePRHealth(ctx, "a", pr.URL, unknown); err != nil || !reflect.DeepEqual(was, want) {
+		t.Errorf("second health = %+v, %v; want %+v, without what isn't kept", was, err, want)
+	}
+	want = track.Health{Head: "def", Mergeable: track.MergeConflicts, Checks: track.ChecksPending}
+	if was, err := s.SavePRHealth(ctx, "a", pr.URL, track.Health{}); err != nil || !reflect.DeepEqual(was, want) {
+		t.Errorf("after GitHub hadn't computed mergeability = %+v, %v; want %+v: the last one kept", was, err, want)
+	}
+	if _, err := s.SavePRHealth(ctx, "a", "https://github.com/acme/api/pull/9", failing); err == nil {
+		t.Error("saved the health of a PR the track hasn't got")
+	}
+
+	if was, known, err := s.SavePRThreads(ctx, "a", pr.URL, 2); err != nil || known || was != 0 {
+		t.Errorf("first count = %d, %v, %v; want none known", was, known, err)
+	}
+	if was, known, err := s.SavePRThreads(ctx, "a", pr.URL, 0); err != nil || !known || was != 2 {
+		t.Errorf("second count = %d, %v, %v; want 2", was, known, err)
+	}
+	if was, known, err := s.SavePRThreads(ctx, "a", pr.URL, 1); err != nil || !known || was != 0 {
+		t.Errorf("third count = %d, %v, %v; want 0, known", was, known, err)
 	}
 }

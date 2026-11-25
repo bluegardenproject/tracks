@@ -18,10 +18,10 @@ import (
 
 // GitHub asks GitHub where pull requests are.
 type GitHub interface {
-	// PR is where the pull request at url is.
-	PR(ctx context.Context, url string) (track.PRState, error)
+	// PR is where the pull request at url is, and its health.
+	PR(ctx context.Context, url string) (track.PR, error)
 	// BranchPRs are the pull requests from branch in the repo checked
-	// out at dir, in any state.
+	// out at dir, in any state, with their health.
 	BranchPRs(ctx context.Context, dir, branch string) ([]track.PR, error)
 	// OpenThreads is how many review threads on pr wait on the gh user:
 	// unresolved, with someone else having the last word.
@@ -44,10 +44,27 @@ type GH struct {
 	Program string // "" is gh on PATH
 }
 
+// prFields are what gh reads of a PR: its state and its health.
+const prFields = "url,state,isDraft,baseRefName,headRefOid,mergeable,statusCheckRollup"
+
 type ghPR struct {
-	URL     string `json:"url"`
-	State   string `json:"state"`
-	IsDraft bool   `json:"isDraft"`
+	URL       string    `json:"url"`
+	State     string    `json:"state"`
+	IsDraft   bool      `json:"isDraft"`
+	Base      string    `json:"baseRefName"`
+	Head      string    `json:"headRefOid"`
+	Mergeable string    `json:"mergeable"`
+	Checks    []ghCheck `json:"statusCheckRollup"`
+}
+
+// ghCheck is a check run (Status, Conclusion) or a commit status
+// (Context, State).
+type ghCheck struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	Context    string `json:"context"`
+	State      string `json:"state"`
 }
 
 func (p ghPR) state() track.PRState {
@@ -62,20 +79,76 @@ func (p ghPR) state() track.PRState {
 	return track.PROpen
 }
 
-func (g GH) PR(ctx context.Context, url string) (track.PRState, error) {
-	out, err := g.run(ctx, "", "pr", "view", url, "--json", "state,isDraft")
+func (p ghPR) pr() (track.PR, bool) {
+	pr, ok := track.ParsePR(p.URL)
+	if !ok {
+		return track.PR{}, false
+	}
+	pr.State = p.state()
+	pr.Health = track.Health{Base: p.Base, Head: p.Head, Mergeable: mergeable(p.Mergeable)}
+	pr.Health.Checks, pr.Health.Failing = rollup(p.Checks)
+	return pr, true
+}
+
+func mergeable(m string) track.Mergeable {
+	switch m {
+	case "MERGEABLE":
+		return track.MergeClean
+	case "CONFLICTING":
+		return track.MergeConflicts
+	}
+	return track.MergeUnknown
+}
+
+// rollup is where checks are, and the names of those that failed. A
+// cancelled run doesn't fail: a newer push often cancels it.
+func rollup(checks []ghCheck) (track.Checks, []string) {
+	var failing []string
+	pending := false
+	for _, c := range checks {
+		name := c.Name
+		if name == "" {
+			name = c.Context
+		}
+		switch {
+		case c.Conclusion == "FAILURE" || c.Conclusion == "TIMED_OUT" || c.Conclusion == "STARTUP_FAILURE" ||
+			c.Conclusion == "ACTION_REQUIRED" || c.State == "FAILURE" || c.State == "ERROR":
+			failing = append(failing, name)
+		case c.Status != "" && c.Status != "COMPLETED", c.State == "PENDING" || c.State == "EXPECTED":
+			pending = true
+		}
+	}
+	switch {
+	case len(failing) > 0:
+		return track.ChecksFailing, failing
+	case pending:
+		return track.ChecksPending, nil
+	case len(checks) > 0:
+		return track.ChecksPassing, nil
+	}
+	return track.ChecksNone, nil
+}
+
+func (g GH) PR(ctx context.Context, url string) (track.PR, error) {
+	out, err := g.run(ctx, "", "pr", "view", url, "--json", prFields)
 	if err != nil {
-		return "", err
+		return track.PR{}, err
 	}
 	var p ghPR
 	if err := json.Unmarshal(out, &p); err != nil {
-		return "", fmt.Errorf("gh pr view %s: %w", url, err)
+		return track.PR{}, fmt.Errorf("gh pr view %s: %w", url, err)
 	}
-	return p.state(), nil
+	// gh answers for the URL asked, which it may write otherwise.
+	p.URL = url
+	pr, ok := p.pr()
+	if !ok {
+		return track.PR{}, fmt.Errorf("gh pr view: %q isn't a pull request link", url)
+	}
+	return pr, nil
 }
 
 func (g GH) BranchPRs(ctx context.Context, dir, branch string) ([]track.PR, error) {
-	out, err := g.run(ctx, dir, "pr", "list", "--head", branch, "--state", "all", "--json", "url,state,isDraft")
+	out, err := g.run(ctx, dir, "pr", "list", "--head", branch, "--state", "all", "--json", prFields)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +158,7 @@ func (g GH) BranchPRs(ctx context.Context, dir, branch string) ([]track.PR, erro
 	}
 	var prs []track.PR
 	for _, p := range list {
-		if pr, ok := track.ParsePR(p.URL); ok {
-			pr.State = p.state()
+		if pr, ok := p.pr(); ok {
 			prs = append(prs, pr)
 		}
 	}

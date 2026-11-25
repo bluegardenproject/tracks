@@ -62,6 +62,8 @@ type Store interface {
 	AddPR(ctx context.Context, id string, pr track.PR, at time.Time) (bool, error)
 	SavePR(ctx context.Context, id string, pr track.PR, at time.Time) (track.PRState, error)
 	UnsettledPRs(ctx context.Context) ([]store.TrackPR, error)
+	SavePRHealth(ctx context.Context, id, url string, h track.Health) (track.Health, error)
+	SavePRThreads(ctx context.Context, id, url string, n int) (int, bool, error)
 	SaveDraft(ctx context.Context, d store.Draft) error
 	Drafts(ctx context.Context) ([]store.Draft, error)
 	Draft(ctx context.Context, id string) (store.Draft, error)

@@ -645,13 +645,19 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
   reads just those: state, mergeability, CI checks, unresolved review
   threads. It replaces the per-PR polling, and the footer's PR buttons
   read the same.
-- **`@github` on the relay**: a sender of its own, reserved as `track` and
-  `tracks` are, posting `event` messages to the track (or side track)
-  whose PR it is: "PR #231 merged", "PR #234 conflicts with main", "CI
-  failed on PR #234: lint", "3 new review comments on PR #234". Unlike
-  notices, they wake the agent: delivery points it to them, so it can
-  rebase, fix the check or answer the comments on its own. The Relay
-  Station shows them.
+- **`@github` on the relay** (built): a sender of its own, reserved as
+  `track` and `tracks` are, posting `event` messages to the open Work
+  track (or side track) whose PR it is, once per change: "PR acme/api#231
+  was merged into main", "… was closed without merging", "PR
+  acme/api#234 has conflicts with main", "CI failed on PR acme/api#234
+  at 0123abc: lint, test" (again after a push that fails again), "3
+  review threads on PR acme/api#234 wait for an answer, 2 of them new".
+  Unlike notices, they wake the agent: delivery points it to them, so it
+  can rebase, fix the check or answer the comments on its own. The Relay
+  Station shows them. What the poll last read of each PR (mergeability,
+  checks and their commit, open threads) is kept in the store, so a
+  restart repeats none; the first count of a PR's threads posts nothing,
+  as they may have waited long.
 - **Facts only**: `@github` posts what Tracks reads (states, counts, check
   names), never a comment's text, which the agent reads on GitHub through
   the comments flow, under the same fenced-data rule.
@@ -660,9 +666,10 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 
 ### Order
 
-1. GitHub on the relay: the notifications endpoint and one GraphQL query
-   in place of the per-PR polling; then `@github`'s events. First: it's
-   useful for a track's own PRs, and restacking needs it.
+1. GitHub on the relay: `@github`'s events, read by the per-PR polling
+   (built); then the notifications endpoint and one GraphQL query in its
+   place. First: it's useful for a track's own PRs, and restacking needs
+   it.
 2. The model: a side track is a track with a main track (the step 11
    link) on its main track's relay; `tracks side new|list`; no nesting;
    the main track can't end while a side track is unsettled.

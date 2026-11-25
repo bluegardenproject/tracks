@@ -21,7 +21,7 @@ var prefixPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // reserved are the relay's own handles, and its reader for the user,
 // which no train takes.
-var reserved = []string{"track", "tracks", "user"}
+var reserved = []string{"track", "tracks", "github", "user"}
 
 // CheckPrefix says why p can't start trains' handles, nil when it can:
 // a lower-case letter, then lower-case letters, digits and hyphens, at

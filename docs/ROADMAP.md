@@ -25,10 +25,10 @@ the v2.0.0 release; git history keeps them.
   maybe in a repo of plugins), a manifest, a versioned message envelope,
   Tracks as an MCP server for its tools, and programmable messages that
   Tracks runs with the user as the final say. Needs planning first.
-- **GitHub on the relay** (in [trains](design/trains.md), Phase 2): poll
-  the notifications endpoint and one GraphQL query instead of each PR,
-  and post `@github` events (merged, conflicts, CI failed, new comments)
-  that wake the track's agent to act on them.
+- **GitHub on the relay** (in [trains](design/trains.md), Phase 2):
+  `@github`'s events (merged, closed, conflicts, CI failed, new review
+  threads) wake the track's agent; open: polling the notifications
+  endpoint and one GraphQL query instead of each PR.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed
