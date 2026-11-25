@@ -134,6 +134,25 @@ func closeFromQuickAccess(c *tmux.Client, paths platform.Paths, client string) e
 	return nil
 }
 
+// askConfirm asks q in the confirm popup and writes "yes" to
+// answerFile when the user confirms, "" otherwise.
+func askConfirm(ctx context.Context, q confirm.Question, answerFile string) error {
+	paths, err := platform.Resolve()
+	if err != nil {
+		return err
+	}
+	t, _ := loadTheme(paths)
+	done, err := runPopup(ctx, confirm.New(t, q))
+	if err != nil {
+		return err
+	}
+	answer := ""
+	if m, ok := done.(confirm.Model); ok && m.Confirmed() {
+		answer = "yes"
+	}
+	return os.WriteFile(answerFile, []byte(answer), 0o600)
+}
+
 // newPopupCmd holds what runs inside the popups.
 func newPopupCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{Use: "popup", Hidden: true}
@@ -161,40 +180,14 @@ func newPopupCmd(version string) *cobra.Command {
 		Use:  "close-tracks <answer-file>",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			paths, err := platform.Resolve()
-			if err != nil {
-				return err
-			}
-			t, _ := loadTheme(paths)
-			done, err := runPopup(cmd.Context(), confirm.New(t, closeQuestion))
-			if err != nil {
-				return err
-			}
-			answer := ""
-			if m, ok := done.(confirm.Model); ok && m.Confirmed() {
-				answer = "yes"
-			}
-			return os.WriteFile(args[0], []byte(answer), 0o600)
+			return askConfirm(cmd.Context(), closeQuestion, args[0])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:  "end-train <handle> <answer-file>",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			paths, err := platform.Resolve()
-			if err != nil {
-				return err
-			}
-			t, _ := loadTheme(paths)
-			done, err := runPopup(cmd.Context(), confirm.New(t, endTrainQuestion(args[0])))
-			if err != nil {
-				return err
-			}
-			answer := ""
-			if m, ok := done.(confirm.Model); ok && m.Confirmed() {
-				answer = "yes"
-			}
-			return os.WriteFile(args[1], []byte(answer), 0o600)
+			return askConfirm(cmd.Context(), endTrainQuestion(args[0]), args[1])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
