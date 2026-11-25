@@ -36,10 +36,10 @@ type item struct {
 	whole                         bool
 }
 
-// layout is the pane's lines, the Platform's frame over Signals', and
-// where its clickable things are. Signals fills the rest of the pane.
+// layout is the pane's lines, the Platform's frame over Signals', each
+// half the pane, and where its clickable things are.
 func (m Model) layout() ([]string, []target) {
-	if m.width < 6 || m.height < 3 {
+	if m.width < 6 || m.height < 4 {
 		return nil, nil
 	}
 	var lines []string
@@ -48,6 +48,10 @@ func (m Model) layout() ([]string, []target) {
 		top := len(lines)
 		lines = append(lines, widget.BorderTitledFrame(m.palette, title, body, m.width, h, theme.BorderDefault)...)
 		for _, it := range items {
+			if it.row >= h-2 {
+				// Cut off with the rest of a body taller than its frame.
+				continue
+			}
 			// The frame's border and padding take two columns, and a
 			// clickable line starts one in.
 			x0, x1 := 3, 0
@@ -61,10 +65,13 @@ func (m Model) layout() ([]string, []target) {
 			targets = append(targets, target{y: top + 1 + it.row, x0: x0, x1: x1, kind: it.kind, index: it.index})
 		}
 	}
+	// The two share the pane's height half and half, Signals taking
+	// an odd row.
+	top := m.height / 2
 	body, items := m.platformBody()
-	frame("Platform", body, items, len(body)+2)
+	frame("Platform", body, items, top)
 	body, items = m.signalsBody()
-	frame("Signals", body, items, max(len(body)+2, m.height-len(lines)))
+	frame("Signals", body, items, m.height-top)
 	if len(lines) > m.height {
 		lines = lines[:m.height]
 	}
