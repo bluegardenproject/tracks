@@ -133,6 +133,29 @@ func TestPollQueryReadsThreadsOnlyByLink(t *testing.T) {
 	}
 }
 
+// GraphQL refuses a query that defines a fragment it doesn't use.
+func TestPollQueryDefinesWhatItUses(t *testing.T) {
+	four, _ := track.ParsePR("https://github.com/a/b/pull/4")
+	branch := []BranchQuery{{Repo: "a/b", Branch: "x"}}
+	for name, tc := range map[string]struct {
+		branches      []BranchQuery
+		prs           []track.PR
+		pr, prThreads bool
+	}{
+		"branches only": {branch, nil, true, false},
+		"PRs only":      {nil, []track.PR{four}, true, true},
+		"both":          {branch, []track.PR{four}, true, true},
+	} {
+		q := pollQuery(tc.branches, tc.prs)
+		if got := strings.Contains(q, "fragment pr on"); got != tc.pr {
+			t.Errorf("%s: fragment pr defined %v, want %v", name, got, tc.pr)
+		}
+		if got := strings.Contains(q, "fragment prThreads on"); got != tc.prThreads {
+			t.Errorf("%s: fragment prThreads defined %v, want %v", name, got, tc.prThreads)
+		}
+	}
+}
+
 func TestPollQueryQuotes(t *testing.T) {
 	q := pollQuery([]BranchQuery{{Repo: "a/b", Branch: `x") { evil }`}}, nil)
 	if !strings.Contains(q, `headRefName: "x\") { evil }"`) {

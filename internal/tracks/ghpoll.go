@@ -40,20 +40,26 @@ type Answer struct {
 // pollChunk is how many branches and PRs one GraphQL query asks for.
 const pollChunk = 25
 
-// prFragments are what a poll reads of a PR: pr its state and health,
+// prFragment and prThreadsFragment are what a poll reads of a PR: pr its state and health,
 // prThreads its review threads too. GitHub charges a query by the most
 // it could return, so a branch's PRs, up to 10 each with up to 100
 // threads, read no threads: those would cost ten times as much. The PRs
 // found there are asked for by their links from the next poll on.
-const prFragments = `fragment pr on PullRequest {
+// A query defines only the fragments it uses: GraphQL refuses one that
+// defines another.
+const (
+	prFragment = `fragment pr on PullRequest {
   url state isDraft mergeable baseRefName headRefOid
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } } } } } } }
 }
-fragment prThreads on PullRequest {
+`
+	prThreadsFragment = `fragment prThreads on PullRequest {
   ...pr
   reviewThreads(first: 100) { nodes { isResolved comments(last: 1) { nodes { author { login } } } } }
-}`
+}
+`
+)
 
 // pollQuery is the GraphQL query for branches and prs, an alias each:
 // b0, b1, … and p0, p1, …. Names go in as JSON strings, which GraphQL
@@ -71,7 +77,12 @@ func pollQuery(branches []BranchQuery, prs []track.PR) string {
 		fmt.Fprintf(&b, "  p%d: repository(owner: %s, name: %s) { pullRequest(number: %d) { ...prThreads } }\n", i, quote(owner), quote(name), pr.Number)
 	}
 	b.WriteString("}\n")
-	b.WriteString(prFragments)
+	if len(branches)+len(prs) > 0 {
+		b.WriteString(prFragment)
+	}
+	if len(prs) > 0 {
+		b.WriteString(prThreadsFragment)
+	}
 	return b.String()
 }
 
@@ -215,7 +226,10 @@ func (g GH) Poll(ctx context.Context, q Query) (Answer, error) {
 		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 			return a, errors.Join(err, ctx.Err())
 		}
-		if readErr := pollAnswer(out, branches[:nb], prs[:np], a); err != nil || readErr != nil {
+		if err != nil && len(out) == 0 {
+			// Nothing came back: gh's error says why.
+			errs = append(errs, err)
+		} else if readErr := pollAnswer(out, branches[:nb], prs[:np], a); err != nil || readErr != nil {
 			// gh's own error says why, when it has one.
 			errs = append(errs, errors.Join(err, readErr))
 		}
