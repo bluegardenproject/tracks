@@ -1,55 +1,36 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/tracks"
 )
 
-// reopener is what offerReopen needs of the daemon.
+// reopener is what reopen needs of the daemon.
 type reopener interface {
 	Interrupted(ctx context.Context) ([]track.Track, error)
 	Reopen(ctx context.Context, progress func(string)) ([]tracks.Reopening, error)
 }
 
-// offerReopen lists the tracks whose windows closed with Tracks and
-// asks on in whether to reopen them, as v1 does when its session
-// starts. It returns the window to show when it reopened one track
-// alone, "" otherwise. No leaves them as they are, to be asked again.
-func offerReopen(ctx context.Context, daemon reopener, in io.Reader, out io.Writer) (string, error) {
+// reopen lists the tracks whose windows closed with Tracks and reopens
+// them. It returns the window to show when it reopened one track alone,
+// "" otherwise.
+func reopen(ctx context.Context, daemon reopener, out io.Writer) (string, error) {
 	interrupted, err := daemon.Interrupted(ctx)
 	if err != nil || len(interrupted) == 0 {
 		return "", err
 	}
-	fmt.Fprintf(out, "%s open when Tracks closed:\n", countTracks(len(interrupted), "was", "were"))
+	fmt.Fprintf(out, "Reopening %s open when Tracks closed:\n", countTracks(len(interrupted), "that was", "that were"))
 	width := 0
 	for _, t := range interrupted {
 		width = max(width, len(t.Name))
 	}
 	for _, t := range interrupted {
 		fmt.Fprintf(out, "  %-*s  %s\n", width, t.Name, describe(t))
-	}
-	them := "them"
-	if len(interrupted) == 1 {
-		them = "it"
-	}
-	fmt.Fprintf(out, "Reopen %s? [Y/n] ", them)
-	answer, err := bufio.NewReader(in).ReadString('\n')
-	if err != nil {
-		fmt.Fprintln(out)
-		answer = "n"
-	}
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "", "y", "yes":
-	default:
-		fmt.Fprintln(out, "Left as they are: resume them from Station, or answer again when Tracks next starts.")
-		return "", nil
 	}
 	reopened, err := daemon.Reopen(ctx, func(step string) { fmt.Fprintln(out, "  "+step) })
 	if err != nil {
@@ -86,7 +67,7 @@ func countTracks(n int, one, many string) string {
 	return s
 }
 
-// describe is t's kind and repos, as the list before the question shows
+// describe is t's kind and repos, as the list of tracks to reopen shows
 // them.
 func describe(t track.Track) string {
 	if len(t.Repos) == 0 {
@@ -101,10 +82,4 @@ func repoList(repos []track.Repo) string {
 		names[i] = r.Name
 	}
 	return strings.Join(names, ", ")
-}
-
-// stdinIsTerminal says a question can be asked on stdin.
-func stdinIsTerminal() bool {
-	info, err := os.Stdin.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

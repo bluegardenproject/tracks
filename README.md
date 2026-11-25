@@ -98,9 +98,9 @@ follows each PR until it's merged or closed.
 ### Closing and coming back
 
 Close Tracks from Quick Access, or with `tracks stop`. The tracks stay: the
-next `tracks` lists the ones that were open and offers to reopen them, each
-agent continuing its conversation where it stopped. Say no, and Resume in
-Station brings any of them back later.
+next `tracks` reopens the ones that were open, each agent continuing its
+conversation where it stopped. A track that couldn't be reopened comes back
+with Resume in Station.
 
 ## Glossary
 
