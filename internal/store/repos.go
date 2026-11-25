@@ -15,8 +15,8 @@ type Repo struct {
 	BaseBranch string
 	DraftPRs   bool
 	Setup      string // the command run once in a worktree before its dev servers
-	// CodeOwner narrows a Review track's reviews to the files it owns by
-	// CODEOWNERS; "" for the whole change.
+	// CodeOwner is who a review narrows to the files of by CODEOWNERS
+	// when asked to, with tracks review --owner; "" for none.
 	CodeOwner string
 	// Prefix goes before the name of a track in this repo and at most
 	// one other, as typed with a space after it; "" for none.

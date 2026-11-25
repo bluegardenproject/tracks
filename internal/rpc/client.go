@@ -237,8 +237,8 @@ func (c Client) ReviewWait(ctx context.Context, id string, progress func(string)
 	return r.Report, c.Call(ctx, ReviewWait, ReviewIDParams{ID: id}, &r, progress)
 }
 
-// ReviewOwner is the code owner a review of dir in track id narrows to
-// by default, "" for the whole change.
+// ReviewOwner is the Code owner of the repo of dir, a worktree of track
+// id, "" for none.
 func (c Client) ReviewOwner(ctx context.Context, id, dir string) (string, error) {
 	var r ReviewOwnerResult
 	return r.Owner, c.Call(ctx, ReviewOwner, ReviewOwnerParams{ID: id, Dir: dir}, &r, nil)

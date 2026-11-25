@@ -192,15 +192,14 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (string, e
 	return name, nil
 }
 
-// ReviewOwner is the code owner a review of dir, a worktree of track
-// id, narrows to by default: its repo's Code owner on a Review track,
-// "" for the whole change. A Work track's pre-push review checks its own
-// whole change.
+// ReviewOwner is the Code owner of dir's repo, dir a worktree of track
+// id: what a review narrows to when asked for the code owner's part
+// with no handle; "" when the repo has none.
 func (s *Service) ReviewOwner(ctx context.Context, id, dir string) (string, error) {
 	t, err := s.Store.Track(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
 		return "", Problem("That track is gone.")
-	} else if err != nil || t.Kind != track.Review {
+	} else if err != nil {
 		return "", err
 	}
 	worktree, ok := "", filepath.IsAbs(dir)
