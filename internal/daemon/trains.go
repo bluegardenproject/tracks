@@ -44,7 +44,7 @@ func (c Config) signals(ctx context.Context, call *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := rpc.SignalsResult{PRs: []rpc.PRSignal{}, RelayNew: sig.RelayNew}
+	out := rpc.SignalsResult{PRs: []rpc.PRSignal{}, RelayNew: sig.RelayNew, Held: sig.Held}
 	for _, pr := range sig.PRs {
 		out.PRs = append(out.PRs, rpc.PRSignal{Index: pr.Index, PR: pr.PR, Action: pr.Action, Sent: pr.Sent})
 	}

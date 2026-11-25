@@ -315,8 +315,7 @@ func (s *Service) WaitReview(ctx context.Context, id string) (string, error) {
 			if msg == 0 {
 				return string(b), nil
 			}
-			_, err := s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, msg)
-			return string(b), err
+			return string(b), s.markReplyRead(ctx, id, msg)
 		}
 		if _, err := os.Stat(filepath.Join(s.reviewDir(id), "run")); err != nil {
 			return "", Problem("This track has no review running: start one with tracks review.")
@@ -384,4 +383,25 @@ func (s *Service) CloseReviewer(ctx context.Context, id string) (string, error) 
 	// to end.
 	closeErr := s.Reviewers.CloseReviewer(id)
 	return t.Name, errors.Join(closeErr, s.leftNotice(ctx, id, s.reviewDir(id), "it was ended"), os.RemoveAll(s.reviewDir(id)))
+}
+
+// markReplyRead marks the reviewer's reply, message msg on track id's
+// relay, read for the track, which got it printed. The track reads its
+// relay with one cursor: one before an earlier message it hasn't read,
+// an @github event come in meanwhile, stays there, so that one still
+// wakes its agent, which reads the reply again with it.
+func (s *Service) markReplyRead(ctx context.Context, id string, msg int64) error {
+	unread, err := s.Store.RelayUnread(ctx, id, relay.TrackHandle)
+	if err != nil {
+		return err
+	}
+	upTo := msg
+	for _, m := range unread {
+		if m.ID < msg && m.Kind != relay.Notice {
+			upTo = m.ID - 1
+			break
+		}
+	}
+	_, err = s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, upTo)
+	return err
 }

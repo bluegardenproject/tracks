@@ -145,6 +145,29 @@ func TestClicks(t *testing.T) {
 	}
 }
 
+func TestCollectUnderSignals(t *testing.T) {
+	calls := 0
+	m := update(t, New(Config{Theme: theme.Default(), Collect: func() error { calls++; return errors.New("answer it first") }}),
+		size, loadedMsg{signals: Signals{Held: true}})
+	v := view(m)
+	signals := strings.Index(v, "Signals")
+	if collect := strings.Index(v, "Collect messages"); collect < signals || collect < strings.Index(v, "Relay Station") {
+		t.Fatalf("@github's held events: Collect messages under the Relay Station, in Signals:\n%s", v)
+	}
+	_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Collect messages"), Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("a click on it did nothing")
+	}
+	m = update(t, m, cmd())
+	if calls != 1 || !strings.Contains(view(m), "answer it first") {
+		t.Errorf("collected %d times, notice shown: %v", calls, strings.Contains(view(m), "answer it first"))
+	}
+	m = update(t, m, loadedMsg{})
+	if v := view(m); strings.Contains(v, "Collect messages") || strings.Contains(v, "answer it first") {
+		t.Errorf("once delivered, the button and its notice stayed:\n%s", v)
+	}
+}
+
 func TestClicksAreSafe(t *testing.T) {
 	calls := 0
 	m := update(t, New(Config{Theme: theme.Default(), Collect: func() error { calls++; return nil }}),

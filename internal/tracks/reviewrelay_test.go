@@ -84,14 +84,19 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 	if last := relayOf(t, f)[len(relayOf(t, f))-1]; last.Kind != relay.Question || last.Body != "And the lock?" || last.To != handle {
 		t.Errorf("tracks review --ask didn't post its question: %+v", last)
 	}
+	// @github's event comes in while tracks review waits.
+	if err := f.svc.postGitHub(ctx, "r", "PR acme/api#1 has conflicts with main."); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.svc.ReviewReply(ctx, "r", run, "It's held briefly."); err != nil {
 		t.Fatal(err)
 	}
 	if answer, err := f.svc.WaitReview(ctx, "r"); err != nil || answer != "It's held briefly." {
 		t.Fatalf("the second answer: %q, %v", answer, err)
 	}
-	if unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle); err != nil || len(unread) != 0 {
-		t.Errorf("the second printed answer is still unread: %+v, %v", unread, err)
+	unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle)
+	if err != nil || len(unread) != 2 || unread[0].From != relay.GitHubHandle || unread[1].Body != "It's held briefly." {
+		t.Errorf("after the second answer, unread %+v, %v; want @github's event, then the answer again", unread, err)
 	}
 
 	run2 := startReview(t, f, worktree)

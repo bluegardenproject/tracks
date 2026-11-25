@@ -12,6 +12,9 @@ import (
 // What a click on a target does.
 const (
 	targetCollect = iota
+	// targetCollectSignals is Collect messages under Signals, for
+	// @github's events: its notice shows there.
+	targetCollectSignals
 	targetRelayStation
 	targetSolve
 	targetTrain
@@ -116,9 +119,15 @@ func (m Model) signalsBody() ([]string, []item) {
 	case n > 0:
 		line += m.mutedText(" · " + strconv.Itoa(n) + " new")
 	}
-	body := []string{line, ""}
+	body := []string{line}
 	// The whole line opens it, from the body's first column.
 	items := []item{{row: 0, width: lipgloss.Width(line), kind: targetRelayStation, from: 2}}
+	if m.signals.Held {
+		b := widget.NewButton("Collect messages", widget.ButtonAccent)
+		items = append(items, item{row: len(body), width: b.Width(), kind: targetCollectSignals})
+		body = append(body, " "+b.View(m.palette))
+	}
+	body = append(body, "")
 	for _, pr := range m.signals.PRs {
 		body = append(body, m.item(cutTo(pr.PR, inner)))
 		if pr.Sent {

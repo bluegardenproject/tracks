@@ -43,9 +43,11 @@ type PR struct {
 }
 
 // Signals are the Relay Station's count of messages the user hasn't
-// seen, and the PRs with open comments.
+// seen, whether @github's events wait for a held pointer, and the PRs
+// with open comments.
 type Signals struct {
 	RelayNew int
+	Held     bool
 	PRs      []PR
 }
 
@@ -160,7 +162,7 @@ func (m Model) actionAt(x, y int) (func() error, int, string) {
 			continue
 		}
 		switch t.kind {
-		case targetCollect:
+		case targetCollect, targetCollectSignals:
 			if m.c.Collect != nil {
 				return m.c.Collect, t.kind, "Collecting…"
 			}
@@ -190,6 +192,8 @@ func (m Model) targetGone(kind int) bool {
 	switch kind {
 	case targetCollect:
 		return !m.anyHeld()
+	case targetCollectSignals:
+		return !m.signals.Held
 	case targetSolve:
 		for _, pr := range m.signals.PRs {
 			if !pr.Sent {

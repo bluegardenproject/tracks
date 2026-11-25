@@ -67,6 +67,7 @@ type PRSignal struct {
 type SignalsResult struct {
 	PRs      []PRSignal `json:"prs"`
 	RelayNew int        `json:"relay_new"`
+	Held     bool       `json:"held,omitempty"`
 }
 
 // Signals are track id's Signals.
