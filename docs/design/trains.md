@@ -627,15 +627,20 @@ own. "Side track" is always two words: "sidetracked" means something else.
   found) to rebase its own commits onto what it merged into, and records
   that as its base. A side track that's archived, or whose PRs there are
   merged or closed already (a fan-in into its main track's branch), has
-  nothing to restack. `--on` stacks on the lower track's branch as its
-  worktree has it, renamed or not (golden,
+  nothing to restack (golden,
   agreed): "The PR below yours, acme/api#232 (relay-store), was merged
-  into main. Restack: rebase onto main keeping only your own commits
-  (`git rebase --onto origin/main 0123abc`), run the tests, push with
+  into main. Restack: fetch it (`git fetch origin main`), rebase onto it
+  keeping only your own commits (`git rebase --onto origin/main
+  0123abc`), run the tests, push with
   `--force-with-lease`, and point your PR at main (`gh pr edit --base
   main`) if GitHub hasn't already." The commit is the merged PR's last
   head, which the poll kept, so a squash merge or a deleted branch
-  doesn't matter. It's typed as the policies' instructions are, and the
+  doesn't matter. Only a base branch and commit that are safe in a
+  command go into it (letters, digits, `.`, `_`, `/`, `-`; 7 hex digits);
+  any other leaves it to the main track. Restacking runs once the poll
+  saved every PR, and a waiting restack is dropped once the side track's
+  own PRs there settle. `--on` stacks on the lower track's branch as its
+  worktree has it, renamed or not. It's typed as the policies' instructions are, and the
   main track gets a notice; a stacked side track that ended is the main
   track's to decide. A PR below that only changes needs no restack of its
   own: if the one above then conflicts, the conflicts policy has it

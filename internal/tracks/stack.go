@@ -141,10 +141,10 @@ func (s *Service) family(ctx context.Context, id string) ([]track.Track, error) 
 // branch, has nothing to restack; one that ended is its main track's to
 // decide.
 func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
-	from, base := gitHubRef(pr.Health.HeadBranch), gitHubRef(pr.Health.Base)
-	if from == "" || base == "" || len(pr.Health.Head) < 7 {
+	if pr.Health.HeadBranch == "" || pr.Health.Base == "" || len(pr.Health.Head) < 7 {
 		return nil
 	}
+	from := pr.Health.HeadBranch
 	lower, err := s.Store.Track(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
@@ -161,7 +161,11 @@ func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
 	} else if err != nil {
 		return err
 	}
-	head := gitHubRef(pr.Health.Head[:7])
+	// The base and the commit go into commands the agent runs: ones
+	// that aren't safe there leave it to the main track.
+	base, okBase := gitHubRef(pr.Health.Base)
+	head := strings.ToLower(pr.Health.Head[:7])
+	safe := okBase && shortSHA.MatchString(head)
 	ref := fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
 	for _, upper := range family {
 		if upper.ID == lower.ID || !side.Is(upper) {
@@ -174,7 +178,7 @@ func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
 			if repo, err := s.gitHubRepo(ctx, r.Path); err != nil || !strings.EqualFold(repo, pr.Repo) {
 				continue
 			}
-			if err := s.restackOne(ctx, upper.ID, r.Name, mainID, pr, ref, shown(lower), base, head); err != nil {
+			if err := s.restackOne(ctx, upper.ID, r.Name, mainID, pr, ref, shown(lower), base, head, safe); err != nil {
 				return err
 			}
 		}
@@ -184,7 +188,7 @@ func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
 
 // restackOne restacks side track id's repo name, under Report's lock and
 // read again, so one ending meanwhile hands the instruction over.
-func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr track.PR, ref, lowerName, base, head string) error {
+func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr track.PR, ref, lowerName, base, head string, safe bool) error {
 	s.reporting.Lock()
 	defer s.reporting.Unlock()
 	upper, err := s.Store.Track(ctx, id)
@@ -196,10 +200,13 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 	if upper.Archived() || settledIn(upper, pr.Repo) {
 		return nil
 	}
+	named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(pr.Health.Base))
+	if !safe {
+		return s.postGitHub(ctx, mainID, named+" Its branch's name isn't one Tracks puts into a command: you decide.", relay.Event)
+	}
 	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
 		return err
 	}
-	named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(base))
 	if !upper.Open() {
 		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event)
 	}

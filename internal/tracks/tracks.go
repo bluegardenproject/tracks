@@ -234,6 +234,9 @@ type Service struct {
 	// checkout, by its path, as gh resolved it.
 	threads   map[string]int
 	repoNames map[string]string
+	// merged are the PRs the running poll saw merge, restacked on once
+	// it saved them all.
+	merged []mergedPR
 	// badges are the badges last written into each train's overlay
 	// header, by session.
 	badges map[string]string

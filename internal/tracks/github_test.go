@@ -30,7 +30,7 @@ const pollAnswerJSON = `{"data":{"viewer":{"login":"me"},
 "b0":{"pullRequests":{"nodes":[{"url":"https://github.com/a/b/pull/3","state":"MERGED","isDraft":false,
   "mergeable":"UNKNOWN","baseRefName":"main","headRefOid":"aaa","commits":{"nodes":[]}}]}},
 "p0":{"pullRequest":{"url":"https://github.com/a/b/pull/4","state":"OPEN","isDraft":true,"mergeable":"CONFLICTING",
-  "baseRefName":"main","headRefOid":"0123456789abcdef","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
+  "baseRefName":"main","headRefOid":"0123456789abcdef","headRefName":"feat/rates","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
     {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE"},
     {"__typename":"CheckRun","name":"test","status":"IN_PROGRESS","conclusion":null},
     {"__typename":"StatusContext","context":"ci/deploy","state":"ERROR"}]}}}}]},
@@ -65,7 +65,7 @@ esac`)
 	}
 	want := PRFacts{PR: four, Threads: 2}
 	want.State = track.PRDraft
-	want.Health = track.Health{Base: "main", Head: "0123456789abcdef", Mergeable: track.MergeConflicts,
+	want.Health = track.Health{Base: "main", Head: "0123456789abcdef", HeadBranch: "feat/rates", Mergeable: track.MergeConflicts,
 		Checks: track.ChecksFailing, Failing: []string{"lint", "ci/deploy"}}
 	if got := a.PRs[four.URL]; !reflect.DeepEqual(got, want) {
 		t.Errorf("PR 4 = %+v\nwant %+v: threads by others, a deleted user's included", got, want)

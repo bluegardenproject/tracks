@@ -150,6 +150,29 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.restackMerged(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// mergedPR is a PR a poll saw merge, track id's.
+type mergedPR struct {
+	id string
+	pr track.PR
+}
+
+// restackMerged restacks on the PRs the poll saw merge, once it saved
+// them all.
+func (s *Service) restackMerged(ctx context.Context) error {
+	s.mu.Lock()
+	merged := s.merged
+	s.merged = nil
+	s.mu.Unlock()
+	var errs []error
+	for _, m := range merged {
+		errs = append(errs, s.restack(ctx, m.id, m.pr))
+	}
 	return errors.Join(errs...)
 }
 
@@ -212,9 +235,11 @@ func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was trac
 		return err
 	}
 	if pr.State == track.PRMerged && (was == track.PROpen || was == track.PRDraft) {
-		if err := s.restack(ctx, id, pr); err != nil {
-			return err
-		}
+		// After the whole poll is saved: a side track stacked on it whose
+		// own PR merged in the same poll has nothing to restack.
+		s.mu.Lock()
+		s.merged = append(s.merged, mergedPR{id, pr})
+		s.mu.Unlock()
 	}
 	before := pr.Health
 	if !pr.State.Settled() {

