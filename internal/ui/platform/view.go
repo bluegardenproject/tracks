@@ -112,6 +112,7 @@ func (m Model) platformBody() ([]string, []item) {
 	}
 	if m.notice != "" && m.noticeFor == targetCollect {
 		body = append(body, m.muted(m.notice, inner)...)
+		body = append(body, "")
 	}
 
 	body = append(body, m.mutedText("Side Tracks"))
@@ -120,11 +121,22 @@ func (m Model) platformBody() ([]string, []item) {
 		items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
 		body = append(body, m.item(cutTo(s.Name, inner)))
 		badges := widget.Badge(m.palette, s.Status)
+		pr := ""
 		if s.PR.Label != "" {
-			badges += " " + widget.Badge(m.palette, s.PR)
+			pr = widget.Badge(m.palette, s.PR)
 		}
-		items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
-		body = append(body, " "+badges, "")
+		if pr != "" && lipgloss.Width(badges+" "+pr) < inner {
+			badges, pr = badges+" "+pr, ""
+		}
+		// A long status, "action required", leaves the PR's badge a row
+		// of its own rather than cut.
+		for _, row := range []string{badges, pr} {
+			if row != "" {
+				items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
+				body = append(body, " "+row)
+			}
+		}
+		body = append(body, "")
 	}
 	if len(m.sides) == 0 {
 		body = append(body, m.mutedText("empty"))
@@ -167,7 +179,7 @@ func (m Model) signalsBody() ([]string, []item) {
 		body = append(body, "")
 	}
 	// A notice of Signals' own clicks shows here.
-	if m.notice != "" && m.noticeFor != targetCollect {
+	if m.notice != "" && (m.noticeFor == targetCollectSignals || m.noticeFor == targetRelayStation || m.noticeFor == targetSolve) {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
 	return body, items

@@ -42,7 +42,7 @@ func newPlatformCmd(version string) *cobra.Command {
 				Theme:     t,
 				Trains:    func() ([]uiplatform.Entry, error) { return platformEntries(client.TrainList(cmd.Context(), id)) },
 				Sides:     func() ([]uiplatform.Side, error) { return platformSides(client.SideList(cmd.Context(), id)) },
-				OpenSide:  func(side string) error { return switchFromPlatform(daemon.tmux, paths, side) },
+				OpenSide:  func(side string) error { return switchFromPlatform(daemon.tmux, side) },
 				Watch:     daemon.watch,
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
 				Collect:   func() error { return client.RelayCollect(cmd.Context(), id) },
@@ -113,28 +113,25 @@ func platformSides(sides []rpc.SideTrack, err error) ([]uiplatform.Side, error) 
 	out := make([]uiplatform.Side, len(sides))
 	for i, s := range sides {
 		out[i] = uiplatform.Side{ID: s.ID, Name: s.Name, Status: track.StatusByID(s.StatusID)}
-		if s.PRID != "" {
-			out[i].PR = track.PRStatusByID(s.PRID)
-			out[i].PR.Label = s.PR
+		// Only a PR status the Platform knows gets a badge.
+		if pr := track.PRStatusByID(s.PRID); pr.ID != "" {
+			pr.Label = s.PR
+			out[i].PR = pr
 		}
 	}
 	return out, nil
 }
 
-// switchFromPlatform switches the client showing the Platform to side
-// track id's window.
-func switchFromPlatform(t *tmux.Client, paths platform.Paths, id string) error {
-	client, err := t.ClientOf(ownPane(paths))
-	if err != nil {
-		return err
-	}
+// switchFromPlatform switches to side track id's window, on its agent
+// pane, as the Station does.
+func switchFromPlatform(t *tmux.Client, id string) error {
 	infos, err := trackwin.List(t, sessionName)
 	if err != nil {
 		return err
 	}
 	for _, in := range infos {
 		if in.Track == id {
-			return t.SwitchClient(client, in.Window)
+			return switchToWindow(t, in.Window)
 		}
 	}
 	return errors.New("its window is closed: open it from the Station")
