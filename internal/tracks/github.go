@@ -41,13 +41,13 @@ type GH struct {
 }
 
 type ghPR struct {
-	URL       string    `json:"url"`
-	State     string    `json:"state"`
-	IsDraft   bool      `json:"isDraft"`
-	Base      string    `json:"baseRefName"`
-	Head      string    `json:"headRefOid"`
-	Mergeable string    `json:"mergeable"`
-	Checks    []ghCheck `json:"statusCheckRollup"`
+	URL       string
+	State     string
+	IsDraft   bool
+	Base      string
+	Head      string
+	Mergeable string
+	Checks    []ghCheck
 }
 
 // ghCheck is a check run (Status, Conclusion) or a commit status

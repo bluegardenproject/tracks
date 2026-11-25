@@ -643,7 +643,11 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
   open review threads), in aliases of 25 per call, where there were a
   `gh pr list` per branch, a `gh pr view` per PR and a threads query per
   PR. Signals' PR buttons count from the same answer. A repo's GitHub
-  name is asked of gh once per checkout.
+  name is asked of gh once per checkout. GitHub charges a query by the
+  most it could return, so a branch's PRs come without their review
+  threads (ten times the cost); a PR found there is read with its
+  threads, by its link, from the next poll on. A poll of a branch and a
+  PR costs 1 point of the 5,000 an hour.
 - **Not the notifications endpoint**: it was the plan, but it misses what
   matters most here. A PR that starts to conflict as its base moves
   notifies nobody, CI notifies only for runs the user triggered and only

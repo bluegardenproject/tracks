@@ -23,7 +23,8 @@ type Query struct {
 
 // PRFacts is a PR as GitHub has it, with its health, and Threads, its
 // review threads that wait on the gh user: unresolved, with someone
-// else having the last word.
+// else having the last word. Threads are read only for the PRs asked
+// for by their links.
 type PRFacts struct {
 	track.PR
 	Threads int
@@ -39,11 +40,18 @@ type Answer struct {
 // pollChunk is how many branches and PRs one GraphQL query asks for.
 const pollChunk = 25
 
-// prFragment is what a poll reads of each PR.
-const prFragment = `fragment pr on PullRequest {
+// prFragments are what a poll reads of a PR: pr its state and health,
+// prThreads its review threads too. GitHub charges a query by the most
+// it could return, so a branch's PRs, up to 10 each with up to 100
+// threads, read no threads: those would cost ten times as much. The PRs
+// found there are asked for by their links from the next poll on.
+const prFragments = `fragment pr on PullRequest {
   url state isDraft mergeable baseRefName headRefOid
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } } } } } } }
+}
+fragment prThreads on PullRequest {
+  ...pr
   reviewThreads(first: 100) { nodes { isResolved comments(last: 1) { nodes { author { login } } } } }
 }`
 
@@ -60,10 +68,10 @@ func pollQuery(branches []BranchQuery, prs []track.PR) string {
 	}
 	for i, pr := range prs {
 		owner, name, _ := strings.Cut(pr.Repo, "/")
-		fmt.Fprintf(&b, "  p%d: repository(owner: %s, name: %s) { pullRequest(number: %d) { ...pr } }\n", i, quote(owner), quote(name), pr.Number)
+		fmt.Fprintf(&b, "  p%d: repository(owner: %s, name: %s) { pullRequest(number: %d) { ...prThreads } }\n", i, quote(owner), quote(name), pr.Number)
 	}
 	b.WriteString("}\n")
-	b.WriteString(prFragment)
+	b.WriteString(prFragments)
 	return b.String()
 }
 
@@ -129,19 +137,39 @@ func (p gqlPR) facts(viewer string) (PRFacts, bool) {
 // and says what it couldn't read.
 func pollAnswer(out []byte, branches []BranchQuery, prs []track.PR, a Answer) error {
 	var r struct {
-		Data map[string]json.RawMessage
+		Data   map[string]json.RawMessage
+		Errors []struct{ Path []any }
 	}
 	if err := json.Unmarshal(out, &r); err != nil || r.Data == nil {
 		return fmt.Errorf("gh api graphql: no answer to read")
 	}
 	var viewer struct{ Login string }
-	_ = json.Unmarshal(r.Data["viewer"], &viewer)
+	if json.Unmarshal(r.Data["viewer"], &viewer) != nil || viewer.Login == "" {
+		// Every thread would seem to wait on the user.
+		return fmt.Errorf("gh api graphql: the answer doesn't say who asks")
+	}
+	// An alias with an error anywhere in it may be missing a field,
+	// which would read as a change: it counts as unanswered.
+	failed := map[string]bool{}
+	for _, e := range r.Errors {
+		if len(e.Path) > 0 {
+			if alias, ok := e.Path[0].(string); ok {
+				failed[alias] = true
+			}
+		}
+	}
+	answer := func(alias string) json.RawMessage {
+		if failed[alias] {
+			return nil
+		}
+		return r.Data[alias]
+	}
 	var missing []string
 	for i, q := range branches {
 		var repo *struct {
 			PullRequests struct{ Nodes []gqlPR }
 		}
-		if json.Unmarshal(r.Data[fmt.Sprintf("b%d", i)], &repo) != nil || repo == nil {
+		if json.Unmarshal(answer(fmt.Sprintf("b%d", i)), &repo) != nil || repo == nil {
 			missing = append(missing, q.Repo+" "+q.Branch)
 			continue
 		}
@@ -155,7 +183,7 @@ func pollAnswer(out []byte, branches []BranchQuery, prs []track.PR, a Answer) er
 	}
 	for i, pr := range prs {
 		var repo *struct{ PullRequest *gqlPR }
-		if json.Unmarshal(r.Data[fmt.Sprintf("p%d", i)], &repo) != nil || repo == nil || repo.PullRequest == nil {
+		if json.Unmarshal(answer(fmt.Sprintf("p%d", i)), &repo) != nil || repo == nil || repo.PullRequest == nil {
 			missing = append(missing, pr.URL)
 			continue
 		}
@@ -187,7 +215,7 @@ func (g GH) Poll(ctx context.Context, q Query) (Answer, error) {
 		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 			return a, errors.Join(err, ctx.Err())
 		}
-		if readErr := pollAnswer(out, branches[:nb], prs[:np], a); readErr != nil {
+		if readErr := pollAnswer(out, branches[:nb], prs[:np], a); err != nil || readErr != nil {
 			// gh's own error says why, when it has one.
 			errs = append(errs, errors.Join(err, readErr))
 		}

@@ -102,6 +102,37 @@ func TestGHPollChunks(t *testing.T) {
 	}
 }
 
+func TestPollAnswerErrors(t *testing.T) {
+	four, _ := track.ParsePR("https://github.com/a/b/pull/4")
+	pr := `{"pullRequest":{"url":"https://github.com/a/b/pull/4","state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+"baseRefName":"main","headRefOid":"abc","commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]},"reviewThreads":{"nodes":[]}}}`
+	for name, tc := range map[string]struct {
+		out  string
+		read bool
+	}{
+		"whole":              {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `}}`, true},
+		"a field's error":    {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p0","pullRequest","commits"]}]}`, false},
+		"another's error":    {`{"data":{"viewer":{"login":"me"},"p0":` + pr + `},"errors":[{"path":["p1"]}]}`, true},
+		"no viewer":          {`{"data":{"viewer":null,"p0":` + pr + `},"errors":[{"path":["viewer"]}]}`, false},
+		"not GraphQL at all": {`HTTP 502`, false},
+	} {
+		a := Answer{Branches: map[BranchQuery][]PRFacts{}, PRs: map[string]PRFacts{}}
+		err := pollAnswer([]byte(tc.out), nil, []track.PR{four}, a)
+		if _, read := a.PRs[four.URL]; read != tc.read || (err == nil) != tc.read {
+			t.Errorf("%s: read %v, error %v; want read %v", name, read, err, tc.read)
+		}
+	}
+}
+
+func TestPollQueryReadsThreadsOnlyByLink(t *testing.T) {
+	four, _ := track.ParsePR("https://github.com/a/b/pull/4")
+	q := pollQuery([]BranchQuery{{Repo: "a/b", Branch: "x"}}, []track.PR{four})
+	if !strings.Contains(q, `headRefName: "x", first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } }`) ||
+		!strings.Contains(q, `pullRequest(number: 4) { ...prThreads }`) {
+		t.Errorf("a branch's PRs read with threads, or a PR's without:\n%s", q)
+	}
+}
+
 func TestPollQueryQuotes(t *testing.T) {
 	q := pollQuery([]BranchQuery{{Repo: "a/b", Branch: `x") { evil }`}}, nil)
 	if !strings.Contains(q, `headRefName: "x\") { evil }"`) {
