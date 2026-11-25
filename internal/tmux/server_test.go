@@ -84,7 +84,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	tmuxOut("set-option", "-p", "-t", pane, "@tracks_title", "Claude Code")
 	for role, want := range map[string]string{"agent": "#[fg=blue] Claude Code #[default]", "platform": "", "terminal": "#[fg=white] Claude Code #[default]"} {
 		tmuxOut("set-option", "-p", "-t", pane, "@tracks_role", role)
-		if got := tmuxOut("display-message", "-p", "-t", pane, "#{E:pane-border-format}"); got != strings.TrimSpace(want) {
+		if got := tmuxOut("display-message", "-p", "-t", pane, "#{E:pane-border-format}"); got != want {
 			t.Errorf("%s pane's border title = %q, want %q", role, got, want)
 		}
 	}

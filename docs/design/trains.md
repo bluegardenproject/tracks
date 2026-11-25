@@ -281,7 +281,8 @@ outside the agent's environment, name the track and the client.
     global options set from the `state.*` tokens, as the buttons' are.
   - **Hide** (`button.variant1`) detaches the client: the popup closes, the
     train runs on.
-  - **End train** ends it, in `button.variant5`, as Close reviewer did.
+  - **End train** ends it, in `button.variant5`, as Close reviewer did,
+    once the user confirms in a popup over the overlay.
 - **`Ctrl+b Esc`** hides it too: a prefix binding that runs `tracks
   trackwin hide <client> <session>`, which detaches the client only when
   its session is a train's. A bare Esc stays the agent's (it interrupts);
