@@ -243,11 +243,6 @@ func (w *fakeWindows) OpenPlatform(window, command string) error {
 	return nil
 }
 
-func (w *fakeWindows) ClosePlatform(window string) error {
-	delete(w.platforms, window)
-	return nil
-}
-
 func (w *fakeWindows) Paste(window, text string) error {
 	w.pasted = append(w.pasted, window+" "+text)
 	if w.whilePasting != nil {
@@ -405,6 +400,9 @@ func TestCreateWork(t *testing.T) {
 	if spec.Track != tr.ID || spec.Kind != "work" || spec.Repo != "api,web" || spec.Dir != "/start" ||
 		spec.Agent != (trackwin.Process{Title: "Claude Code", Command: "claude 'go'"}) || spec.Terminals != 1 {
 		t.Errorf("window = %+v", spec)
+	}
+	if cmd := f.windows.platforms[got.Window.ID]; !strings.Contains(cmd, "TRACKS_ID='"+tr.ID+"'") {
+		t.Errorf("the new window's Platform runs %q, want one for the track", cmd)
 	}
 	if e := f.engine.spec; !e.Auto || !slices.Equal(e.DraftPRs, []string{"api"}) || e.Program != "claude" || e.BinDir != "/data/bin" {
 		t.Errorf("engine spec = %+v", e)

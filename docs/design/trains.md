@@ -142,7 +142,7 @@ Tracks doesn't promise more than the engines can enforce.
 ## The Platform
 
 A narrow pane on the left of the track's window, a small Tracks program
-built from the Tracks window's parts: `widget.Frame`, the theme's tokens,
+built from the Tracks window's parts: `widget.BorderTitledFrame`, the theme's tokens,
 the Station's status badges. It holds two frames: **Platform**, the trains,
 and below it **Signals**: the Relay Station and the PRs' open comments.
 (The sketch shows later agents beside the Reviewer.)
@@ -164,10 +164,12 @@ and below it **Signals**: the Relay Station and the PRs' open comments.
 ╰───────────────────────────╯
 ```
 
-- **Shown only while it has something to show:** a train, or a PR with
-  open comments. Each frame shows only with its entries: a track with open
-  comments and no train has Signals alone. A track with neither has no
-  sidebar.
+- **Always shown:** every track window has it, opened with the window and
+  by the daemon's tick for a window that lacks one. With no trains the
+  Platform frame says `empty`, muted; Signals always has the Relay Station,
+  which opens empty on a relay without messages. Frame titles take their
+  border's colour, entries the Station's list colour, and tmux draws no
+  title over the pane.
 - **No icons** at first. A train's name and agent, its status badge, and for
   the Reviewer its outcome as a second badge, as the Station shows a PR's.
 - **Width:** "action required" and the frame need about 22–24 columns. A

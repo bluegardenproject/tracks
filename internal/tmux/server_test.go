@@ -33,7 +33,7 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	themeConf := tmux.ThemeConf{
-		Colors: tmux.Colors{Border: "white", BorderActive: "cyan", Title: "white", TitleActive: "cyan", FooterBg: "black", FooterFg: "white", Foreground: "white", Background: "black"},
+		Colors: tmux.Colors{Border: "blue", Title: "white", FooterBg: "black", FooterFg: "white", Foreground: "white", Background: "black"},
 		Footer: []string{"top", "", "", `#(echo "system")`},
 	}
 	if err := themeConf.Write(conf.ThemeFile); err != nil {
@@ -77,6 +77,16 @@ func TestServerWithGeneratedConfig(t *testing.T) {
 	}
 	if got := tmuxOut("show-options", "-gv", "terminal-features"); !strings.Contains(got, "xterm-test:RGB") {
 		t.Errorf("terminal-features = %q, want 24-bit colour for xterm-test only", got)
+	}
+	// The agent pane's title takes the border's colour, the Platform
+	// shows none, other panes' titles take Title.
+	pane := tmuxOut("display-message", "-p", "-t", "tracks", "#{pane_id}")
+	tmuxOut("set-option", "-p", "-t", pane, "@tracks_title", "Claude Code")
+	for role, want := range map[string]string{"agent": "#[fg=blue] Claude Code #[default]", "platform": "", "terminal": "#[fg=white] Claude Code #[default]"} {
+		tmuxOut("set-option", "-p", "-t", pane, "@tracks_role", role)
+		if got := tmuxOut("display-message", "-p", "-t", pane, "#{E:pane-border-format}"); got != strings.TrimSpace(want) {
+			t.Errorf("%s pane's border title = %q, want %q", role, got, want)
+		}
 	}
 	if got := tmuxOut("display-message", "-p", "-t", "tracks:0", "#W"); got != "Tracks" {
 		t.Errorf("window 0 = %q, want Tracks", got)

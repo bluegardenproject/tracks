@@ -34,8 +34,7 @@ type item struct {
 }
 
 // layout is the pane's lines, the Platform's frame over Signals', and
-// where its clickable things are. The Platform shows while there are
-// trains; Signals fills the rest of the pane.
+// where its clickable things are. Signals fills the rest of the pane.
 func (m Model) layout() ([]string, []target) {
 	if m.width < 6 || m.height < 3 {
 		return nil, nil
@@ -44,7 +43,7 @@ func (m Model) layout() ([]string, []target) {
 	var targets []target
 	frame := func(title string, body []string, items []item, h int) {
 		top := len(lines)
-		lines = append(lines, widget.Frame(m.palette, title, body, m.width, h, theme.BorderDefault)...)
+		lines = append(lines, widget.BorderTitledFrame(m.palette, title, body, m.width, h, theme.BorderDefault)...)
 		for _, it := range items {
 			// The frame's border and padding take two columns, and a
 			// clickable line starts one in.
@@ -59,11 +58,9 @@ func (m Model) layout() ([]string, []target) {
 			targets = append(targets, target{y: top + 1 + it.row, x0: x0, x1: x1, kind: it.kind, index: it.index})
 		}
 	}
-	if len(m.trains) > 0 || m.err != nil {
-		body, items := m.platformBody()
-		frame("Platform", body, items, len(body)+2)
-	}
-	body, items := m.signalsBody()
+	body, items := m.platformBody()
+	frame("Platform", body, items, len(body)+2)
+	body, items = m.signalsBody()
 	frame("Signals", body, items, max(len(body)+2, m.height-len(lines)))
 	if len(lines) > m.height {
 		lines = lines[:m.height]
@@ -72,7 +69,7 @@ func (m Model) layout() ([]string, []target) {
 }
 
 // platformBody is the Platform frame's inside: each train, its badges
-// and its Collect messages.
+// and its Collect messages; "empty" for no trains.
 func (m Model) platformBody() ([]string, []item) {
 	inner := m.width - 4
 	var body []string
@@ -82,7 +79,7 @@ func (m Model) platformBody() ([]string, []item) {
 		// border.
 		name := cutTo(t.Handle, inner)
 		items = append(items, item{row: len(body), kind: targetTrain, index: i, whole: true})
-		body = append(body, m.bold(name))
+		body = append(body, m.item(name))
 		badges := widget.Badge(m.palette, t.Status)
 		if t.Outcome.Label != "" {
 			badges += " " + widget.Badge(m.palette, t.Outcome)
@@ -95,6 +92,9 @@ func (m Model) platformBody() ([]string, []item) {
 			body = append(body, " "+b.View(m.palette))
 		}
 		body = append(body, "")
+	}
+	if len(m.trains) == 0 && m.err == nil {
+		body = append(body, m.mutedText("empty"), "")
 	}
 	if m.err != nil {
 		body = append(body, m.muted("Couldn't read the Platform: "+m.err.Error(), inner)...)
@@ -109,7 +109,7 @@ func (m Model) platformBody() ([]string, []item) {
 // count of new messages, and each PR with open comments and its button.
 func (m Model) signalsBody() ([]string, []item) {
 	inner := m.width - 4
-	line := lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextAccent)).Render("Relay Station")
+	line := m.item("Relay Station")
 	switch n := m.signals.RelayNew; {
 	case n > 99:
 		line += m.mutedText(" · 99+")
@@ -120,7 +120,7 @@ func (m Model) signalsBody() ([]string, []item) {
 	// The whole line opens it, from the body's first column.
 	items := []item{{row: 0, width: lipgloss.Width(line), kind: targetRelayStation, from: 2}}
 	for _, pr := range m.signals.PRs {
-		body = append(body, m.bold(cutTo(pr.PR, inner)))
+		body = append(body, m.item(cutTo(pr.PR, inner)))
 		if pr.Sent {
 			body = append(body, " "+m.mutedText(cutTo(pr.Action, inner-1)))
 		} else {
@@ -130,17 +130,16 @@ func (m Model) signalsBody() ([]string, []item) {
 		}
 		body = append(body, "")
 	}
-	// A notice of Signals' own clicks shows here; Collect messages' too
-	// while the Platform's frame isn't shown.
-	ownNotice := m.noticeFor != targetCollect || len(m.trains) == 0 && m.err == nil
-	if m.notice != "" && ownNotice {
+	// A notice of Signals' own clicks shows here.
+	if m.notice != "" && m.noticeFor != targetCollect {
 		body = append(body, m.muted(m.notice, inner)...)
 	}
 	return body, items
 }
 
-func (m Model) bold(text string) string {
-	return lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextDefault)).Bold(true).Render(text)
+// item is a list item's name, as the Station shows a track's.
+func (m Model) item(text string) string {
+	return lipgloss.NewStyle().Foreground(m.palette.Color(theme.TableTextDefault)).Render(text)
 }
 
 func (m Model) mutedText(text string) string {
