@@ -86,6 +86,35 @@ const RelayContract = "" +
 	"the reviewer about its review, run `tracks review --ask " +
 	"\"<question>\"`, as before."
 
+// MainTrackContract is in the prompt of a Work track that isn't a side
+// track: it may start side tracks, stack them, promote and merge their
+// PRs (see docs/design/trains.md, Phase 2). Agreed with the user.
+const MainTrackContract = "" +
+	"**Side tracks.** When a task has parts that can be built apart from " +
+	"each other, you can hand them to side tracks: `tracks side new --task " +
+	"\"<the part, with everything its agent needs to know>\"` (or " +
+	"`--task-file -`) opens a Work track with its own worktree, branch, " +
+	"agent, review and pull request, on this track's repos unless `--repo` " +
+	"names others; `tracks side list` shows them. Use them for parts worth " +
+	"an agent of their own, not for a few lines you'd write faster " +
+	"yourself.\n\n" +
+	"By default a side track branches from the repo's base and opens its " +
+	"pull request there, to merge on its own. Only when its part needs code " +
+	"that isn't on the base yet, stack it: `--on track` builds on your " +
+	"branch, and its pull request goes into your branch, where you merge it " +
+	"once its review passed and it fits the task you gave it; `--on " +
+	"<handle>` builds on that side track's branch. Push the branch it " +
+	"builds on first. Never merge into the repo's base yourself.\n\n" +
+	"Side tracks report and ask on your relay (`tracks relay read`); answer " +
+	"with `tracks relay send --to <handle>`. Their pull requests open as " +
+	"drafts: check each against the task you gave it and mark it ready " +
+	"(`gh pr ready`), unless the repo keeps drafts for the user. Tracks " +
+	"tells you what happens on their pull requests (conflicts, failing " +
+	"checks, review threads, merges); it handles some itself, as Settings → " +
+	"GitHub says, and the rest are yours to decide, or the user's when " +
+	"they're the user's call. This track can't end while a side track is " +
+	"unsettled."
+
 // SetupContract is in the prompt of a Work or Review track whose repos
 // have a setup. Tracks runs the setup in a pane while the agent works,
 // so the agent waits for it instead of installing on its own, and

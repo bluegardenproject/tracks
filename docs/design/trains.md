@@ -903,8 +903,14 @@ track's policy has Tracks tell it (built, step 4).
    own trains. The "Side track" paragraph (golden) tells the agent to
    ask another side track directly to settle a conflict, a shared file
    or an interface, that its main track sees these, and the cap.
-9. The main track's prompt: a "Side tracks" paragraph, its wording agreed
-   with the user first, as every prompt.
+9. The main track's prompt (built): a "Side tracks" paragraph in every
+   Work track's prompt but a side track's (`agents.MainTrackContract`,
+   agreed with the user): when to start a side track and when not, the
+   default (from the repo's base, PR there) and stacking (`--on track`,
+   merged into the main track's branch by it, never into the base;
+   `--on <handle>`), pushing first, the relay, promoting drafts unless
+   the repo keeps them, `@github`'s events and the policies, and that it
+   can't end while a side track is unsettled.
 
 ### Later (v3)
 
