@@ -823,8 +823,8 @@ track's policy has Tracks tell it (built, step 4).
    track's details say "Side track of <name>" where others say "Started
    from". The rows are ordinary rows to keys, clicks and the filter, and
    the selection follows its track when a reload moves it. Ended and
-   archived tracks are in the same list, so they group the same; the
-   History tab lists no tracks.
+   archived tracks are in the same list, so they group the same; Settings'
+   Tracks History lists no tracks.
 7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
 8. Side tracks talking to each other.
 9. The main track's prompt: a "Side tracks" paragraph, its wording agreed

@@ -119,32 +119,6 @@ func cells(t source.Track) []string {
 	return []string{shownInList(t), t.Kind, statusText(t), model}
 }
 
-// sidePrefix goes before a side track's name under its main track.
-const (
-	sideCorner = "└ "
-	sidePrefix = "side: "
-)
-
-// shownInList is t's name as the list shows it.
-func shownInList(t source.Track) string {
-	if t.Under {
-		return sideCorner + sidePrefix + t.Shown()
-	}
-	return t.Shown()
-}
-
-// sideName draws side track t's name under its main track, at most
-// width cells: the corner and prefix stay, the name is cut.
-func (m Model) sideName(t source.Track, width int, selected bool, fill lipgloss.Style) string {
-	lead := lipgloss.Width(sideCorner + sidePrefix)
-	muted := fill.Foreground(m.palette.Color(theme.TableTextMuted))
-	if width <= lead {
-		return muted.Render(cut(sideCorner+sidePrefix, width))
-	}
-	name := fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(selected)
-	return muted.Render(sideCorner+sidePrefix) + name.Render(cut(t.Shown(), width-lead))
-}
-
 func (m Model) loadTracks() tea.Cmd {
 	if m.source == nil {
 		return nil
