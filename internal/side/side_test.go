@@ -52,3 +52,13 @@ func TestIs(t *testing.T) {
 		t.Error("a side track is one with a handle on the relay of a main track that's still there")
 	}
 }
+
+func TestNotices(t *testing.T) {
+	st := track.Track{Name: "relay-store", Side: "side-000123", Prompt: "  Store the relay\nin SQLite"}
+	if got := Joined(st); got != "@side-000123 joined: side track relay-store, Store the relay" {
+		t.Errorf("joined %q", got)
+	}
+	if got := LeftNotice(st, "it ended"); got != "@side-000123 left: it ended." {
+		t.Errorf("left %q", got)
+	}
+}

@@ -688,6 +688,21 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
      `tracks side new` is `tracks new work` with the side flag: the
      daemon refuses it from a side track and for a main track that
      ended, the command under the review marker, as `tracks relay`.
+   - 2b, the relay: a side track reads two relays, its own as `track`
+     (its reviewer's) and its main track's as its handle; `relay read`,
+     `wait`, `show` and delivery merge the two (message numbers grow
+     across relays, so one cursor orders them). `--to track` in a side
+     track sends to its main track, from its handle: identity is still
+     `$TRACKS_ID`, so a side track can't send as its main track. The
+     main track sends to a side track by handle or prefix, as to a train;
+     an ended one is refused. `relay who` lists the side tracks; a side
+     track sees its main track as @track, itself, and its own trains.
+     Tracks posts "@side-000123 joined: side track <name>, <task's first
+     line>" as one starts or resumes, and "left: it ended." (or "Tracks
+     stopped.") as it closes. `relay wait` now sleeps through notices,
+     as delivery does: a join notice wakes no one.
+     The main track's Relay Station marks only its own pointers "not
+     delivered", not those of messages to its side tracks.
 3. Draft PRs the main track promotes, as the repo's rule allows.
 4. The Platform's "Side tracks" list; a click switches to the window.
 5. The Station's grouping.

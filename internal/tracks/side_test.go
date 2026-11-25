@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
@@ -40,6 +41,11 @@ func TestSideNew(t *testing.T) {
 	case len(saved.Repos) != 1 || saved.Repos[0].Name != "api" || saved.Kind != track.Work:
 		t.Errorf("side track is a %s track on %+v; want a Work track on its main track's api", saved.Kind, saved.Repos)
 	}
+	msgs, err := f.store.RelayUnread(ctx, main.ID, relay.TrackHandle)
+	if err != nil || len(msgs) != 1 || msgs[0].Body != "@"+st.Side+" joined: side track relay-store, Store the relay" {
+		t.Errorf("main track's relay holds %+v, %v; want the join notice", msgs, err)
+	}
+
 	var problem Problem
 	for _, tc := range []struct {
 		req Request
@@ -60,6 +66,62 @@ func TestSideNew(t *testing.T) {
 	}
 }
 
+func TestSideRelay(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	if _, err := f.svc.RelayRead(ctx, main.ID, relay.TrackHandle); err != nil {
+		t.Fatal(err)
+	}
+	report, err := f.svc.RelaySend(ctx, st.ID, "@track", relay.Report, "PR #231 is ready.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.From != st.Side || report.To != relay.TrackHandle {
+		t.Errorf("a side track sent as %s to %s; want as %s to the main track", report.From, report.To, st.Side)
+	}
+	if msgs, err := f.svc.RelayRead(ctx, main.ID, relay.TrackHandle); err != nil || len(msgs) != 1 || msgs[0].ID != report.ID {
+		t.Errorf("main track read %+v, %v; want the side track's report", msgs, err)
+	}
+
+	question, err := f.svc.RelaySend(ctx, main.ID, side.Prefix, relay.Question, "Which table?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if question.To != st.Side {
+		t.Errorf("sent to %s; want %s, the one side track", question.To, st.Side)
+	}
+	if due, err := f.svc.dueMessages(ctx, st, 0, f.svc.now().Add(time.Minute), pointerGrace); err != nil || len(due) != 1 || due[0].ID != question.ID {
+		t.Errorf("due for the side track %+v, %v; want its main track's question", due, err)
+	}
+	msgs, err := f.svc.RelayRead(ctx, st.ID, relay.TrackHandle)
+	if err != nil || len(msgs) != 2 || msgs[1].ID != question.ID {
+		t.Fatalf("side track read %+v, %v; want the join notice and the question", msgs, err)
+	}
+	if m, err := f.svc.RelayShow(ctx, st.ID, relay.TrackHandle, question.ID); err != nil || m.Body != "Which table?" {
+		t.Errorf("side track showed %+v, %v", m, err)
+	}
+	other, err := f.store.AddRelayMessage(ctx, main.ID, relay.Message{From: "reviewer-1", To: relay.TrackHandle, Kind: relay.Report, Body: "Fine."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.RelayShow(ctx, st.ID, relay.TrackHandle, other.ID); err == nil {
+		t.Error("a side track showed a message of its main track's relay that isn't for it")
+	}
+
+	var problem Problem
+	if _, err := f.svc.RelaySend(ctx, st.ID, side.Prefix, relay.Question, "Hi?"); !errors.As(err, &problem) {
+		t.Errorf("a side track sent to a side track: %v, want a Problem", err)
+	}
+	who, err := f.svc.RelayWho(ctx, main.ID)
+	if err != nil || len(who) != 2 || who[1].Handle != st.Side {
+		t.Errorf("main track's relay has %+v, %v; want the track and the side track", who, err)
+	}
+	who, err = f.svc.RelayWho(ctx, st.ID)
+	if err != nil || len(who) != 2 || who[0].Handle != relay.TrackHandle || !strings.Contains(who[0].Agent, "api-cache") || who[1].Handle != st.Side {
+		t.Errorf("side track sees %+v, %v; want its main track and itself", who, err)
+	}
+}
+
 func TestMainTrackWaitsForItsSideTracks(t *testing.T) {
 	ctx := context.Background()
 	f, main, st := sideFixture(t)
@@ -73,6 +135,13 @@ func TestMainTrackWaitsForItsSideTracks(t *testing.T) {
 	}
 	if err := f.svc.End(ctx, st.ID); err != nil {
 		t.Fatal(err)
+	}
+	unread, err := f.store.RelayUnread(ctx, main.ID, relay.TrackHandle)
+	if err != nil || len(unread) == 0 || unread[len(unread)-1].Body != "@"+st.Side+" left: it ended." {
+		t.Errorf("main track's relay holds %+v, %v; want the side track's left notice last", unread, err)
+	}
+	if _, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Still there?"); !errors.As(err, &problem) {
+		t.Errorf("sending to an ended side track: %v, want a Problem", err)
 	}
 	if err := f.svc.End(ctx, main.ID); !errors.As(err, &problem) || !strings.Contains(err.Error(), "PR #231 open") {
 		t.Fatalf("ending a main track whose side track's PR is open: %v, want a Problem naming it", err)
@@ -173,5 +242,58 @@ func TestAutoArchiveSkipsAMainTrackWaiting(t *testing.T) {
 	f.svc.Now = func() time.Time { return later.Add(ArchiveAfter + time.Hour) }
 	if names, err := f.svc.AutoArchive(ctx); err != nil || len(names) != 2 {
 		t.Errorf("auto-archive took %v, %v; want the main track and its side track", names, err)
+	}
+}
+
+func TestSideTrackReadsBothRelays(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	if _, err := f.svc.RelayRead(ctx, st.ID, relay.TrackHandle); err != nil {
+		t.Fatal(err)
+	}
+	question, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Which table?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := f.store.AddRelayMessage(ctx, st.ID, relay.Message{From: "reviewer-1", To: relay.TrackHandle, Kind: relay.Report, Body: "Fine."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := f.svc.RelayWait(ctx, st.ID, relay.TrackHandle)
+	if err != nil || len(msgs) != 2 || msgs[0].ID != question.ID || msgs[1].ID != report.ID {
+		t.Fatalf("side track read %+v, %v; want its main track's question, then its reviewer's report", msgs, err)
+	}
+	if m, err := f.svc.RelayShow(ctx, st.ID, relay.TrackHandle, report.ID); err != nil || m.Body != "Fine." {
+		t.Errorf("show from its own relay: %+v, %v", m, err)
+	}
+	if msgs, err := f.svc.RelayRead(ctx, st.ID, relay.TrackHandle); err != nil || len(msgs) != 0 {
+		t.Errorf("read again %+v, %v; want nothing", msgs, err)
+	}
+}
+
+func TestRelayWaitSleepsThroughNotices(t *testing.T) {
+	ctx := context.Background()
+	f, main, _ := sideFixture(t)
+	ctx, cancel := context.WithTimeout(ctx, 3*relayPoll)
+	defer cancel()
+	// Only the side track's join notice is unread.
+	if msgs, err := f.svc.RelayWait(ctx, main.ID, relay.TrackHandle); err == nil {
+		t.Errorf("a notice woke relay wait: %+v", msgs)
+	}
+}
+
+func TestSideTrackLeavesWhenTracksStops(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	if err := f.svc.Report(ctx, st.ID, track.Interrupted); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Report(ctx, st.ID, track.Resumed); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := f.store.RelayUnread(ctx, main.ID, relay.TrackHandle)
+	if err != nil || len(msgs) != 3 || msgs[1].Body != "@"+st.Side+" left: Tracks stopped." ||
+		!strings.HasPrefix(msgs[2].Body, "@"+st.Side+" joined:") {
+		t.Errorf("main track's relay holds %+v, %v; want joined, left as Tracks stopped, joined again", msgs, err)
 	}
 }

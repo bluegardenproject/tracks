@@ -37,6 +37,9 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 		return err
 	}
 	s.notify(statusNotice(id, t.Name, t.Status(), next.Status()))
+	if t.Open() != next.Open() {
+		s.sideNotice(ctx, t, e)
+	}
 	if on := next.Status().Attention; on != t.Status().Attention && next.Open() {
 		return s.markWindow(id, on)
 	}

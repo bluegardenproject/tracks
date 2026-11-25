@@ -139,6 +139,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		removeWorktrees()
 		return Created{}, fmt.Errorf("save the track: %w", err)
 	}
+	s.sideNotice(undo, t, track.Created)
 	s.startEager(undo, t)
 	return Created{Track: t, Window: win}, nil
 }
