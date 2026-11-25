@@ -66,6 +66,30 @@ func TestCheck(t *testing.T) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	for out, want := range map[string]string{
+		"2.1.281 (Claude Code)\n":                                    "2.1.281",
+		"GitHub Copilot CLI 1.0.114.\nRun 'copilot update' to check": "1.0.114",
+		"2026.11.20-1a2b3c\n":                                        "2026.11.20-1a2b3c",
+		"some tool, no number":                                       "some tool, no number",
+	} {
+		if got := version(out); got != want {
+			t.Errorf("version(%q) = %q, want %q", out, got, want)
+		}
+	}
+}
+
+func TestRunnersLeaveOutPreviews(t *testing.T) {
+	for _, e := range Runners() {
+		if e.Preview {
+			t.Errorf("%s is a preview but runs tracks", e.Name)
+		}
+	}
+	if len(Runners()) != len(All)-1 {
+		t.Errorf("Runners = %d engines, want all %d but Copilot", len(Runners()), len(All))
+	}
+}
+
 func TestListModels(t *testing.T) {
 	path := fakePath(t, "agent", "/bin/cat <<'OUT'\n"+realListModels+"OUT")
 	if got, err := ListModels(context.Background(), path); err != nil || len(got) != 4 {

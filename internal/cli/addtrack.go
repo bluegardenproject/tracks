@@ -117,7 +117,7 @@ func runsOn(s settings.Settings) map[track.Kind]addtrack.RunsOn {
 // addedEngines are the engines added on the Engines tab.
 func addedEngines(s settings.Settings) []addtrack.Engine {
 	var out []addtrack.Engine
-	for _, e := range agents.All {
+	for _, e := range agents.Runners() {
 		if conf := s.Engines.Get(e.ID); conf != nil {
 			out = append(out, addtrack.Engine{
 				ID: e.ID, Name: e.Name, Default: conf.Model,

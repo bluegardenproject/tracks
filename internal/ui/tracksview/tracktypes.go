@@ -308,9 +308,9 @@ func (m Model) openTypePicker() (Model, tea.Cmd) {
 		return m.modelPicker(m.typeEngine(), pickTypeModel, kind+" tracks: model")
 	}
 	cur := m.typeEngine().ID
-	items := make([]widget.PickerItem, len(agents.All))
+	items := make([]widget.PickerItem, len(agents.Runners()))
 	marked := 0
-	for i, en := range agents.All {
+	for i, en := range agents.Runners() {
 		items[i] = widget.PickerItem{Label: en.Name}
 		if m.engines.settings.Get(en.ID) == nil {
 			items[i].Detail = "not added"
@@ -332,7 +332,7 @@ func (m Model) agentPicked(r widget.PickerResult) (Model, tea.Cmd) {
 	case widget.PickerClosed:
 		m.picker = nil
 	case widget.PickerChosen:
-		en := agents.All[m.picker.Cursor]
+		en := agents.Runners()[m.picker.Cursor]
 		m.picker = nil
 		model := ""
 		if en.ID == m.typeEngine().ID {
