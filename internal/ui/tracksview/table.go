@@ -19,17 +19,17 @@ type table struct {
 	// selected and hover are row indexes, -1 for none; offset is the
 	// first row shown.
 	selected, hover, offset int
-	// cell, when set, draws a cell itself on the row's fill, as wide as
-	// its value; "" draws the value. A drawn cell that doesn't fit falls
-	// back to it.
-	cell func(row, col int, fill lipgloss.Style) string
+	// cell, when set, draws a cell itself on the row's fill, at most
+	// width cells wide; "" draws the value. A drawn cell that doesn't fit
+	// falls back to it.
+	cell func(row, col, width int, fill lipgloss.Style) string
 }
 
 // draw renders the header and the rows that fit, width by at most
 // height lines.
 func (t table) draw(m Model, width, height int) []string {
 	widths := columnWidths(t.header, t.rows, width)
-	row := func(values []string, fill lipgloss.Style, style func(col int) lipgloss.Style, drawn func(col int) string) string {
+	row := func(values []string, fill lipgloss.Style, style func(col int) lipgloss.Style, drawn func(col, width int) string) string {
 		var b strings.Builder
 		used := 0
 		for i, v := range values {
@@ -37,7 +37,7 @@ func (t table) draw(m Model, width, height int) []string {
 				b.WriteString(fill.Render(strings.Repeat(" ", columnGap)))
 				used += columnGap
 			}
-			if d := drawn(i); d != "" && lipgloss.Width(d) <= widths[i] {
+			if d := drawn(i, widths[i]); d != "" && lipgloss.Width(d) <= widths[i] {
 				b.WriteString(d + fill.Render(strings.Repeat(" ", widths[i]-lipgloss.Width(d))))
 				used += widths[i]
 				continue
@@ -54,7 +54,7 @@ func (t table) draw(m Model, width, height int) []string {
 	}
 
 	plain := lipgloss.NewStyle()
-	none := func(int) string { return "" }
+	none := func(int, int) string { return "" }
 	lines := []string{row(t.header, plain, func(int) lipgloss.Style { return m.fg(theme.TableTextFaint) }, none)}
 	end := min(len(t.rows), t.offset+height-1)
 	for i := t.offset; i < end; i++ {
@@ -67,7 +67,7 @@ func (t table) draw(m Model, width, height int) []string {
 		}
 		drawn := none
 		if t.cell != nil {
-			drawn = func(col int) string { return t.cell(i, col, fill) }
+			drawn = func(col, width int) string { return t.cell(i, col, width, fill) }
 		}
 		lines = append(lines, row(t.rows[i], fill, func(col int) lipgloss.Style {
 			if col == 0 {

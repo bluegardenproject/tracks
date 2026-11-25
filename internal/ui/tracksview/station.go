@@ -2,6 +2,7 @@ package tracksview
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -115,7 +116,33 @@ func cells(t source.Track) []string {
 	} else if t.Model != "" {
 		model = t.Model
 	}
-	return []string{t.Shown(), t.Kind, statusText(t), model}
+	return []string{shownInList(t), t.Kind, statusText(t), model}
+}
+
+// sidePrefix goes before a side track's name under its main track.
+const (
+	sideCorner = "└ "
+	sidePrefix = "side: "
+)
+
+// shownInList is t's name as the list shows it.
+func shownInList(t source.Track) string {
+	if t.Under {
+		return sideCorner + sidePrefix + t.Shown()
+	}
+	return t.Shown()
+}
+
+// sideName draws side track t's name under its main track, at most
+// width cells: the corner and prefix stay, the name is cut.
+func (m Model) sideName(t source.Track, width int, selected bool, fill lipgloss.Style) string {
+	lead := lipgloss.Width(sideCorner + sidePrefix)
+	if width <= lead {
+		return ""
+	}
+	muted := fill.Foreground(m.palette.Color(theme.TableTextMuted))
+	name := fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(selected)
+	return muted.Render(sideCorner+sidePrefix) + name.Render(cut(t.Shown(), width-lead))
 }
 
 func (m Model) loadTracks() tea.Cmd {
@@ -130,11 +157,18 @@ func (m Model) loadTracks() tea.Cmd {
 }
 
 func (m Model) setTracks(msg tracksMsg) Model {
-	m.station.tracks, m.station.err = msg.tracks, msg.err
+	was, had := m.selectedTrack()
+	m.station.tracks, m.station.err = group(msg.tracks), msg.err
 	if msg.err == nil {
 		m.station.filter = msg.filter
 	}
-	m.station.selected = min(m.station.selected, max(0, len(msg.tracks)-1))
+	m.station.selected = min(m.station.selected, max(0, len(m.station.tracks)-1))
+	// Grouping can move a track: the selection follows it.
+	if had && was.ID != "" {
+		if i := slices.IndexFunc(m.station.tracks, func(t source.Track) bool { return t.ID == was.ID }); i >= 0 {
+			m.station.selected = i
+		}
+	}
 	return m.scrollStation()
 }
 
@@ -360,9 +394,12 @@ func (m Model) list(width, height int) []string {
 	for i, t := range s.tracks {
 		rows[i] = cells(t)
 	}
-	cell := func(row, col int, fill lipgloss.Style) string {
-		if col == statusColumn {
+	cell := func(row, col, width int, fill lipgloss.Style) string {
+		switch {
+		case col == statusColumn:
 			return m.statusBadges(s.tracks[row], fill)
+		case col == 0 && s.tracks[row].Under:
+			return m.sideName(s.tracks[row], width, row == s.selected, fill)
 		}
 		return ""
 	}
