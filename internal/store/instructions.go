@@ -71,3 +71,11 @@ func (s *Store) DropInstructions(ctx context.Context, pr string, kinds ...string
 	}
 	return nil
 }
+
+// InstructionWaiting reports whether instruction id still waits: not
+// typed, dropped or replaced since it was read.
+func (s *Store) InstructionWaiting(ctx context.Context, id int64) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM instructions WHERE id = ? AND typed_at IS NULL", id).Scan(&n)
+	return n > 0, err
+}
