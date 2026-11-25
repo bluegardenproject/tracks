@@ -7,6 +7,8 @@ import "slices"
 type Engines struct {
 	Claude *Engine `yaml:"claude,omitempty"`
 	Cursor *Engine `yaml:"cursor,omitempty"`
+	// Copilot is found and added, but runs no tracks yet.
+	Copilot *Engine `yaml:"copilot,omitempty"`
 }
 
 // DefaultID is the engine new tracks run on, until each track type gets
@@ -39,6 +41,8 @@ func (e Engines) Get(id string) *Engine {
 		return e.Claude
 	case "cursor":
 		return e.Cursor
+	case "copilot":
+		return e.Copilot
 	}
 	return nil
 }
@@ -50,12 +54,14 @@ func (e *Engines) Set(id string, engine *Engine) {
 		e.Claude = engine
 	case "cursor":
 		e.Cursor = engine
+	case "copilot":
+		e.Copilot = engine
 	}
 }
 
 // Clone copies e deeply, so the copy can be saved while e changes.
 func (e Engines) Clone() Engines {
-	return Engines{Claude: e.Claude.clone(), Cursor: e.Cursor.clone()}
+	return Engines{Claude: e.Claude.clone(), Cursor: e.Cursor.clone(), Copilot: e.Copilot.clone()}
 }
 
 func (e *Engine) clone() *Engine {

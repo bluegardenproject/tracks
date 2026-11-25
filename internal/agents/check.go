@@ -40,12 +40,18 @@ func Check(ctx context.Context, e Engine) (Found, error) {
 }
 
 // version reads a version from --version output: its first line,
-// without a trailing "(Claude Code)"-style name.
+// without a trailing "(Claude Code)"-style name, or a leading "GitHub
+// Copilot CLI"-style one and the full stop after it.
 func version(out string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
 	line = strings.TrimSpace(line)
 	if i := strings.Index(line, " ("); i > 0 && strings.HasSuffix(line, ")") {
 		line = line[:i]
+	}
+	if fields := strings.Fields(line); len(fields) > 1 {
+		if last := strings.TrimSuffix(fields[len(fields)-1], "."); last != "" && unicode.IsDigit(rune(last[0])) {
+			return last
+		}
 	}
 	return line
 }

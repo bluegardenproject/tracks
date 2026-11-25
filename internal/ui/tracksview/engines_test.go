@@ -224,3 +224,22 @@ func TestCheckingMCPServers(t *testing.T) {
 		}
 	}
 }
+
+func TestAddingAPreviewEngine(t *testing.T) {
+	f := &fakeEngines{found: map[string]agents.Found{"copilot": {Path: "/bin/copilot", Version: "1.0.114"}}}
+	m := New(Config{Version: "test", Theme: theme.Default(), Engines: f})
+	m = settle(m, tea.WindowSizeMsg{Width: 120, Height: 90}, shiftTabKey, shiftTabKey)
+	m = press(t, m, "Add GitHub Copilot to Engines")
+	if f.saved.Copilot == nil {
+		t.Fatal("adding GitHub Copilot should save it")
+	}
+	view := plainView(m)
+	for _, want := range []string{"/bin/copilot", "1.0.114", "can't run tracks on GitHub Copilot yet", "Remove GitHub Copilot"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("an added preview engine should show %q:\n%s", want, view)
+		}
+	}
+	if strings.Count(view, "Default model") != 0 || strings.Contains(view, "auto mode") {
+		t.Errorf("a preview engine has no model or auto mode controls:\n%s", view)
+	}
+}

@@ -36,6 +36,11 @@ the v2.0.0 release; git history keeps them.
   say so instead of replacing the binary. Open: an own tap or homebrew-core.
 - **Confirm Cursor's markers on a real screen:** the plan-approval and
   mode-switch markers Tracks reads from the Cursor agent CLI.
+- **GitHub Copilot as an engine:** the Engines tab finds and adds the
+  `copilot` CLI, but tracks don't run on it yet. Next: its session
+  (`--session-id`), start command (`-i`, `--model`, permissions), status
+  hooks, prompts, reviewer and trust question. It also reads hooks from
+  `.claude/settings.json`, so Claude's mustn't fire for it.
 
 ## Follow-ups
 

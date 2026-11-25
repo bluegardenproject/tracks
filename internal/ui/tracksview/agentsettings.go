@@ -403,7 +403,7 @@ func (m Model) openReviewerPicker() (Model, tea.Cmd) {
 	}
 	items := []widget.PickerItem{{Label: sameAsTrack, Detail: "the reviewed track's agent and model"}}
 	marked := 0
-	for i, en := range agents.All {
+	for i, en := range agents.Runners() {
 		item := widget.PickerItem{Label: en.Name}
 		if m.engines.settings.Get(en.ID) == nil {
 			item.Detail = "not added"
@@ -431,7 +431,7 @@ func (m Model) reviewerAgentPicked(r widget.PickerResult) (Model, tea.Cmd) {
 		if i == 0 {
 			return m.setReviewer(nil)
 		}
-		en := agents.All[i-1]
+		en := agents.Runners()[i-1]
 		model := ""
 		if !m.reviewerFollows() && en.ID == m.reviewerEngine().ID {
 			model = m.reviewerModel()

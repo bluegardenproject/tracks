@@ -147,6 +147,13 @@ func (b *engineBody) draw(en agents.Engine, width int) {
 
 	b.status(en, check, width)
 	b.add("")
+	if en.Preview {
+		b.wrapped(theme.TextMuted, "Tracks can't run tracks on "+en.Name+" yet, so it isn't among the agents to pick.",
+			width-engineLabelWidth)
+		b.add("")
+		b.remove(en, width)
+		return
+	}
 	value, detail := "Default", en.Name+" chooses"
 	if cur.Model != "" {
 		value, detail = cur.Model, m.modelLabel(en, cur.Model)
@@ -172,7 +179,13 @@ func (b *engineBody) draw(en agents.Engine, width int) {
 	b.wrapped(theme.TextFaint, autoModeHint, width-engineLabelWidth)
 
 	b.add("")
-	if e.confirm == en.ID {
+	b.remove(en, width)
+}
+
+// remove is the Remove button, or the question it asks first.
+func (b *engineBody) remove(en agents.Engine, width int) {
+	m := b.m
+	if m.engines.confirm == en.ID {
 		b.add(m.fg(theme.TextDefault).Render(cut("Remove "+en.Name+" from Engines? Its model settings are removed too.", width)))
 		b.buttons("", 0, []int{ctlConfirm, ctlCancel},
 			widget.NewButton("Remove", widget.ButtonDanger), widget.NewButton("Cancel", widget.ButtonDefault))

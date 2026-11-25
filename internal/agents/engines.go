@@ -14,6 +14,9 @@ type Engine struct {
 	ListsModels bool
 	// MCPNote says which MCP servers `mcp list` leaves out.
 	MCPNote string
+	// Preview engines are found and added on the Engines tab, but
+	// Tracks can't run tracks on them yet.
+	Preview bool
 }
 
 // Model is a value for the CLI's --model, and what to call it.
@@ -40,10 +43,26 @@ var (
 		ListsModels: true,
 		MCPNote:     "Servers from Cursor plugins, such as Figma, aren't listed here: the Cursor CLI only shows them in /mcp list inside a session.",
 	}
+	Copilot = Engine{
+		ID: "copilot", Name: "GitHub Copilot", Program: "copilot",
+		Install: "npm install -g @github/copilot",
+		Preview: true,
+	}
 )
 
 // All are the engines, in the order they're shown.
-var All = []Engine{Claude, Cursor}
+var All = []Engine{Claude, Cursor, Copilot}
+
+// Runners are the engines tracks run on: All but the previews.
+func Runners() []Engine {
+	var out []Engine
+	for _, e := range All {
+		if !e.Preview {
+			out = append(out, e)
+		}
+	}
+	return out
+}
 
 // ByID returns the engine id.
 func ByID(id string) (Engine, bool) {
