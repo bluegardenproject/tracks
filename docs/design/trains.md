@@ -644,7 +644,10 @@ own. "Side track" is always two words: "sidetracked" means something else.
   another merge in the same poll, a track stacked on the top one
   restacks onto where the chain ends. Known limits: a lower track that
   rewrote its history after the upper branched makes `--onto` replay or
-  fail, which the agent sees and solves; the base is recorded before the
+  fail, which the agent sees and solves, as does a three-deep stack
+  whose merges land in two polls while the top's restack still waits
+  (the second restack names the newer merge's head); the base is
+  recorded before the
   agent restacked, so a review in between diffs against the new one.
   `--on` stacks on the lower track's branch as its
   worktree has it, renamed or not. It's typed as the policies' instructions are, and the

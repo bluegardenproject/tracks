@@ -240,7 +240,7 @@ func TestGitHubRef(t *testing.T) {
 	for ref, ok := range map[string]bool{
 		"main": true, "side/relay-store": true, "release-1.2_x": true,
 		"x$(rm -rf ~)": false, "a`b`": false, "a;b": false, "a b": false, "-x": false,
-		".hidden": false, "a..b": false, "": false, strings.Repeat("a", 201): false,
+		".hidden": false, "/main": false, "a..b": false, "": false, strings.Repeat("a", 201): false,
 	} {
 		if _, got := gitHubRef(ref); got != ok {
 			t.Errorf("gitHubRef(%q) safe %v, want %v", ref, got, ok)
