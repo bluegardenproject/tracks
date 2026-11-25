@@ -1,0 +1,1 @@
+CI failed on your PR {pr} at {head}: {checks}. Investigate the failing checks. If your changes caused them, fix them and push. If they didn't, don't re-run the checks: tell your main track with `tracks relay send --to track` what fails, what likely causes it, and why your changes don't.

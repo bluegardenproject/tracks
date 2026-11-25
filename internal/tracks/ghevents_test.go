@@ -51,7 +51,7 @@ func TestPREvents(t *testing.T) {
 		{"both", with(track.PROpen, both), track.PROpen, clean,
 			[]string{"PR acme/api#7 has conflicts with main.", "CI failed on PR acme/api#7 at 0123456: lint."}},
 	} {
-		if got := prEvents(tc.pr, tc.was, tc.before); !slices.Equal(got, tc.want) {
+		if got := bodies(prEvents(tc.pr, tc.was, tc.before)); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
 	}
@@ -68,7 +68,8 @@ func TestThreadsEvent(t *testing.T) {
 		{0, 3, "3 review threads on PR acme/api#7 wait for an answer."},
 		{1, 3, "3 review threads on PR acme/api#7 wait for an answer, 2 of them new."},
 	} {
-		if got := threadsEvent(pr, tc.was, tc.n); got != tc.want {
+		e, ok := threadsEvent(pr, tc.was, tc.n)
+		if got := e.Body; got != tc.want || ok != (tc.want != "") {
 			t.Errorf("threadsEvent(%d → %d) = %q, want %q", tc.was, tc.n, got, tc.want)
 		}
 	}
@@ -224,4 +225,13 @@ func TestUnsettledPassPostsToWorkTracks(t *testing.T) {
 	if got, want := githubEvents(t, f, work.Track.ID), []string{"PR acme/web#5 has conflicts with main."}; !slices.Equal(got, want) {
 		t.Errorf("events = %q, want %q", got, want)
 	}
+}
+
+// bodies are what events say.
+func bodies(events []ghEvent) []string {
+	var out []string
+	for _, e := range events {
+		out = append(out, e.Body)
+	}
+	return out
 }

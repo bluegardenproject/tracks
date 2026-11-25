@@ -85,7 +85,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Errorf("tracks review --ask didn't post its question: %+v", last)
 	}
 	// @github's event comes in while tracks review waits.
-	if err := f.svc.postGitHub(ctx, "r", "PR acme/api#1 has conflicts with main."); err != nil {
+	if err := f.svc.postGitHub(ctx, "r", "PR acme/api#1 has conflicts with main.", relay.Event); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.ReviewReply(ctx, "r", run, "It's held briefly."); err != nil {

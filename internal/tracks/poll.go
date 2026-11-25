@@ -85,7 +85,11 @@ func (s *Service) PollPRs(ctx context.Context) error {
 				return err
 			}
 			s.notify(prNotice(b.t.ID, b.t.Name, pr, was))
-			if err := s.prHealth(ctx, b.t.ID, pr, was, b.t.Open()); err != nil {
+			var post *track.Track
+			if b.t.Open() {
+				post = &b.t
+			}
+			if err := s.prHealth(ctx, b.t.ID, pr, was, post); err != nil {
 				return err
 			}
 			asked[[2]string{b.t.ID, pr.URL}] = true
@@ -97,9 +101,11 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	working := map[string]bool{}
+	working := map[string]*track.Track{}
 	for _, t := range open {
-		working[t.ID] = t.Kind == track.Work
+		if t.Kind == track.Work {
+			working[t.ID] = &t
+		}
 	}
 	for _, p := range unsettled {
 		f, ok := answer.PRs[p.URL]
@@ -169,9 +175,9 @@ func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
 }
 
 // prHealth records pr's health, as track id's, which was in state was,
-// and posts @github's events on what changed when post says the track
-// is an open Work track, whose agent acts on them.
-func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post bool) error {
+// and posts @github's events on what changed when post is the track,
+// an open Work track, whose agent acts on them.
+func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post *track.Track) error {
 	before := pr.Health
 	if !pr.State.Settled() {
 		var err error
@@ -179,11 +185,11 @@ func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was trac
 			return err
 		}
 	}
-	if !post {
+	if post == nil {
 		return nil
 	}
 	for _, e := range prEvents(pr, was, before) {
-		if err := s.postGitHub(ctx, id, e); err != nil {
+		if err := s.githubEvent(ctx, *post, e); err != nil {
 			return err
 		}
 	}

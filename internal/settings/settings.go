@@ -23,6 +23,7 @@ type Settings struct {
 	History History `yaml:"history,omitempty"`
 
 	Notifications Notifications `yaml:"notifications,omitempty"`
+	GitHub        GitHub        `yaml:"github,omitempty"`
 }
 
 // Load reads the file at path. A missing file gives the defaults.

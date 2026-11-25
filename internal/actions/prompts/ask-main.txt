@@ -1,0 +1,1 @@
+@{side}, your side track {name}: {fact} Ask the user with your question tool whether and how it should handle this, then tell it with `tracks relay send --to {side}`.

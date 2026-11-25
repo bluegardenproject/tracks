@@ -7,61 +7,86 @@ import (
 	"unicode"
 
 	"github.com/bluegardenproject/tracks/internal/relay"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
 // maxFailing is how many failing checks an event names.
 const maxFailing = 5
 
+// ghEvent is one of @github's events on PR: Kind is a settings.Event*
+// for those a policy is set for, eventMerged or eventClosed; Body says
+// it. Threads counts a review threads event's open threads.
+type ghEvent struct {
+	Kind, Body string
+	PR         track.PR
+	Threads    int
+}
+
+// The events no policy is set for: the main track decides.
+const (
+	eventMerged = "merged"
+	eventClosed = "closed"
+)
+
 // prEvents are @github's events on pr, which was in state was with
 // health before: it merged or closed, has conflicts with its base, or
 // its checks failed on a commit they hadn't failed on. A PR first seen
 // already merged or closed has none.
-func prEvents(pr track.PR, was track.PRState, before track.Health) []string {
+func prEvents(pr track.PR, was track.PRState, before track.Health) []ghEvent {
 	name := prName(pr)
-	base := gitHubText(pr.Health.Base)
-	if base == "" {
-		base = "its base"
-	}
+	base := baseOf(pr)
 	unsettled := was == track.PROpen || was == track.PRDraft
 	switch {
 	case pr.State == track.PRMerged && unsettled:
-		return []string{name + " was merged into " + base + "."}
+		return []ghEvent{{Kind: eventMerged, PR: pr, Body: name + " was merged into " + base + "."}}
 	case pr.State == track.PRClosed && unsettled:
-		return []string{name + " was closed without merging."}
+		return []ghEvent{{Kind: eventClosed, PR: pr, Body: name + " was closed without merging."}}
 	case pr.State.Settled():
 		return nil
 	}
-	var events []string
+	var events []ghEvent
 	h := pr.Health
 	if h.Mergeable == track.MergeConflicts && before.Mergeable != track.MergeConflicts {
-		events = append(events, name+" has conflicts with "+base+".")
+		events = append(events, ghEvent{Kind: settings.EventConflicts, PR: pr, Body: name + " has conflicts with " + base + "."})
 	}
 	if h.Checks == track.ChecksFailing && (before.Checks != track.ChecksFailing || before.Head != h.Head) {
-		events = append(events, "CI failed on "+name+onCommit(h.Head)+": "+failing(h.Failing)+".")
+		events = append(events, ghEvent{Kind: settings.EventCIFailed, PR: pr,
+			Body: "CI failed on " + name + onCommit(h.Head) + ": " + failing(h.Failing) + "."})
 	}
 	return events
 }
 
 // threadsEvent is @github's event on pr's open review threads, now n,
-// before was, "" when none came in.
-func threadsEvent(pr track.PR, was, n int) string {
+// before was; false when none came in.
+func threadsEvent(pr track.PR, was, n int) (ghEvent, bool) {
+	e := ghEvent{Kind: settings.EventReviewThreads, PR: pr, Threads: n}
 	switch {
 	case n <= was:
-		return ""
+		return ghEvent{}, false
 	case n == 1:
-		return "1 review thread on " + prName(pr) + " waits for an answer."
+		e.Body = "1 review thread on " + prName(pr) + " waits for an answer."
 	case n-was == n:
-		return fmt.Sprintf("%d review threads on %s wait for an answer.", n, prName(pr))
+		e.Body = fmt.Sprintf("%d review threads on %s wait for an answer.", n, prName(pr))
+	default:
+		e.Body = fmt.Sprintf("%d review threads on %s wait for an answer, %d of them new.", n, prName(pr), n-was)
 	}
-	return fmt.Sprintf("%d review threads on %s wait for an answer, %d of them new.", n, prName(pr), n-was)
+	return e, true
 }
 
-// postGitHub posts body to track id's relay from @github, which wakes
-// its agent.
-func (s *Service) postGitHub(ctx context.Context, id, body string) error {
+// baseOf is the branch pr merges into, as an event names it.
+func baseOf(pr track.PR) string {
+	if base := gitHubText(pr.Health.Base); base != "" {
+		return base
+	}
+	return "its base"
+}
+
+// postGitHub posts body to track id's relay from @github, an event
+// that wakes its agent, or a notice, which doesn't.
+func (s *Service) postGitHub(ctx context.Context, id, body string, kind relay.Kind) error {
 	_, err := s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.GitHubHandle, To: relay.TrackHandle,
-		Kind: relay.Event, Body: body, At: s.now()})
+		Kind: kind, Body: body, At: s.now()})
 	return err
 }
 
