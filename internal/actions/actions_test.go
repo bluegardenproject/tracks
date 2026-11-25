@@ -133,8 +133,8 @@ func TestRenderTakesVariantsInTurn(t *testing.T) {
 
 func TestTrainHeader(t *testing.T) {
 	want := "#[align=left] reviewer-1 · Reviewer  #{E:@b}#[align=right]" +
-		"#[range=user|train-hide]#[bg=#{@tracks_button1_bg}]#[fg=#{@tracks_button1_text}] Hide #[norange default] " +
-		"#[range=user|train-end]#[bg=#{@tracks_button5_bg}]#[fg=#{@tracks_button5_text}] End train #[norange default] "
+		"#[range=user|train-hide]#[bg=#{@tracks_button5_bg}]#[fg=#{@tracks_button5_text}] Hide #[norange default] " +
+		"#[range=user|train-end]#[bg=#{@tracks_button2_bg}]#[fg=#{@tracks_button2_text}] End train #[norange default] "
 	if got := TrainHeader("reviewer-1", "Reviewer", "@b"); got != want {
 		t.Errorf("TrainHeader = %s", got)
 	}
