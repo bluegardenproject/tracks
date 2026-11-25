@@ -675,6 +675,46 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
 - **With side tracks**: a side track's PR merging tells its main track it
   can restack the next; a conflict goes to the side tracks it concerns.
 
+### Side tracks and GitHub's events
+
+A side track's PR is its own: `@github`'s events on it (above) go to the
+side track and wake its agent. Its main track has to know too, to keep
+track of the work and to tell the user; what happens next is a policy.
+
+- **Copied to the main track**: each event on a side track's PR also goes
+  to its main track's relay, naming the side track: "@side-000123's PR
+  acme/api#231 has conflicts with main." The main track's agent gets the
+  pointer, as for any message.
+- **A policy per kind of event**, under Settings → GitHub:
+
+  | Event | Handle automatically | Main track decides | Ask me | Default |
+  |---|---|---|---|---|
+  | Conflicts with its base | Tracks tells the side track to rebase and solve them | | | Handle automatically |
+  | CI failed | Tracks tells the side track to investigate and fix the checks, naming them | | | Handle automatically |
+  | New review threads | Tracks tells the side track to work through them | The main track's agent chooses, and may ask the user | The main track asks the user with its question tool | Main track decides |
+
+  Each row offers the three; "Handle automatically" still tells the main
+  track, as information. Merged and closed aren't a setting: the main
+  track decides (restack the next side track, promote, tell the user).
+- **Ask before replying to human comments on PRs**, on by default: the
+  comments flow (the PR comments skill and its prompt) asks the user
+  before it replies to a person, as it does now; off, it replies on its
+  own. A bot's comments never ask.
+- **Tracks sends the instructions**, not the main track's agent, so they
+  don't hang on how a prompt is read: "Rebase onto main and solve the
+  conflicts, then push.", "Investigate the failing checks (lint, test)
+  and fix them, then push." They're Tracks' own words, from the side
+  track's main track, and golden files: their wording is agreed with the
+  user first.
+- **Policies are rules Tracks runs**: a trigger (an `@github` event on a
+  side track's PR), and an effect (instruct the side track, tell the main
+  track, have the main track ask the user). A fixed table in Tracks, not
+  a language: the first of the programmable messages of
+  [protocol.md](protocol.md), built so that a plugin can later declare
+  them (there: "Plugins, settings and policies").
+- **A track that isn't a side track** keeps today's events: facts that
+  wake its own agent, which decides. The policies may extend to it later.
+
 ### Order
 
 1. GitHub on the relay: `@github`'s events, and one GraphQL query a
@@ -711,12 +751,18 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
      as delivery does: a join notice wakes no one.
      The main track's Relay Station marks only its own pointers "not
      delivered", not those of messages to its side tracks.
-3. Draft PRs the main track promotes, as the repo's rule allows.
-4. The Platform's "Side tracks" list; a click switches to the window.
-5. The Station's grouping.
-6. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
-7. Side tracks talking to each other.
-8. The main track's prompt: a "Side tracks" paragraph, its wording agreed
+3. The Platform's side tracks (#251): in the Platform frame, under a
+   dim "Side Tracks" heading after the trains' dim "Trains", each side
+   track with the Station's status and PR badges, "empty" for none; a
+   click switches to its window.
+4. Side tracks and GitHub's events: copied to the main track, the
+   policies and Settings → GitHub; the instructions' wording agreed
+   first. Before drafts and stacking, which lean on it.
+5. Draft PRs the main track promotes, as the repo's rule allows.
+6. The Station's grouping.
+7. Stacking: `--on`, the PR's base; restacking on `@github`'s events.
+8. Side tracks talking to each other.
+9. The main track's prompt: a "Side tracks" paragraph, its wording agreed
    with the user first, as every prompt.
 
 ### Later (v3)

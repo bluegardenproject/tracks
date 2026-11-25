@@ -177,6 +177,34 @@ contract:
 - **Negotiation as a first-class thing**: proposals, counter-proposals and
   acceptance, with the user as the one who can always decide.
 
+## Plugins, settings and policies
+
+The Reviewer is to become a plugin, and Tracks' first policies (the
+GitHub ones of [trains.md](trains.md), "Side tracks and GitHub's events")
+decide what happens on an event. A plugin needs both, through the
+interface, in both directions:
+
+- **Plugin → Tracks, in its manifest**: its settings as a schema (name,
+  type, values, default: `ask_before_human_replies: bool = true`), which
+  Tracks draws in Settings under the plugin's name; the events it
+  subscribes to (`github.conflicts`, `github.ci_failed`,
+  `github.review_threads`, `review.requested`, …); and the effects it
+  may answer with (instruct a track, ask the user, post a report), so it
+  can't do more than it declared.
+- **Tracks → Plugin**: events as envelopes (refs to the PR and the
+  track, facts, never a comment's text), and the plugin's own settings'
+  values, so it reads no config of Tracks'.
+- **A policy is a contract**: "conflicts → handle automatically" is
+  `when: github.conflicts(pr) do: deliver(side, "Rebase …")`, and "ask
+  me" swaps the effect for a gate. Built as a fixed table of triggers and
+  effects that Tracks evaluates, Settings → GitHub can become a built-in
+  plugin drawn as any other, a change of who declares the rules, not a
+  rewrite.
+
+Open: whether Settings → GitHub moves into the Reviewer's plugin or
+stays Tracks' own; how a plugin's settings are validated and migrated
+across its versions.
+
 ## Order, once it's decided
 
 1. Tracks' MCP server for what exists: the relay, the proxy, the panes.
