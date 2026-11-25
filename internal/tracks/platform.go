@@ -22,8 +22,9 @@ import (
 // since it last looked, for the Platforms to read them again, brings the
 // trains' overlay headers up to their status, and tells the user when
 // one waits on them, as on Claude's trust question, which only its
-// overlay shows. It reads the windows, their Platforms and the reviewers
-// once each, whatever the number of tracks.
+// overlay shows; it puts each Platform back to its width. It reads the
+// windows, their Platforms and the reviewers a fixed number of times,
+// whatever the number of tracks.
 func (s *Service) SyncTrains(ctx context.Context) error {
 	infos, err := s.Windows.List()
 	if err != nil {
