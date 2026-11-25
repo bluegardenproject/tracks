@@ -9,7 +9,7 @@ import (
 	"github.com/bluegardenproject/tracks/internal/actions"
 )
 
-func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
+func TestSyncTrainsKeepsThePlatformOpen(t *testing.T) {
 	ctx := context.Background()
 	f, panes, worktree := trainsFixture(t, "cursor")
 	f.svc.Changes = &Changes{}
@@ -28,20 +28,27 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.windows.platforms) != 0 {
-		t.Fatalf("a track without trains got a Platform: %v", f.windows.platforms)
+	cmd := f.windows.platforms["@r"]
+	if !strings.Contains(cmd, "TRACKS_ID='r'") || !strings.HasSuffix(cmd, " platform") {
+		t.Errorf("a track without trains: the Platform runs %q, want tracks platform for track r", cmd)
 	}
 	if heardChange() {
 		t.Error("a track without trains was told as a change")
 	}
 
-	run := startReview(t, f, worktree)
+	// A Platform that closed, or a window opened before the daemon,
+	// gets one on the next tick.
+	delete(f.windows.platforms, "@r")
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
 	}
-	cmd := f.windows.platforms["@r"]
-	if !strings.Contains(cmd, "TRACKS_ID='r'") || !strings.HasSuffix(cmd, " platform") {
-		t.Errorf("the Platform runs %q, want tracks platform for track r", cmd)
+	if len(f.windows.platforms) != 1 {
+		t.Fatalf("a window without a Platform didn't get one: %v", f.windows.platforms)
+	}
+
+	run := startReview(t, f, worktree)
+	if err := f.svc.SyncTrains(ctx); err != nil {
+		t.Fatal(err)
 	}
 	if !heardChange() {
 		t.Error("a train that came wasn't told as a change")
@@ -91,15 +98,15 @@ func TestSyncTrainsOpensAndClosesThePlatform(t *testing.T) {
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.windows.platforms) != 0 {
-		t.Errorf("the Platform stayed after the last train went: %v", f.windows.platforms)
+	if len(f.windows.platforms) != 1 {
+		t.Errorf("the Platform closed after the last train went: %v", f.windows.platforms)
 	}
 	if !heardChange() {
 		t.Error("the last train going wasn't told as a change")
 	}
 }
 
-func TestAPRsCommentsOpenThePlatform(t *testing.T) {
+func TestAPRsCommentsShowOnThePlatform(t *testing.T) {
 	ctx := context.Background()
 	f, _, _ := trainsFixture(t, "cursor")
 	const url = "https://github.com/acme/api/pull/7"
@@ -113,7 +120,7 @@ func TestAPRsCommentsOpenThePlatform(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(f.windows.platforms) != 1 {
-		t.Fatalf("a track with a PR's comments and no train got no Platform: %v", f.windows.platforms)
+		t.Fatalf("a track with a PR's comments and no train has no Platform: %v", f.windows.platforms)
 	}
 	sig, err := f.svc.Signals(ctx, "r")
 	if err != nil || len(sig.PRs) != 1 || sig.PRs[0].PR != "PR #7" || sig.PRs[0].Action != "solve 2 comments" {
@@ -125,7 +132,7 @@ func TestAPRsCommentsOpenThePlatform(t *testing.T) {
 	if err := f.svc.SyncTrains(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.windows.platforms) != 0 {
-		t.Errorf("the Platform stayed with nothing to show: %v", f.windows.platforms)
+	if len(f.windows.platforms) != 1 {
+		t.Errorf("the Platform closed with nothing to show: %v", f.windows.platforms)
 	}
 }

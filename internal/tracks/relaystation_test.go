@@ -81,3 +81,17 @@ func TestRelayStation(t *testing.T) {
 		t.Error("a track that's gone has a relay")
 	}
 }
+
+// A track's Platform always offers the Relay Station: with no messages
+// it opens empty, not on an error.
+func TestAnEmptyRelayStation(t *testing.T) {
+	ctx := context.Background()
+	f, _ := deliveryFixture(t)
+	log, err := f.svc.RelayStation(ctx, "a")
+	if err != nil || len(log.Messages) != 0 || len(log.Waiting) != 0 {
+		t.Errorf("an empty relay: %+v, %v", log, err)
+	}
+	if sig, err := f.svc.Signals(ctx, "a"); err != nil || sig.RelayNew != 0 {
+		t.Errorf("an empty relay's Signals: %+v, %v", sig, err)
+	}
+}

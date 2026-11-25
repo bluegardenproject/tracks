@@ -49,14 +49,12 @@ func writeThemeConf(paths platform.Paths, t theme.Theme, version, command string
 // borders and titles with.
 func tmuxColors(t theme.Theme) tmux.Colors {
 	return tmux.Colors{
-		Border:       t.Value(theme.BorderDefault),
-		BorderActive: t.Value(theme.BorderFocus),
-		Title:        t.Value(theme.TextMuted),
-		TitleActive:  t.Value(theme.TextAccent),
-		FooterBg:     t.Value(theme.FooterBg),
-		FooterFg:     t.Value(theme.FooterText),
-		Foreground:   t.Value(theme.TextTrackDefault),
-		Background:   t.Value(theme.BgBase),
+		Border:     t.Value(theme.BorderDefault),
+		Title:      t.Value(theme.TextDefault),
+		FooterBg:   t.Value(theme.FooterBg),
+		FooterFg:   t.Value(theme.FooterText),
+		Foreground: t.Value(theme.TextTrackDefault),
+		Background: t.Value(theme.BgBase),
 	}
 }
 

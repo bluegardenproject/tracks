@@ -146,8 +146,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.load()
 	}
-	// No key quits it: the daemon keeps it open while the track has
-	// something to show, and would only open it again.
+	// No key quits it: the daemon keeps it open, and would only open
+	// it again.
 	return m, nil
 }
 

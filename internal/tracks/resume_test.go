@@ -57,6 +57,9 @@ func TestResume(t *testing.T) {
 	if spec.Track != tr.ID || spec.Name != "fix-it-2" || spec.Terminals != 1 || spec.Agent.Title != "Claude Code" {
 		t.Errorf("window = %+v", spec)
 	}
+	if f.windows.platforms[got.Window.ID] == "" {
+		t.Error("the resumed track's window has no Platform")
+	}
 	if e := f.engine.spec; !e.Resume || !e.Auto || e.Track.Session != "session-1" {
 		t.Errorf("engine spec = %+v", e)
 	}

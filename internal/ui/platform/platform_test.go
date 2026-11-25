@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/train"
@@ -67,14 +68,39 @@ func TestPlatformShowsTheTrainsAndSignals(t *testing.T) {
 	}
 }
 
-func TestSignalsAloneWithoutTrains(t *testing.T) {
-	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{signals: Signals{PRs: []PR{{PR: "PR #12", Action: "solve 1 comment"}}}})
+func TestThePlatformShowsWithoutTrains(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{})
 	v := view(m)
-	if strings.Contains(v, "Platform") || !strings.HasPrefix(v, "╭─ Signals ") {
-		t.Errorf("without trains, Signals alone:\n%s", v)
+	lines := strings.Split(v, "\n")
+	if !strings.HasPrefix(lines[0], "╭─ Platform ") || !strings.Contains(lines[1], "│ empty ") || !strings.HasPrefix(lines[4], "╭─ Signals ") {
+		t.Errorf("without trains, the Platform says empty over Signals:\n%s", v)
 	}
-	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read the") {
+	if !strings.Contains(lines[5], "│ Relay Station ") {
+		t.Errorf("without messages, Signals still shows the Relay Station:\n%s", v)
+	}
+	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read the") || strings.Contains(e, "empty") {
 		t.Errorf("an error:\n%s", e)
+	}
+}
+
+// The frames' titles take their border's colour, and the trains, the
+// Relay Station and the PRs the Station's list items' colour; "empty"
+// is muted.
+func TestThePlatformsColours(t *testing.T) {
+	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{signals: Signals{PRs: []PR{{PR: "PR #12", Action: "solve 1 comment"}}}})
+	raw := strings.Join(func() []string { l, _ := m.(Model).layout(); return l }(), "\n")
+	p := m.(Model).palette
+	fg := func(tok theme.Token, s string) string { return lipgloss.NewStyle().Foreground(p.Color(tok)).Render(s) }
+	for _, want := range []string{fg(theme.BorderDefault, "Platform"), fg(theme.BorderDefault, "Signals"), fg(theme.TextMuted, "empty"),
+		fg(theme.TableTextDefault, "Relay Station"), fg(theme.TableTextDefault, "PR #12")} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("missing %q in\n%q", want, raw)
+		}
+	}
+	m = update(t, m, loadedMsg{trains: []Entry{{Handle: "reviewer-1", Status: track.Done}}})
+	raw = strings.Join(func() []string { l, _ := m.(Model).layout(); return l }(), "\n")
+	if want := fg(theme.TableTextDefault, "reviewer-1"); !strings.Contains(raw, want) {
+		t.Errorf("a train's handle isn't in the Station's list colour: %q", raw)
 	}
 }
 

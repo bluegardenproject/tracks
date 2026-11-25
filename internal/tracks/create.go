@@ -128,7 +128,8 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	return Created{Track: t, Window: win}, nil
 }
 
-// open opens t's window with the agent start runs. When setting the
+// open opens t's window with the agent start runs, and its Platform;
+// the daemon's tick opens a Platform that failed. When setting the
 // window up fails, it closes it again.
 func (s *Service) open(t track.Track, info agents.Engine, start agents.Start) (trackwin.Window, error) {
 	win, err := s.Windows.Open(windowSpec(t, info, start))
@@ -138,6 +139,7 @@ func (s *Service) open(t track.Track, info agents.Engine, start agents.Start) (t
 		}
 		return trackwin.Window{}, fmt.Errorf("open the window: %w", err)
 	}
+	_ = s.openPlatform(win.ID, t.ID)
 	return win, nil
 }
 

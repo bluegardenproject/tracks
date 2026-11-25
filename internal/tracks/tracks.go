@@ -129,11 +129,9 @@ type Windows interface {
 	// copy mode.
 	LeaveScroll(window string) error
 	// Platforms are the track windows' Platform panes, by window;
-	// OpenPlatform opens window's running command, ClosePlatform closes
-	// it.
+	// OpenPlatform opens window's running command.
 	Platforms() (map[string]string, error)
 	OpenPlatform(window, command string) error
-	ClosePlatform(window string) error
 }
 
 // Service creates, lists and ends tracks.
@@ -190,6 +188,9 @@ type Service struct {
 	// reviewMu keeps a review's start, which resets the review's folder,
 	// and a reviewer's reply, which writes to it, apart.
 	reviewMu sync.Mutex
+	// platformMu keeps a window to one Platform while a new window's
+	// and the tick's open it.
+	platformMu sync.Mutex
 	// setupMu keeps one StartSetup looking at and opening panes at a
 	// time, so a setup never starts twice.
 	setupMu sync.Mutex

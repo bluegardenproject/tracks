@@ -15,10 +15,10 @@ import (
 	"github.com/bluegardenproject/tracks/internal/train"
 )
 
-// SyncTrains keeps each open track's Platform in step with its trains
-// and its PRs' comments: open while it has one or the other, closed when
-// it has neither. A train's status comes from tmux and its run, not the
-// store, so SyncTrains also tells Changes when a track's trains changed
+// SyncTrains keeps a Platform open on each open track's window,
+// whatever it shows, windows opened before this daemon included. A
+// train's status comes from tmux and its run, not the store, so
+// SyncTrains also tells Changes when a track's trains changed
 // since it last looked, for the Platforms to read them again, brings the
 // trains' overlay headers up to their status, and tells the user when
 // one waits on them, as on Claude's trust question, which only its
@@ -85,10 +85,7 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 		s.mu.Lock()
 		prs := prSignals(tracks[in.Track], s.comments[in.Track])
 		s.mu.Unlock()
-		// The Platform shows while it has something: a train, or a PR's
-		// comments under Signals.
-		shown := len(trains) > 0 || len(prs) > 0
-		if shown {
+		if len(trains) > 0 || len(prs) > 0 {
 			seen[in.Track] = trainsKey(trains) + fmt.Sprint(prs)
 		}
 		for _, tr := range trains {
@@ -99,12 +96,8 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 				s.tellWaiting(ctx, in.Track, tr, runs[in.Track].run)
 			}
 		}
-		pane := platforms[in.Window]
-		switch {
-		case shown && pane == "":
-			errs = append(errs, s.Windows.OpenPlatform(in.Window, s.platformCommand(in.Track)))
-		case !shown && pane != "":
-			errs = append(errs, s.Windows.ClosePlatform(in.Window))
+		if platforms[in.Window] == "" {
+			errs = append(errs, s.openPlatform(in.Window, in.Track))
 		}
 	}
 	s.mu.Lock()
@@ -164,6 +157,17 @@ func trainsKey(trains []train.Train) string {
 	return b.String()
 }
 
+// openPlatform opens track id's Platform in window, unless it has one.
+func (s *Service) openPlatform(window, id string) error {
+	s.platformMu.Lock()
+	defer s.platformMu.Unlock()
+	platforms, err := s.Windows.Platforms()
+	if err != nil || platforms[window] != "" {
+		return err
+	}
+	return s.Windows.OpenPlatform(window, s.platformCommand(id))
+}
+
 // platformCommand runs track id's Platform: tracks platform from
 // Tracks' own folder, with the track's ID.
 func (s *Service) platformCommand(id string) string {
@@ -193,17 +197,9 @@ func (w TmuxWindows) Platforms() (map[string]string, error) {
 // it wouldn't be found as the Platform, and the next tick would open
 // another.
 func (w TmuxWindows) OpenPlatform(window, command string) error {
-	pane, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Title: "trains", Command: command})
+	pane, err := trackwin.OpenPlatform(w.Tmux, window, "", trackwin.Process{Command: command})
 	if err != nil && pane != "" {
 		_ = w.Tmux.KillPane(pane)
 	}
 	return err
-}
-
-func (w TmuxWindows) ClosePlatform(window string) error {
-	pane, err := trackwin.Platform(w.Tmux, window)
-	if err != nil || pane == "" {
-		return err
-	}
-	return w.Tmux.KillPane(pane)
 }

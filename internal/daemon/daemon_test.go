@@ -41,7 +41,6 @@ func (noWindows) Scrolled(string) (bool, error)         { return false, nil }
 func (noWindows) LeaveScroll(string) error              { return nil }
 func (noWindows) Platforms() (map[string]string, error) { return nil, nil }
 func (noWindows) OpenPlatform(string, string) error     { return nil }
-func (noWindows) ClosePlatform(string) error            { return nil }
 func (noWindows) Open(trackwin.Spec) (trackwin.Window, error) {
 	return trackwin.Window{}, errors.New("no windows")
 }
