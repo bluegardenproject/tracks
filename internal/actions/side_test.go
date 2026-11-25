@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/golden"
@@ -16,7 +17,7 @@ func TestSidePromptsMatchGolden(t *testing.T) {
 		}
 		golden.Check(t, "testdata/side-threads."+engine+".golden", text)
 	}
-	if one, _ := SideThreads("claude", "acme/api#231", "https://github.com/acme/api/pull/231", 1); one[:15] != "1 review thread" {
+	if one, _ := SideThreads("claude", "acme/api#231", "https://github.com/acme/api/pull/231", 1); !strings.HasPrefix(one, "1 review thread on your PR acme/api#231 waits for an answer.") {
 		t.Errorf("one thread: %q", one)
 	}
 	if _, ok := SideThreads("codex", "acme/api#231", "https://github.com/acme/api/pull/231", 3); ok {

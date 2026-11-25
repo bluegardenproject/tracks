@@ -226,9 +226,7 @@ func (s *Service) deliveryMaps() {
 	if s.held == nil {
 		s.held = map[string]map[string]bool{}
 	}
-	if s.typing == nil {
-		s.typing = map[string]bool{}
-	}
+
 }
 
 // dueMessages are t's unread messages a pointer goes for, a side
@@ -296,7 +294,7 @@ func (s *Service) point(id, window string, due []relay.Message, pointed int64, c
 	// meanwhile.
 	in, known := s.turns[id]
 	_, waiting := s.pointing[id]
-	if s.busy[id] || s.pointed[id] != pointed || waiting || s.typing[id] || !collected && (!known || in) {
+	if s.busy[id] || s.pointed[id] != pointed || waiting || !collected && (!known || in) {
 		s.mu.Unlock()
 		if collected {
 			return Problem("The messages changed meanwhile: try again.")
@@ -411,34 +409,46 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 
 // typeInstruction pastes in, a waiting instruction, into t's agent in
 // window when it's free, by what holds a pointer back, and reports
-// whether it did. As point does, it checks again under the lock and
-// claims the turn the instruction starts before the paste, so no
-// pointer or turn lands meanwhile. One about review threads marks their
-// Signals button sent.
+// whether it did. It's waited for as a pointer is: checked again under
+// the lock, and kept as pointing until the agent's turn starts, so no
+// pointer goes meanwhile and one the agent didn't take stalls as a
+// pointer's does. One about review threads marks their Signals button
+// sent.
 func (s *Service) typeInstruction(ctx context.Context, t track.Track, window string, in store.Instruction) (bool, error) {
-	if t.Waiting || s.blockers(t, window).Why() != "" {
+	if t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
 		return false, nil
 	}
 	s.mu.Lock()
 	s.deliveryMaps()
-	_, pointing := s.pointing[t.ID]
+	_, waiting := s.pointing[t.ID]
 	inTurn, known := s.turns[t.ID]
-	if s.busy[t.ID] || pointing || s.typing[t.ID] || !known || inTurn {
+	if s.busy[t.ID] || waiting || !known || inTurn {
 		s.mu.Unlock()
 		return false, nil
 	}
-	s.typing[t.ID] = true
-	s.turns[t.ID] = true
+	s.pointerGen++
+	gen := s.pointerGen
+	s.pointing[t.ID] = pointing{at: s.now(), before: s.pointed[t.ID], gen: gen}
+	delete(s.turns, t.ID)
 	s.mu.Unlock()
 
 	err := s.Windows.Paste(window, in.Body)
 	s.mu.Lock()
-	delete(s.typing, t.ID)
+	p, ours := s.pointing[t.ID]
+	ours = ours && p.gen == gen
 	if err != nil {
-		// It went to an idle agent, which stays so.
-		s.turns[t.ID] = false
+		if ours {
+			// It went to an idle agent, which stays so.
+			delete(s.pointing, t.ID)
+			s.turns[t.ID] = false
+		}
 		s.mu.Unlock()
 		return false, err
+	}
+	if ours {
+		// The stall's wait starts once it's in.
+		p.at = s.now()
+		s.pointing[t.ID] = p
 	}
 	if in.Kind == settings.EventReviewThreads && s.comments[t.ID] != nil {
 		if _, ok := s.comments[t.ID][in.PR]; ok {
@@ -447,5 +457,6 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 	}
 	s.mu.Unlock()
 	s.Changes.Notify()
-	return true, s.Store.InstructionTyped(ctx, in.ID, s.now())
+	// It's in: marked so even if the daemon stops meanwhile.
+	return true, s.Store.InstructionTyped(context.WithoutCancel(ctx), in.ID, s.now())
 }

@@ -247,9 +247,6 @@ type Service struct {
 	// held is, by track, whose messages wait while its pointer is held
 	// back.
 	held map[string]map[string]bool
-	// typing marks the tracks an instruction is being pasted into: no
-	// pointer goes meanwhile.
-	typing map[string]bool
 	// trainsSeen is, by track, what SyncTrains last saw of its trains.
 	trainsSeen map[string]string
 }
