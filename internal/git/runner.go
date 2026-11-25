@@ -42,6 +42,17 @@ type ExecRunner struct {
 	// means inherit from the parent process.
 	Dir string
 
+	// GitDir and WorkTree, when set, pass --git-dir / --work-tree
+	// explicitly so git never discovers a tampered .git inside an
+	// untrusted worktree.
+	GitDir   string
+	WorkTree string
+
+	// Safe disables repository-controlled git config hooks and tools
+	// (fsmonitor, hooksPath, sshCommand, diff.external, submodules)
+	// when inspecting agent-writable worktrees from the daemon.
+	Safe bool
+
 	// NoOptionalLocks sets GIT_OPTIONAL_LOCKS=0 on the spawned
 	// process so git skips lock-taking operations that exist only
 	// as optimisations (the implicit index refresh during
@@ -62,7 +73,33 @@ type ExecRunner struct {
 // EDITOR unset" — not because the user did anything wrong, but
 // because the daemon has no TTY.
 func (e ExecRunner) command(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	var argv []string
+	if e.Safe {
+		argv = append(argv,
+			"-c", "core.fsmonitor=false",
+			"-c", "core.hooksPath=/dev/null",
+			"-c", "core.sshCommand=false",
+			"-c", "core.pager=cat",
+			"-c", "diff.external=",
+			"-c", "diff.ignoreSubmodules=all",
+			"-c", "status.submoduleSummary=false",
+			"-c", "submodule.recurse=false",
+			"-c", "credential.helper=",
+		)
+	}
+	if e.GitDir != "" {
+		argv = append(argv, "--git-dir", e.GitDir)
+	}
+	if e.WorkTree != "" {
+		argv = append(argv, "--work-tree", e.WorkTree)
+	}
+	if e.Safe && len(args) > 0 && args[0] == "status" {
+		argv = append(argv, "status", "--ignore-submodules=all")
+		argv = append(argv, args[1:]...)
+	} else {
+		argv = append(argv, args...)
+	}
+	cmd := exec.CommandContext(ctx, "git", argv...)
 	if e.Dir != "" {
 		cmd.Dir = e.Dir
 	}

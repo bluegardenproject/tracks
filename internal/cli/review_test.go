@@ -192,3 +192,16 @@ func TestReviewerTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestGatherAndOwnedRejectFlagBase(t *testing.T) {
+	ctx := context.Background()
+	dir := repo(t)
+	for _, bad := range []string{"", "--output=/tmp/evil", "--no-index", "main:evil", "a b"} {
+		if _, err := gatherPacket(ctx, dir, bad); err == nil {
+			t.Errorf("gatherPacket accepted base %q", bad)
+		}
+		if _, err := ownedPacket(ctx, dir, review.Packet{Base: bad}, "@team"); err == nil {
+			t.Errorf("ownedPacket accepted base %q", bad)
+		}
+	}
+}

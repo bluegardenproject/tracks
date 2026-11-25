@@ -72,7 +72,7 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	if work.Repos, err = s.Worktrees.Add(ctx, work, progress); err != nil {
 		return Created{}, err
 	}
-	s.prepare(ctx, work.Repos)
+	s.prepare(ctx, work.Kind, work.Repos)
 	undo := context.WithoutCancel(ctx)
 	removeWorktrees := func() { _ = s.Worktrees.Remove(undo, work) }
 	if t.Engine == agents.Cursor.ID {

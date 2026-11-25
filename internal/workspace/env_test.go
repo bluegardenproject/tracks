@@ -54,3 +54,53 @@ func TestCopyEnv(t *testing.T) {
 		t.Errorf("mode %v, want 0600 kept", info.Mode().Perm())
 	}
 }
+
+func TestCopyEnvBlocksSymlinkEscape(t *testing.T) {
+	isolate(t)
+	root := t.TempDir()
+	api := repo(t, root, "api")
+	write := func(dir, rel, body string) {
+		t.Helper()
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(api.Path, ".gitignore", ".env*\n")
+	run(t, api.Path, "add", ".gitignore")
+	run(t, api.Path, "commit", "-q", "-m", "ignore")
+	write(api.Path, "apps/web/.env", "SECRET=1")
+	write(api.Path, ".env.local", "SECRET=2")
+
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(filepath.Join(outside, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(root, "wt")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Intermediate directory symlink escaping worktree, plus dangling file symlink.
+	if err := os.Symlink(outside, filepath.Join(worktree, "apps")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "escaped.env"), filepath.Join(worktree, ".env.local")); err != nil {
+		t.Fatal(err)
+	}
+
+	copied, err := CopyEnv(context.Background(), api.Path, worktree)
+	if err != nil {
+		t.Fatalf("CopyEnv error: %v", err)
+	}
+	if len(copied) != 0 {
+		t.Errorf("copied %v; want nothing written through symlinks", copied)
+	}
+	for _, p := range []string{filepath.Join(outside, "web/.env"), filepath.Join(outside, "escaped.env")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("CopyEnv escaped worktree and wrote %s", p)
+		}
+	}
+}

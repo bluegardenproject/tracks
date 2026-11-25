@@ -276,10 +276,15 @@ func (s *Service) hasSetup(ctx context.Context, repos []track.Repo) bool {
 	return err == nil && len(commands) > 0
 }
 
-// prepare readies repos' new worktrees in track t: their .env files
-// are copied when the repo has a setup or dev servers. Copying is best
-// effort: a track works without them.
-func (s *Service) prepare(ctx context.Context, repos []track.Repo) {
+// prepare readies repos' new worktrees in track t: for Work tracks,
+// their .env files are copied when the repo has a setup or dev servers.
+// Review tracks are skipped so primary .env secrets are never copied
+// into untrusted pull-request checkouts. Copying is best effort: a
+// track works without them.
+func (s *Service) prepare(ctx context.Context, kind track.Kind, repos []track.Repo) {
+	if kind != track.Work {
+		return
+	}
 	configs, err := s.repoConfigs(ctx)
 	if err != nil {
 		return

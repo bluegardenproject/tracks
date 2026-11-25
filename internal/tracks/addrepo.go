@@ -70,7 +70,7 @@ func (s *Service) AddRepo(ctx context.Context, id, name string, progress func(st
 		_ = s.Worktrees.Remove(context.WithoutCancel(ctx), track.Track{ID: t.ID, Kind: t.Kind, Repos: []track.Repo{added}})
 		return track.Repo{}, fmt.Errorf("save the repo: %w", err)
 	}
-	s.prepare(ctx, []track.Repo{added})
+	s.prepare(ctx, t.Kind, []track.Repo{added})
 	t.Repos = append(t.Repos, added)
 	s.startEager(context.WithoutCancel(ctx), t)
 	return added, nil

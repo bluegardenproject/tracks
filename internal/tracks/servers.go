@@ -109,6 +109,10 @@ func (s *Service) Up(ctx context.Context, id string, names ...string) ([]Server,
 			problems[d.key()] = fmt.Sprintf("its folder %s isn't on this branch.", folder)
 			continue
 		}
+		if !dirWithin(d.repo.Worktree, dir) {
+			problems[d.key()] = fmt.Sprintf("its folder %s points outside the worktree.", d.def.Dir)
+			continue
+		}
 		port, err := s.portFor(ctx, t, d, used)
 		var problem Problem
 		if errors.As(err, &problem) {
@@ -364,4 +368,19 @@ func (s *Service) serverCommand(id string, d devServer, port int) string {
 		env += " PORT=" + strconv.Itoa(port)
 	}
 	return env + " sh -c " + shellx.Quote(inner)
+}
+
+// dirWithin reports whether dir, after resolving symlinks on both
+// paths, is equal to or inside root.
+func dirWithin(root, dir string) bool {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(realRoot, realDir)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

@@ -114,7 +114,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	if t.Repos, err = s.Worktrees.Add(ctx, t, progress); err != nil {
 		return Created{}, err
 	}
-	s.prepare(ctx, t.Repos)
+	s.prepare(ctx, t.Kind, t.Repos)
 	// Undoing runs to the end even when ctx is cancelled.
 	undo := context.WithoutCancel(ctx)
 	removeWorktrees := func() {

@@ -42,12 +42,15 @@ func (w *Worktrees) Lost(ctx context.Context, t track.Track) ([]Unsaved, error) 
 // branchOnly counts the commits on r's branch that no other branch and
 // no remote has; 0 when the branch is gone.
 func branchOnly(ctx context.Context, r track.Repo) (int, error) {
+	if strings.HasPrefix(r.Branch, "-") {
+		return 0, fmt.Errorf("invalid branch %q", r.Branch)
+	}
 	primary := git.NewPrimaryRepoClient(r.Path)
 	if ok, err := primary.BranchExists(ctx, r.Branch); err != nil || !ok {
 		return 0, err
 	}
-	out, _, err := primary.Runner.Run(ctx, "rev-list", "--count", "refs/heads/"+r.Branch,
-		"--not", "--exclude="+r.Branch, "--branches", "--remotes")
+	out, _, err := primary.Runner.Run(ctx, "rev-list", "--count", "--not", "--exclude="+r.Branch,
+		"--branches", "--remotes", "--not", "--end-of-options", "refs/heads/"+r.Branch, "--")
 	if err != nil {
 		return 0, err
 	}

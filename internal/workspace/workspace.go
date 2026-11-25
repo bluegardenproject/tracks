@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/bluegardenproject/tracks/internal/git"
@@ -55,7 +56,12 @@ func (w *Worktrees) Add(ctx context.Context, t track.Track, progress func(string
 	made := t
 	made.Repos = nil
 	for _, r := range t.Repos {
-		r.Worktree = filepath.Join(w.Root, t.ID, r.Name)
+		wtPath, err := worktreePath(w.Root, t.ID, r.Name)
+		if err != nil {
+			_ = w.Remove(context.WithoutCancel(ctx), made)
+			return nil, err
+		}
+		r.Worktree = wtPath
 		r.Branch = branch
 		if err := w.add(ctx, r, review, progress); err != nil {
 			_ = w.Remove(context.WithoutCancel(ctx), made)
@@ -103,7 +109,11 @@ func (w *Worktrees) AddRepo(ctx context.Context, id string, r track.Repo, branch
 	if exists {
 		return track.Repo{}, fmt.Errorf("%s already has a branch %s", r.Name, branch)
 	}
-	r.Worktree = filepath.Join(w.Root, id, r.Name)
+	wtPath, err := worktreePath(w.Root, id, r.Name)
+	if err != nil {
+		return track.Repo{}, err
+	}
+	r.Worktree = wtPath
 	r.Branch = branch
 	if err := w.add(ctx, r, Review{}, progress); err != nil {
 		return track.Repo{}, err
@@ -119,10 +129,17 @@ func (w *Worktrees) Remove(ctx context.Context, t track.Track) error {
 		if r.Worktree == "" {
 			continue
 		}
+		if w.Root != "" && !withinRoot(w.Root, r.Worktree) {
+			errs = append(errs, fmt.Errorf("worktree %q is outside %q: remove it by hand or check XDG_STATE_HOME, then try again", r.Worktree, w.Root))
+			continue
+		}
 		primary := git.NewPrimaryRepoClient(r.Path)
 		if err := primary.RemoveWorktree(ctx, r.Worktree); err != nil {
 			errs = append(errs, err)
 			continue
+		}
+		if dir, err := trackDir(w.Root, t.ID); err == nil {
+			removeEmptyParents(filepath.Dir(r.Worktree), dir)
 		}
 		if t.Kind == track.Work && r.Branch != "" {
 			if err := primary.DeleteBranch(ctx, r.Branch); err != nil {
@@ -132,10 +149,117 @@ func (w *Worktrees) Remove(ctx context.Context, t track.Track) error {
 	}
 	// Only an empty folder goes: whatever is left in it isn't ours to
 	// delete.
-	if err := os.Remove(filepath.Join(w.Root, t.ID)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		errs = append(errs, err)
+	if dir, err := trackDir(w.Root, t.ID); err == nil {
+		if err := os.Remove(dir); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
 	}
 	return errors.Join(errs...)
+}
+
+func safeSegment(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\")
+}
+
+func repoFolder(name string) (string, error) {
+	if name == "" || strings.ContainsAny(name, "\\") {
+		return "", fmt.Errorf("invalid repo name %q", name)
+	}
+	segs := strings.Split(name, "/")
+	for _, seg := range segs {
+		if seg == "" || seg == "." || seg == ".." {
+			return "", fmt.Errorf("invalid repo name %q", name)
+		}
+	}
+	folder := strings.Join(segs, "-")
+	if !safeSegment(folder) {
+		return "", fmt.Errorf("invalid repo name %q", name)
+	}
+	return folder, nil
+}
+
+func trackDir(root, id string) (string, error) {
+	if !safeSegment(id) {
+		return "", fmt.Errorf("invalid track id %q", id)
+	}
+	return filepath.Join(root, id), nil
+}
+
+func worktreePath(root, id, name string) (string, error) {
+	base, err := trackDir(root, id)
+	if err != nil {
+		return "", err
+	}
+	folder, err := repoFolder(name)
+	if err != nil {
+		return "", err
+	}
+	candidate := folder
+	for n := 2; ; n++ {
+		_, err := os.Lstat(filepath.Join(base, candidate))
+		if errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if n > 100 {
+			return "", fmt.Errorf("no free worktree folder for %q", name)
+		}
+		candidate = fmt.Sprintf("%s-%d", folder, n)
+	}
+	target := filepath.Join(base, candidate)
+	if filepath.Dir(target) != filepath.Clean(base) || filepath.Base(target) != candidate {
+		return "", fmt.Errorf("repo name %q escapes worktree directory", name)
+	}
+	return target, nil
+}
+
+// resolveExisting resolves symlinks on path or its deepest existing
+// ancestor. It returns false when an existing entry cannot be resolved
+// (such as a dangling or looping symlink) so containment checks fail closed.
+func resolveExisting(path string) (string, bool) {
+	clean := filepath.Clean(path)
+	var tail []string
+	cur := clean
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			for i := len(tail) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, tail[i])
+			}
+			return filepath.Clean(resolved), true
+		}
+		if _, lerr := os.Lstat(cur); !errors.Is(lerr, os.ErrNotExist) {
+			return "", false
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return clean, true
+		}
+		tail = append(tail, filepath.Base(cur))
+		cur = parent
+	}
+}
+
+func withinRoot(root, path string) bool {
+	rRoot, ok1 := resolveExisting(root)
+	rPath, ok2 := resolveExisting(path)
+	if !ok1 || !ok2 {
+		return false
+	}
+	rel, err := filepath.Rel(rRoot, rPath)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// removeEmptyParents removes empty directories between dir and stop (exclusive),
+// cleaning up nested folders from older worktrees named with '/'.
+func removeEmptyParents(dir, stop string) {
+	stop = filepath.Clean(stop)
+	for d := filepath.Clean(dir); d != stop && withinRoot(stop, d); d = filepath.Dir(d) {
+		if err := os.Remove(d); err != nil {
+			return
+		}
+	}
 }
 
 func (w *Worktrees) lock(path string) (unlock func()) {

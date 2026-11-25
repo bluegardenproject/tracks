@@ -66,7 +66,7 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 		return Created{}, err
 	}
 	undo := context.WithoutCancel(ctx)
-	s.prepare(ctx, made)
+	s.prepare(ctx, t.Kind, made)
 	for _, r := range made {
 		// A re-created worktree has lost what its setup made.
 		_ = s.Store.SetSetupDone(undo, t.ID, r.Name, false)

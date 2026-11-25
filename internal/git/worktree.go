@@ -32,6 +32,24 @@ func NewWorktreeClient(path string) *WorktreeClient {
 	}
 }
 
+// NewSafeWorktreeClient constructs a hardened client using an already
+// verified gitDir (from the primary repo's .git/worktrees/<name>) and
+// worktree path. It runs from gitDir with repository-controlled hooks
+// and tools disabled so an agent-tampered worktree cannot run commands
+// outside its sandbox.
+func NewSafeWorktreeClient(gitDir, worktree string) *WorktreeClient {
+	return &WorktreeClient{
+		Path: worktree,
+		Runner: ExecRunner{
+			Dir:             gitDir,
+			GitDir:          gitDir,
+			WorkTree:        worktree,
+			NoOptionalLocks: true,
+			Safe:            true,
+		},
+	}
+}
+
 // CurrentBranch returns the branch currently checked out in the
 // worktree.
 func (c *WorktreeClient) CurrentBranch(ctx context.Context) (string, error) {
@@ -63,7 +81,10 @@ func (c *WorktreeClient) InitSubmodules(ctx context.Context) error {
 // base (e.g. "origin/develop"). Useful for `tracks gc --branches`,
 // which prunes branches that Claude never actually committed to.
 func (c *WorktreeClient) HasCommitsBeyond(ctx context.Context, base string) (bool, error) {
-	out, _, err := c.Runner.Run(ctx, "rev-list", "--count", base+"..HEAD")
+	if base == "" || strings.HasPrefix(base, "-") {
+		return false, fmt.Errorf("HasCommitsBeyond: invalid base %q", base)
+	}
+	out, _, err := c.Runner.Run(ctx, "rev-list", "--count", "--end-of-options", base+"..HEAD", "--")
 	if err != nil {
 		return false, err
 	}
@@ -137,7 +158,10 @@ func (c *WorktreeClient) UnsavedWork(ctx context.Context) (string, error) {
 // — every commit that landed on base after we branched would show
 // up here too, inverted (someone else's new file reading as `D`).
 func (c *WorktreeClient) ChangedFiles(ctx context.Context, base string) ([]string, error) {
-	committedOut, _, err := c.Runner.Run(ctx, "diff", "--name-status", base+"...HEAD")
+	if base == "" || strings.HasPrefix(base, "-") {
+		return nil, fmt.Errorf("ChangedFiles: invalid base %q", base)
+	}
+	committedOut, _, err := c.Runner.Run(ctx, "diff", "--name-status", "--end-of-options", base+"...HEAD", "--")
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +187,10 @@ func (c *WorktreeClient) ChangedFiles(ctx context.Context, base string) ([]strin
 // `diff A...B` shows. Three dots would be the symmetric difference,
 // which would pull in the base's own commits.
 func (c *WorktreeClient) CommitLog(ctx context.Context, base string) ([]string, error) {
-	out, _, err := c.Runner.Run(ctx, "log", "--oneline", base+"..HEAD")
+	if base == "" || strings.HasPrefix(base, "-") {
+		return nil, fmt.Errorf("CommitLog: invalid base %q", base)
+	}
+	out, _, err := c.Runner.Run(ctx, "log", "--oneline", "--end-of-options", base+"..HEAD", "--")
 	if err != nil {
 		return nil, err
 	}
