@@ -13,6 +13,9 @@ const (
 	TextInverse      Token = "text.inverse"
 	TextAccent       Token = "text.accent"
 	TextTrackDefault Token = "text.track.default"
+	// TextAccentAttention is text that asks to be seen, such as a count of
+	// new messages.
+	TextAccentAttention Token = "text.accent.attention"
 
 	BgBase     Token = "bg.base"
 	BgSurface  Token = "bg.surface"
@@ -121,7 +124,7 @@ const (
 
 // All lists every token in display order.
 var All = []Token{
-	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent, TextTrackDefault,
+	TextDefault, TextMuted, TextFaint, TextInverse, TextAccent, TextTrackDefault, TextAccentAttention,
 	BgBase, BgSurface, BgSelected, BgHover,
 	BorderDefault, BorderFocus, BorderAccent,
 	StateSuccessText, StateSuccessTextAccent, StateSuccessBg, StateSuccessBgAccent,
