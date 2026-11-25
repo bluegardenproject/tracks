@@ -402,6 +402,9 @@ func (s *Service) markReplyRead(ctx context.Context, id string, msg int64) error
 			break
 		}
 	}
+	if upTo == 0 {
+		return nil
+	}
 	_, err = s.Store.MarkRelayRead(ctx, id, relay.TrackHandle, upTo)
 	return err
 }

@@ -125,8 +125,11 @@ func TestPRHealthAndThreads(t *testing.T) {
 	if was, err := s.SavePRHealth(ctx, "a", pr.URL, track.Health{}); err != nil || !reflect.DeepEqual(was, want) {
 		t.Errorf("after GitHub hadn't computed mergeability = %+v, %v; want %+v: the last one kept", was, err, want)
 	}
-	if _, err := s.SavePRHealth(ctx, "a", "https://github.com/acme/api/pull/9", failing); err == nil {
-		t.Error("saved the health of a PR the track hasn't got")
+	if _, err := s.SavePRHealth(ctx, "a", "https://github.com/acme/api/pull/9", failing); !errors.Is(err, ErrNotFound) {
+		t.Errorf("saving the health of a PR the track hasn't got: %v, want ErrNotFound", err)
+	}
+	if _, _, err := s.SavePRThreads(ctx, "a", "https://github.com/acme/api/pull/9", 1); !errors.Is(err, ErrNotFound) {
+		t.Errorf("counting the threads of a PR the track hasn't got: %v, want ErrNotFound", err)
 	}
 
 	if was, known, err := s.SavePRThreads(ctx, "a", pr.URL, 2); err != nil || known || was != 0 {
