@@ -22,8 +22,15 @@ func askKind(kind string) string { return "ask:" + kind }
 // instructionKinds are the kinds of instruction about events of kind.
 func instructionKinds(kind string) []string { return []string{kind, askKind(kind)} }
 
-// eventKinds are the events a policy is set for.
-var eventKinds = []string{settings.EventConflicts, settings.EventCIFailed, settings.EventReviewThreads}
+// eventKinds are the events a policy is set for; eventWords name them.
+var (
+	eventKinds = []string{settings.EventConflicts, settings.EventCIFailed, settings.EventReviewThreads}
+	eventWords = map[string]string{
+		settings.EventConflicts:     "conflicts",
+		settings.EventCIFailed:      "a CI failure",
+		settings.EventReviewThreads: "review threads",
+	}
+)
 
 // githubEvent tells of e, on a PR of t, a Work track: open, or a side
 // track that ended with its PR still open. A track that isn't a side
@@ -40,6 +47,18 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 		}
 		return s.postGitHub(ctx, t.ID, e.Body, relay.Event)
 	}
+	// Under Report's lock, read again: a side track ending meanwhile
+	// hands its instructions over, and none may be queued after.
+	s.reporting.Lock()
+	defer s.reporting.Unlock()
+	if now, err := s.Store.Track(ctx, t.ID); err == nil {
+		t = now
+	}
+	// What waits about an earlier event of its kind, under the policy
+	// then, gives way to what this one's says now.
+	if err := s.Store.DropInstructions(ctx, e.PR.URL, instructionKinds(e.Kind)...); err != nil {
+		return err
+	}
 	main, err := s.Store.Track(ctx, t.Parent)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && !main.Open():
@@ -54,11 +73,6 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	}
 	name := gitHubText(cmp.Or(t.Title, t.Name))
 	named := fmt.Sprintf("@%s, side track %s: %s", t.Side, name, e.Body)
-	// What waits about an earlier event of its kind, under the policy
-	// then, gives way to what this one's says now.
-	if err := s.Store.DropInstructions(ctx, e.PR.URL, instructionKinds(e.Kind)...); err != nil {
-		return err
-	}
 	policy := s.githubPolicy(e.Kind)
 	if !t.Open() {
 		// No agent to tell or to ask about: its main track decides.
@@ -170,7 +184,7 @@ func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
 		if pr, ok := track.ParsePR(in.PR); ok {
 			about = prName(pr)
 		}
-		kind := strings.ReplaceAll(strings.TrimPrefix(in.Kind, askKind("")), "_", " ")
+		kind := eventWords[strings.TrimPrefix(in.Kind, askKind(""))]
 		body := fmt.Sprintf("@%s, side track %s, ended before Tracks' word about %s on %s went out: you decide.", t.Side, name, kind, about)
 		if err := s.postGitHub(ctx, t.Parent, body, relay.Event); err != nil {
 			return err
