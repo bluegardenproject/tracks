@@ -108,7 +108,9 @@ func (s *Store) SavePRHealth(ctx context.Context, id, url string, h track.Health
 	var mergeable, checks, head sql.NullString
 	err = s.db.QueryRowContext(ctx, "SELECT mergeable, checks, head FROM track_prs WHERE track_id = ? AND url = ?", id, url).
 		Scan(&mergeable, &checks, &head)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
+		return track.Health{}, ErrNotFound
+	} else if err != nil {
 		return track.Health{}, err
 	}
 	was = track.Health{Mergeable: track.Mergeable(mergeable.String), Checks: track.Checks(checks.String), Head: head.String}
@@ -122,7 +124,9 @@ func (s *Store) SavePRHealth(ctx context.Context, id, url string, h track.Health
 func (s *Store) SavePRThreads(ctx context.Context, id, url string, n int) (was int, known bool, err error) {
 	var threads sql.NullInt64
 	err = s.db.QueryRowContext(ctx, "SELECT threads FROM track_prs WHERE track_id = ? AND url = ?", id, url).Scan(&threads)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, ErrNotFound
+	} else if err != nil {
 		return 0, false, err
 	}
 	_, err = s.db.ExecContext(ctx, "UPDATE track_prs SET threads = ? WHERE track_id = ? AND url = ?", n, id, url)

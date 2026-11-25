@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/relay"
 )
 
 func TestSyncTrainsKeepsThePlatformOpen(t *testing.T) {
@@ -134,5 +135,18 @@ func TestAPRsCommentsShowOnThePlatform(t *testing.T) {
 	}
 	if len(f.windows.platforms) != 1 {
 		t.Errorf("the Platform closed with nothing to show: %v", f.windows.platforms)
+	}
+}
+
+func TestHeldGitHubEventsInSignals(t *testing.T) {
+	ctx := context.Background()
+	f, _, _ := trainsFixture(t, "cursor")
+	f.svc.setHeld("r", []relay.Message{{From: relay.GitHubHandle}})
+	if sig, err := f.svc.Signals(ctx, "r"); err != nil || !sig.Held {
+		t.Errorf("Signals %+v, %v; want them held, for Collect messages", sig, err)
+	}
+	f.svc.setHeld("r", nil)
+	if sig, err := f.svc.Signals(ctx, "r"); err != nil || sig.Held {
+		t.Errorf("Signals %+v, %v; want nothing held", sig, err)
 	}
 }

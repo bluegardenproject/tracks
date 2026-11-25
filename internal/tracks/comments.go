@@ -43,7 +43,7 @@ func (s *Service) CountComments(ctx context.Context) error {
 			continue
 		}
 		if err := s.threadsEvents(ctx, t, counts); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 		}
 		s.mu.Lock()
 		was := s.comments[t.ID]

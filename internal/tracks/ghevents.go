@@ -98,6 +98,7 @@ const maxGitHubText = 60
 // characters and cut short: a repo's owners choose their checks' and
 // branches' names.
 func gitHubText(s string) string {
+	s = escapes.ReplaceAllString(s, "")
 	s = strings.Map(func(r rune) rune {
 		if unicode.IsPrint(r) {
 			return r

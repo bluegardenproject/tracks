@@ -22,10 +22,6 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	working := map[string]bool{}
-	for _, t := range tracks {
-		working[t.ID] = t.Open()
-	}
 	var errs []error
 	asked := map[[2]string]bool{}
 	for _, t := range tracks {
@@ -47,7 +43,7 @@ func (s *Service) PollPRs(ctx context.Context) error {
 					return err
 				}
 				s.notify(prNotice(t.ID, t.Name, pr, was))
-				if err := s.prHealth(ctx, t.ID, pr, was, working[t.ID]); err != nil {
+				if err := s.prHealth(ctx, t.ID, pr, was, t.Open()); err != nil {
 					return err
 				}
 				asked[[2]string{t.ID, pr.URL}] = true
@@ -58,6 +54,16 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	unsettled, err := s.Store.UnsettledPRs(ctx)
 	if err != nil {
 		return err
+	}
+	// Read after the branches' calls to GitHub, which take a while: a
+	// track opened meanwhile gets its events.
+	open, err := s.Store.OpenTracks(ctx)
+	if err != nil {
+		return err
+	}
+	working := map[string]bool{}
+	for _, t := range open {
+		working[t.ID] = t.Kind == track.Work
 	}
 	for _, p := range unsettled {
 		if asked[[2]string{p.TrackID, p.URL}] {

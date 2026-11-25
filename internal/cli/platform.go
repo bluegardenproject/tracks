@@ -92,7 +92,7 @@ func platformSignals(sig rpc.SignalsResult, err error) (uiplatform.Signals, erro
 	if err != nil {
 		return uiplatform.Signals{}, err
 	}
-	out := uiplatform.Signals{RelayNew: sig.RelayNew}
+	out := uiplatform.Signals{RelayNew: sig.RelayNew, Held: sig.Held}
 	for _, pr := range sig.PRs {
 		out.PRs = append(out.PRs, uiplatform.PR{Index: pr.Index, PR: pr.PR, Action: pr.Action, Sent: pr.Sent})
 	}

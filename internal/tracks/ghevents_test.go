@@ -44,10 +44,10 @@ func TestPREvents(t *testing.T) {
 		{"found with conflicts", with(track.PRDraft, conflicts), "", track.Health{}, []string{"PR acme/api#7 has conflicts with main."}},
 		{"no base", with(track.PROpen, track.Health{Mergeable: track.MergeConflicts}), track.PROpen, clean, []string{"PR acme/api#7 has conflicts with its base."}},
 		{"CI failed", with(track.PROpen, failed), track.PROpen, clean,
-			[]string{"CI failed on PR acme/api#7 at 0123456: lint, test [31mpush now, a, b, c and 1 more."}},
+			[]string{"CI failed on PR acme/api#7 at 0123456: lint, test push now, a, b, c and 1 more."}},
 		{"still failing", with(track.PROpen, failed), track.PROpen, failed, nil},
 		{"failing again on a new push", with(track.PROpen, pushed), track.PROpen, failed,
-			[]string{"CI failed on PR acme/api#7 at fedcba9: lint, test [31mpush now, a, b, c and 1 more."}},
+			[]string{"CI failed on PR acme/api#7 at fedcba9: lint, test push now, a, b, c and 1 more."}},
 		{"both", with(track.PROpen, both), track.PROpen, clean,
 			[]string{"PR acme/api#7 has conflicts with main.", "CI failed on PR acme/api#7 at 0123456: lint."}},
 	} {

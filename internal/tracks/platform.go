@@ -126,10 +126,13 @@ func (s *Service) SyncTrains(ctx context.Context) error {
 }
 
 // Signals are what a track's Platform shows under Signals: its PRs with
-// open comments, and how many relay messages the user hasn't seen.
+// open comments, how many relay messages the user hasn't seen, and
+// whether @github's events wait for a held pointer, which Collect
+// messages sends.
 type Signals struct {
 	PRs      []PRSignal
 	RelayNew int
+	Held     bool
 }
 
 // Signals are track id's Signals.
@@ -145,7 +148,7 @@ func (s *Service) Signals(ctx context.Context, id string) (Signals, error) {
 	s.mu.Lock()
 	prs := prSignals(t, s.comments[id])
 	s.mu.Unlock()
-	return Signals{PRs: prs, RelayNew: n}, nil
+	return Signals{PRs: prs, RelayNew: n, Held: s.heldFrom(id, relay.GitHubHandle)}, nil
 }
 
 // trainsKey is what of trains a Platform shows, to tell a change.

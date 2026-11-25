@@ -658,6 +658,8 @@ while it sleeps. The polling gets cheaper and its news reaches the agents:
   checks and their commit, open threads) is kept in the store, so a
   restart repeats none; the first count of a PR's threads posts nothing,
   as they may have waited long.
+  Held back, as a train's messages are, they offer Collect messages under
+  Signals' Relay Station.
 - **Facts only**: `@github` posts what Tracks reads (states, counts, check
   names), never a comment's text, which the agent reads on GitHub through
   the comments flow, under the same fenced-data rule.
