@@ -38,6 +38,7 @@ var (
 	engineKeys       = []keyHelp{{"Tab", "next"}, {"Shift+Tab", "previous"}, {"Enter", "press"}, {"Esc", "back"}}
 	typeKeys         = []keyHelp{{"←/→", "track type"}, {"↑/↓", "field"}, {"Enter", "choose"}, {"Esc", "back"}}
 	agentKeys        = []keyHelp{{"↑/↓", "field"}, {"Enter", "choose"}, {"Esc", "back"}}
+	githubKeys       = []keyHelp{{"↑/↓", "event"}, {"←/→", "policy"}, {"Enter", "next policy"}, {"Esc", "back"}}
 	prefixEditKeys   = []keyHelp{{"Enter", "save"}, {"Esc", "cancel"}}
 	modelPickerKeys  = []keyHelp{{"Type", "to filter"}, {"↑/↓", "select"}, {"Enter", "choose"}, {"Esc", "close"}}
 )

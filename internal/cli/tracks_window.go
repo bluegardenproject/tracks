@@ -109,6 +109,7 @@ func newTracksWindowCmd(version string) *cobra.Command {
 				Agents:        agentSettings{path: paths.Settings},
 				History:       history{path: paths.Settings},
 				Notifications: notifications{path: paths.Settings},
+				GitHub:        githubSettings{path: paths.Settings},
 				About:         about(paths),
 			})
 			_, err = tea.NewProgram(window,

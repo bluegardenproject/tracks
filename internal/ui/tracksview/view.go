@@ -174,6 +174,8 @@ func (m Model) hints() string {
 				return "  " + joinKeys(key, text, prefixEditKeys)
 			}
 			return "  " + joinKeys(key, text, agentKeys)
+		case sectionGitHub:
+			return "  " + joinKeys(key, text, githubKeys)
 		}
 		return "  " + joinKeys(key, text, scrollKeys)
 	case m.tab == tabSettings && s.section != sectionFastTracks && s.section != sectionAbout:

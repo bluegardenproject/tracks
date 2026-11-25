@@ -690,7 +690,7 @@ track's policy has Tracks tell it (built, step 4).
   ended hears its events itself, as any track.
 - **A policy per kind of event**, in `settings.yaml`'s `github:` section
   (`conflicts`, `ci_failed`, `review_threads`: `auto`, `main` or `ask`),
-  to be drawn in Settings → GitHub:
+  set in Settings → GitHub (built):
 
   | Event | Handle automatically (`auto`) | Main track decides (`main`) | Ask me (`ask`) | Default |
   |---|---|---|---|---|
@@ -800,7 +800,7 @@ track's policy has Tracks tell it (built, step 4).
    track) has no row to offer Collect messages under.
 4. Side tracks and GitHub's events (built): facts to the main track, the
    policies in `settings.yaml`, the instructions typed into the agents.
-   To come: Settings → GitHub's frame, and "ask before replying to human
+   Settings → GitHub (built). To come: "ask before replying to human
    comments".
 5. Draft PRs the main track promotes, as the repo's rule allows.
    Built: a side track's prompt ends with a "Side track" paragraph
