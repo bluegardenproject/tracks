@@ -45,6 +45,9 @@ func (s *Service) archive(ctx context.Context, id string, force, keep bool) ([]w
 	case t.Archived():
 		return nil, nil
 	}
+	if err := s.sidesSettled(ctx, t, "it's archived"); err != nil {
+		return nil, err
+	}
 	if t.Kind.Worktrees() {
 		lost, err := s.lost(ctx, t, force)
 		switch {
@@ -89,7 +92,8 @@ func (s *Service) discard(ctx context.Context, t track.Track) error {
 
 // AutoArchive archives the tracks that ended more than ArchiveAfter ago,
 // when the setting is on, and returns their names. A track with a PR
-// still open stays; one with work that would be lost stays too, unless
+// still open stays, as does a main track with an unsettled side track;
+// one with work that would be lost stays too, unless
 // the setting says to archive it with its worktrees and branches.
 func (s *Service) AutoArchive(ctx context.Context) ([]string, error) {
 	st, err := s.Settings()
@@ -104,6 +108,14 @@ func (s *Service) AutoArchive(ctx context.Context) ([]string, error) {
 	var errs []error
 	for _, t := range old {
 		if track.PRStatus(t.PRs).ID == track.PRsOpen.ID || ctx.Err() != nil {
+			continue
+		}
+		var problem Problem
+		if err := s.sidesSettled(ctx, t, "it's archived"); errors.As(err, &problem) {
+			// Its side tracks still run, or still have PRs open.
+			continue
+		} else if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 			continue
 		}
 		unsaved, err := s.archive(ctx, t.ID, false, st.History.KeepUnsaved())

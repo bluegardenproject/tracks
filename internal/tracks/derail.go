@@ -17,6 +17,9 @@ func (s *Service) Derail(ctx context.Context, id string, force bool) ([]workspac
 		return nil, err
 	}
 	defer release()
+	if err := s.sidesSettled(ctx, t, "it's derailed"); err != nil {
+		return nil, err
+	}
 	if t.Kind.Worktrees() {
 		if lost, err := s.lost(ctx, t, force); err != nil || len(lost) > 0 {
 			return lost, err
@@ -37,6 +40,9 @@ func (s *Service) Lost(ctx context.Context, id string) ([]workspace.Unsaved, err
 		return nil, err
 	}
 	defer release()
+	if err := s.sidesSettled(ctx, t, "it's archived or derailed"); err != nil {
+		return nil, err
+	}
 	if !t.Kind.Worktrees() {
 		return nil, nil
 	}

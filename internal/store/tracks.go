@@ -9,7 +9,7 @@ import (
 )
 
 const trackColumns = "id, kind, name, engine, model, session_id, prompt, review_ref, document, " +
-	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, agent_exit, interrupted, parent_id"
+	"candor, opinion, claim_check, terminal, created_at, closed_at, cleaned_at, waiting, archived_at, title, agent_exit, interrupted, parent_id, side"
 
 // parentName is the name a track's parent is shown under, read with it.
 const parentName = "(SELECT COALESCE(NULLIF(p.title, ''), p.name) FROM tracks p WHERE p.id = tracks.parent_id)"
@@ -22,9 +22,9 @@ func (s *Store) AddTrack(ctx context.Context, t track.Track) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM tracks WHERE id = ?))",
+	_, err = tx.ExecContext(ctx, "INSERT INTO tracks ("+trackColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM tracks WHERE id = ?), NULLIF(?, ''))",
 		t.ID, string(t.Kind), t.Name, t.Engine, t.Model, t.Session, t.Prompt, t.ReviewRef, t.Document,
-		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Exit, t.Interrupted, t.Parent)
+		t.Candor, t.Opinion, t.ClaimCheck, t.Terminal, t.CreatedAt.UnixMilli(), millis(t.ClosedAt), millis(t.CleanedAt), t.Waiting, millis(t.ArchivedAt), t.Title, t.Exit, t.Interrupted, t.Parent, t.Side)
 	if err != nil {
 		return err
 	}
@@ -52,6 +52,11 @@ func (s *Store) Track(ctx context.Context, id string) (track.Track, error) {
 		return track.Track{}, ErrNotFound
 	}
 	return tracks[0], nil
+}
+
+// SideTracks are main track id's side tracks, oldest first.
+func (s *Store) SideTracks(ctx context.Context, id string) ([]track.Track, error) {
+	return s.tracks(ctx, "WHERE parent_id = ? AND side IS NOT NULL ORDER BY created_at, id", id)
 }
 
 // OpenTracks are the tracks whose window is open, oldest first.
@@ -242,11 +247,11 @@ func scanTrack(row scanner) (track.Track, error) {
 	var kind string
 	var created int64
 	var closed, cleaned, archived sql.NullInt64
-	var parent, parentName sql.NullString
+	var parent, side, parentName sql.NullString
 	err := row.Scan(&t.ID, &kind, &t.Name, &t.Engine, &t.Model, &t.Session, &t.Prompt, &t.ReviewRef, &t.Document,
 		&t.Candor, &t.Opinion, &t.ClaimCheck, &t.Terminal, &created, &closed, &cleaned, &t.Waiting, &archived, &t.Title, &t.Exit, &t.Interrupted,
-		&parent, &parentName)
-	t.Parent, t.ParentName = parent.String, parentName.String
+		&parent, &side, &parentName)
+	t.Parent, t.ParentName, t.Side = parent.String, parentName.String, side.String
 	t.Kind = track.Kind(kind)
 	t.CreatedAt = time.UnixMilli(created)
 	if closed.Valid {

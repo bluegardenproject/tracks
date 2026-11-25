@@ -43,6 +43,8 @@ type Request struct {
 	NoDraft bool `json:"no_draft,omitempty"`
 	// Parent is the ID of the track tracks new ran in, "" for none.
 	Parent string `json:"parent,omitempty"`
+	// Side makes the track a side track of Parent, its main track.
+	Side bool `json:"side,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:

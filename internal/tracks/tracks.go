@@ -41,6 +41,7 @@ type Store interface {
 	EndedTracks(ctx context.Context, limit int) ([]track.Track, error)
 	EndedBefore(ctx context.Context, at time.Time) ([]track.Track, error)
 	InterruptedTracks(ctx context.Context) ([]track.Track, error)
+	SideTracks(ctx context.Context, id string) ([]track.Track, error)
 	FilteredTracks(ctx context.Context, f track.Filter, now time.Time, limit int) ([]track.Track, error)
 	Filter(ctx context.Context) (track.Filter, error)
 	SetFilter(ctx context.Context, f track.Filter) error
@@ -187,6 +188,9 @@ type Service struct {
 	claimed map[string]bool
 	// busy are the tracks being resumed, archived or ended.
 	busy map[string]bool
+	// makingSides counts the side tracks being made for each main track,
+	// which can't end meanwhile.
+	makingSides map[string]int
 	// reviewMu keeps a review's start, which resets the review's folder,
 	// and a reviewer's reply, which writes to it, apart.
 	reviewMu sync.Mutex

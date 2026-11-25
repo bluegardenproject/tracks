@@ -69,9 +69,24 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		model = conf.Model
 	}
 
+	if req.Side {
+		done, err := s.makingSide(req.Parent)
+		if err != nil {
+			return Created{}, err
+		}
+		defer done()
+		if err := s.sideTrack(ctx, &req); err != nil {
+			return Created{}, err
+		}
+	}
 	t, drafts, err := s.check(ctx, req)
 	if err != nil {
 		return Created{}, err
+	}
+	if req.Side {
+		if t.Side, err = s.sideHandle(ctx, t.Parent); err != nil {
+			return Created{}, err
+		}
 	}
 	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, model, s.now()
 	name, release, err := s.claimName(t)

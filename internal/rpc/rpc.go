@@ -159,6 +159,8 @@ type CreateResult struct {
 	Window string `json:"window"`
 	// Title is the name it's shown under, when that isn't Name.
 	Title string `json:"title,omitempty"`
+	// Side is a side track's handle on its main track's relay.
+	Side string `json:"side,omitempty"`
 }
 
 // ListParams asks for Station's list: under its filter, when one is on.
