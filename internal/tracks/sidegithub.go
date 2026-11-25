@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/relay"
@@ -134,4 +135,40 @@ func (s *Service) dropDone(ctx context.Context, pr track.PR) error {
 		}
 	}
 	return s.Store.DropInstructions(ctx, pr.URL, kinds...)
+}
+
+// sideEnded hands what waited for side track t, which ended, to its main
+// track: the instructions Tracks hadn't typed into its agent yet, and
+// the main track's questions to the user about its PRs, which it can no
+// longer act on. Each is dropped, and its main track hears of it as an
+// event, to decide.
+func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
+	waiting, err := s.Store.WaitingInstructions(ctx)
+	if err != nil {
+		return err
+	}
+	prs := map[string]bool{}
+	for _, pr := range t.PRs {
+		prs[pr.URL] = true
+	}
+	name := gitHubText(cmp.Or(t.Title, t.Name))
+	for _, in := range waiting {
+		mine := in.TrackID == t.ID
+		asked := in.TrackID == t.Parent && strings.HasPrefix(in.Kind, askKind("")) && prs[in.PR]
+		if !mine && !asked {
+			continue
+		}
+		if err := s.Store.DropInstructions(ctx, in.PR, in.Kind); err != nil {
+			return err
+		}
+		about := in.PR
+		if pr, ok := track.ParsePR(in.PR); ok {
+			about = prName(pr)
+		}
+		body := fmt.Sprintf("@%s, side track %s, ended before Tracks' word about %s went out: you decide.", t.Side, name, about)
+		if err := s.postGitHub(ctx, t.Parent, body, relay.Event); err != nil {
+			return err
+		}
+	}
+	return nil
 }

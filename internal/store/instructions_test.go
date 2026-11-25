@@ -44,4 +44,17 @@ func TestInstructions(t *testing.T) {
 	if waiting, _ = s.WaitingInstructions(ctx); len(waiting) != 3 || waiting[2].Body != "again" {
 		t.Errorf("after one was typed, a new one of its kind waits: %+v", waiting)
 	}
+	if still, err := s.InstructionWaiting(ctx, waiting[0].ID); err != nil || !still {
+		t.Errorf("a waiting one: %v, %v", still, err)
+	}
+	if err := s.DropInstructions(ctx, "pr1", "ci_failed", "conflicts"); err != nil {
+		t.Fatal(err)
+	}
+	if waiting, _ = s.WaitingInstructions(ctx); len(waiting) != 1 || waiting[0].Body != "other" {
+		t.Errorf("after dropping pr1's: %+v; want pr2's left", waiting)
+	}
+	var typed int
+	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM instructions WHERE typed_at IS NOT NULL").Scan(&typed); err != nil || typed != 1 {
+		t.Errorf("typed rows %d, %v; want the typed one kept", typed, err)
+	}
 }

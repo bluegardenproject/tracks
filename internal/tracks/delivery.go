@@ -226,7 +226,6 @@ func (s *Service) deliveryMaps() {
 	if s.held == nil {
 		s.held = map[string]map[string]bool{}
 	}
-
 }
 
 // dueMessages are t's unread messages a pointer goes for, a side
@@ -418,14 +417,25 @@ func (s *Service) typeInstruction(ctx context.Context, t track.Track, window str
 	if t.Waiting || s.inTurn(t.ID) || s.blockers(t, window).Why() != "" {
 		return false, nil
 	}
+	// Read a while ago: dropped or replaced since, it's moot.
+	if still, err := s.Store.InstructionWaiting(ctx, in.ID); err != nil || !still {
+		return false, err
+	}
 	s.mu.Lock()
 	s.deliveryMaps()
+	if in.Kind == settings.EventReviewThreads && s.comments[t.ID][in.PR].Sent {
+		// The user sent them from Signals.
+		s.mu.Unlock()
+		return false, s.Store.DropInstructions(ctx, in.PR, in.Kind)
+	}
 	_, waiting := s.pointing[t.ID]
 	inTurn, known := s.turns[t.ID]
-	if s.busy[t.ID] || waiting || !known || inTurn {
+	if s.busy[t.ID] || waiting || !known || inTurn || s.now().Before(s.retryAt[t.ID]) {
+		// After a stall, it waits as long as a pointer would.
 		s.mu.Unlock()
 		return false, nil
 	}
+	delete(s.retryAt, t.ID)
 	s.pointerGen++
 	gen := s.pointerGen
 	s.pointing[t.ID] = pointing{at: s.now(), before: s.pointed[t.ID], gen: gen}

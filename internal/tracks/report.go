@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/store"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
@@ -39,6 +40,11 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 	s.notify(statusNotice(id, t.Name, t.Status(), next.Status()))
 	if t.Open() != next.Open() {
 		s.sideNotice(ctx, t, e)
+	}
+	if e == track.Ended && side.Is(t) {
+		if err := s.sideEnded(ctx, t); err != nil {
+			return err
+		}
 	}
 	if on := next.Status().Attention; on != t.Status().Attention && next.Open() {
 		return s.markWindow(id, on)

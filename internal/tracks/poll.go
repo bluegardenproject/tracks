@@ -76,8 +76,23 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	}
 	s.keepThreads(answer)
 
+	// Read after GitHub's answer, which takes a while: a track opened
+	// meanwhile gets its events, one ended doesn't.
+	open, err := s.Store.OpenTracks(ctx)
+	if err != nil {
+		return err
+	}
+	isOpen := map[string]bool{}
+	for _, t := range open {
+		isOpen[t.ID] = true
+	}
 	asked := map[[2]string]bool{}
 	for _, b := range branches {
+		if b.t.Open() && !isOpen[b.t.ID] {
+			if now, err := s.Store.Track(ctx, b.t.ID); err == nil {
+				b.t = now
+			}
+		}
 		for _, f := range answer.Branches[b.q] {
 			pr := f.PR
 			pr.CheckedAt = s.now()
@@ -95,12 +110,6 @@ func (s *Service) PollPRs(ctx context.Context) error {
 			}
 			asked[[2]string{b.t.ID, pr.URL}] = true
 		}
-	}
-	// Read after GitHub's answer, which takes a while: a track opened
-	// meanwhile gets its events.
-	open, err := s.Store.OpenTracks(ctx)
-	if err != nil {
-		return err
 	}
 	working := map[string]*track.Track{}
 	for _, t := range open {
@@ -189,8 +198,9 @@ func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
 }
 
 // prHealth records pr's health, as track id's, which was in state was,
-// and posts @github's events on what changed when post is the track,
-// an open Work track, whose agent acts on them.
+// drops the instructions it made moot, and posts @github's events on
+// what changed when post is the track: an open Work track, or a side
+// track that ended with its PR open, whose main track hears them.
 func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was track.PRState, post *track.Track) error {
 	if err := s.dropDone(ctx, pr); err != nil {
 		return err

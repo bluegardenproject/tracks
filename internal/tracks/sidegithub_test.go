@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/hooks"
@@ -341,5 +342,86 @@ func TestAnInstructionNotTakenStalls(t *testing.T) {
 	f.svc.mu.Unlock()
 	if waiting || !known || in {
 		t.Errorf("after the stall: pointing %v, turn %v known %v; want the track free", waiting, in, known)
+	}
+}
+
+// A side track that ends hands what waited for it to its main track.
+func TestAnEndingSideTrackHandsOverItsInstructions(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	const url = "https://github.com/acme/api/pull/231"
+	if err := f.svc.SeePRs(ctx, st.ID, []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.instruct(ctx, st.ID, settings.EventConflicts, url, "Rebase."); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.instruct(ctx, main.ID, askKind(settings.EventCIFailed), url, "Ask."); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Report(ctx, st.ID, track.Ended); err != nil {
+		t.Fatal(err)
+	}
+	if side, asks := waitingFor(t, f, st.ID), waitingFor(t, f, main.ID); len(side)+len(asks) != 0 {
+		t.Errorf("still waiting: side %q, main %q", side, asks)
+	}
+	got := fromGitHub(t, f, main.ID)
+	if len(got) != 2 || !strings.Contains(got[0], "ended before Tracks' word about PR acme/api#231 went out") {
+		t.Errorf("the main track's relay: %q; want an event for each", got)
+	}
+}
+
+// Answered threads, or the user's click on Signals' button, drop a
+// waiting threads instruction; one dropped meanwhile isn't pasted.
+func TestThreadsInstructionsGoWhenMoot(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	gh := &fakeGitHub{}
+	f.svc.GitHub = gh
+	const url = "https://github.com/acme/api/pull/1"
+	if err := f.svc.SeePRs(ctx, "a", []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	count := func(n int) {
+		t.Helper()
+		gh.threads = map[string]int{url: n}
+		if err := f.svc.PollPRs(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.CountComments(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count(2)
+	if err := f.svc.instruct(ctx, "a", settings.EventReviewThreads, url, "Work through them."); err != nil {
+		t.Fatal(err)
+	}
+	count(0)
+	if got := waitingFor(t, f, "a"); len(got) != 0 {
+		t.Errorf("with every thread answered, still waiting: %q", got)
+	}
+
+	count(2)
+	if err := f.svc.instruct(ctx, "a", settings.EventReviewThreads, url, "Work through them."); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
+	if _, err := f.svc.RunAction(ctx, "a", actions.Range(0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, "a"); len(got) != 0 {
+		t.Errorf("after the user sent them from Signals, still waiting: %q", got)
+	}
+
+	if err := f.svc.instruct(ctx, "a", settings.EventConflicts, url, "Rebase."); err != nil {
+		t.Fatal(err)
+	}
+	waiting, _ := f.store.WaitingInstructions(ctx)
+	if err := f.store.DropInstructions(ctx, url, settings.EventConflicts); err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(time.Minute)
+	if typed, err := f.svc.typeInstruction(ctx, track.Track{ID: "a"}, "@a", waiting[0]); err != nil || typed {
+		t.Errorf("pasted one dropped meanwhile: %v, %v", typed, err)
 	}
 }
