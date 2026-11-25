@@ -208,6 +208,11 @@ func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was trac
 	if err := s.dropDone(ctx, pr); err != nil {
 		return err
 	}
+	if pr.State == track.PRMerged && (was == track.PROpen || was == track.PRDraft) {
+		if err := s.restack(ctx, id, pr); err != nil {
+			return err
+		}
+	}
 	before := pr.Health
 	if !pr.State.Settled() {
 		var err error

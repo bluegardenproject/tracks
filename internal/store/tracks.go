@@ -104,6 +104,12 @@ func (s *Store) SetBranch(ctx context.Context, id string, position int, branch s
 	return s.updateTrack(ctx, id, "UPDATE track_repos SET branch = ? WHERE track_id = ? AND position = ?", branch, id, position)
 }
 
+// SetBase records base as the branch track id's repo name builds on: a
+// stacked side track's, once the PR below it merged.
+func (s *Store) SetBase(ctx context.Context, id, name, base string) error {
+	return s.updateTrack(ctx, id, "UPDATE track_repos SET base = ? WHERE track_id = ? AND name = ?", base, id, name)
+}
+
 // SetSetupDone records whether the setup of track id's repo name
 // succeeded in its worktree.
 func (s *Store) SetSetupDone(ctx context.Context, id, name string, done bool) error {

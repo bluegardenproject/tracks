@@ -50,6 +50,7 @@ type Store interface {
 	Rename(ctx context.Context, id, name string) error
 	SetTitle(ctx context.Context, id, title string) error
 	SetBranch(ctx context.Context, id string, position int, branch string) error
+	SetBase(ctx context.Context, id, name, base string) error
 	SetSetupDone(ctx context.Context, id, name string, done bool) error
 	AddTrackError(ctx context.Context, id string, e track.Failure) error
 	ClearTrackErrors(ctx context.Context, id, kind, subject string) (bool, error)
@@ -93,6 +94,8 @@ type Worktrees interface {
 	// re-creates.
 	Missing(t track.Track) []track.Repo
 	Restore(ctx context.Context, t track.Track, progress func(string)) ([]track.Repo, error)
+	// Pushed reports whether origin of the repo at path has branch.
+	Pushed(ctx context.Context, path, branch string) (bool, error)
 	// Branches are t's repos on the branches their worktrees are on.
 	Branches(ctx context.Context, t track.Track) []track.Repo
 	// RemoveWorktrees removes the worktrees and keeps the branches.

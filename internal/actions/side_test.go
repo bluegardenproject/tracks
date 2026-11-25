@@ -25,5 +25,6 @@ func TestSidePromptsMatchGolden(t *testing.T) {
 	if _, ok := SideThreads("codex", "acme/api#231", "https://github.com/acme/api/pull/231", 3, true); ok {
 		t.Error("an engine without a prompt got one")
 	}
+	golden.Check(t, "testdata/side-restack.golden", SideRestack("acme/api#232", "relay-store", "main", "0123abc"))
 	golden.Check(t, "testdata/ask-main.golden", AskMain("side-000123", "relay-cli", "3 review threads on PR acme/api#231 wait for an answer."))
 }

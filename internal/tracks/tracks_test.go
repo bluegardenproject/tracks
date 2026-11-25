@@ -64,6 +64,12 @@ type fakeWorktrees struct {
 	// root, when set, is where worktrees go, made as real folders;
 	// else they're under /wt and don't exist.
 	root string
+	// pushed are the branches origin has, for Pushed.
+	pushed map[string]bool
+}
+
+func (w *fakeWorktrees) Pushed(_ context.Context, _, branch string) (bool, error) {
+	return w.pushed[branch], nil
 }
 
 func (w *fakeWorktrees) path(id, name string) string {

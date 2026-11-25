@@ -47,6 +47,9 @@ type Request struct {
 	Parent string `json:"parent,omitempty"`
 	// Side makes the track a side track of Parent, its main track.
 	Side bool `json:"side,omitempty"`
+	// On stacks a side track on its main track ("track") or one of its
+	// side tracks, by handle: its shared repos branch from that one's.
+	On string `json:"on,omitempty"`
 }
 
 // check turns req into a track, checking it again as the form does:

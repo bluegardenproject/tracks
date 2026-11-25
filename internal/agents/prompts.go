@@ -182,8 +182,17 @@ const LinksContract = "" +
 	"could not read a link."
 
 // SideTrack is what a side track's prompt names: its main track, as
-// shown, and its own handle on the main track's relay.
-type SideTrack struct{ Main, Handle string }
+// shown, its own handle on the main track's relay, and its repos built
+// on another track's branch.
+type SideTrack struct {
+	Main, Handle string
+	Stacked      []Stack
+}
+
+// Stack is a side track's repo built on another track's branch: Repo,
+// the track it's on (On, as shown), that track's Branch, and the base
+// the repo's PRs go against otherwise (Default).
+type Stack struct{ Repo, On, Branch, Default string }
 
 // SideTrackContract ends a side track's prompt. Its pull request opens
 // as a draft that its main track checks against the task and marks
@@ -203,6 +212,7 @@ func SideTrackContract(s SideTrack, keepDrafts []string, totalRepos int) string 
 		"@track and you are @" + s.Handle + ". The task asks for a pull " +
 		"request: once the review passes, open it as a **draft** (`gh pr " +
 		"create --draft`), and never mark it ready yourself: " + ready + " " +
+		stacked(s.Stacked) +
 		"Then report to your main track with `tracks relay send --to track " +
 		"--kind report`, the PR's link and the review's outcome on stdin. " +
 		"When you are blocked or need a decision the task doesn't settle, " +
@@ -216,6 +226,17 @@ func SideTrackContract(s SideTrack, keepDrafts []string, totalRepos int) string 
 		"reports still go to it. At most 5 messages pass between two side " +
 		"tracks; after that, go through your main track. Don't start side " +
 		"tracks of your own."
+}
+
+// stacked says, for each of a side track's stacked repos, which branch
+// its pull request goes against; "" for none.
+func stacked(stacks []Stack) string {
+	var b strings.Builder
+	for _, s := range stacks {
+		b.WriteString("Your branch builds on " + s.On + "'s branch `" + s.Branch + "` in " + s.Repo +
+			": open its pull request against it (`gh pr create --base " + s.Branch + "`), not " + s.Default + ". ")
+	}
+	return b.String()
 }
 
 // DraftPRSuffix builds the prompt fragment instructing the agent to

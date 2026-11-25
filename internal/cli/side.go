@@ -37,8 +37,8 @@ func newSideCmd() *cobra.Command {
 
 // sideNewFlags are tracks side new's flags.
 type sideNewFlags struct {
-	name, task, taskFile, engine, model string
-	repos                               []string
+	name, task, taskFile, engine, model, on string
+	repos                                   []string
 }
 
 func newSideNewCmd() *cobra.Command {
@@ -48,7 +48,8 @@ func newSideNewCmd() *cobra.Command {
 		Short: "start a side track of this track",
 		Long: "Opens a side track in the background, a Work track on this track's repos unless --repo names " +
 			"others, and prints its name and its handle on the relay. The task is its prompt: its agent starts " +
-			"from that alone. A side track starts no side tracks of its own.",
+			"from that alone. Without --on it branches from the repos' base and its pull request goes there; " +
+			"--on stacks it on a track whose code it needs. A side track starts no side tracks of its own.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			client, id, err := trackClient("side new")
@@ -78,6 +79,8 @@ func newSideNewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.name, "name", "", "the side track's name (default: from the task)")
 	cmd.Flags().StringSliceVar(&f.repos, "repo", nil, "a repo from the Repositories tab; repeat it for several "+
 		"(default: this track's)")
+	cmd.Flags().StringVar(&f.on, "on", "", "stack it on this track's branch (track) or a side track's (its handle): "+
+		"the repos they share branch from that one's pushed branch, and its pull request goes against it")
 	cmd.Flags().StringVar(&f.engine, "engine", "", "the agent CLI (default: the one Settings picks for Work tracks)")
 	cmd.Flags().StringVar(&f.model, "model", "", "the model, with --engine (default: the engine's)")
 	return cmd
@@ -102,7 +105,7 @@ func sideRequest(f sideNewFlags, task string) (tracks.Request, error) {
 	}
 	return tracks.Request{
 		Kind: track.Work, Name: f.name, Repos: f.repos, Prompt: strings.TrimSpace(task),
-		Engine: f.engine, Model: f.model, NoDraft: true, Side: true,
+		Engine: f.engine, Model: f.model, NoDraft: true, Side: true, On: f.on,
 	}, nil
 }
 

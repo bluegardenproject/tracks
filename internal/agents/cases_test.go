@@ -26,6 +26,7 @@ type spawnCase struct {
 	setup     bool
 	servers   bool
 	side      bool
+	stacked   bool
 }
 
 var spawnCases = []spawnCase{
@@ -36,6 +37,7 @@ var spawnCases = []spawnCase{
 	{name: "side track", kind: track.Work, repos: 1, auto: true, side: true},
 	{name: "side track, drafts kept", kind: track.Work, repos: 1, draft: []bool{true}, auto: true, side: true},
 	{name: "side track, some drafts kept", kind: track.Work, repos: 2, draft: []bool{false, true}, auto: true, side: true},
+	{name: "side track, stacked", kind: track.Work, repos: 1, auto: true, side: true, stacked: true},
 	{name: "work with setup", kind: track.Work, repos: 1, auto: true, setup: true},
 	{name: "work with setup and dev servers", kind: track.Work, repos: 1, auto: true, setup: true, servers: true},
 	{name: "review with dev servers", kind: track.Review, repos: 1, auto: true, servers: true},
@@ -95,6 +97,9 @@ func (c spawnCase) spec(tr track.Track, program string) agents.Spec {
 	}
 	if c.side {
 		s.Side = &agents.SideTrack{Main: "api-cache", Handle: "side-000123"}
+		if c.stacked {
+			s.Side.Stacked = []agents.Stack{{Repo: tr.Repos[0].Name, On: "relay-store", Branch: "side/relay-store", Default: "main"}}
+		}
 	}
 	return s
 }
