@@ -46,6 +46,17 @@ A first lean, not decided: manifest-only plugins at first, a repo of
 first-party ones, installed from git and pinned, permissions approved on
 install, the Reviewer moved over last.
 
+## Many instances, picked by the track
+
+Every train, built in or a plugin, runs as several instances in one
+track, or side track, at once: three reviewers on three checkouts, a
+research agent on four topics. The track's agent picks the agent a task
+needs and starts as many as it takes. So a train's state (its folder, its
+hidden session, its run marker, its place on the relay) is per instance,
+keyed by its handle, for every kind alike; the manifest says what an
+agent is, not how many may run. Several reviewers in a track (one per
+target, `docs/design/review.md`) is the first.
+
 ## Three layers, and a fourth to invent
 
 ### 1. The manifest: what an agent declares
