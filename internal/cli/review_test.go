@@ -64,6 +64,20 @@ func TestReviewBaseIsTheTrackRepos(t *testing.T) {
 	if got := reviewBase(ctx, dir, track.Track{}); got != "origin/develop" {
 		t.Errorf("without the track, base %q, want the origin ref that exists", got)
 	}
+	// Another worktree of the track's repo, the agent's own.
+	second := filepath.Join(t.TempDir(), "fix")
+	if out, err := exec.Command("git", "-C", dir, "worktree", "add", "-q", "--detach", second).CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v\n%s", err, out)
+	}
+	if got := reviewBase(ctx, second, tr); got != "origin/release" {
+		t.Errorf("another worktree of the repo: base %q, want its repo's", got)
+	}
+	if top, err := checkoutTop(ctx, second); err != nil || !samePath(top, second) {
+		t.Errorf("checkoutTop = %q, %v; want %s", top, err, second)
+	}
+	if _, err := checkoutTop(ctx, t.TempDir()); err == nil {
+		t.Error("a folder outside any checkout has a top")
+	}
 	if got := fallbackBase(ctx, t.TempDir()); got != "HEAD~1" {
 		t.Errorf("outside a repo with origin refs, base %q", got)
 	}

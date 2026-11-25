@@ -74,6 +74,9 @@ type ReviewRequest struct {
 	Packet review.Packet `json:"packet"`
 	// Stale reviews a pull request's worktree that's behind the PR.
 	Stale bool `json:"stale,omitempty"`
+	// Other says Dir is another checkout of one of the track's repos,
+	// tracks review --dir's, not one of its worktrees.
+	Other bool `json:"other,omitempty"`
 }
 
 // reviewPoll is how often WaitReview looks for the report.
@@ -96,15 +99,20 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (Started, 
 	if req.Packet.Empty() {
 		return Started{}, Problem("There are no changes to review.")
 	}
-	worktree, ok := "", filepath.IsAbs(req.Dir)
-	if ok {
-		worktree, ok = ownWorktree(t, req.Dir)
+	_, worktree, own, ok := checkoutOf(t, req.Dir, req.Other)
+	switch {
+	case !ok && req.Other:
+		return Started{}, Problem(req.Dir + " isn't a checkout of one of the track's repos: --dir reviews another " +
+			"worktree, or the main checkout, of one of them.")
+	case !ok:
+		return Started{}, Problem("Run tracks review in one of the track's worktrees, or name another checkout of one of its repos with --dir.")
 	}
-	if !ok {
-		return Started{}, Problem("Run tracks review in one of the track's worktrees.")
-	}
-	if req.Packet, err = s.addPR(ctx, t, req.Packet, req.Stale); err != nil {
-		return Started{}, err
+	// A pull request is the track's own worktree's: another checkout
+	// isn't at its head.
+	if own {
+		if req.Packet, err = s.addPR(ctx, t, req.Packet, req.Stale); err != nil {
+			return Started{}, err
+		}
 	}
 	set, err := s.Settings()
 	if err != nil {
@@ -189,7 +197,11 @@ func (s *Service) StartReview(ctx context.Context, req ReviewRequest) (Started, 
 	if err := os.WriteFile(filepath.Join(dir, "handle"), []byte(handle), 0o600); err != nil {
 		return Started{}, err
 	}
-	if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing the change."); err != nil {
+	what := "the change"
+	if !own {
+		what += " in " + worktree
+	}
+	if err := s.notice(context.WithoutCancel(ctx), t.ID, "@"+handle+" joined: Reviewer on "+name+", reviewing "+what+"."); err != nil {
 		return Started{}, err
 	}
 	return Started{Handle: handle, Name: name, Target: worktree}, nil
@@ -232,7 +244,7 @@ func (s *Service) replaceReviewer(ctx context.Context, id, target, prefix string
 func samePath(a, b string) bool { return a != "" && resolvedPath(a) == resolvedPath(b) }
 
 // ReviewOwner is the Code owner of dir's repo, dir a worktree of track
-// id: what a review narrows to when asked for the code owner's part
+// id or another checkout of one of its repos: what a review narrows to when asked for the code owner's part
 // with no handle; "" when the repo has none.
 func (s *Service) ReviewOwner(ctx context.Context, id, dir string) (string, error) {
 	t, err := s.Store.Track(ctx, id)
@@ -241,25 +253,20 @@ func (s *Service) ReviewOwner(ctx context.Context, id, dir string) (string, erro
 	} else if err != nil {
 		return "", err
 	}
-	worktree, ok := "", filepath.IsAbs(dir)
-	if ok {
-		worktree, ok = ownWorktree(t, dir)
-	}
+	r, _, _, ok := checkoutOf(t, dir, true)
 	if !ok {
-		return "", Problem("Run tracks review in one of the track's worktrees.")
+		return "", Problem("Run tracks review in one of the track's worktrees, or with --dir in a checkout of one of its repos.")
+	}
+	if r.RepoID == 0 {
+		return "", nil
 	}
 	repos, err := s.Store.Repos(ctx)
 	if err != nil {
 		return "", err
 	}
-	for _, r := range t.Repos {
-		if r.Worktree != worktree || r.RepoID == 0 {
-			continue
-		}
-		for _, repo := range repos {
-			if repo.ID == r.RepoID {
-				return repo.CodeOwner, nil
-			}
+	for _, repo := range repos {
+		if repo.ID == r.RepoID {
+			return repo.CodeOwner, nil
 		}
 	}
 	return "", nil
