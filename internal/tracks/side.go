@@ -1,7 +1,6 @@
 package tracks
 
 import (
-	"cmp"
 	"context"
 	"errors"
 
@@ -15,33 +14,33 @@ import (
 // track of the open main track req.Parent, which isn't a side track
 // itself. It fills in the main track's repos when req names none, and
 // returns the main track's name as shown.
-func (s *Service) sideTrack(ctx context.Context, req *Request) (string, error) {
+func (s *Service) sideTrack(ctx context.Context, req *Request) (track.Track, error) {
 	if req.Parent == "" {
-		return "", Problem("Start side tracks from inside a track.")
+		return track.Track{}, Problem("Start side tracks from inside a track.")
 	}
 	main, err := s.Store.Track(ctx, req.Parent)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return "", Problem("That track is gone.")
+		return track.Track{}, Problem("That track is gone.")
 	case err != nil:
-		return "", err
+		return track.Track{}, err
 	case side.Is(main):
-		return "", Problem(main.Name + " is a side track: a side track starts no side tracks of its own.")
+		return track.Track{}, Problem(main.Name + " is a side track: a side track starts no side tracks of its own.")
 	case !main.Open():
-		return "", Problem(main.Name + " has ended.")
+		return track.Track{}, Problem(main.Name + " has ended.")
 	}
 	if req.Kind != track.Work {
-		return "", Problem("A side track is a Work track.")
+		return track.Track{}, Problem("A side track is a Work track.")
 	}
 	if len(req.Repos) == 0 {
 		for _, r := range main.Repos {
 			req.Repos = append(req.Repos, r.Name)
 		}
 		if len(req.Repos) == 0 {
-			return "", Problem(main.Name + " has no repos: name the side track's with --repo.")
+			return track.Track{}, Problem(main.Name + " has no repos: name the side track's with --repo.")
 		}
 	}
-	return cmp.Or(main.Title, main.Name), nil
+	return main, nil
 }
 
 // sideHandle is a new handle on main track id's relay, one none of its

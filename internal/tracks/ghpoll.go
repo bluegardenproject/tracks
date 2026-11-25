@@ -49,7 +49,7 @@ const pollChunk = 25
 // defines another.
 const (
 	prFragment = `fragment pr on PullRequest {
-  url state isDraft mergeable baseRefName headRefOid
+  url state isDraft mergeable baseRefName headRefOid headRefName
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } } } } } } }
 }
@@ -99,6 +99,7 @@ type gqlPR struct {
 	Mergeable string `json:"mergeable"`
 	Base      string `json:"baseRefName"`
 	Head      string `json:"headRefOid"`
+	HeadRef   string `json:"headRefName"`
 	Commits   struct {
 		Nodes []struct {
 			Commit struct {
@@ -127,7 +128,7 @@ func (p gqlPR) facts(viewer string) (PRFacts, bool) {
 	if n := p.Commits.Nodes; len(n) > 0 && n[0].Commit.StatusCheckRollup != nil {
 		checks = n[0].Commit.StatusCheckRollup.Contexts.Nodes
 	}
-	pr, ok := ghPR{URL: p.URL, State: p.State, IsDraft: p.IsDraft, Base: p.Base, Head: p.Head,
+	pr, ok := ghPR{URL: p.URL, State: p.State, IsDraft: p.IsDraft, Base: p.Base, Head: p.Head, HeadRef: p.HeadRef,
 		Mergeable: p.Mergeable, Checks: checks}.pr()
 	if !ok {
 		return PRFacts{}, false

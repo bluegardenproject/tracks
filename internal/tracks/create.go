@@ -76,14 +76,14 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 	if req.On != "" && !req.Side {
 		return Created{}, Problem("--on stacks side tracks only.")
 	}
-	var mainName string
+	var main track.Track
 	if req.Side {
 		done, err := s.makingSide(req.Parent)
 		if err != nil {
 			return Created{}, err
 		}
 		defer done()
-		if mainName, err = s.sideTrack(ctx, &req); err != nil {
+		if main, err = s.sideTrack(ctx, &req); err != nil {
 			return Created{}, err
 		}
 	}
@@ -95,12 +95,8 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		if t.Side, err = s.sideHandle(ctx, t.Parent); err != nil {
 			return Created{}, err
 		}
-		t.ParentName = mainName
+		t.ParentName = shown(main)
 		if req.On != "" {
-			main, err := s.Store.Track(ctx, t.Parent)
-			if err != nil {
-				return Created{}, err
-			}
 			lower, err := s.stackOn(ctx, main, req.On)
 			if err != nil {
 				return Created{}, err

@@ -187,6 +187,9 @@ func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
 	if ok {
 		return repo, nil
 	}
+	if s.GitHub == nil {
+		return "", ErrNoGH
+	}
 	repo, err := s.GitHub.RepoOf(ctx, path)
 	if err != nil {
 		return "", err

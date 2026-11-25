@@ -71,6 +71,7 @@ type Store interface {
 	InstructionTyped(ctx context.Context, id int64, at time.Time) error
 	DropInstructions(ctx context.Context, pr string, kinds ...string) error
 	InstructionWaiting(ctx context.Context, id int64) (bool, error)
+	DropInstruction(ctx context.Context, id int64) error
 	SaveDraft(ctx context.Context, d store.Draft) error
 	Drafts(ctx context.Context) ([]store.Draft, error)
 	Draft(ctx context.Context, id string) (store.Draft, error)

@@ -196,7 +196,9 @@ func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
 		if !mine && !asked {
 			continue
 		}
-		if err := s.Store.DropInstructions(ctx, in.PR, in.Kind); err != nil {
+		// Its own only: a sibling's of the same kind and PR, a restack
+		// after the same merge, stays.
+		if err := s.Store.DropInstruction(ctx, in.ID); err != nil {
 			return err
 		}
 		about := in.PR

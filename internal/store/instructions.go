@@ -79,3 +79,9 @@ func (s *Store) InstructionWaiting(ctx context.Context, id int64) (bool, error) 
 	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM instructions WHERE id = ? AND typed_at IS NULL", id).Scan(&n)
 	return n > 0, err
 }
+
+// DropInstruction drops instruction id, if it still waits.
+func (s *Store) DropInstruction(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM instructions WHERE id = ? AND typed_at IS NULL", id)
+	return err
+}
