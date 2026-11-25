@@ -14,34 +14,35 @@ import (
 
 // sideTrack checks that req asks for a side track it may have: a Work
 // track of the open main track req.Parent, which isn't a side track
-// itself. It fills in the main track's repos when req names none.
-func (s *Service) sideTrack(ctx context.Context, req *Request) error {
+// itself. It fills in the main track's repos when req names none, and
+// returns the main track's name as shown.
+func (s *Service) sideTrack(ctx context.Context, req *Request) (string, error) {
 	if req.Parent == "" {
-		return Problem("Start side tracks from inside a track.")
+		return "", Problem("Start side tracks from inside a track.")
 	}
 	main, err := s.Store.Track(ctx, req.Parent)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return Problem("That track is gone.")
+		return "", Problem("That track is gone.")
 	case err != nil:
-		return err
+		return "", err
 	case side.Is(main):
-		return Problem(main.Name + " is a side track: a side track starts no side tracks of its own.")
+		return "", Problem(main.Name + " is a side track: a side track starts no side tracks of its own.")
 	case !main.Open():
-		return Problem(main.Name + " has ended.")
+		return "", Problem(main.Name + " has ended.")
 	}
 	if req.Kind != track.Work {
-		return Problem("A side track is a Work track.")
+		return "", Problem("A side track is a Work track.")
 	}
 	if len(req.Repos) == 0 {
 		for _, r := range main.Repos {
 			req.Repos = append(req.Repos, r.Name)
 		}
 		if len(req.Repos) == 0 {
-			return Problem(main.Name + " has no repos: name the side track's with --repo.")
+			return "", Problem(main.Name + " has no repos: name the side track's with --repo.")
 		}
 	}
-	return nil
+	return cmp.Or(main.Title, main.Name), nil
 }
 
 // sideHandle is a new handle on main track id's relay, one none of its
@@ -67,15 +68,11 @@ func (s *Service) sideHandle(ctx context.Context, id string) (string, error) {
 
 // sideSpec is what side track t's prompt names, nil for any other
 // track: its main track, as shown, and its handle.
-func (s *Service) sideSpec(ctx context.Context, t track.Track) *agents.SideTrack {
+func sideSpec(t track.Track) *agents.SideTrack {
 	if !side.Is(t) {
 		return nil
 	}
-	main := t.ParentName
-	if m, err := s.Store.Track(ctx, t.Parent); err == nil {
-		main = cmp.Or(m.Title, m.Name)
-	}
-	return &agents.SideTrack{Main: main, Handle: t.Side}
+	return &agents.SideTrack{Main: t.ParentName, Handle: t.Side}
 }
 
 // SideTracks are main track id's side tracks, oldest first.

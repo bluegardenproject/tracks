@@ -72,13 +72,14 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		model = conf.Model
 	}
 
+	var mainName string
 	if req.Side {
 		done, err := s.makingSide(req.Parent)
 		if err != nil {
 			return Created{}, err
 		}
 		defer done()
-		if err := s.sideTrack(ctx, &req); err != nil {
+		if mainName, err = s.sideTrack(ctx, &req); err != nil {
 			return Created{}, err
 		}
 	}
@@ -90,6 +91,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		if t.Side, err = s.sideHandle(ctx, t.Parent); err != nil {
 			return Created{}, err
 		}
+		t.ParentName = mainName
 	}
 	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, model, s.now()
 	name, release, err := s.claimName(t)
@@ -122,7 +124,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		return Created{}, err
 	}
 	start, err := engine.Command(agents.Spec{
-		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: s.sideSpec(ctx, t),
+		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: sideSpec(t),
 		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
 		DevServers: s.hasDevServers(ctx, t.Repos),
 	})

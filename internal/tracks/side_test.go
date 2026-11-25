@@ -3,10 +3,12 @@ package tracks
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
@@ -314,5 +316,39 @@ func TestSideTrackPromptNamesItsMainTrack(t *testing.T) {
 	}
 	if f.engine.spec.Side != nil || got.DraftPRs != nil {
 		t.Errorf("a track that isn't a side track started with %+v, drafts %v", f.engine.spec.Side, got.DraftPRs)
+	}
+}
+
+func TestSideTrackPromptNamesItsMainTrackAsShown(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	main, err := f.svc.Create(ctx, Request{Kind: track.Work, Name: "api-cache", Title: "API cache", Repos: []string{"api"}, Prompt: "Cache the API"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := f.svc.Create(ctx, Request{Kind: track.Work, Prompt: "Store the relay", Parent: main.Track.ID, Side: true, NoDraft: true}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(st.DraftPRs, []string{"api"}) {
+		t.Errorf("side track made with repos keeping drafts %v; want api, by its rule", st.DraftPRs)
+	}
+	if s := f.engine.spec.Side; s == nil || s.Main != "API cache" || s.Handle != st.Track.Side {
+		t.Errorf("side track started with %+v; want its main track as shown, API cache, and its handle", s)
+	}
+
+	// A side track whose session never started starts fresh: its prompt
+	// names its main track again.
+	f.engine.unstarted = true
+	f.engine.spec = agents.Spec{}
+	f.windows.windows[1].Exit = "1"
+	if _, err := f.svc.CheckExits(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Restart(ctx, st.Track.ID, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.engine.spec.Side; f.engine.spec.Resume || s == nil || s.Main != "API cache" || s.Handle != st.Track.Side {
+		t.Errorf("restarted side track with %+v, resume %v; want a fresh start naming API cache", s, f.engine.spec.Resume)
 	}
 }
