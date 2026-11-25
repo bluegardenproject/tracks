@@ -9,6 +9,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/actions"
 	"github.com/bluegardenproject/tracks/internal/settings"
+	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -63,6 +64,39 @@ func (s *Service) CountComments(ctx context.Context) error {
 		// before the PRs' buttons moved to Signals loses its old ones.
 		if err := s.Windows.Buttons(window, ""); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	if err := s.endedSidesThreads(ctx, open); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// endedSidesThreads posts the review threads events of side tracks that
+// ended with a PR still open, which go to their main tracks, and drops
+// the instructions their answered threads made moot. open are the open
+// tracks, counted already.
+func (s *Service) endedSidesThreads(ctx context.Context, open []track.Track) error {
+	unsettled, err := s.Store.UnsettledPRs(ctx)
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, t := range open {
+		seen[t.ID] = true
+	}
+	var errs []error
+	for _, p := range unsettled {
+		if seen[p.TrackID] {
+			continue
+		}
+		seen[p.TrackID] = true
+		t, err := s.Store.Track(ctx, p.TrackID)
+		if err != nil || t.Kind != track.Work || !side.Is(t) {
+			continue
+		}
+		if err := s.threadsEvents(ctx, t, s.polledThreads(t)); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 		}
 	}
 	return errors.Join(errs...)

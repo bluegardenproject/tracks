@@ -245,6 +245,43 @@ func TestAnEndedSideTracksEventsGoToItsMainTrack(t *testing.T) {
 	if got := fromGitHub(t, f, main.ID); len(got) != 1 || !strings.HasPrefix(got[0], "event: @"+st.Side) {
 		t.Errorf("the main track's relay: %q; want the event, for it to decide", got)
 	}
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{CIFailed: settings.PolicyAsk}}, nil
+	}
+	if err := f.svc.githubEvent(ctx, ended, ghEvent{Kind: settings.EventCIFailed, PR: pr, Body: "CI failed."}); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitingFor(t, f, main.ID); len(got) != 0 {
+		t.Errorf("asked about an ended side track: %q; want its main track to decide", got)
+	}
+}
+
+// An ended side track's open PR still counts its review threads, for
+// its main track.
+func TestAnEndedSideTracksThreadsGoToItsMainTrack(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	gh := &fakeGitHub{}
+	f.svc.GitHub = gh
+	const url = "https://github.com/acme/api/pull/231"
+	if err := f.svc.SeePRs(ctx, st.ID, []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.SetState(ctx, st.ID, st.State.Apply(track.Ended, f.svc.now())); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []int{0, 2} {
+		gh.threads = map[string]int{url: n}
+		if err := f.svc.PollPRs(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.CountComments(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := fromGitHub(t, f, main.ID); len(got) != 1 || !strings.Contains(got[0], "2 review threads") {
+		t.Errorf("the main track's relay: %q; want the new threads", got)
+	}
 }
 
 // An instruction goes before a due pointer, and marks the review
@@ -273,17 +310,36 @@ func TestAnInstructionGoesFirst(t *testing.T) {
 	if !sent {
 		t.Error("the review threads' button isn't marked sent")
 	}
+	if got := deliver(t, f); len(got) != 0 {
+		t.Errorf("pasted %q while the instruction waits for its turn", got)
+	}
+	f.svc.SetTurn(ctx, "a", hooks.TurnStart)
 	f.svc.SetTurn(ctx, "a", hooks.TurnEnd)
 	if got := deliver(t, f); len(got) != 1 || !strings.Contains(got[0], "on the relay") {
-		t.Errorf("then pasted %q; want the pointer", got)
+		t.Errorf("after its turn pasted %q; want the pointer", got)
 	}
+}
 
+// An instruction the agent didn't take, its turn never starting,
+// stalls as a pointer does, and frees the track.
+func TestAnInstructionNotTakenStalls(t *testing.T) {
+	ctx := context.Background()
+	f, now := deliveryFixture(t)
+	if err := f.svc.instruct(ctx, "a", settings.EventConflicts, "pr", "Rebase."); err != nil {
+		t.Fatal(err)
+	}
+	if got := deliver(t, f); len(got) != 1 {
+		t.Fatalf("pasted %q; want the instruction", got)
+	}
+	*now = now.Add(pointerStall)
+	if got := deliver(t, f); len(got) != 0 {
+		t.Fatalf("pasted %q at the stall", got)
+	}
 	f.svc.mu.Lock()
-	f.svc.deliveryMaps()
-	f.svc.typing["a"] = true
-	pointed := f.svc.pointed["a"]
+	_, waiting := f.svc.pointing["a"]
+	in, known := f.svc.turns["a"]
 	f.svc.mu.Unlock()
-	if err := f.svc.point("a", "@a", []relay.Message{{ID: pointed + 1}}, pointed, false); err != nil || len(f.windows.pasted) != 2 {
-		t.Errorf("a pointer went while an instruction was pasted: %v, %q", err, f.windows.pasted)
+	if waiting || !known || in {
+		t.Errorf("after the stall: pointing %v, turn %v known %v; want the track free", waiting, in, known)
 	}
 }

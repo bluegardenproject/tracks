@@ -2,7 +2,7 @@
 CREATE TABLE instructions (
   id         INTEGER PRIMARY KEY,
   track_id   TEXT    NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
-  kind       TEXT    NOT NULL, -- the event it answers: conflicts, ci_failed, review_threads, ask
+  kind       TEXT    NOT NULL, -- the event it answers: conflicts, ci_failed, review_threads; ask:<event> to ask the user
   pr_url     TEXT    NOT NULL, -- the PR it's about
   body       TEXT    NOT NULL,
   created_at INTEGER NOT NULL, -- Unix milliseconds, UTC

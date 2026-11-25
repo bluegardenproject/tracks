@@ -54,8 +54,8 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	name := gitHubText(cmp.Or(t.Title, t.Name))
 	named := fmt.Sprintf("@%s, side track %s: %s", t.Side, name, e.Body)
 	policy := s.githubPolicy(e.Kind)
-	if policy == settings.PolicyAuto && !t.Open() {
-		// No agent to tell: its main track decides.
+	if !t.Open() {
+		// No agent to tell or to ask about: its main track decides.
 		policy = settings.PolicyMain
 	}
 	switch policy {
