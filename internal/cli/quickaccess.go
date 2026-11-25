@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -100,6 +101,26 @@ var closeQuestion = confirm.Question{
 	Action: "Close Tracks",
 }
 
+// endTrainQuestion asks to end the train handle.
+func endTrainQuestion(handle string) confirm.Question {
+	return confirm.Question{
+		Title:  "End " + handle + "?",
+		Text:   []string{"Its agent stops and its overlay closes."},
+		Action: "End train",
+	}
+}
+
+// confirmEndTrain asks over client, a train overlay's, whether to end
+// the train handle.
+func confirmEndTrain(c *tmux.Client, paths platform.Paths, client, handle string) (bool, error) {
+	if client == "" {
+		return false, errors.New("no client to ask on")
+	}
+	q := endTrainQuestion(handle)
+	answer, err := askInPopup(c, paths, client, "end-train "+shellx.Quote(handle), q.Width(), q.Height())
+	return answer == "yes", err
+}
+
 // closeFromQuickAccess closes Tracks once the user confirms, and says
 // why over client when it can't.
 func closeFromQuickAccess(c *tmux.Client, paths platform.Paths, client string) error {
@@ -154,6 +175,26 @@ func newPopupCmd(version string) *cobra.Command {
 				answer = "yes"
 			}
 			return os.WriteFile(args[0], []byte(answer), 0o600)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:  "end-train <handle> <answer-file>",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			paths, err := platform.Resolve()
+			if err != nil {
+				return err
+			}
+			t, _ := loadTheme(paths)
+			done, err := runPopup(cmd.Context(), confirm.New(t, endTrainQuestion(args[0])))
+			if err != nil {
+				return err
+			}
+			answer := ""
+			if m, ok := done.(confirm.Model); ok && m.Confirmed() {
+				answer = "yes"
+			}
+			return os.WriteFile(args[1], []byte(answer), 0o600)
 		},
 	})
 	cmd.AddCommand(&cobra.Command{

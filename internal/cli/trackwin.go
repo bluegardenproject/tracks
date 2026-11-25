@@ -72,7 +72,8 @@ func newTrackwinCmd() *cobra.Command {
 				if len(args) == 3 {
 					client = args[2]
 				}
-				msg := trainAction(c.Context(), t, rpc.Client{Socket: paths.Socket}, args[0], args[1], client)
+				confirmEnd := func(handle string) (bool, error) { return confirmEndTrain(t, paths, client, handle) }
+				msg := trainAction(c.Context(), t, rpc.Client{Socket: paths.Socket}, args[0], args[1], client, confirmEnd)
 				switch {
 				case msg == "":
 					return nil
@@ -107,13 +108,14 @@ func newTrackwinCmd() *cobra.Command {
 
 // trainAction runs button, Hide or End train, of the overlay header of
 // the train whose window is window, for client, and words how it went;
-// "" when it went well or window isn't a train's.
+// "" when it went well, the user didn't confirm End train, or window
+// isn't a train's. confirmEnd asks the user to confirm ending handle.
 func trainAction(ctx context.Context, t interface {
 	trackwin.Tmux
 	DetachClient(client string) error
 }, daemon interface {
 	TrainEnd(ctx context.Context, id, name string) error
-}, button, window, client string) string {
+}, button, window, client string, confirmEnd func(handle string) (bool, error)) string {
 	track, handle, err := trackwin.TrainOf(t, window)
 	switch {
 	case err != nil:
@@ -125,6 +127,11 @@ func trainAction(ctx context.Context, t interface {
 			return "Couldn't hide " + handle + ": " + err.Error()
 		}
 	case button == actions.EndTrainRange:
+		if ok, err := confirmEnd(handle); err != nil {
+			return "Couldn't ask to end " + handle + ": " + err.Error()
+		} else if !ok {
+			return ""
+		}
 		if err := daemon.TrainEnd(ctx, track, handle); err != nil {
 			return err.Error()
 		}
