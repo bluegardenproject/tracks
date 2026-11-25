@@ -54,13 +54,20 @@ var prompts embed.FS
 // Prompt is the line typed into an agent of engine to have it work
 // through the open comments on the PR at url; false when that engine has
 // none. It names the skill or rule that holds the steps, so a session
-// started before they were installed finds them.
-func Prompt(engine, url string) (string, bool) {
+// started before they were installed finds them. ask is the user's
+// setting to see the replies to people before they're posted: off, the
+// prompt lets the agent post them on its own, as the steps allow when
+// the prompt says so.
+func Prompt(engine, url string, ask bool) (string, bool) {
 	b, err := prompts.ReadFile("prompts/pr-comments." + engine + ".txt")
 	if err != nil {
 		return "", false
 	}
-	return strings.ReplaceAll(strings.TrimSpace(string(b)), "{pr}", url), true
+	text := strings.ReplaceAll(strings.TrimSpace(string(b)), "{pr}", url)
+	if !ask {
+		text += " " + fill("pr-comments-own-replies")
+	}
+	return text, true
 }
 
 // Comments is how a PR's open comments stand: Open threads wait on the

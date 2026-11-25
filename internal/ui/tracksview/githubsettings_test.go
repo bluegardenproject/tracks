@@ -110,10 +110,10 @@ func TestGitHubKeysSave(t *testing.T) {
 	}
 	saves := f.saves
 	m = settle(m, tea.KeyPressMsg{Code: tea.KeyLeft}, downKey, downKey, downKey)
-	if f.saves != saves || m.settings.github.focus != len(githubRows)-1 {
-		t.Errorf("left on the first choice saved (%d saves, want %d), or focus %d went past the last row", f.saves, saves, m.settings.github.focus)
+	if f.saves != saves || m.settings.github.focus != githubToggle {
+		t.Errorf("left on the first choice saved (%d saves, want %d), or focus %d went past the toggle", f.saves, saves, m.settings.github.focus)
 	}
-	m = settle(m, tea.KeyPressMsg{Code: tea.KeyLeft})
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, tea.KeyPressMsg{Code: tea.KeyLeft})
 	if f.saved.ReviewThreads != settings.PolicyAuto || f.saved.CIFailed != settings.PolicyAuto {
 		t.Errorf("left on review threads saved %+v", f.saved)
 	}
@@ -156,5 +156,48 @@ func TestGitHubNarrow(t *testing.T) {
 	m = clickText(t, m, "( ) Main track")
 	if f.saved.Conflicts != settings.PolicyMain {
 		t.Errorf("clicking a wrapped choice saved %+v", f.saved)
+	}
+}
+
+// githubToggleShown is the replies toggle's line as drawn.
+func githubToggleShown(m Model) string {
+	for _, line := range githubShown(m) {
+		if strings.HasSuffix(line, githubToggleLabel) {
+			return line
+		}
+	}
+	return ""
+}
+
+func TestGitHubHumanRepliesToggle(t *testing.T) {
+	f := &fakeGitHub{saved: settings.GitHub{ReviewThreads: settings.PolicyAsk}}
+	m := openGitHub(t, f, 140)
+	if got := githubToggleShown(m); got != "[x] "+githubToggleLabel {
+		t.Fatalf("the toggle shows %q; want it on by default", got)
+	}
+	if view := strings.Join(githubShown(m), " "); !strings.Contains(view, "Replies to bots never ask.") {
+		t.Errorf("the toggle should say what it does:\n%s", view)
+	}
+	m = settle(m, enterKey, downKey, downKey, downKey)
+	if m.settings.github.focus != githubToggle || !strings.Contains(plainView(m), "Enter toggle") {
+		t.Fatalf("focus %d, want the toggle below the policies, its keys shown:\n%s", m.settings.github.focus, plainView(m))
+	}
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyLeft}, tea.KeyPressMsg{Code: tea.KeyRight}, downKey)
+	if f.saves != 0 || m.settings.github.focus != githubToggle {
+		t.Fatalf("left or right on the toggle saved (%d saves), or down left it (focus %d)", f.saves, m.settings.github.focus)
+	}
+	m = settle(m, enterKey)
+	if f.saved.AsksBeforeHumanReplies() || f.saved.ReviewThreads != settings.PolicyAsk {
+		t.Errorf("enter on the toggle saved %+v; want it off, the policies kept", f.saved)
+	}
+	if githubToggleShown(m) != "[ ] "+githubToggleLabel || !strings.Contains(plainView(m), "Replying to people on PRs without asking you.") {
+		t.Errorf("the view should show it off and say so:\n%s", plainView(m))
+	}
+	m = clickText(t, m, "[ ] "+githubToggleLabel)
+	if f.saved.AskBeforeHumanReplies != nil || f.saves != 2 {
+		t.Errorf("a click should switch it back on, to the default: saved %+v, %d saves", f.saved, f.saves)
+	}
+	if !strings.Contains(plainView(m), "Asking you before replying to people on PRs.") {
+		t.Errorf("switching it on should say so:\n%s", plainView(m))
 	}
 }

@@ -79,14 +79,20 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	}
 	name := gitHubText(cmp.Or(t.Title, t.Name))
 	named := fmt.Sprintf("@%s, side track %s: %s", t.Side, name, e.Body)
-	policy := s.githubPolicy(e.Kind)
+	gh, err := s.githubSettings()
+	policy := gh.Policy(e.Kind)
+	if err != nil {
+		// A settings.yaml that doesn't read, as one edited by hand
+		// may: nothing acts on its own, the main track decides.
+		policy = settings.PolicyMain
+	}
 	if !t.Open() {
 		// No agent to tell or to ask about: its main track decides.
 		policy = settings.PolicyMain
 	}
 	switch policy {
 	case settings.PolicyAuto:
-		body, ok := sideInstruction(t, e)
+		body, ok := sideInstruction(t, e, gh.AsksBeforeHumanReplies())
 		if !ok {
 			break
 		}
@@ -104,24 +110,26 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	return s.postGitHub(ctx, main.ID, named, relay.Event)
 }
 
-// githubPolicy is the user's policy for events of kind; merged and
-// closed are always the main track's to decide.
-func (s *Service) githubPolicy(kind string) settings.Policy {
-	var set settings.Settings
-	if s.Settings != nil {
-		var err error
-		if set, err = s.Settings(); err != nil {
-			// A settings.yaml that doesn't read, as one edited by hand
-			// may: nothing acts on its own, the main track decides.
-			return settings.PolicyMain
-		}
+// githubSettings is Settings → GitHub as the user set it.
+func (s *Service) githubSettings() (settings.GitHub, error) {
+	if s.Settings == nil {
+		return settings.GitHub{}, nil
 	}
-	return set.GitHub.Policy(kind)
+	set, err := s.Settings()
+	return set.GitHub, err
+}
+
+// asksBeforeHumanReplies is whether the PR comments flow asks the user
+// before it replies to a person: yes too when settings.yaml doesn't
+// read.
+func (s *Service) asksBeforeHumanReplies() bool {
+	g, err := s.githubSettings()
+	return err != nil || g.AsksBeforeHumanReplies()
 }
 
 // sideInstruction is what Tracks types into side track t's agent for
-// e; false for an event it has no prompt for.
-func sideInstruction(t track.Track, e ghEvent) (string, bool) {
+// e, ask as actions.Prompt's; false for an event it has no prompt for.
+func sideInstruction(t track.Track, e ghEvent, ask bool) (string, bool) {
 	pr := fmt.Sprintf("%s#%d", e.PR.Repo, e.PR.Number)
 	h := e.PR.Health
 	switch e.Kind {
@@ -134,7 +142,7 @@ func sideInstruction(t track.Track, e ghEvent) (string, bool) {
 		}
 		return actions.SideCIFailed(pr, head, failing(h.Failing)), true
 	case settings.EventReviewThreads:
-		return actions.SideThreads(t.Engine, pr, e.PR.URL, e.Threads)
+		return actions.SideThreads(t.Engine, pr, e.PR.URL, e.Threads, ask)
 	}
 	return "", false
 }

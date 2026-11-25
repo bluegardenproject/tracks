@@ -736,8 +736,12 @@ track's policy has Tracks tell it (built, step 4).
 - **Ask before replying to human comments on PRs**, on by default: the
   comments flow (the PR comments skill and its prompt) asks the user
   before it replies to a person, as it does now; off, it replies on its
-  own. A bot's comments never ask. To come, its own PR: it changes the
-  skill's text.
+  own. A bot's comments never ask. Built: `github.ask_before_human_replies`
+  in `settings.yaml`, a toggle in Settings → GitHub. The skill and rule
+  ask unless the prompt that sent the agent there says it may reply on
+  its own; the PR comments prompt, the button's and a side track's
+  instruction, says so when the setting is off, so a change takes effect
+  on the next prompt.
 - **Policies are rules Tracks runs**: a trigger (an `@github` event on a
   side track's PR), and an effect (instruct the side track, tell the main
   track, have the main track ask the user). A fixed table in Tracks, not
@@ -800,8 +804,8 @@ track's policy has Tracks tell it (built, step 4).
    track) has no row to offer Collect messages under.
 4. Side tracks and GitHub's events (built): facts to the main track, the
    policies in `settings.yaml`, the instructions typed into the agents.
-   Settings → GitHub (built). To come: "ask before replying to human
-   comments".
+   Settings → GitHub (built), with "ask before replying to human
+   comments" (built).
 5. Draft PRs the main track promotes, as the repo's rule allows.
    Built: a side track's prompt ends with a "Side track" paragraph
    (`agents.SideTrackContract`, golden-checked, in place of the plain

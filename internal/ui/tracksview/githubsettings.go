@@ -23,8 +23,12 @@ type githubState struct {
 }
 
 // githubHit is a choice on the section: its row and its policy, -1 for
-// none.
+// none. The replies toggle is row githubToggle, choice 0.
 type githubHit struct{ row, choice int }
+
+// githubToggle is the focus, and the row of a githubHit, of the toggle
+// below the policies.
+var githubToggle = len(githubRows)
 
 var githubRows = []struct{ event, label string }{
 	{settings.EventConflicts, "Conflicts with its base"},
@@ -46,6 +50,11 @@ var githubChoices = []struct {
 const (
 	githubIntro = "What Tracks does when GitHub reports something on a side track's PR. The main track always hears of it."
 	githubGap   = 2 // cells between two choices
+)
+
+const (
+	githubToggleLabel = "Ask before replying to human comments on PRs"
+	githubToggleHelp  = "On: the PR comments flow shows you its replies to people before it posts them. Off: it posts them on its own. Replies to bots never ask."
 )
 
 var githubHelp = []string{
@@ -142,15 +151,42 @@ func (m Model) setGitHubPolicy(row, choice int) (Model, tea.Cmd) {
 	return m.saveGitHub()
 }
 
+// toggleHumanReplies switches asking before replying to people and
+// saves it.
+func (m Model) toggleHumanReplies() (Model, tea.Cmd) {
+	g := &m.settings.github
+	on := !g.github.AsksBeforeHumanReplies()
+	g.github.AskBeforeHumanReplies = nil
+	if !on {
+		g.github.AskBeforeHumanReplies = &on
+	}
+	text := "Replying to people on PRs without asking you."
+	if on {
+		text = "Asking you before replying to people on PRs."
+	}
+	m.settings.notice = notice{text: text}
+	return m.saveGitHub()
+}
+
 // githubKey handles a key while GitHub has focus.
 func (m Model) githubKey(key string) (Model, tea.Cmd) {
 	g := &m.settings.github
-	choice := g.githubChoice(g.focus)
 	switch key {
 	case "up", "k", "shift+tab":
 		g.focus = max(0, g.focus-1)
+		return m, nil
 	case "down", "j", "tab":
-		g.focus = min(len(githubRows)-1, g.focus+1)
+		g.focus = min(githubToggle, g.focus+1)
+		return m, nil
+	}
+	if g.focus == githubToggle {
+		if key == "enter" || key == "space" {
+			return m.toggleHumanReplies()
+		}
+		return m, nil
+	}
+	choice := g.githubChoice(g.focus)
+	switch key {
 	case "left", "h":
 		return m.setGitHubPolicy(g.focus, max(0, choice-1))
 	case "right", "l":
@@ -205,6 +241,19 @@ func (m Model) githubView(width int) (lines []string, laid []githubLaid) {
 		}
 		lines = append(lines, line)
 	}
+	box, color := "[ ]", theme.BorderDefault
+	if g.github.AsksBeforeHumanReplies() {
+		box = "[x]"
+	}
+	toggle := githubHit{githubToggle, 0}
+	if g.hover == toggle || s.editing && g.focus == githubToggle {
+		color = theme.BorderFocus
+	}
+	label := cut(githubToggleLabel, max(0, width-4))
+	lines = append(lines, "")
+	laid = append(laid, githubLaid{toggle, len(lines), 0, 4 + lipgloss.Width(label)})
+	lines = append(lines, m.fg(color).Render(box)+" "+m.fg(theme.TextDefault).Render(label))
+	lines = append(lines, wrap(theme.TextMuted, githubToggleHelp)...)
 	lines = append(lines, "")
 	for _, h := range githubHelp {
 		if h == "" {
@@ -236,5 +285,8 @@ func (m Model) githubClick(bx, by int) (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.settings.github.focus = hit.row
+	if hit.row == githubToggle {
+		return m.toggleHumanReplies()
+	}
 	return m.setGitHubPolicy(hit.row, hit.choice)
 }

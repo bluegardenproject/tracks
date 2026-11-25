@@ -2,12 +2,14 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/bluegardenproject/tracks/internal/actions"
+	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -97,7 +99,7 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 	if err := run(actions.Range(1)); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := actions.Prompt("claude", second)
+	want, _ := actions.Prompt("claude", second, true)
 	if !slices.Equal(f.windows.prompts, []string{window + " " + want}) {
 		t.Errorf("typed %q, want the prompt for PR 2 into %s", f.windows.prompts, window)
 	}
@@ -107,11 +109,28 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 	if err := run(actions.Range(1)); err == nil || len(f.windows.prompts) != 1 {
 		t.Error("sent the same comments twice")
 	}
+	off := false
+	f.svc.Settings = func() (settings.Settings, error) {
+		return settings.Settings{GitHub: settings.GitHub{AskBeforeHumanReplies: &off}}, nil
+	}
+	if err := run(actions.Range(0)); err != nil {
+		t.Fatal(err)
+	}
+	if own, _ := actions.Prompt("claude", first, false); len(f.windows.prompts) != 2 || f.windows.prompts[1] != window+" "+own {
+		t.Errorf("typed %q; want PR 1's prompt replying to people on its own", f.windows.prompts)
+	}
 
 	gh.threads[second] = 2
 	count()
-	if got, want := signals(), "0 PR #1: solve 3 comments; 1 PR #2: solve 2 comments"; got != want {
+	if got, want := signals(), "0 PR #1: sent to the agent (sent); 1 PR #2: solve 2 comments"; got != want {
 		t.Errorf("after a new comment on PR 2: %q, want %q", got, want)
+	}
+	f.svc.Settings = func() (settings.Settings, error) { return settings.Settings{}, errors.New("yaml: line 3: bad") }
+	if err := run(actions.Range(1)); err != nil {
+		t.Fatal(err)
+	}
+	if ask, _ := actions.Prompt("claude", second, true); len(f.windows.prompts) != 3 || f.windows.prompts[2] != window+" "+ask {
+		t.Errorf("typed %q; want PR 2's prompt asking first, settings.yaml not read", f.windows.prompts)
 	}
 	gh.threads = map[string]int{}
 	count()

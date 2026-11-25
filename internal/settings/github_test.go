@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,5 +28,30 @@ func TestGitHubPolicy(t *testing.T) {
 	s, err := Load(path)
 	if err != nil || s.GitHub.Policy(EventReviewThreads) != PolicyAsk || s.GitHub.Policy(EventConflicts) != PolicyAuto {
 		t.Errorf("loaded %+v, %v", s.GitHub, err)
+	}
+}
+
+func TestGitHubAsksBeforeHumanReplies(t *testing.T) {
+	on, off := true, false
+	for _, c := range []struct {
+		set  *bool
+		want bool
+	}{{nil, true}, {&on, true}, {&off, false}} {
+		if got := (GitHub{AskBeforeHumanReplies: c.set}).AsksBeforeHumanReplies(); got != c.want {
+			t.Errorf("set %v: asks %v, want %v", c.set, got, c.want)
+		}
+	}
+
+	path := filepath.Join(t.TempDir(), "settings.yaml")
+	if err := Save(path, Settings{GitHub: GitHub{AskBeforeHumanReplies: &off}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(b), "ask_before_human_replies: false") {
+		t.Errorf("settings.yaml reads %q, %v", b, err)
+	}
+	s, err := Load(path)
+	if err != nil || s.GitHub.AsksBeforeHumanReplies() {
+		t.Errorf("loaded %+v, %v: want off", s.GitHub, err)
 	}
 }

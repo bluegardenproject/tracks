@@ -12,7 +12,7 @@ import (
 func TestPromptsMatchGolden(t *testing.T) {
 	const url = "https://github.com/acme/api/pull/23"
 	for _, engine := range []string{"claude", "cursor"} {
-		text, ok := Prompt(engine, url)
+		text, ok := Prompt(engine, url, true)
 		if !ok {
 			t.Fatalf("no prompt for %s", engine)
 		}
@@ -20,8 +20,13 @@ func TestPromptsMatchGolden(t *testing.T) {
 			t.Errorf("the %s prompt doesn't name the PR: %q", engine, text)
 		}
 		golden.Check(t, "testdata/pr-comments."+engine+".golden", text)
+		own, _ := Prompt(engine, url, false)
+		if !strings.HasPrefix(own, text+" ") {
+			t.Errorf("the %s prompt replying on its own should be the asking one and more: %q", engine, own)
+		}
+		golden.Check(t, "testdata/pr-comments."+engine+".own-replies.golden", own)
 	}
-	if _, ok := Prompt("codex", url); ok {
+	if _, ok := Prompt("codex", url, true); ok {
 		t.Error("an engine without a prompt got one")
 	}
 }

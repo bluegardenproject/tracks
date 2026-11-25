@@ -85,8 +85,9 @@ func TestSideTracksGitHubEvents(t *testing.T) {
 
 	t.Run("ask me, and handle threads automatically", func(t *testing.T) {
 		f, main, st := sideFixture(t)
+		off := false
 		f.svc.Settings = func() (settings.Settings, error) {
-			return settings.Settings{GitHub: settings.GitHub{Conflicts: settings.PolicyAsk, ReviewThreads: settings.PolicyAuto}}, nil
+			return settings.Settings{GitHub: settings.GitHub{Conflicts: settings.PolicyAsk, ReviewThreads: settings.PolicyAuto, AskBeforeHumanReplies: &off}}, nil
 		}
 		for _, e := range []ghEvent{conflicts, threads} {
 			if err := f.svc.githubEvent(ctx, st, e); err != nil {
@@ -96,9 +97,9 @@ func TestSideTracksGitHubEvents(t *testing.T) {
 		if got := waitingFor(t, f, main.ID); len(got) != 1 || got[0] != "ask:conflicts: "+actions.AskMain(st.Side, "relay-store", conflicts.Body) {
 			t.Errorf("waiting for the main track: %q; want it to ask the user", got)
 		}
-		work, _ := actions.SideThreads("claude", "acme/api#231", pr.URL, 3)
+		work, _ := actions.SideThreads("claude", "acme/api#231", pr.URL, 3, false)
 		if got := waitingFor(t, f, st.ID); len(got) != 1 || got[0] != "review_threads: "+work {
-			t.Errorf("waiting for the side track: %q; want the threads' prompt", got)
+			t.Errorf("waiting for the side track: %q; want the threads' prompt, replying to people on its own", got)
 		}
 	})
 
