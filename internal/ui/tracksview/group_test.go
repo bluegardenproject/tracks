@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
 )
@@ -56,7 +57,7 @@ func TestGroup(t *testing.T) {
 		{"a side track whose main track is filtered out keeps its place",
 			[]source.Track{docs, sideOf("cli", 5, api)}, "docs cli"},
 		{"a side track whose main track is archived shows on its own",
-			[]source.Track{docs, sideOf("cli", 5, archivedMain)}, "docs cli"},
+			[]source.Track{archivedMain, docs, sideOf("cli", 5, archivedMain)}, "old docs cli"},
 		{"archived with its archived main track",
 			[]source.Track{archivedMain, docs, func() source.Track {
 				s := sideOf("cli", 5, archivedMain)
@@ -108,6 +109,11 @@ func TestStationGroupsSideTracks(t *testing.T) {
 	narrow := plainView(update(m, tea.WindowSizeMsg{Width: 44, Height: 40}))
 	if !strings.Contains(narrow, "└ side: re") || strings.Contains(narrow, "relay-store") {
 		t.Errorf("a narrow list should cut the name and keep the corner and prefix:\n%s", narrow)
+	}
+	for width, want := range map[int]string{8: "└ side:…", 7: "└ side…"} {
+		if got := escapes.ReplaceAllString(m.sideName(m.station.tracks[1], width, false, lipgloss.NewStyle()), ""); got != want {
+			t.Errorf("%d cells: %q, want %q", width, got, want)
+		}
 	}
 }
 
