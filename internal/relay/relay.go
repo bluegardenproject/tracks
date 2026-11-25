@@ -71,6 +71,13 @@ func CheckSend(from, to string, kind Kind, body string) error {
 		return errors.New("a message goes to someone else")
 	case (from == TrackHandle) == (to == TrackHandle):
 		return ErrStar
+	}
+	return checkBody(body)
+}
+
+// checkBody says why body can't be a message, nil when it can.
+func checkBody(body string) error {
+	switch {
 	case strings.TrimSpace(body) == "":
 		return errors.New("the message is empty")
 	case len(body) > MaxBody:
@@ -89,6 +96,11 @@ func knownKind(k Kind) bool {
 	}
 	return false
 }
+
+// For reports whether m is addressed to reader: to it, or to everyone.
+// The track reads more of its relay than is addressed to it: what its
+// side tracks send each other, which points nothing to it.
+func For(reader string, m Message) bool { return m.To == "" || m.To == reader }
 
 // CanRead says whether reader may read m: the track reads its whole
 // relay, a train what it sent, what was sent to it, and the notices.
@@ -129,11 +141,12 @@ const UserHandle = "user"
 
 // Waiting are the IDs of the messages in unread, the track's unread
 // ones, still waiting for a pointer: past pointed, the last one its
-// agent was pointed to, and not a notice, which wakes no one.
+// agent was pointed to, addressed to the track, and not a notice, which
+// wakes no one.
 func Waiting(unread []Message, pointed int64) []int64 {
 	var out []int64
 	for _, m := range unread {
-		if m.Kind != Notice && m.ID > pointed {
+		if m.Kind != Notice && m.ID > pointed && For(TrackHandle, m) {
 			out = append(out, m.ID)
 		}
 	}

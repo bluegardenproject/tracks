@@ -41,7 +41,8 @@ func newRelaySendCmd() *cobra.Command {
 		Use:   "send --to <handle> --kind <kind>",
 		Short: "send a train or side track the message on stdin",
 		Long: "Sends the message on stdin to one of the track's trains or side tracks: --to takes its handle, or a " +
-			"prefix only one of them has, such as reviewer. In a side track, --to track sends to its main track. " +
+			"prefix only one of them has, such as reviewer. In a side track, --to track sends to its main track, and " +
+			"another side track's handle asks it a question or answers one, at most 5 messages between the two. " +
 			"--kind is question, answer, report or event.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {

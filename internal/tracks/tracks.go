@@ -213,6 +213,9 @@ type Service struct {
 	serverMu sync.Mutex
 	// reporting keeps one Report reading and writing a state at a time.
 	reporting sync.Mutex
+	// siblingMu keeps one side track's message to another counting and
+	// adding at a time, so a pair never passes its limit.
+	siblingMu sync.Mutex
 	// gone counts, per waiting track, the checks in a row that found
 	// its dialog closed.
 	gone map[string]int

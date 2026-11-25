@@ -34,7 +34,7 @@ var relayWait = 30 * time.Minute
 // one of its trains or side tracks, by its handle or a prefix only one
 // of them has. A side track sends to its main track as @track, on the
 // main track's relay and under its own handle there, never the main
-// track's.
+// track's; and to another side track of it, there too, by its handle.
 func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind, body string) (relay.Message, error) {
 	t, err := s.relayTrack(ctx, id)
 	if err != nil {
@@ -50,7 +50,7 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 	if err != nil {
 		return relay.Message{}, err
 	}
-	sides, err := s.Store.SideTracks(ctx, id)
+	sides, err := s.sideTracksOn(ctx, t)
 	if err != nil {
 		return relay.Message{}, err
 	}
@@ -64,6 +64,9 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 	handle, err := train.Resolve(to, handles)
 	if err != nil {
 		return relay.Message{}, Problem(err.Error() + ": tracks relay who lists who's on the relay.")
+	}
+	if i := slices.IndexFunc(sides, func(st track.Track) bool { return st.Side == handle }); i >= 0 && side.Is(t) {
+		return s.sendSibling(ctx, t, sides[i], kind, body)
 	}
 	if err := relay.CheckSend(relay.TrackHandle, handle, kind, body); err != nil {
 		return relay.Message{}, Problem(err.Error() + ".")
@@ -102,7 +105,9 @@ func inboxes(t track.Track, reader string) []inbox {
 	return out
 }
 
-// unread is what reader hasn't read in t's inboxes, oldest first.
+// unread is what reader hasn't read in t's inboxes and is addressed to
+// it, oldest first: what its side tracks send each other wakes no main
+// track, which reads it all the same.
 func (s *Service) unread(ctx context.Context, t track.Track, reader string) ([]relay.Message, error) {
 	var out []relay.Message
 	for _, in := range inboxes(t, reader) {
@@ -110,7 +115,11 @@ func (s *Service) unread(ctx context.Context, t track.Track, reader string) ([]r
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, msgs...)
+		for _, m := range msgs {
+			if relay.For(in.reader, m) {
+				out = append(out, m)
+			}
+		}
 	}
 	// IDs grow across relays, so they order the two.
 	slices.SortFunc(out, func(a, b relay.Message) int { return cmp.Compare(a.ID, b.ID) })
@@ -218,7 +227,8 @@ func (s *Service) woken(ctx context.Context, id, reader string) (bool, error) {
 
 // RelayWho is who's on track id's relay: the track, its trains, then
 // its side tracks. A side track sees its main track's relay as its own:
-// the main track as @track, itself, then its own trains.
+// the main track as @track, itself, its own trains, then the other side
+// tracks.
 func (s *Service) RelayWho(ctx context.Context, id string) ([]Member, error) {
 	t, err := s.relayTrack(ctx, id)
 	if err != nil {
@@ -242,17 +252,26 @@ func (s *Service) RelayWho(ctx context.Context, id string) ([]Member, error) {
 	for _, tr := range trains {
 		out = append(out, Member{Handle: tr.Handle, Agent: tr.Agent.Name(), Engine: tr.Engine, Status: tr.Status, Outcome: tr.Outcome})
 	}
-	if side.Is(t) {
-		return out, nil
-	}
-	sides, err := s.Store.SideTracks(ctx, id)
+	sides, err := s.sideTracksOn(ctx, t)
 	if err != nil {
 		return nil, err
 	}
 	for _, st := range sides {
-		out = append(out, trackMember(st.Side, "Side track "+st.Name, st))
+		if st.ID != t.ID {
+			out = append(out, trackMember(st.Side, "Side track "+st.Name, st))
+		}
 	}
 	return out, nil
+}
+
+// sideTracksOn are the side tracks on the relay t's agent sends on as
+// @track: its own, or, for a side track, which starts none, its main
+// track's, itself among them.
+func (s *Service) sideTracksOn(ctx context.Context, t track.Track) ([]track.Track, error) {
+	if side.Is(t) {
+		return s.Store.SideTracks(ctx, t.Parent)
+	}
+	return s.Store.SideTracks(ctx, t.ID)
 }
 
 // trackMember is track t on a relay as handle, shown as agent.
