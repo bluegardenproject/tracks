@@ -198,3 +198,27 @@ func TestCountCommentsPostsGitHubEvents(t *testing.T) {
 		t.Errorf("events = %q, want %q: none for the first count, nor for fewer", got, want)
 	}
 }
+
+func TestUnsettledPassPostsToWorkTracks(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	gh := &fakeGitHub{}
+	f.svc.GitHub = gh
+	work, err := f.svc.Create(ctx, Request{Kind: track.Work, Repos: []string{"api"}, Prompt: "Fix"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seen by a hook, in another repo: not on the track's branch.
+	const url = "https://github.com/acme/web/pull/5"
+	if err := f.svc.SeePRs(ctx, work.Track.ID, []string{url}); err != nil {
+		t.Fatal(err)
+	}
+	gh.states = map[string]track.PRState{url: track.PROpen}
+	gh.health = map[string]track.Health{url: {Base: "main", Mergeable: track.MergeConflicts}}
+	if err := f.svc.PollPRs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := githubEvents(t, f, work.Track.ID), []string{"PR acme/web#5 has conflicts with main."}; !slices.Equal(got, want) {
+		t.Errorf("events = %q, want %q", got, want)
+	}
+}
