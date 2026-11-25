@@ -32,6 +32,10 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 	}
 	count := func() {
 		t.Helper()
+		gh.asked = nil
+		if err := f.svc.PollPRs(ctx); err != nil {
+			t.Fatal(err)
+		}
 		if err := f.svc.CountComments(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -64,8 +68,8 @@ func TestCountCommentsAndRunAction(t *testing.T) {
 
 	gh.threads = map[string]int{first: 3, second: 1, merged: 5}
 	count()
-	if want := []string{"threads " + first, "threads " + second}; !slices.Equal(gh.asked, want) {
-		t.Errorf("asked %q, want %q: a merged PR's threads don't count", gh.asked, want)
+	if slices.Contains(gh.asked, "view "+merged) || !slices.Contains(gh.asked, "view "+first) || !slices.Contains(gh.asked, "view "+second) {
+		t.Errorf("asked %q: want the open PRs, and not the merged one", gh.asked)
 	}
 	if got, want := signals(), "0 PR #1: solve 3 comments; 1 PR #2: solve 1 comment"; got != want {
 		t.Errorf("Signals shows %q, want %q", got, want)

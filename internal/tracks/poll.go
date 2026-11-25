@@ -8,12 +8,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
-// PollPRs asks GitHub about the tracks' pull requests, in one pass:
+// PollPRs asks GitHub about the tracks' pull requests, in one poll:
 // the PRs from the branches of Work tracks that aren't closed, which
-// finds those opened by hand, then every PR not yet merged or closed,
-// whatever its track's status. What changed on an open Work track's
-// PR goes to its relay as @github's events. ErrNoGH means nothing was
-// asked.
+// finds those opened by hand, and every PR not yet merged or closed,
+// whatever its track's status, with their review threads, which
+// CountComments counts. What changed on an open Work track's PR goes
+// to its relay as @github's events. ErrNoGH means nothing was asked.
 func (s *Service) PollPRs(ctx context.Context) error {
 	if s.GitHub == nil {
 		return nil
@@ -23,40 +23,69 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		return err
 	}
 	var errs []error
-	asked := map[[2]string]bool{}
+	type branch struct {
+		t track.Track
+		q BranchQuery
+	}
+	var branches []branch
+	var q Query
 	for _, t := range tracks {
 		for _, r := range t.Repos {
 			if r.Branch == "" {
 				continue
 			}
-			prs, err := s.GitHub.BranchPRs(ctx, r.Path, r.Branch)
+			repo, err := s.gitHubRepo(ctx, r.Path)
 			if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
 				return errors.Join(err, ctx.Err())
 			} else if err != nil {
 				errs = append(errs, fmt.Errorf("%s in %s: %w", t.Name, r.Name, err))
 				continue
 			}
-			for _, pr := range prs {
-				pr.CheckedAt = s.now()
-				was, err := s.Store.SavePR(ctx, t.ID, pr, pr.CheckedAt)
-				if err != nil {
-					return err
-				}
-				s.notify(prNotice(t.ID, t.Name, pr, was))
-				if err := s.prHealth(ctx, t.ID, pr, was, t.Open()); err != nil {
-					return err
-				}
-				asked[[2]string{t.ID, pr.URL}] = true
-			}
+			b := branch{t, BranchQuery{Repo: repo, Branch: r.Branch}}
+			branches = append(branches, b)
+			q.Branches = append(q.Branches, b.q)
 		}
 	}
-
 	unsettled, err := s.Store.UnsettledPRs(ctx)
 	if err != nil {
 		return err
 	}
-	// Read after the branches' calls to GitHub, which take a while: a
-	// track opened meanwhile gets its events.
+	seen := map[string]bool{}
+	for _, p := range unsettled {
+		if !seen[p.URL] {
+			seen[p.URL] = true
+			q.PRs = append(q.PRs, p.PR)
+		}
+	}
+	if len(q.Branches)+len(q.PRs) == 0 {
+		return errors.Join(errs...)
+	}
+	answer, err := s.GitHub.Poll(ctx, q)
+	if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
+		return errors.Join(err, ctx.Err())
+	} else if err != nil {
+		errs = append(errs, err)
+	}
+	s.keepThreads(answer)
+
+	asked := map[[2]string]bool{}
+	for _, b := range branches {
+		for _, f := range answer.Branches[b.q] {
+			pr := f.PR
+			pr.CheckedAt = s.now()
+			was, err := s.Store.SavePR(ctx, b.t.ID, pr, pr.CheckedAt)
+			if err != nil {
+				return err
+			}
+			s.notify(prNotice(b.t.ID, b.t.Name, pr, was))
+			if err := s.prHealth(ctx, b.t.ID, pr, was, b.t.Open()); err != nil {
+				return err
+			}
+			asked[[2]string{b.t.ID, pr.URL}] = true
+		}
+	}
+	// Read after GitHub's answer, which takes a while: a track opened
+	// meanwhile gets its events.
 	open, err := s.Store.OpenTracks(ctx)
 	if err != nil {
 		return err
@@ -66,17 +95,11 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		working[t.ID] = t.Kind == track.Work
 	}
 	for _, p := range unsettled {
-		if asked[[2]string{p.TrackID, p.URL}] {
+		f, ok := answer.PRs[p.URL]
+		if !ok || asked[[2]string{p.TrackID, p.URL}] {
 			continue
 		}
-		now, err := s.GitHub.PR(ctx, p.URL)
-		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
-			return errors.Join(err, ctx.Err())
-		} else if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		p.State, p.Health, p.CheckedAt = now.State, now.Health, s.now()
+		p.State, p.Health, p.CheckedAt = f.State, f.Health, s.now()
 		was, err := s.Store.SavePR(ctx, p.TrackID, p.PR, p.CheckedAt)
 		if err != nil {
 			return err
@@ -89,6 +112,53 @@ func (s *Service) PollPRs(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// keepThreads keeps the open threads a poll read on each PR not
+// merged or closed, for CountComments; a PR it couldn't read keeps the
+// last count.
+func (s *Service) keepThreads(a Answer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.threads == nil {
+		s.threads = map[string]int{}
+	}
+	keep := func(f PRFacts) {
+		if f.State.Settled() {
+			delete(s.threads, f.URL)
+		} else {
+			s.threads[f.URL] = f.Threads
+		}
+	}
+	for _, list := range a.Branches {
+		for _, f := range list {
+			keep(f)
+		}
+	}
+	for _, f := range a.PRs {
+		keep(f)
+	}
+}
+
+// gitHubRepo is the GitHub repo of the checkout at path, asked of gh once.
+func (s *Service) gitHubRepo(ctx context.Context, path string) (string, error) {
+	s.mu.Lock()
+	repo, ok := s.repoNames[path]
+	s.mu.Unlock()
+	if ok {
+		return repo, nil
+	}
+	repo, err := s.GitHub.RepoOf(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	if s.repoNames == nil {
+		s.repoNames = map[string]string{}
+	}
+	s.repoNames[path] = repo
+	s.mu.Unlock()
+	return repo, nil
 }
 
 // prHealth records pr's health, as track id's, which was in state was,

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -22,51 +23,103 @@ func fakeGH(t *testing.T, script string) GH {
 	return GH{Program: path}
 }
 
-func TestGH(t *testing.T) {
-	ctx := context.Background()
-	gh := fakeGH(t, `case "$*" in
-"pr view https://github.com/a/b/pull/1 --json `+prFields+`") echo '{"state":"OPEN","isDraft":true}' ;;
-"pr view https://github.com/a/b/pull/2 --json `+prFields+`") echo '{"state":"MERGED","isDraft":false}' ;;
-*) echo "unknown command" >&2; exit 1 ;;
-esac`)
-	for url, want := range map[string]track.PRState{"https://github.com/a/b/pull/1": track.PRDraft, "https://github.com/a/b/pull/2": track.PRMerged} {
-		if got, err := gh.PR(ctx, url); err != nil || got.State != want || got.URL != url {
-			t.Errorf("PR(%s) = %+v, %v; want %s", url, got, err, want)
-		}
-	}
+// pollAnswerJSON is a GraphQL answer to a poll for branch feat/x of
+// a/b and PRs 4 and 9: the branch has PR 3, merged; PR 4 conflicts and
+// fails its checks, with two threads waiting; PR 9's repo wasn't found.
+const pollAnswerJSON = `{"data":{"viewer":{"login":"me"},
+"b0":{"pullRequests":{"nodes":[{"url":"https://github.com/a/b/pull/3","state":"MERGED","isDraft":false,
+  "mergeable":"UNKNOWN","baseRefName":"main","headRefOid":"aaa","commits":{"nodes":[]},"reviewThreads":{"nodes":[]}}]}},
+"p0":{"pullRequest":{"url":"https://github.com/a/b/pull/4","state":"OPEN","isDraft":true,"mergeable":"CONFLICTING",
+  "baseRefName":"main","headRefOid":"0123456789abcdef","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
+    {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE"},
+    {"__typename":"CheckRun","name":"test","status":"IN_PROGRESS","conclusion":null},
+    {"__typename":"StatusContext","context":"ci/deploy","state":"ERROR"}]}}}}]},
+  "reviewThreads":{"nodes":[
+    {"isResolved":false,"comments":{"nodes":[{"author":{"login":"copilot-pull-request-reviewer"}}]}},
+    {"isResolved":false,"comments":{"nodes":[{"author":{"login":"me"}}]}},
+    {"isResolved":true,"comments":{"nodes":[{"author":{"login":"alice"}}]}},
+    {"isResolved":false,"comments":{"nodes":[{"author":null}]}},
+    {"isResolved":false,"comments":{"nodes":[]}}]}}},
+"p1":null},
+"errors":[{"type":"NOT_FOUND","path":["p1"],"message":"Could not resolve to a Repository with the name c/d."}]}`
 
-	dir := t.TempDir()
-	gh = fakeGH(t, `[ "$*" = "pr list --head feat/x --state all --json `+prFields+`" ] &&
-[ "$GH_PROMPT_DISABLED" = 1 ] && [ "$(pwd -P)" = "$(cd "$DIR" && pwd -P)" ] &&
-echo '[{"url":"https://github.com/a/b/pull/3","state":"CLOSED","isDraft":false},{"url":"nope","state":"OPEN"}]'`)
-	t.Setenv("DIR", dir)
-	prs, err := gh.BranchPRs(ctx, dir, "feat/x")
-	if err != nil || len(prs) != 1 || prs[0].URL != "https://github.com/a/b/pull/3" || prs[0].State != track.PRClosed {
-		t.Errorf("BranchPRs = %+v, %v; want #3 closed, run in the repo without prompts", prs, err)
+func TestGHPoll(t *testing.T) {
+	ctx := context.Background()
+	// Like gh, it prints the answer and fails for the error in it.
+	gh := fakeGH(t, `case "$*" in
+"api graphql -f query=query {"*"b0: repository(owner: \"a\", name: \"b\") { pullRequests(headRefName: \"feat/x\""*"p0: repository(owner: \"a\", name: \"b\") { pullRequest(number: 4)"*"p1: repository(owner: \"c\", name: \"d\") { pullRequest(number: 9)"*)
+  [ "$GH_PROMPT_DISABLED" = 1 ] || exit 3
+  echo '`+pollAnswerJSON+`'
+  echo "gh: Could not resolve to a Repository with the name 'c/d'." >&2; exit 1 ;;
+*) echo "unknown command: $*" >&2; exit 1 ;;
+esac`)
+	four, _ := track.ParsePR("https://github.com/a/b/pull/4")
+	nine, _ := track.ParsePR("https://github.com/c/d/pull/9")
+	branch := BranchQuery{Repo: "a/b", Branch: "feat/x"}
+	a, err := gh.Poll(ctx, Query{Branches: []BranchQuery{branch}, PRs: []track.PR{four, nine}})
+	if err == nil || !strings.Contains(err.Error(), nine.URL) || !strings.Contains(err.Error(), "Could not resolve") {
+		t.Errorf("Poll's error = %v; want PR 9 named, with gh's reason", err)
+	}
+	if got := a.Branches[branch]; len(got) != 1 || got[0].URL != "https://github.com/a/b/pull/3" || got[0].State != track.PRMerged {
+		t.Errorf("the branch's PRs = %+v; want #3 merged", got)
+	}
+	want := PRFacts{PR: four, Threads: 2}
+	want.State = track.PRDraft
+	want.Health = track.Health{Base: "main", Head: "0123456789abcdef", Mergeable: track.MergeConflicts,
+		Checks: track.ChecksFailing, Failing: []string{"lint", "ci/deploy"}}
+	if got := a.PRs[four.URL]; !reflect.DeepEqual(got, want) {
+		t.Errorf("PR 4 = %+v\nwant %+v: threads by others, a deleted user's included", got, want)
+	}
+	if _, ok := a.PRs[nine.URL]; ok {
+		t.Error("PR 9, which GitHub didn't find, is in the answer")
 	}
 
 	gh = fakeGH(t, `echo "HTTP 401: Bad credentials" >&2; exit 1`)
-	if _, err := gh.PR(ctx, "https://github.com/a/b/pull/1"); err == nil || !strings.Contains(err.Error(), "HTTP 401") {
+	if _, err := gh.Poll(ctx, Query{PRs: []track.PR{four}}); err == nil || !strings.Contains(err.Error(), "HTTP 401") {
 		t.Errorf("a failing gh: %v, want its message", err)
 	}
 	t.Setenv("PATH", t.TempDir())
-	if _, err := (GH{}).PR(ctx, "https://github.com/a/b/pull/1"); !errors.Is(err, ErrNoGH) {
+	if _, err := (GH{}).Poll(ctx, Query{PRs: []track.PR{four}}); !errors.Is(err, ErrNoGH) {
 		t.Errorf("without gh: %v, want ErrNoGH", err)
 	}
 }
 
-func TestGHHealth(t *testing.T) {
-	gh := fakeGH(t, `echo '{"url":"https://github.com/a/b/pull/4","state":"OPEN","isDraft":false,
-"baseRefName":"main","headRefOid":"0123456789abcdef","mergeable":"CONFLICTING","statusCheckRollup":[
-{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE"},
-{"__typename":"CheckRun","name":"test","status":"IN_PROGRESS","conclusion":""},
-{"__typename":"CheckRun","name":"old","status":"COMPLETED","conclusion":"CANCELLED"},
-{"__typename":"StatusContext","context":"ci/deploy","state":"ERROR"}]}'`)
-	pr, err := gh.PR(context.Background(), "https://github.com/a/b/pull/4")
-	want := track.Health{Base: "main", Head: "0123456789abcdef", Mergeable: track.MergeConflicts,
-		Checks: track.ChecksFailing, Failing: []string{"lint", "ci/deploy"}}
-	if err != nil || !reflect.DeepEqual(pr.Health, want) {
-		t.Errorf("PR = %+v, %v; want health %+v", pr, err, want)
+func TestGHPollChunks(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	t.Setenv("CALLS", calls)
+	gh := fakeGH(t, `echo x >> "$CALLS"; echo '{"data":{"viewer":{"login":"me"}}}'`)
+	var prs []track.PR
+	for n := 1; n <= 2*pollChunk+1; n++ {
+		pr, _ := track.ParsePR("https://github.com/a/b/pull/" + strconv.Itoa(n))
+		prs = append(prs, pr)
+	}
+	_, err := gh.Poll(context.Background(), Query{PRs: prs})
+	if err == nil {
+		t.Error("an answer without the PRs reads as one")
+	}
+	if b, _ := os.ReadFile(calls); strings.Count(string(b), "x") != 3 {
+		t.Errorf("%d calls for %d PRs, want 3 of at most %d", strings.Count(string(b), "x"), len(prs), pollChunk)
+	}
+}
+
+func TestPollQueryQuotes(t *testing.T) {
+	q := pollQuery([]BranchQuery{{Repo: "a/b", Branch: `x") { evil }`}}, nil)
+	if !strings.Contains(q, `headRefName: "x\") { evil }"`) {
+		t.Errorf("a branch's name isn't quoted:\n%s", q)
+	}
+}
+
+func TestGHRepoOf(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DIR", dir)
+	gh := fakeGH(t, `[ "$*" = "repo view --json nameWithOwner" ] && [ "$(pwd -P)" = "$(cd "$DIR" && pwd -P)" ] &&
+echo '{"nameWithOwner":"acme/api"}'`)
+	if repo, err := gh.RepoOf(context.Background(), dir); err != nil || repo != "acme/api" {
+		t.Errorf("RepoOf = %q, %v", repo, err)
+	}
+	gh = fakeGH(t, `echo '{}'`)
+	if _, err := gh.RepoOf(context.Background(), dir); err == nil {
+		t.Error("an answer without a repo reads as one")
 	}
 }
 
@@ -89,23 +142,5 @@ func TestRollup(t *testing.T) {
 		if got, _ := rollup(tc.checks); got != tc.want {
 			t.Errorf("rollup(%+v) = %q, want %q", tc.checks, got, tc.want)
 		}
-	}
-}
-
-func TestGHOpenThreads(t *testing.T) {
-	answer := `{"data":{"viewer":{"login":"me"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[
-{"isResolved":false,"comments":{"nodes":[{"author":{"login":"copilot-pull-request-reviewer"}}]}},
-{"isResolved":false,"comments":{"nodes":[{"author":{"login":"me"}}]}},
-{"isResolved":true,"comments":{"nodes":[{"author":{"login":"alice"}}]}},
-{"isResolved":false,"comments":{"nodes":[{"author":null}]}},
-{"isResolved":false,"comments":{"nodes":[]}}
-]}}}}}`
-	gh := fakeGH(t, `case "$*" in
-"api graphql -f query="*" -f owner=acme -f name=api -F number=7") echo '`+answer+`' ;;
-*) echo "unknown command: $*" >&2; exit 1 ;;
-esac`)
-	pr, _ := track.ParsePR("https://github.com/acme/api/pull/7")
-	if n, err := gh.OpenThreads(context.Background(), pr); err != nil || n != 2 {
-		t.Errorf("OpenThreads = %d, %v; want 2: the bot's, and the deleted user's", n, err)
 	}
 }

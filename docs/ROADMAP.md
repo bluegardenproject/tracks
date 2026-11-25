@@ -27,8 +27,8 @@ the v2.0.0 release; git history keeps them.
   Tracks runs with the user as the final say. Needs planning first.
 - **GitHub on the relay** (in [trains](design/trains.md), Phase 2):
   `@github`'s events (merged, closed, conflicts, CI failed, new review
-  threads) wake the track's agent; open: polling the notifications
-  endpoint and one GraphQL query instead of each PR.
+  threads) wake the track's agent, from one GraphQL query a poll. Maybe:
+  the notifications endpoint to poll early, if a minute proves slow.
 - **Worktree setup:** submodules (step 4 of Backends).
 - **Homebrew:** a formula built from the release binaries and checked against
   `SHA256SUMS`, updated by each release, depending on tmux. A brew-installed

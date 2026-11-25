@@ -11,12 +11,12 @@ import (
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
-// CountComments asks GitHub how many review threads wait on each open
-// track's agent, per PR not merged or closed; the Platform's Signals
-// shows a button for each PR with some, and the change feed tells it
-// when they changed. More of them on a Work track's PR is @github's
-// event on its relay. A track whose counts couldn't be read keeps the
-// last ones. ErrNoGH means nothing was asked.
+// CountComments counts the review threads that wait on each open
+// track's agent, per PR not merged or closed, as PollPRs last read
+// them; the Platform's Signals shows a button for each PR with some,
+// and the change feed tells it when they changed. More of them on a
+// Work track's PR is @github's event on its relay. A PR the poll
+// couldn't read keeps its last count.
 func (s *Service) CountComments(ctx context.Context) error {
 	if s.GitHub == nil {
 		return nil
@@ -35,13 +35,7 @@ func (s *Service) CountComments(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		counts, err := s.openThreads(ctx, t)
-		if errors.Is(err, ErrNoGH) || ctx.Err() != nil {
-			return errors.Join(err, ctx.Err())
-		} else if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
-			continue
-		}
+		counts := s.polledThreads(t)
 		if err := s.threadsEvents(ctx, t, counts); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
 		}
@@ -93,21 +87,18 @@ func (s *Service) threadsEvents(ctx context.Context, t track.Track, counts map[s
 	return nil
 }
 
-// openThreads counts the open threads on each of t's unsettled PRs, by
-// URL.
-func (s *Service) openThreads(ctx context.Context, t track.Track) (map[string]int, error) {
+// polledThreads are the open threads on each of t's unsettled PRs the
+// poll read, by URL.
+func (s *Service) polledThreads(t track.Track) map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	counts := map[string]int{}
 	for _, pr := range t.PRs {
-		if pr.State.Settled() {
-			continue
+		if n, ok := s.threads[pr.URL]; ok && !pr.State.Settled() {
+			counts[pr.URL] = n
 		}
-		n, err := s.GitHub.OpenThreads(ctx, pr)
-		if err != nil {
-			return nil, err
-		}
-		counts[pr.URL] = n
 	}
-	return counts, nil
+	return counts
 }
 
 // PRSignal is one of a track's PRs with open comments, for Signals: the
