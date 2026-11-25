@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.7.0](https://github.com/bluegardenproject/tracks/compare/v3.6.0...v3.7.0) (2026-11-25)
+
+
+### Features
+
+* **platform:** always show the Platform, in the Station's colours ([f6fdc3f](https://github.com/bluegardenproject/tracks/commit/f6fdc3f487c13854cddba27b63b6231cc3e5e9d5))
+* **relay:** [@github](https://github.com/github)'s events on a track's PRs ([8b971fa](https://github.com/bluegardenproject/tracks/commit/8b971fa29db9d47c915343cd167eb114f33e8eb2))
+* **trains:** confirm before End train ends a train ([be6d9d7](https://github.com/bluegardenproject/tracks/commit/be6d9d77b6e12bbf890ea5e24253ff24869c8af0))
+
+
+### Bug Fixes
+
+* **relay:** keep [@github](https://github.com/github)'s events through a review, and collect them ([17d8ae8](https://github.com/bluegardenproject/tracks/commit/17d8ae89ac53cb24e85b7220686e2e87b1edb720))
+* **relay:** the review's hints on [@github](https://github.com/github)'s events ([67761bd](https://github.com/bluegardenproject/tracks/commit/67761bd71b45ea225cdd128b26c431e64004b55f))
+
+
+### Code Refactoring
+
+* **cli:** share the confirm popups' flow ([d347ae1](https://github.com/bluegardenproject/tracks/commit/d347ae1131b1629979317d18f143d5c33c28fdfc))
+
+
+### Documentation
+
+* **design:** side tracks' decisions ([dfe2e64](https://github.com/bluegardenproject/tracks/commit/dfe2e648743b8c86a1b3715741525c74ad424559))
+
 ## [3.6.0](https://github.com/bluegardenproject/tracks/compare/v3.5.0...v3.6.0) (2026-11-25)
 
 
