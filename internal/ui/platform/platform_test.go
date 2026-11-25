@@ -72,10 +72,10 @@ func TestThePlatformShowsWithoutTrains(t *testing.T) {
 	m := update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{})
 	v := view(m)
 	lines := strings.Split(v, "\n")
-	if !strings.HasPrefix(lines[0], "╭─ Platform ") || !strings.Contains(lines[1], "│ empty ") || !strings.HasPrefix(lines[4], "╭─ Signals ") {
-		t.Errorf("without trains, the Platform says empty over Signals:\n%s", v)
+	if !strings.HasPrefix(lines[0], "╭─ Platform ") || !strings.Contains(lines[1], "│ empty ") || !strings.HasPrefix(lines[10], "╭─ Signals ") {
+		t.Errorf("without trains, the Platform says empty over Signals, each half the pane:\n%s", v)
 	}
-	if !strings.Contains(lines[5], "│ Relay Station ") {
+	if !strings.Contains(lines[11], "│ Relay Station ") {
 		t.Errorf("without messages, Signals still shows the Relay Station:\n%s", v)
 	}
 	if e := view(update(t, New(Config{Theme: theme.Default()}), size, loadedMsg{err: errors.New("the daemon is gone")})); !strings.Contains(e, "Couldn't read the") || strings.Contains(e, "empty") {
@@ -274,7 +274,7 @@ func TestAClickOpensTheTrain(t *testing.T) {
 	var opened []string
 	m := New(Config{Theme: theme.Default(), Open: func(h string) { opened = append(opened, h) }})
 	var tm tea.Model = m
-	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 12}, loadedMsg{trains: []Entry{
+	for _, msg := range []tea.Msg{tea.WindowSizeMsg{Width: 26, Height: 20}, loadedMsg{trains: []Entry{
 		{Handle: "reviewer-527192", Status: track.Active, Held: true}, {Handle: "watch-000001", Status: track.Done}}}} {
 		tm, _ = tm.Update(msg)
 	}
@@ -334,5 +334,29 @@ func TestASignalsNoticeShowsInSignals(t *testing.T) {
 	v := view(m)
 	if strings.Index(v, "no client") < strings.Index(v, "Signals") {
 		t.Errorf("the Relay Station's notice shows above Signals:\n%s", v)
+	}
+}
+
+// The Platform and Signals each take half the pane, Signals an odd row;
+// a list longer than its half is cut, and its hidden rows don't click.
+func TestHalfAndHalf(t *testing.T) {
+	var opened []string
+	m := update(t, New(Config{Theme: theme.Default(), Open: func(h string) { opened = append(opened, h) }}),
+		tea.WindowSizeMsg{Width: 26, Height: 11}, loadedMsg{trains: []Entry{
+			{Handle: "reviewer-527192", Status: track.Active}, {Handle: "watch-000001", Status: track.Done}}})
+	lines := strings.Split(view(m), "\n")
+	if len(lines) != 11 || !strings.HasPrefix(lines[4], "╰") || !strings.HasPrefix(lines[5], "╭─ Signals ") || !strings.HasPrefix(lines[10], "╰") {
+		t.Fatalf("want the Platform in rows 0-4, Signals in 5-10:\n%s", view(m))
+	}
+	if strings.Contains(view(m), "watch-000001") {
+		t.Errorf("the second train fits no more, yet shows:\n%s", view(m))
+	}
+	for y := 1; y <= 3; y++ {
+		if _, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: y, Button: tea.MouseLeft}); cmd != nil {
+			cmd()
+		}
+	}
+	if got := strings.Join(opened, " "); got != "reviewer-527192 reviewer-527192" {
+		t.Errorf("opened %q; want the first train's two rows only", got)
 	}
 }
