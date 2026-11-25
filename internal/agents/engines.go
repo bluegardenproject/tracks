@@ -8,6 +8,9 @@ type Engine struct {
 	Name    string
 	Program string // found on PATH
 	Install string // a command that installs it
+	// InstallDocs, for an engine without one command that installs it
+	// everywhere, is the page that says how.
+	InstallDocs string
 	// Models is the built-in model list, for engines that can't list
 	// their own; ListsModels engines ask the CLI instead.
 	Models      []Model
@@ -45,8 +48,8 @@ var (
 	}
 	Copilot = Engine{
 		ID: "copilot", Name: "GitHub Copilot", Program: "copilot",
-		Install: "npm install -g @github/copilot",
-		Preview: true,
+		InstallDocs: "https://docs.github.com/copilot/how-tos/copilot-cli",
+		Preview:     true,
 	}
 )
 

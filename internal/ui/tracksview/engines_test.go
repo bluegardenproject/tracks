@@ -243,3 +243,12 @@ func TestAddingAPreviewEngine(t *testing.T) {
 		t.Errorf("a preview engine has no model or auto mode controls:\n%s", view)
 	}
 }
+
+func TestAMissingEngineWithoutAnInstallCommandPointsToItsDocs(t *testing.T) {
+	m := New(Config{Version: "test", Theme: theme.Default(), Engines: &fakeEngines{}})
+	m = settle(m, tea.WindowSizeMsg{Width: 120, Height: 90}, shiftTabKey, shiftTabKey)
+	m = press(t, m, "Add GitHub Copilot to Engines")
+	if view := plainView(m); !strings.Contains(view, "See "+agents.Copilot.InstallDocs+" to install it.") {
+		t.Errorf("a missing Copilot should point to its install docs:\n%s", view)
+	}
+}
