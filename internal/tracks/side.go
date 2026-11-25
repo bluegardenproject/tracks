@@ -112,3 +112,23 @@ func (s *Service) sidesSettled(ctx context.Context, t track.Track, doing string)
 	}
 	return nil
 }
+
+// sideNotice tells side track t's main track's relay that t joined it,
+// or left it as it ended or Tracks stopped. A notice that can't be posted changes nothing
+// for t.
+func (s *Service) sideNotice(ctx context.Context, t track.Track, e track.Event) {
+	if !side.Is(t) {
+		return
+	}
+	body := side.Joined(t)
+	switch e {
+	case track.Ended:
+		body = side.LeftNotice(t, "it ended")
+	case track.Interrupted:
+		body = side.LeftNotice(t, "Tracks stopped")
+	case track.Created, track.Resumed:
+	default:
+		return
+	}
+	_ = s.notice(context.WithoutCancel(ctx), t.Parent, body)
+}

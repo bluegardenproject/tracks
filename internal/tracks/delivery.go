@@ -179,7 +179,7 @@ func (s *Service) deliver(ctx context.Context, t track.Track, window string) err
 		s.Changes.Notify()
 	}
 
-	due, err := s.dueMessages(ctx, t.ID, pointed, now, pointerGrace)
+	due, err := s.dueMessages(ctx, t, pointed, now, pointerGrace)
 	if err != nil || len(due) == 0 {
 		s.setHeld(t.ID, nil)
 		return err
@@ -207,10 +207,11 @@ func (s *Service) deliveryMaps() {
 	}
 }
 
-// dueMessages are track id's unread messages a pointer goes for: past
-// pointed, not a notice, and at least grace old.
-func (s *Service) dueMessages(ctx context.Context, id string, pointed int64, now time.Time, grace time.Duration) ([]relay.Message, error) {
-	unread, err := s.Store.RelayUnread(ctx, id, relay.TrackHandle)
+// dueMessages are t's unread messages a pointer goes for, a side
+// track's on its main track's relay too: past pointed, not a notice,
+// and at least grace old.
+func (s *Service) dueMessages(ctx context.Context, t track.Track, pointed int64, now time.Time, grace time.Duration) ([]relay.Message, error) {
+	unread, err := s.unread(ctx, t, relay.TrackHandle)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +364,7 @@ func (s *Service) CollectMessages(ctx context.Context, id string) (string, error
 	if waiting {
 		return t.Name, Problem("A pointer to " + t.Name + "'s messages is on its way.")
 	}
-	due, err := s.dueMessages(ctx, id, pointed, s.now(), 0)
+	due, err := s.dueMessages(ctx, t, pointed, s.now(), 0)
 	if err != nil {
 		return t.Name, err
 	}
