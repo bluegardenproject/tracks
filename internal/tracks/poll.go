@@ -154,6 +154,9 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	if err := s.restackMerged(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	if err := s.tellEvents(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 
@@ -276,12 +279,33 @@ func (s *Service) prHealth(ctx context.Context, id string, pr track.PR, was trac
 	if post == nil {
 		return nil
 	}
+	// Told once the poll queued its restacks: a conflict a restack
+	// solves, as a merge below retargets a PR, is no event of its own.
+	s.mu.Lock()
 	for _, e := range prEvents(pr, was, before) {
-		if err := s.githubEvent(ctx, *post, e); err != nil {
-			return err
-		}
+		s.events = append(s.events, polledEvent{*post, e})
 	}
+	s.mu.Unlock()
 	return nil
+}
+
+// polledEvent is an event a poll found on track t's PR.
+type polledEvent struct {
+	t track.Track
+	e ghEvent
+}
+
+// tellEvents tells the events the poll found, once it restacked.
+func (s *Service) tellEvents(ctx context.Context) error {
+	s.mu.Lock()
+	events := s.events
+	s.events = nil
+	s.mu.Unlock()
+	var errs []error
+	for _, pe := range events {
+		errs = append(errs, s.githubEvent(ctx, pe.t, pe.e))
+	}
+	return errors.Join(errs...)
 }
 
 // branchTracks are the Work tracks whose branches may get PRs: those

@@ -56,7 +56,7 @@ func (s *Service) stack(ctx context.Context, t *track.Track, lower track.Track) 
 	if lower.Kind != track.Work {
 		// A Review track's checkout is someone else's branch, a Plan's
 		// or an Ask's none: nothing Tracks restacks on.
-		return Problem(shown(lower) + " is a " + string(lower.Kind) + " track, with no branch of its own to build on.")
+		return Problem(shown(lower) + " is " + article(string(lower.Kind)) + " " + string(lower.Kind) + " track, with no branch of its own to build on.")
 	}
 	live := lower.Repos
 	if !lower.Cleaned() {
@@ -151,7 +151,7 @@ func (s *Service) family(ctx context.Context, id string) ([]track.Track, error) 
 // branch, has nothing to restack; one that ended is its main track's to
 // decide.
 func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
-	if pr.Health.HeadBranch == "" || pr.Health.Base == "" || len(pr.Health.Head) < 7 {
+	if pr.Health.HeadBranch == "" || pr.Health.Base == "" {
 		return nil
 	}
 	from := pr.Health.HeadBranch
@@ -174,7 +174,7 @@ func (s *Service) restack(ctx context.Context, id string, pr track.PR) error {
 	// The base and the commit go into commands the agent runs: ones
 	// that aren't safe there leave it to the main track.
 	base, okBase := gitHubRef(pr.Health.Base)
-	head := strings.ToLower(pr.Health.Head[:7])
+	head := strings.ToLower(pr.Health.Head[:min(7, len(pr.Health.Head))])
 	safe := okBase && shortSHA.MatchString(head)
 	ref := fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
 	for _, upper := range family {
@@ -210,13 +210,13 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 	if upper.Archived() || settledIn(upper, pr.Repo) {
 		return nil
 	}
-	named := fmt.Sprintf("@%s, side track %s: the PR below its, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(pr.Health.Base))
-	if !safe {
-		return s.postGitHub(ctx, mainID, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
-	}
+	named := fmt.Sprintf("@%s, side track %s: the PR below it, %s, was merged into %s.", upper.Side, gitHubText(shown(upper)), prName(pr), gitHubText(pr.Health.Base))
 	// What waits for it about the branch below is moot, ended or not.
 	if err := s.dropBeforeRestack(ctx, upper, mainID, pr.Repo); err != nil {
 		return err
+	}
+	if !safe {
+		return s.postGitHub(ctx, mainID, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
 	}
 	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
 		return err
@@ -291,4 +291,12 @@ func (s *Service) restackWaits(ctx context.Context, id, repo string) (bool, erro
 		}
 	}
 	return false, nil
+}
+
+// article is "a" or "an" before word.
+func article(word string) string {
+	if word != "" && strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }
