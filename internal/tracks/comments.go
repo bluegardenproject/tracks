@@ -240,7 +240,7 @@ func (s *Service) RunAction(ctx context.Context, id, button string) (string, err
 	// Signals shows it sent.
 	s.Changes.Notify()
 	// The user sent what a waiting instruction would.
-	return t.Name, s.Store.DropInstructions(ctx, pr.URL, instructionKinds(settings.EventReviewThreads)...)
+	return t.Name, s.Store.DropInstructions(context.WithoutCancel(ctx), pr.URL, instructionKinds(settings.EventReviewThreads)...)
 }
 
 // setSent marks the comments on track id's PR at url sent, or not. The

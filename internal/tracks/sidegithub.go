@@ -54,6 +54,11 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 	}
 	name := gitHubText(cmp.Or(t.Title, t.Name))
 	named := fmt.Sprintf("@%s, side track %s: %s", t.Side, name, e.Body)
+	// What waits about an earlier event of its kind, under the policy
+	// then, gives way to what this one's says now.
+	if err := s.Store.DropInstructions(ctx, e.PR.URL, instructionKinds(e.Kind)...); err != nil {
+		return err
+	}
 	policy := s.githubPolicy(e.Kind)
 	if !t.Open() {
 		// No agent to tell or to ask about: its main track decides.
@@ -165,7 +170,8 @@ func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
 		if pr, ok := track.ParsePR(in.PR); ok {
 			about = prName(pr)
 		}
-		body := fmt.Sprintf("@%s, side track %s, ended before Tracks' word about %s went out: you decide.", t.Side, name, about)
+		kind := strings.ReplaceAll(strings.TrimPrefix(in.Kind, askKind("")), "_", " ")
+		body := fmt.Sprintf("@%s, side track %s, ended before Tracks' word about %s on %s went out: you decide.", t.Side, name, kind, about)
 		if err := s.postGitHub(ctx, t.Parent, body, relay.Event); err != nil {
 			return err
 		}

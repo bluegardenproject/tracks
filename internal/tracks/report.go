@@ -42,7 +42,8 @@ func (s *Service) Report(ctx context.Context, id string, e track.Event) error {
 		s.sideNotice(ctx, t, e)
 	}
 	if e == track.Ended && side.Is(t) {
-		if err := s.sideEnded(ctx, t); err != nil {
+		// Done whatever happens to the caller now: the track has ended.
+		if err := s.sideEnded(context.WithoutCancel(ctx), t); err != nil {
 			return err
 		}
 	}

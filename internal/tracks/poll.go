@@ -82,13 +82,16 @@ func (s *Service) PollPRs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	isOpen := map[string]bool{}
+	current := map[string]track.Track{}
 	for _, t := range open {
-		isOpen[t.ID] = true
+		current[t.ID] = t
 	}
 	asked := map[[2]string]bool{}
 	for _, b := range branches {
-		if b.t.Open() && !isOpen[b.t.ID] {
+		// As it is now: resumed or ended during the poll.
+		if now, ok := current[b.t.ID]; ok {
+			b.t = now
+		} else if b.t.Open() {
 			if now, err := s.Store.Track(ctx, b.t.ID); err == nil {
 				b.t = now
 			}
