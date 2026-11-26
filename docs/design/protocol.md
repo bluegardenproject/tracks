@@ -23,6 +23,42 @@ the questions to plan and discuss. Built on the relay and the trains of
 
 - Agents across machines. The relay is local; so is this.
 
+## Planning: the agenda
+
+Planning started on 2026-11-25, with side tracks (trains.md, Phase 2)
+released in 3.9.0. The topics, in this document's sections, and the
+order to discuss them in (not the order to build them, which is under
+"Order, once it's decided"):
+
+| | Topic | Where |
+|---|---|---|
+| A | What a plugin is: its shape (A1, manifest-only or executables), where it lives, install and update, compatibility, trust, the Reviewer as a plugin | Plugins first |
+| B | The manifest: what an agent declares | The manifest |
+| C | The envelope: a message, versioned | The envelope |
+| D | Tracks as an MCP server: how agents use Tracks | Tracks as an MCP server |
+| E | Programmable messages | Programmable messages |
+| F | Many instances, and how the track finds and picks agents | Many instances |
+| G | Plugins' settings and policies, both ways | Plugins, settings and policies |
+| H | The first plugins: the Investigator, the Watcher, a research agent | Plugins first |
+| I | A command-running train's sandbox: switched on without managed settings, the hosts it may reach | trains.md, Open |
+
+Discussion order: **A1 first**, since manifest-only or executables
+decides the trust model, the install story and what the Watcher can be;
+then **D**, how plugins act; **B** and **C** follow from those two; **E**,
+the open design space, once the ground is set; F to I along the way.
+
+**Where it stands**: at A1, with this proposal on the table, not decided:
+
+- Plugins start **manifest-only**: a brief and the Tracks tools it
+  declares, no code of its own. Everything a plugin does goes through
+  Tracks, which enforces and audits its permissions.
+- A long-running agent such as the Watcher is a **lifecycle Tracks runs**,
+  not a loop the plugin ships: Tracks wakes it on the events it
+  subscribes to (an `@github` event, a train finishing, a relay message)
+  or on a timer it declares, and it answers through its tools.
+- **Executables** may come later, behind an explicit trust step of their
+  own, if a plugin turns out to need code (a parser, a protocol client).
+
 ## Plugins first: the Investigator and the Watcher
 
 The Investigator and the Watcher (trains.md, formerly its step 12) move
@@ -44,7 +80,13 @@ To plan and discuss before building:
 
 A first lean, not decided: manifest-only plugins at first, a repo of
 first-party ones, installed from git and pinned, permissions approved on
-install, the Reviewer moved over last.
+install, the Reviewer moved over last. The fuller A1 proposal is under
+"Planning: the agenda".
+
+A third candidate for the first plugins: a **research agent**, run as
+several instances at once, one per topic (see "Many instances"). It
+reads and reports, as the Investigator does, and may share its manifest
+shape.
 
 ## Many instances, picked by the track
 
@@ -56,6 +98,13 @@ hidden session, its run marker, its place on the relay) is per instance,
 keyed by its handle, for every kind alike; the manifest says what an
 agent is, not how many may run. Several reviewers in a track (one per
 target, [review.md](review.md)) is the first.
+
+Open: how the track's agent **finds** the agents it can start (the
+built-in trains and the installed plugins, each with what it's for and
+what it costs), and how it starts several at once (`tracks train new
+<kind> --task …` per instance, or one call for a set), with the user's
+say in how many run. Tracks as an MCP server would answer the first
+with a tool that lists them, with their manifests.
 
 ## Three layers, and a fourth to invent
 
@@ -227,7 +276,10 @@ across its versions.
 
 ## Open
 
-- Everything under "Plugins first".
+- Everything under "Plugins first", starting with A1 ("Planning: the
+  agenda").
+- How the track finds and starts agents, several at once ("Many
+  instances").
 - Contracts: YAML in a message, or a tool call (`relay_send` with a
   `contract` argument) that Tracks validates against the vocabulary?
 - How a contract shows in the Relay Station: waiting, running, done,
