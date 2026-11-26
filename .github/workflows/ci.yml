@@ -36,6 +36,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.27"
+          # The newest 1.27 patch, not whichever the runner has cached:
+          # the standard library's security fixes come in patches.
+          check-latest: true
           cache: true
 
       - name: Download modules
@@ -90,6 +93,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.27"
+          # The newest 1.27 patch, not whichever the runner has cached:
+          # the standard library's security fixes come in patches.
+          check-latest: true
           cache: true
 
       - name: Download modules
@@ -100,3 +106,16 @@ jobs:
 
       - name: go test
         run: go test -race -count=1 ./...
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      # Fails on a known vulnerability the code actually reaches, in a
+      # module or in the standard library of the Go a release builds with.
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: "1.27"
+          check-latest: true
+          go-package: ./...

@@ -32,6 +32,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.27"
+          # The newest 1.27 patch, not whichever the runner has cached:
+          # the binaries carry the standard library's security fixes.
+          check-latest: true
 
       - name: Get dependencies
         if: ${{ steps.release.outputs.release_created }}
