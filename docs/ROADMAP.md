@@ -24,7 +24,9 @@ the v2.0.0 release; git history keeps them.
   exploring. Plugins (the Investigator and the Watcher as the first,
   maybe in a repo of plugins), a manifest, a versioned message envelope,
   Tracks as an MCP server for its tools, and programmable messages that
-  Tracks runs with the user as the final say. Needs planning first.
+  Tracks runs with the user as the final say. Planning started
+  2026-11-25: the agenda and where it stands are in protocol.md,
+  "Planning: the agenda".
 - **GitHub on the relay** (in [trains](design/trains.md), Phase 2):
   `@github`'s events (merged, closed, conflicts, CI failed, new review
   threads) wake the track's agent, from one GraphQL query a poll. Maybe:
@@ -50,6 +52,12 @@ the v2.0.0 release; git history keeps them.
 - Cursor `create-chat` hangs with an unused `XDG_CONFIG_HOME`.
 - Agents asking questions in plain text instead of their question tool.
 - `NOCASE` folds only A–Z.
+- **Security, from the 2026-11 hardening (#263):** a sandboxed agent can
+  still write the shared primary `.git/config`, so filter drivers (via a
+  worktree's `.gitattributes`) run in Tracks' safe `git status`, and the
+  daemon's fetches honour `core.sshCommand` and `remote.*.uploadpack`.
+  The lasting fix: narrow the agent's sandbox to the primary repo's
+  `objects/`, `refs/`, `logs/` and its own `worktrees/<name>`.
 - Proxy and dev servers ([docs/design/proxy.md](design/proxy.md)):
   - A track window closed outside Tracks leaves its dev servers only tmux's
     SIGHUP; nothing cleans up servers orphaned by a crash.
