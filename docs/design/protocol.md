@@ -43,6 +43,7 @@ programmable messages are still ideas. Built on the relay and the trains of
 | The Reviewer | Stays built in; moves over last, as a plugin bundled in the binary, the strictest test of the interface |
 | Managing them | A **Plugins** tab in the Tracks window, before Settings: add, update, remove, disable, and each plugin's settings (drawn from its manifest). The CLI does the same: `tracks plugin add/list/update/remove` |
 | The relay | Plugins get the rights built-in agents have, no more: the star, the side tracks' rules (see "Plugins on the relay") |
+| Who answers for what | Tracks keeps its **own** trains safe: the Reviewer and the built-in trains stay read-only and cut off from the user's MCP servers (`--strict-mcp-config`), so they can't post to Slack, comment on a PR or push. A **plugin** does what its author built and its user approved: a reviewer plugin that posts on GitHub or Slack is a valid plugin. Tracks shows a plugin's declared permissions on install and enforces its own tools' rules (the relay), but doesn't police what a plugin does with the user's MCP servers |
 | Tracks' MCP server | Built **first**: every engine needs it, and it's how plugins' own MCP servers reach agents, as a gateway (see "Tracks as an MCP server") |
 | Engines | Claude and Cursor both (Cursor through its plugin folder, see the spike); Copilot, Codex and others through the same server once they're engines |
 
@@ -379,8 +380,9 @@ across its versions.
 
 ## Open
 
-- How a train gets only the user's servers it requires, not all of them:
-  trains are kept from the user's MCP servers on purpose.
+- Whether a plugin train gets all the user's MCP servers, as an ordinary
+  session does, or only those its manifest names: the user's servers
+  are the plugin's and the user's business, not Tracks'.
 - OAuth for remote MCP servers behind the gateway.
 - The sandbox for plugins' code: the same profile as the manifest's
   permissions, and the hosts it may reach (trains.md, "Open": a
