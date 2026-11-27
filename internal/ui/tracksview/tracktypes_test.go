@@ -179,3 +179,66 @@ func TestTrackTypeEffortSwitchingTypes(t *testing.T) {
 		t.Errorf("an unknown effort should be listed and marked, marked %d:\n%s", m.picker.Marked, view)
 	}
 }
+
+func TestTrackTypeUnknownEffortWarns(t *testing.T) {
+	m, _ := openTypes(t)
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "claude", Effort: "turbo"})
+	view := plainView(m)
+	if !strings.Contains(view, "turbo") || !strings.Contains(view, "not a level Claude Code lists") {
+		t.Errorf("an unknown effort should say so beside its field:\n%s", view)
+	}
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "claude", Effort: "high"})
+	if view := plainView(m); strings.Contains(view, "not a level") {
+		t.Errorf("a listed effort shouldn't warn:\n%s", view)
+	}
+}
+
+func TestTrackTypeEffortClicks(t *testing.T) {
+	m, _ := openTypes(t)
+	effortAt := func() (x, y int, ok bool) {
+		for y, line := range strings.Split(plainView(m), "\n") {
+			if i := strings.Index(line, "Effort "); i >= 0 {
+				if j := strings.Index(line[i:], "Default"); j >= 0 {
+					return len([]rune(line[:i+j])), y, true
+				}
+			}
+		}
+		return 0, 0, false
+	}
+	x, y, ok := effortAt()
+	if !ok {
+		t.Fatalf("Effort not drawn:\n%s", plainView(m))
+	}
+	m = settle(m, tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if m.picker == nil || m.pickerFor != pickTypeEffort || !strings.Contains(plainView(m), "Work tracks: effort") {
+		t.Fatalf("clicking the Effort field should open its picker:\n%s", plainView(m))
+	}
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if m.picker != nil {
+		t.Errorf("where a hidden Effort would be, a click opened %d:\n%s", m.pickerFor, plainView(m))
+	}
+}
+
+func TestTrackTypePickersKeepTheirEngine(t *testing.T) {
+	m, types := openTypes(t)
+	m = settle(m, downKey, downKey, downKey, enterKey)
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor", Model: "gpt-5"})
+	m = settle(m, downKey, downKey, downKey, enterKey)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "claude", Effort: "high"}) {
+		t.Errorf("an effort picked for Claude Code after a reload moved Work to Cursor: %+v", d)
+	}
+
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "claude", Effort: "high"})
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, enterKey)
+	if m.pickerFor != pickTypeModel {
+		t.Fatalf("the model picker didn't open: %d", m.pickerFor)
+	}
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, downKey, enterKey)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "claude", Model: "opus"}) {
+		t.Errorf("a model picked for Claude Code after a reload moved Work to Cursor: %+v", d)
+	}
+}

@@ -218,7 +218,11 @@ func (m Model) typesBody(width int) []string {
 	lines := append(m.typesIntro(width), strings.Join(row, " "), "",
 		label("Agent")+m.selectField(en.Name, fw, lit(typeAgent)), model)
 	if m.typeFieldShown(typeEffort) {
-		lines = append(lines, label("Effort")+m.selectField(m.effortText(), fw, lit(typeEffort)))
+		effort := label("Effort") + m.selectField(m.effortText(), fw, lit(typeEffort))
+		if !m.effortListed() {
+			effort += m.fg(theme.StateWarningText).Render(cut("  "+unknownEffort(en), max(0, width-labelWidth-fw-2)))
+		}
+		lines = append(lines, effort)
 	}
 	if m.engines.settings.Get(en.ID) == nil {
 		warn := en.Name + " isn't added on the Engines tab, so " + kindTitle(m.selectedKind()) + " tracks can't start."

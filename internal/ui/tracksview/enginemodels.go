@@ -129,7 +129,7 @@ func (m Model) modelPicked(r widget.PickerResult) (Model, tea.Cmd) {
 		m.picker = nil
 		switch m.pickerFor {
 		case pickTypeModel:
-			return m.setType(&settings.TrackType{Engine: m.pickerEngine, Model: model, Effort: m.typeEffort()})
+			return m.setType(&settings.TrackType{Engine: m.pickerEngine, Model: model, Effort: m.carriedEffort(m.pickerEngine)})
 		case pickReviewerModel:
 			return m.setReviewer(&settings.TrackType{Engine: m.pickerEngine, Model: model})
 		}
