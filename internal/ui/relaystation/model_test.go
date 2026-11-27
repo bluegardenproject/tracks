@@ -216,6 +216,12 @@ func TestRefsWrap(t *testing.T) {
 			t.Errorf("%s is cut off:\n%s", f, out)
 		}
 	}
+	long := "internal/store/migrations/0028_relay_envelope_and_more.sql"
+	m = run(40, 30, Loaded{Messages: []relay.Message{{ID: 1, From: "side-1", To: relay.TrackHandle, Kind: relay.Report,
+		Body: "x", At: now, Refs: relay.Refs{Files: []string{long}}}}})
+	if out := plain(m); !strings.Contains(out, "0028_relay_envelope_and_more.sql") {
+		t.Errorf("a ref wider than the popup lost its tail:\n%s", out)
+	}
 }
 
 func TestOutcomeBadgesAreThemeStates(t *testing.T) {

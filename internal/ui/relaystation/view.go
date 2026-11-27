@@ -143,28 +143,41 @@ func (m Model) refLines(refs relay.Refs, width int) []string {
 		items = append(items, item{label: clean(f)})
 	}
 	const sep = " · "
+	sepWidth := lipgloss.Width(sep)
 	var lines []string
 	line, used := "", 0
-	for _, it := range items {
-		w := lipgloss.Width(it.label)
-		if used > 0 && used+len(sep)+w > width {
-			lines = append(lines, line)
-			line, used = "", 0
-		}
+	flush := func() {
 		if used > 0 {
-			line += m.fg(theme.TextFaint).Render(sep)
-			used += len(sep)
+			lines = append(lines, line)
 		}
+		line, used = "", 0
+	}
+	for _, it := range items {
 		st := m.fg(theme.TextMuted)
 		if it.link != "" {
 			st = m.fg(theme.TextAccent).Underline(true).Hyperlink(it.link)
 		}
+		w := lipgloss.Width(it.label)
+		if w > width {
+			// Too long for a line of its own: wrapped, at its slashes
+			// where it can be.
+			flush()
+			for _, part := range strings.Split(lipgloss.Wrap(it.label, width, "/"), "\n") {
+				lines = append(lines, st.Render(part))
+			}
+			continue
+		}
+		if used > 0 && used+sepWidth+w > width {
+			flush()
+		}
+		if used > 0 {
+			line += m.fg(theme.TextFaint).Render(sep)
+			used += sepWidth
+		}
 		line += st.Render(it.label)
 		used += w
 	}
-	if used > 0 {
-		lines = append(lines, line)
-	}
+	flush()
 	return lines
 }
 

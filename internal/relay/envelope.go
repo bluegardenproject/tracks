@@ -35,6 +35,9 @@ type Refs struct {
 // Empty reports whether r refers to nothing.
 func (r Refs) Empty() bool { return len(r.PRs) == 0 && len(r.Files) == 0 }
 
+// IsZero is Empty, so a message's JSON leaves out refs to nothing.
+func (r Refs) IsZero() bool { return r.Empty() }
+
 // All is r's PRs, then its files.
 func (r Refs) All() []string { return slices.Concat(r.PRs, r.Files) }
 
