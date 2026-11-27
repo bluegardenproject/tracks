@@ -41,3 +41,17 @@ func TestPrintMembers(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
 }
+
+func TestRelaySendFlags(t *testing.T) {
+	cmd := newRelaySendCmd()
+	if err := cmd.ParseFlags([]string{"--to", "track", "--kind", "report", "--outcome", "pass",
+		"--ref", "#12", "--ref", "a,b.go"}); err != nil {
+		t.Fatal(err)
+	}
+	if o, _ := cmd.Flags().GetString("outcome"); o != "pass" {
+		t.Errorf("--outcome %q", o)
+	}
+	if refs, _ := cmd.Flags().GetStringArray("ref"); len(refs) != 2 || refs[1] != "a,b.go" {
+		t.Errorf("--ref %q, want each as given, commas kept", refs)
+	}
+}

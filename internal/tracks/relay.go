@@ -35,16 +35,24 @@ var relayWait = 30 * time.Minute
 // of them has. A side track sends to its main track as @track, on the
 // main track's relay and under its own handle there, never the main
 // track's; and to another side track of it, there too, by its handle.
-func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind, body string) (relay.Message, error) {
+// f is the message's outcome and refs, its #123 refs PRs of the repo of
+// the track's PRs.
+func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind, body string, f relay.Fields) (relay.Message, error) {
 	t, err := s.relayTrack(ctx, id)
 	if err != nil {
 		return relay.Message{}, err
 	}
+	outcome, refs, err := f.Resolve(prRepo(t))
+	if err != nil {
+		return relay.Message{}, Problem(err.Error() + ".")
+	}
+	draft := relay.Message{Kind: kind, Body: body, Outcome: outcome, Refs: refs, At: s.now()}
 	if side.Is(t) && strings.TrimPrefix(to, "@") == relay.TrackHandle {
 		if err := relay.CheckSend(t.Side, relay.TrackHandle, kind, body); err != nil {
 			return relay.Message{}, Problem(err.Error() + ".")
 		}
-		return s.Store.AddRelayMessage(ctx, t.Parent, relay.Message{From: t.Side, To: relay.TrackHandle, Kind: kind, Body: body, At: s.now()})
+		draft.From, draft.To = t.Side, relay.TrackHandle
+		return s.Store.AddRelayMessage(ctx, t.Parent, draft)
 	}
 	if side.Is(t) && strings.TrimPrefix(to, "@") == t.Side {
 		return relay.Message{}, Problem("A message goes to someone else.")
@@ -71,7 +79,7 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 		return relay.Message{}, Problem(err.Error() + ": tracks relay who lists who's on the relay.")
 	}
 	if i := slices.IndexFunc(sides, func(st track.Track) bool { return st.Side == handle }); i >= 0 && side.Is(t) {
-		return s.sendSibling(ctx, t, sides[i], kind, body)
+		return s.sendSibling(ctx, t, sides[i], draft)
 	}
 	if err := relay.CheckSend(relay.TrackHandle, handle, kind, body); err != nil {
 		return relay.Message{}, Problem(err.Error() + ".")
@@ -84,6 +92,8 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 	for _, tr := range trains {
 		switch {
 		case tr.Handle != handle || tr.Agent.ReadsRelay():
+		case tr.Agent == train.Reviewer && kind == relay.Question && (outcome != "" || !refs.Empty()):
+			return relay.Message{}, Problem("The reviewer reads the question alone: send it without --outcome and --ref.")
 		case tr.Agent == train.Reviewer && kind == relay.Question:
 			// It runs no commands: Tracks types the question to it.
 			return s.askReview(ctx, id, handle, body)
@@ -93,7 +103,23 @@ func (s *Service) RelaySend(ctx context.Context, id, to string, kind relay.Kind,
 			return relay.Message{}, Problem("The " + tr.Agent.Name() + " doesn't read the relay.")
 		}
 	}
-	return s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.TrackHandle, To: handle, Kind: kind, Body: body, At: s.now()})
+	draft.From, draft.To = relay.TrackHandle, handle
+	return s.Store.AddRelayMessage(ctx, id, draft)
+}
+
+// prRepo is the repo, owner/name, of track t's PRs, for its #123 refs;
+// "" when it has none, or PRs of more than one repo.
+func prRepo(t track.Track) string {
+	repo := ""
+	for _, pr := range t.PRs {
+		switch {
+		case repo == "":
+			repo = pr.Repo
+		case pr.Repo != repo:
+			return ""
+		}
+	}
+	return repo
 }
 
 // inbox is a relay a track's agent reads, and the handle it reads as.

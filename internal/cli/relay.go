@@ -36,15 +36,18 @@ func newRelayCmd() *cobra.Command {
 }
 
 func newRelaySendCmd() *cobra.Command {
-	var to, kind string
+	var to, kind, outcome string
+	var refs []string
 	cmd := &cobra.Command{
-		Use:   "send --to <handle> --kind <kind>",
+		Use:   "send --to <handle> --kind <kind> [--outcome <outcome>] [--ref <pr-or-path>]...",
 		Short: "send a train or side track the message on stdin",
 		Long: "Sends the message on stdin to one of the track's trains or side tracks: --to takes its handle, or a " +
 			"prefix only one of them has, such as reviewer. In a side track, --to track sends to its main track, and " +
 			"another side track's handle asks it a question or answers one, at most " + strconv.Itoa(relay.PairLimit) +
 			" messages between the two. " +
-			"--kind is question, answer, report or event.",
+			"--kind is question, answer, report or event. --outcome gives the message a short status: pass, blocked, " +
+			"done or needs-input. --ref, once per ref, says what it's about: a PR's URL, #123 for a PR of the track's " +
+			"repo, or a file's path in the repo; at most " + strconv.Itoa(relay.MaxRefs) + ".",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			client, id, err := trackClient("relay send")
@@ -55,7 +58,8 @@ func newRelaySendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			m, err := client.RelaySend(c.Context(), id, to, relay.Kind(kind), body)
+			m, err := client.RelaySend(c.Context(), id, to, relay.Kind(kind), body,
+				relay.Fields{Outcome: relay.Outcome(outcome), Refs: refs})
 			if err != nil {
 				return err
 			}
@@ -65,6 +69,8 @@ func newRelaySendCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&to, "to", "", "a handle, or a prefix only one has; track for a side track's main track")
 	cmd.Flags().StringVar(&kind, "kind", "", "question, answer, report or event")
+	cmd.Flags().StringVar(&outcome, "outcome", "", "pass, blocked, done or needs-input")
+	cmd.Flags().StringArrayVar(&refs, "ref", nil, "a PR's URL, #123, or a file's path in the repo; repeatable")
 	_ = cmd.MarkFlagRequired("to")
 	_ = cmd.MarkFlagRequired("kind")
 	return cmd

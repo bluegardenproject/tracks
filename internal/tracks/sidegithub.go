@@ -46,7 +46,7 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 		if !t.Open() {
 			return nil
 		}
-		return s.postGitHub(ctx, t.ID, e.Body, relay.Event)
+		return s.postGitHub(ctx, t.ID, e.Body, relay.Event, e.PR.URL)
 	}
 	// Under Report's lock, read again: a side track ending meanwhile
 	// hands its instructions over, and none may be queued after.
@@ -81,7 +81,7 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 		if !t.Open() {
 			return nil
 		}
-		return s.postGitHub(ctx, t.ID, e.Body, relay.Event)
+		return s.postGitHub(ctx, t.ID, e.Body, relay.Event, e.PR.URL)
 	case err != nil:
 		return err
 	}
@@ -107,15 +107,15 @@ func (s *Service) githubEvent(ctx context.Context, t track.Track, e ghEvent) err
 		if err := s.instruct(ctx, t.ID, e.Kind, e.PR.URL, body); err != nil {
 			return err
 		}
-		return s.postGitHub(ctx, main.ID, named+" Tracks tells it to handle it, once its agent is free.", relay.Notice)
+		return s.postGitHub(ctx, main.ID, named+" Tracks tells it to handle it, once its agent is free.", relay.Notice, e.PR.URL)
 	case settings.PolicyAsk:
 		if err := s.instruct(ctx, main.ID, askKind(e.Kind), e.PR.URL, actions.AskMain(t.Side, name, e.Body)); err != nil {
 			return err
 		}
-		return s.postGitHub(ctx, main.ID, named+" Tracks asks the user through this track, once its agent is free.", relay.Notice)
+		return s.postGitHub(ctx, main.ID, named+" Tracks asks the user through this track, once its agent is free.", relay.Notice, e.PR.URL)
 	}
 	// The main track decides: the event wakes its agent.
-	return s.postGitHub(ctx, main.ID, named, relay.Event)
+	return s.postGitHub(ctx, main.ID, named, relay.Event, e.PR.URL)
 }
 
 // githubSettings is Settings → GitHub as the user set it.
@@ -221,7 +221,7 @@ func (s *Service) sideEnded(ctx context.Context, t track.Track) error {
 		}
 		kind := eventWords[strings.TrimPrefix(in.Kind, askKind(""))]
 		body := fmt.Sprintf("@%s, side track %s, ended before Tracks' word about %s on %s went out: you decide.", t.Side, name, kind, about)
-		if err := s.postGitHub(ctx, t.Parent, body, relay.Event); err != nil {
+		if err := s.postGitHub(ctx, t.Parent, body, relay.Event, in.PR); err != nil {
 			return err
 		}
 	}
