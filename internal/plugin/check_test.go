@@ -48,6 +48,7 @@ func TestCheck(t *testing.T) {
 		{"no kind", func(m *Manifest) { m.Components[0].Kind = "" }, "components[0].kind", "is missing"},
 		{"bad kind", func(m *Manifest) { m.Components[0].Kind = "theme" }, "components[0].kind", "isn't a kind"},
 		{"reserved name", func(m *Manifest) { m.Components[1].Name = "reviewer" }, "components[1].name", "Tracks' own"},
+		{"relay handle name", func(m *Manifest) { m.Components[1].Name = "github" }, "components[1].name", "Tracks' own"},
 		{"built-in kind name", func(m *Manifest) { m.Components[0].Name = "plan" }, "components[0].name", "Tracks' own"},
 		{"same name", func(m *Manifest) { m.Components[0].Name = "research" }, "components[1].name", "another component"},
 		{"no brief", func(m *Manifest) { m.Components[0].Brief = "" }, "components[0].brief", "is missing"},

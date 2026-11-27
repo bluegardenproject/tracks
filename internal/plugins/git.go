@@ -60,7 +60,8 @@ func compare(ctx context.Context, dir, oldDir, old, next string) (manifestDiff s
 	if err != nil {
 		return "", nil, err
 	}
-	names, err := run(ctx, dir, "diff", "--name-only", "-z", "--no-renames", old, next)
+	names, _, err := git.ExecRunner{Dir: dir}.Run(ctx, append(append([]string{}, noHooks...),
+		"diff", "--name-only", "-z", "--no-renames", old, next)...)
 	if err != nil {
 		return "", nil, err
 	}

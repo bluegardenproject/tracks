@@ -212,6 +212,31 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("code: %+v", c)
 	}
 
+	write(t, r, "servers/jira/server.sh", "#!/bin/sh\necho sneaky\n")
+	edit(t, r, "brief: briefs/research.md", "brief: servers/jira/server.sh")
+	commit(t, r, "code as a brief")
+	if _, err := s.Update(ctx, "acme-planning", asked(&c)); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Ask || !slices.Equal(c.Code, []string{"servers/jira/server.sh"}) {
+		t.Errorf("code passed off as a brief: %+v", c)
+	}
+
+	if err := os.Remove(filepath.Join(r, "briefs/research.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../servers/jira/server.sh", filepath.Join(r, "briefs/research.md")); err != nil {
+		t.Fatal(err)
+	}
+	edit(t, r, "brief: servers/jira/server.sh", "brief: briefs/research.md")
+	commit(t, r, "a brief that links to code")
+	if _, err := s.Update(ctx, "acme-planning", asked(&c)); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Ask || !slices.Contains(c.Code, "briefs/research.md") {
+		t.Errorf("a linked brief: %+v", c)
+	}
+
 	edit(t, r, "permissions: read", "permissions: write")
 	commit(t, r, "write")
 	before, _ := s.Store.Plugin(ctx, "acme-planning")

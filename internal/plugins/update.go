@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/plugin"
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -76,7 +77,7 @@ func (s Service) Update(ctx context.Context, name string, confirm func(Change) (
 	if err != nil {
 		c.Unknown = true
 	}
-	c.ManifestDiff, c.Code = diff, code(changed, m, s.manifestAt(p.Dir))
+	c.ManifestDiff, c.Code = diff, code(staging, changed, m, s.manifestAt(p.Dir))
 	c.Widens = plugin.Widens(prev, c.Approval)
 	c.Ask = c.Unknown || len(c.Code) > 0 || !prev.Equal(c.Approval)
 	if ok, err := confirm(c); err != nil || !ok {
@@ -87,6 +88,7 @@ func (s Service) Update(ctx context.Context, name string, confirm func(Change) (
 		return c, err
 	}
 	if err := s.save(ctx, p, commit, dir, c.Approval); err != nil {
+		_ = os.RemoveAll(dir)
 		return c, err
 	}
 	if p.Dir != dir && filepath.Dir(p.Dir) == filepath.Dir(dir) {
@@ -139,20 +141,40 @@ func (s Service) manifestAt(dir string) *plugin.Manifest {
 }
 
 // code is the changed files that count as code: all but plugin.yaml
-// and the briefs, which are prompts, of either version.
-func code(changed []string, next plugin.Manifest, prev *plugin.Manifest) []string {
-	text := []string{plugin.File}
+// and the briefs, which are prompts. A brief is exempt only when it was
+// one before too, is a plain file in dir, the new version's folder, and
+// isn't, or isn't inside, a context provider or an MCP server: so an
+// update can't pass code off as a brief.
+func code(dir string, changed []string, next plugin.Manifest, prev *plugin.Manifest) []string {
+	var briefs, code []string
+	if prev != nil {
+		for _, c := range prev.Components {
+			briefs = append(briefs, path.Clean(c.Brief))
+		}
+	}
 	for _, m := range []*plugin.Manifest{&next, prev} {
 		if m == nil {
 			continue
 		}
 		for _, c := range m.Components {
-			text = append(text, path.Clean(c.Brief))
+			for _, p := range append(slices.Clone(c.Context), c.MCP...) {
+				code = append(code, path.Clean(p))
+			}
 		}
+	}
+	isBrief := func(f string) bool {
+		if !slices.Contains(briefs, f) || !slices.ContainsFunc(next.Components, func(c plugin.Component) bool { return path.Clean(c.Brief) == f }) {
+			return false
+		}
+		if slices.ContainsFunc(code, func(p string) bool { return f == p || strings.HasPrefix(f, p+"/") }) {
+			return false
+		}
+		info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(f)))
+		return err == nil && info.Mode().IsRegular()
 	}
 	var out []string
 	for _, f := range changed {
-		if !slices.Contains(text, f) {
+		if f != plugin.File && !isBrief(f) {
 			out = append(out, f)
 		}
 	}
