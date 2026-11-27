@@ -593,6 +593,13 @@ own. "Side track" is always two words: "sidetracked" means something else.
   worktree, branch and PRs stay, and the Station still lists it, so the
   user can resume it. It's for a side track whose part is done, or when
   the user asks; a side track can't end itself or its siblings.
+- **Questions go to the main track first**: a side track asks its main
+  track on the relay, not the user, and reports what blocks it from
+  outside the code (a refused push, a missing permission, GitHub
+  failing) instead of working around it. The main track answers what it
+  can and asks the user the rest. Tracks tells the main track itself
+  when a side track's status turns to action required or error, an
+  event from `@tracks` that wakes its agent.
 - **No nesting**: a side track starts no side tracks of its own.
 
 ### Pull requests

@@ -18,3 +18,13 @@ func Joined(t track.Track) string {
 func LeftNotice(t track.Track, why string) string {
 	return "@" + t.Side + " left: " + why + "."
 }
+
+// NeedsUser is the event that side track t's agent waits on the user.
+func NeedsUser(t track.Track) string {
+	return "@" + t.Side + " needs the user: its agent is waiting for an answer."
+}
+
+// Failed is the event that side track t's agent exited with an error.
+func Failed(t track.Track) string {
+	return "@" + t.Side + " failed: its agent exited with an error."
+}

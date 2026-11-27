@@ -390,3 +390,39 @@ func TestMainTrackEndsItsSideTrack(t *testing.T) {
 		t.Errorf("ending the main track once its side track ended without a PR: %v", err)
 	}
 }
+
+// A side track that turns to needing the user, or fails, tells its main
+// track with an event that wakes its agent; the change alone, once.
+func TestSideTrackStatusTellsItsMainTrack(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	events := func() []string {
+		t.Helper()
+		msgs, err := f.store.RelayUnread(ctx, main.ID, relay.TrackHandle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range msgs {
+			if m.Kind == relay.Event && m.From == relay.TracksHandle {
+				out = append(out, m.Body)
+			}
+		}
+		return out
+	}
+	for _, e := range []track.Event{track.AgentWaiting, track.AgentWaiting, track.AgentWorking, track.AgentFailed} {
+		if err := f.svc.Report(ctx, st.ID, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{side.NeedsUser(st), side.Failed(st)}
+	if got := events(); !slices.Equal(got, want) {
+		t.Errorf("main track's relay events %q; want %q", got, want)
+	}
+	if err := f.svc.Report(ctx, main.ID, track.AgentWaiting); err != nil {
+		t.Fatal(err)
+	}
+	if got := events(); len(got) != len(want) {
+		t.Errorf("a main track's own status posted %q", got[len(want):])
+	}
+}
