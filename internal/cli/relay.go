@@ -63,7 +63,7 @@ func newRelaySendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Sent #%d to @%s.\n", m.ID, m.To)
+			_, err = fmt.Fprintln(c.OutOrStdout(), sent(m))
 			return err
 		},
 	}
@@ -158,6 +158,9 @@ func newRelayWhoCmd() *cobra.Command {
 		},
 	}
 }
+
+// sent says that m went.
+func sent(m relay.Message) string { return fmt.Sprintf("Sent #%d to @%s.", m.ID, m.To) }
 
 // readMessage is a message from r, checked here for its size and for
 // being UTF-8: JSON would make any text valid on its way to the daemon.

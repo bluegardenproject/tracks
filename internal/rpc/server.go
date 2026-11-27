@@ -20,6 +20,8 @@ const maxRequest = 8 << 20
 // Call is one request being answered.
 type Call struct {
 	Params json.RawMessage
+	// Token is the caller's agent token, "" for none.
+	Token string
 	// Gone is closed once the caller has hung up.
 	Gone <-chan struct{}
 
@@ -80,7 +82,7 @@ func answer(ctx context.Context, conn net.Conn, handlers map[string]Handler) {
 		_, _ = io.Copy(io.Discard, conn)
 		close(gone)
 	}()
-	call := &Call{Params: req.Params, Gone: gone, enc: json.NewEncoder(conn)}
+	call := &Call{Params: req.Params, Token: req.Token, Gone: gone, enc: json.NewEncoder(conn)}
 
 	reply := Reply{}
 	h, ok := handlers[req.Method]

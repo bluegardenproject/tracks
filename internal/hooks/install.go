@@ -45,12 +45,24 @@ func Command(program, engine, id string) string {
 // settings file, or Cursor's plugin folder. command is the hook
 // command; socket is the daemon's, "" for none.
 func Install(dir, engine, command, socket string) (string, error) {
+	return install(dir, engine, command, socket, nil)
+}
+
+// install is Install, with Claude allowed the tools allow names.
+func install(dir, engine, command, socket string, allow []string) (string, error) {
 	switch engine {
 	case "claude":
 		path := filepath.Join(dir, "claude-settings.json")
-		return path, writeJSON(path, claudeSettings(command, socket))
+		settings := claudeSettings(command, socket)
+		if len(allow) > 0 {
+			settings["permissions"] = map[string]any{"allow": allow}
+		}
+		return path, writeJSON(path, settings)
 	case "cursor":
-		plugin := filepath.Join(dir, "cursor-plugin")
+		// The folder names the plugin: its MCP server's id is
+		// plugin-tracks-tracks.
+		removeLegacyPlugin(dir)
+		plugin := filepath.Join(dir, MCPServer)
 		if err := writeJSON(filepath.Join(plugin, ".cursor-plugin", "plugin.json"), map[string]string{"name": "tracks-hooks"}); err != nil {
 			return "", err
 		}
@@ -73,7 +85,7 @@ type claudeMatcher struct {
 // claudeSettings are the hooks and, with a socket, a sandbox exception
 // for it: Claude's sandbox blocks Unix sockets, so the agent's tracks
 // commands couldn't reach the daemon.
-func claudeSettings(command, socket string) any {
+func claudeSettings(command, socket string) map[string]any {
 	hooks := map[string][]claudeMatcher{}
 	for _, h := range claudeHooks {
 		hooks[h.event] = append(hooks[h.event], claudeMatcher{Matcher: h.matcher,

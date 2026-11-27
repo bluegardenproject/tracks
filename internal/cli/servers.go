@@ -117,14 +117,10 @@ func newServersCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(servers) == 0 {
-				_, err := fmt.Fprintln(c.OutOrStdout(), "No dev servers.")
-				return err
-			}
-			if id == "" {
+			if id == "" && len(servers) > 0 {
 				return printAllServers(c.OutOrStdout(), servers)
 			}
-			return printServers(c.OutOrStdout(), servers)
+			return listServers(c.OutOrStdout(), servers)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "every open track's servers")
@@ -196,6 +192,15 @@ func printAllServers(out io.Writer, servers []tracks.Server) error {
 		}
 	}
 	return nil
+}
+
+// listServers prints a track's dev servers, as tracks servers does.
+func listServers(out io.Writer, servers []tracks.Server) error {
+	if len(servers) == 0 {
+		_, err := fmt.Fprintln(out, "No dev servers.")
+		return err
+	}
+	return printServers(out, servers)
 }
 
 // printServers prints a line per dev server.

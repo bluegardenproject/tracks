@@ -79,15 +79,18 @@ func (s *Service) Resume(ctx context.Context, id string, recreate bool, progress
 		removeWorktrees()
 		return Created{}, err
 	}
-	hooks, err := s.installHooks(t)
+	setup, err := s.installHooks(t)
+	if err == nil {
+		err = s.saveToken(undo, t.ID, setup)
+	}
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err
 	}
-	start, err := engine.Command(agents.Spec{
+	start, err := engine.Command(setup.spec(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), Resume: true,
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks,
-	})
+		SocketDir: s.SocketDir, BinDir: s.BinDir,
+	}))
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err

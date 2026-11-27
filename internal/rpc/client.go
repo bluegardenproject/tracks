@@ -20,6 +20,8 @@ var ErrNotRunning = errors.New("the daemon isn't running")
 // Client calls the daemon listening on Socket.
 type Client struct {
 	Socket string
+	// Token is the agent token every call carries, "" for none.
+	Token string
 }
 
 // dialTimeout bounds connecting: the daemon is local, so a slow dial is
@@ -43,7 +45,7 @@ func (c Client) Call(ctx context.Context, method string, params, result any, pro
 	defer conn.Close()
 	defer context.AfterFunc(ctx, func() { conn.Close() })()
 
-	req := Request{Method: method}
+	req := Request{Method: method, Token: c.Token}
 	if params != nil {
 		if req.Params, err = json.Marshal(params); err != nil {
 			return err
@@ -77,6 +79,12 @@ func (c Client) Call(ctx context.Context, method string, params, result any, pro
 		}
 		return nil
 	}
+}
+
+// Agent is the track of the agent whose token c carries.
+func (c Client) Agent(ctx context.Context) (string, error) {
+	var r AgentResult
+	return r.ID, c.Call(ctx, Agent, nil, &r, nil)
 }
 
 func (c Client) Ping(ctx context.Context) (PingResult, error) {

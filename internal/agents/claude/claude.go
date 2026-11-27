@@ -101,6 +101,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 		line.Set("--add-dir", d)
 	}
 	line.SetIf("--settings", s.Hooks)
+	line.SetIf("--mcp-config", s.MCPConfig)
 	return agents.Start{Command: s.Wrap(line.Build()), Dir: dir}, nil
 }
 

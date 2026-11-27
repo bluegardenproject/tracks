@@ -20,6 +20,23 @@ func TestHooksGoInWithSettings(t *testing.T) {
 	}
 }
 
+func TestTracksMCPServerGoesInWithItsConfig(t *testing.T) {
+	spec := agents.Spec{Track: track.Track{ID: "t1", Kind: track.Ask, Session: "s1"}, Program: "claude",
+		Hooks: "/data/hooks/t1/claude-settings.json", MCPConfig: "/data/hooks/t1/claude-mcp.json", Token: "tok"}
+	for _, resume := range []bool{false, true} {
+		spec.Resume = resume
+		start, err := Command(spec)
+		if err != nil || !strings.Contains(start.Command, `--mcp-config '\''/data/hooks/t1/claude-mcp.json'\''`) ||
+			!strings.Contains(start.Command, "TRACKS_AGENT_TOKEN='tok'") || strings.Contains(start.Command, "--strict-mcp-config") {
+			t.Errorf("resume %v: Command = %q, %v", resume, start.Command, err)
+		}
+	}
+	spec.MCPConfig, spec.Token = "", ""
+	if start, _ := Command(spec); strings.Contains(start.Command, "--mcp-config") || strings.Contains(start.Command, "TRACKS_AGENT_TOKEN") {
+		t.Errorf("without a server: %q", start.Command)
+	}
+}
+
 func TestEffortGoesInOnStartAndResume(t *testing.T) {
 	spec := agents.Spec{Track: track.Track{ID: "t1", Kind: track.Ask, Session: "s1", Model: "opus", Effort: "high"}, Program: "claude"}
 	for _, resume := range []bool{false, true} {

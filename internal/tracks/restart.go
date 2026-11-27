@@ -57,15 +57,18 @@ func (s *Service) Restart(ctx context.Context, id string, progress func(string))
 			return Created{}, err
 		}
 	}
-	hooks, err := s.installHooks(t)
+	setup, err := s.installHooks(t)
+	if err == nil {
+		err = s.saveToken(ctx, t.ID, setup)
+	}
 	if err != nil {
 		return Created{}, err
 	}
-	start, err := engine.Command(agents.Spec{
+	start, err := engine.Command(setup.spec(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), Resume: resume, DraftPRs: drafts,
-		Side: s.sideSpec(ctx, t), SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
+		Side: s.sideSpec(ctx, t), SocketDir: s.SocketDir, BinDir: s.BinDir, Setup: s.hasSetup(ctx, t.Repos),
 		DevServers: s.hasDevServers(ctx, t.Repos),
-	})
+	}))
 	if err != nil {
 		return Created{}, err
 	}

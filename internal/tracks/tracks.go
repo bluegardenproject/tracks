@@ -82,6 +82,8 @@ type Store interface {
 	RelayMessage(ctx context.Context, id string, msg int64) (relay.Message, error)
 	RelayLog(ctx context.Context, id string) ([]relay.Message, error)
 	RelayUnseen(ctx context.Context, id, reader string) (int, error)
+	SetAgentToken(ctx context.Context, id, hash string) error
+	AgentToken(ctx context.Context, hash string) (string, error)
 }
 
 // Worktrees makes and removes a track's worktrees.

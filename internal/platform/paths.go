@@ -43,6 +43,9 @@ func Resolve() (Paths, error) {
 	}), nil
 }
 
+// Socket is the daemon's socket in its DataDir, dataDir.
+func Socket(dataDir string) string { return filepath.Join(dataDir, "daemon.sock") }
+
 type env struct{ home, xdgConfig, xdgState string }
 
 func resolve(e env) Paths {
@@ -64,7 +67,7 @@ func resolve(e env) Paths {
 		Database:   filepath.Join(state, "tracks.db"),
 		Worktrees:  filepath.Join(state, "worktrees"),
 		Plugins:    filepath.Join(state, "plugins"),
-		Socket:     filepath.Join(state, "daemon.sock"),
+		Socket:     Socket(state),
 		Lock:       filepath.Join(state, "daemon.lock"),
 		Log:        filepath.Join(state, "daemon.log"),
 		BinDir:     filepath.Join(state, "bin"),

@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +124,67 @@ func TestInstall(t *testing.T) {
 
 	if _, err := Install(dir, "codex", command, ""); err == nil {
 		t.Error("an engine without hooks should be an error")
+	}
+	if _, err := os.Stat(filepath.Join(plugin, ".mcp.json")); !os.IsNotExist(err) {
+		t.Errorf("Install gives Cursor an MCP server: %v", err)
+	}
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), "mcp__") {
+		t.Errorf("Install allows Claude an MCP server: %s", b)
+	}
+}
+
+func TestInstallAgent(t *testing.T) {
+	dir := t.TempDir()
+	command := Command("/bin/tracks", "claude", "t1")
+	if err := os.MkdirAll(filepath.Join(dir, "cursor-plugin", "hooks"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	settings, mcpConfig, err := InstallAgent(dir, "claude", command, "/state/daemon.sock", "/state/bin/tracks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claude struct {
+		Hooks       map[string]any `json:"hooks"`
+		Permissions struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	readJSON(t, settings, &claude)
+	if len(claude.Hooks) != len(claudeHooks) || len(claude.Permissions.Allow) != 1 || claude.Permissions.Allow[0] != "mcp__tracks" {
+		t.Errorf("Claude's settings = %+v; want the hooks and mcp__tracks allowed", claude)
+	}
+	var config struct {
+		MCPServers map[string]struct {
+			Type    string            `json:"type"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+		} `json:"mcpServers"`
+	}
+	readJSON(t, mcpConfig, &config)
+	if s := config.MCPServers["tracks"]; len(config.MCPServers) != 1 || s.Type != "stdio" || s.Command != "/state/bin/tracks" ||
+		len(s.Args) != 1 || s.Args[0] != "mcp" || len(s.Env) != 0 {
+		t.Errorf("Claude's MCP config = %+v", config)
+	}
+
+	plugin, mcpConfig, err := InstallAgent(dir, "cursor", command, "", "/state/bin/tracks")
+	if err != nil || mcpConfig != "" || plugin != filepath.Join(dir, "tracks") {
+		t.Fatalf("Cursor: %q, %q, %v; want the plugin folder tracks and no config", plugin, mcpConfig, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "cursor-plugin")); !os.IsNotExist(err) {
+		t.Errorf("the old plugin folder is still there: %v", err)
+	}
+	config.MCPServers = nil
+	readJSON(t, filepath.Join(plugin, ".mcp.json"), &config)
+	want := map[string]string{"TRACKS_ID": "${env:TRACKS_ID}", "TRACKS_AGENT_TOKEN": "${env:TRACKS_AGENT_TOKEN}",
+		"TRACKS_SOCKET_DIR": "${env:TRACKS_SOCKET_DIR}"}
+	s := config.MCPServers["tracks"]
+	if len(config.MCPServers) != 1 || s.Command != "/state/bin/tracks" || len(s.Args) != 1 || s.Args[0] != "mcp" || !maps.Equal(s.Env, want) {
+		t.Errorf("Cursor's .mcp.json = %+v", config)
+	}
+	if _, err := os.Stat(filepath.Join(plugin, "hooks", "hooks.json")); err != nil {
+		t.Errorf("Cursor's hooks: %v", err)
 	}
 }
 
