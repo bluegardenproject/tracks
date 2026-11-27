@@ -1,0 +1,3 @@
+#!/bin/sh
+# A context provider: lists the ADRs.
+ls "${ADR_DIR:-docs/adr}" 2>/dev/null

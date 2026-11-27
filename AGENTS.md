@@ -27,6 +27,7 @@ command line to `internal/cli`. Open work is in [docs/ROADMAP.md](docs/ROADMAP.m
 - `store/` SQLite: schema, migrations (`migrations/*.sql`, one per change), queries · `repos/` rules for adding, changing and removing repos
 - `agents/` the agent CLIs (engines): finding one, its version, its models, its MCP servers, and the pane command a track runs · `agents/claude/`, `agents/cursor/` each engine's command line, prompts and session
 - `review/` what a track's reviewer is given: its brief, the diff's limit, the review marker
+- `plugin/` what a plugin is: its manifest (`plugin.yaml`), the rules it follows, what the user approves · `plugins/` installing, updating and removing plugins, pinned to a commit or linked from a local folder
 - `hooks/` the engines' hook events and what they mean for a track's status · `notifier/` the user's notification channels
 - `track/` the track domain: kinds, repos, window names · `tracks/` creating, listing, ending, resuming and cleaning tracks · `workspace/` a track's git worktrees
 - `side/` side tracks: what makes a track one, when one is settled, their relay notices
