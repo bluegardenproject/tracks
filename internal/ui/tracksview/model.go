@@ -133,7 +133,7 @@ type Model struct {
 	engines         enginesTab
 	// picker, when set, is open over the window; pickerFor is what it
 	// chooses, and pickerEngine the engine for pickModel,
-	// pickTypeModel and pickReviewerModel.
+	// pickTypeModel, pickTypeEffort and pickReviewerModel.
 	picker       *widget.Picker
 	pickerFor    int
 	pickerEngine string
