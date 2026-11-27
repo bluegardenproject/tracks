@@ -522,7 +522,7 @@ func TestCreateRunsOnTheTypesAgent(t *testing.T) {
 	}
 	f := newFixture(t)
 	f.engines = settings.Engines{Claude: &settings.Engine{Model: "opus"}, Cursor: &settings.Engine{Model: "gpt-5"}}
-	f.types.Set("ask", &settings.TrackType{Engine: "cursor"})
+	f.types.Set("ask", &settings.TrackType{Engine: "cursor", Effort: "high"})
 	f.types.Set("plan", &settings.TrackType{Engine: "claude", Model: "sonnet", Effort: "high"})
 	for _, c := range []struct {
 		kind                  track.Kind

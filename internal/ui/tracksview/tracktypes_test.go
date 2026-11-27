@@ -153,6 +153,12 @@ func TestTrackTypeEffortFocusWhenHidden(t *testing.T) {
 	m, _ := openTypes(t)
 	m = settle(m, downKey, downKey, downKey)
 	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	if m.settings.types.focus != typeAgent {
+		t.Errorf("Up from a hidden effort should reach Agent, focus %d", m.settings.types.focus)
+	}
+	m = settle(m, downKey, downKey)
+	m.settings.types.focus = typeEffort
 	m = settle(m, enterKey)
 	if m.pickerFor == pickTypeEffort || m.settings.types.focus != typeModel {
 		t.Errorf("Enter on a hidden effort should act on Model: picker %d, focus %d", m.pickerFor, m.settings.types.focus)

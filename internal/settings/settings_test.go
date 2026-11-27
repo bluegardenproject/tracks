@@ -184,13 +184,16 @@ func TestTracksKeepWhatThisBuildDoesntKnow(t *testing.T) {
 	if err != nil || s.Tracks.Get("work") == nil || s.Tracks.Get("work").Engine != "claude" {
 		t.Fatalf("Load: %+v, %v", s.Tracks, err)
 	}
-	s.Tracks.Set("work", &TrackType{Engine: "claude", Model: "opus"})
+	s.Tracks.Set("work", &TrackType{Engine: "claude", Model: "opus", Effort: "high"})
 	s.Tracks.Set("doc", &TrackType{Engine: "cursor"})
 	if err := Save(path, s); err != nil {
 		t.Fatal(err)
 	}
+	if back, err := Load(path); err != nil || *back.Tracks.Get("work") != (TrackType{Engine: "claude", Model: "opus", Effort: "high"}) {
+		t.Errorf("work read back as %+v, %v", back.Tracks.Get("work"), err)
+	}
 	data, _ := os.ReadFile(path)
-	for _, want := range []string{"model: opus", "sandbox: strict # newer", "triage: {engine: cursor}", "doc:\n        engine: cursor"} {
+	for _, want := range []string{"model: opus", "effort: high", "sandbox: strict # newer", "triage: {engine: cursor}", "doc:\n        engine: cursor"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("saved file lacks %q:\n%s", want, data)
 		}
