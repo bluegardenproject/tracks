@@ -83,22 +83,33 @@ func mcpTools(env mcpEnv, socket, tmuxSocket string) []mcp.Tool {
 			Description: "Send a train or side track a message: to takes its handle, or a prefix only one of them " +
 				"has, such as reviewer. In a side track, to track sends to its main track, and another side track's " +
 				"handle asks it a question or answers one, at most " + strconv.Itoa(relay.PairLimit) +
-				" messages between the two. kind is question, answer, report or event.",
+				" messages between the two. kind is question, answer, report or event. outcome gives the message a " +
+				"short status: pass, blocked, done or needs-input. refs say what it's about: a PR's URL, #123 for a " +
+				"PR of the track's repo, or a file's path in the repo; at most " + strconv.Itoa(relay.MaxRefs) + ".",
 			Schema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"to":   map[string]any{"type": "string", "description": "a handle, or a prefix only one has; track for a side track's main track"},
 					"kind": map[string]any{"type": "string", "enum": []string{"question", "answer", "report", "event"}},
 					"body": map[string]any{"type": "string", "description": "the message"},
+					"outcome": map[string]any{"type": "string", "enum": relay.Outcomes,
+						"description": "pass, blocked, done or needs-input"},
+					"refs": map[string]any{"type": "array", "items": map[string]any{"type": "string"},
+						"maxItems": relay.MaxRefs, "description": "a PR's URL, #123, or a file's path in the repo"},
 				},
 				"required": []string{"to", "kind", "body"},
 			},
 			Call: func(ctx context.Context, args json.RawMessage) (string, error) {
-				var a struct{ To, Kind, Body string }
+				var a struct {
+					To, Kind, Body string
+					Outcome        relay.Outcome
+					Refs           []string
+				}
 				if err := json.Unmarshal(args, &a); err != nil {
 					return "", err
 				}
-				m, err := client.RelaySend(ctx, id, a.To, relay.Kind(a.Kind), a.Body)
+				m, err := client.RelaySend(ctx, id, a.To, relay.Kind(a.Kind), a.Body,
+					relay.Fields{Outcome: a.Outcome, Refs: a.Refs})
 				if err != nil {
 					return "", err
 				}
