@@ -99,6 +99,10 @@ func TestMessageWithoutFieldsKeepsItsJSON(t *testing.T) {
 	if strings.Contains(string(b), "outcome") || strings.Contains(string(b), "refs") {
 		t.Errorf("a message without an outcome or refs marshals them: %s", b)
 	}
+	b, err = json.Marshal(Message{ID: 1, Kind: Question, Refs: Refs{PRs: []string{}, Files: []string{}}})
+	if err != nil || strings.Contains(string(b), "refs") {
+		t.Errorf("empty refs marshal: %s, %v", b, err)
+	}
 	var m Message
 	if err := json.Unmarshal([]byte(`{"id":2,"from":"track","to":"x","kind":"report","body":"b","outcome":"pass","refs":{"prs":["https://github.com/a/b/pull/1"]}}`), &m); err != nil ||
 		m.Outcome != Pass || len(m.Refs.PRs) != 1 {
