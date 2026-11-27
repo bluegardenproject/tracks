@@ -1,0 +1,26 @@
+protocol: 1
+name: acme-planning
+engines: [claude, cursor]
+settings:
+  - { name: adr_dir, type: string, default: docs/adr }
+  - { name: ask_first, type: bool, default: true }
+components:
+  - kind: track
+    name: custom-planner
+    base: plan
+    brief: briefs/planner.md
+    context: [ctx/adrs]
+    trains: [research]
+    defaults: { engine: claude, model: opus }
+  - kind: train
+    name: research
+    lifecycle: one-shot
+    permissions: read
+    hosts: ["*.atlassian.net"]
+    brief: briefs/research.md
+    mcp: [servers/jira]
+    requires_mcp: [datadog]
+    relay:
+      sends: [report, event, question]
+      reads: true
+      subscribes: [github.ci_failed, train.done]

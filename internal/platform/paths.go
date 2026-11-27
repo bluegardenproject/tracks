@@ -21,6 +21,8 @@ type Paths struct {
 	Database string
 	// Worktrees holds the tracks' worktrees, a folder per track.
 	Worktrees string
+	// Plugins holds the installed plugins, a folder per plugin.
+	Plugins string
 	// Socket, Lock and Log are the daemon's; BinDir goes first on a
 	// track's PATH.
 	Socket, Lock, Log, BinDir string
@@ -61,6 +63,7 @@ func resolve(e env) Paths {
 		DataDir:    state,
 		Database:   filepath.Join(state, "tracks.db"),
 		Worktrees:  filepath.Join(state, "worktrees"),
+		Plugins:    filepath.Join(state, "plugins"),
 		Socket:     filepath.Join(state, "daemon.sock"),
 		Lock:       filepath.Join(state, "daemon.lock"),
 		Log:        filepath.Join(state, "daemon.log"),
