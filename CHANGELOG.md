@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.10.0](https://github.com/bluegardenproject/tracks/compare/v3.9.0...v3.10.0) (2026-11-27)
+
+
+### Features
+
+* **settings:** Claude effort per track type ([b349ccf](https://github.com/bluegardenproject/tracks/commit/b349ccf82b5fa6a0587906939332f7d898253bdc))
+
+
+### Bug Fixes
+
+* **deps:** bump the go-minor-and-patch group with 5 updates ([f901dca](https://github.com/bluegardenproject/tracks/commit/f901dca9a7e78548c137e0f86b15fe7f28785808))
+* **settings:** Effort field warns, clicks and keeps its engine ([42d89c8](https://github.com/bluegardenproject/tracks/commit/42d89c84b559e6f588e88c00d83a0db62e61148e))
+* **settings:** every key acts on the field drawn as focused ([ad8d190](https://github.com/bluegardenproject/tracks/commit/ad8d19055de78a4100427b8b6d58de3ff7a375e3))
+* **settings:** focus and unknown efforts in the Effort picker ([766563a](https://github.com/bluegardenproject/tracks/commit/766563a0155f4838e7f03b3eb2025503dd473e1c))
+* **settings:** keep focus off a hidden Effort field ([14330ca](https://github.com/bluegardenproject/tracks/commit/14330cac6818a6d7269e97007d217c9c2d14e411))
+* **workspace:** harden git refs, daemon worktree checks, and env copies ([be23ef7](https://github.com/bluegardenproject/tracks/commit/be23ef7f9e82609153891a9e2e64875e12d2cda5))
+
+
+### Documentation
+
+* **protocol:** v2 planning's agenda, where it stands, and the sandbox follow-up ([1d7d60d](https://github.com/bluegardenproject/tracks/commit/1d7d60dff0056143e2f6af4b29a9bf0cdedd270a))
+
+
+### Miscellaneous
+
+* **deps:** bump the actions group with 2 updates ([d4197c9](https://github.com/bluegardenproject/tracks/commit/d4197c9e6362d4002ba5801f34ec23f272269976))
+
 ## [3.9.0](https://github.com/bluegardenproject/tracks/compare/v3.8.0...v3.9.0) (2026-11-25)
 
 
