@@ -132,8 +132,8 @@ func TestMCPEndToEnd(t *testing.T) {
 	// server here, which has none.
 	tools := mcpTools(mcpEnv{Token: tokens[main.ID], Track: main.ID}, paths.Socket, tmuxtest.Socket(t))
 	panes := tools[len(tools)-1]
-	if _, err := panes.Call(ctx, json.RawMessage("{}")); err == nil {
-		t.Error("panes_list without a window should fail")
+	if _, err := panes.Call(ctx, json.RawMessage("{}")); err == nil || !strings.HasPrefix(err.Error(), "list the panes:") {
+		t.Errorf("panes_list without a window: %v, want it failing on the window", err)
 	}
 }
 
