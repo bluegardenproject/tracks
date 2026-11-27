@@ -117,3 +117,94 @@ func TestDetailsShowWhereATrackStarted(t *testing.T) {
 		t.Errorf("details lack the track theme-idea was started from:\n%s", view)
 	}
 }
+
+func TestLiveReloadClearsStaleConfirmationAndTracksMovedTarget(t *testing.T) {
+	var ended []int
+	tracks := []source.Track{
+		{ID: "a", Number: 1, Name: "first", Kind: "work", Status: track.Active},
+		{ID: "b", Number: 2, Name: "second", Kind: "work", Status: track.Active},
+		{ID: "c", Number: 3, Name: "third", Kind: "work", Status: track.Active},
+	}
+	m := New(Config{Version: "test", Theme: theme.Default(), End: func(n int) error {
+		ended = append(ended, n)
+		return nil
+	}})
+	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 40}, tracksMsg{tracks: tracks})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown}) // select "second"
+	m = run(m, tea.KeyPressMsg{Code: 'e'})
+	if m.station.asking == nil {
+		t.Fatal("expected askEnd confirmation")
+	}
+
+	// If "second" disappears on reload, the confirmation must be cleared so
+	// confirming does not end the newly selected track.
+	m = update(m, tracksMsg{tracks: []source.Track{tracks[0], tracks[2]}})
+	if m.station.asking != nil {
+		t.Fatalf("stale confirmation stayed open after target disappeared: %+v", m.station.asking)
+	}
+	m = run(m, tea.KeyPressMsg{Code: 'y'})
+	if len(ended) != 0 {
+		t.Fatalf("y after target disappeared ended tracks %v", ended)
+	}
+
+	// If the target track moves position and changes window number, confirmation
+	// follows it and ends the updated window number.
+	m = update(m, tracksMsg{tracks: tracks})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp}) // move from "third" to "second"
+	m = run(m, tea.KeyPressMsg{Code: 'e'})
+	moved := []source.Track{
+		tracks[2],
+		tracks[0],
+		{ID: "b", Number: 9, Name: "second", Kind: "work", Status: track.Active},
+	}
+	m = update(m, tracksMsg{tracks: moved})
+	if m.station.asking == nil || m.station.asking.number != 9 {
+		t.Fatalf("expected asking to track moved target with number 9, got %+v", m.station.asking)
+	}
+	m = run(m, tea.KeyPressMsg{Code: 'y'})
+	if len(ended) != 1 || ended[0] != 9 {
+		t.Fatalf("ended = %v, want [9]", ended)
+	}
+
+	// If the target track closes while askEnd is open, askEnd clears.
+	m = update(m, tracksMsg{tracks: tracks})
+	m = run(m, tea.KeyPressMsg{Code: 'e'})
+	closed := []source.Track{
+		tracks[0],
+		{ID: "b", Number: 0, Name: "second", Kind: "work", Status: track.Done},
+	}
+	m = update(m, tracksMsg{tracks: closed})
+	if m.station.asking != nil {
+		t.Fatalf("askEnd stayed open after target closed: %+v", m.station.asking)
+	}
+
+	// askRecreate clears if the ended track becomes Closed or Archived on reload,
+	// and a late checkedMsg for an open track is ignored.
+	endedTrack := source.Track{ID: "b", Number: 0, Name: "second", Kind: "work", Status: track.Done}
+	m = update(m, tracksMsg{tracks: []source.Track{endedTrack}})
+	m = m.ask(question{id: "b", name: "second", kind: askRecreate, lines: []string{"api"}})
+	if m.station.asking == nil {
+		t.Fatal("expected askRecreate to open for ended track")
+	}
+	m = update(m, tracksMsg{tracks: []source.Track{{ID: "b", Number: 0, Name: "second", Kind: "work", Status: track.Closed}}})
+	if m.station.asking != nil {
+		t.Fatalf("askRecreate stayed open after track became Closed: %+v", m.station.asking)
+	}
+	m = update(m, tracksMsg{tracks: []source.Track{{ID: "b", Number: 2, Name: "second", Kind: "work", Status: track.Active}}})
+	m = m.checked(checkedMsg{id: "b", name: "second", kind: askArchive})
+	if m.station.asking != nil {
+		t.Fatalf("checkedMsg opened askArchive for an open track: %+v", m.station.asking)
+	}
+}
+
+func TestWideAndEscapedTrackNamesDontPanicOrLeak(t *testing.T) {
+	tracks := []source.Track{
+		{ID: "a", Number: 1, Name: "日本語の長いトラック名\x1b]0;title\x07\u202e", Kind: "work", Status: track.Active,
+			Repos: []source.Repo{{Name: "repo\x1b[31m", Branch: "feat/日本語", Path: "/tmp/日本語のパス"}}},
+	}
+	m := update(New(Config{Version: "test", Theme: theme.Default()}), tea.WindowSizeMsg{Width: 42, Height: 20}, tracksMsg{tracks: tracks})
+	out := m.View().Content
+	if strings.Contains(out, "\x1b]0;") || strings.Contains(out, "\u202e") {
+		t.Errorf("terminal escape or BiDi leaked into view: %q", out)
+	}
+}

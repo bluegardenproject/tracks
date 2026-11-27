@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/style"
 )
@@ -26,7 +27,7 @@ func frame(p style.Palette, t lipgloss.Style, title string, body []string, w, h 
 		return nil
 	}
 	b := lipgloss.NewStyle().Foreground(p.Color(border))
-	title = cutTo(title, w-6)
+	title = Cut(termtext.SingleLine(title), w-6)
 	lines := []string{b.Render("╭─ ") + t.Render(title) +
 		b.Render(" "+strings.Repeat("─", max(0, w-5-lipgloss.Width(title)))+"╮")}
 	inner := w - 4

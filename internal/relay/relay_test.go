@@ -65,6 +65,10 @@ func TestFormatFencesTheBody(t *testing.T) {
 	if got := Format(Message{From: TracksHandle, Kind: Notice, Body: "x"}, true); !strings.Contains(got, "@tracks → everyone · notice") {
 		t.Errorf("a notice: %q", got)
 	}
+	dirty := Format(Message{ID: 8, From: "rev\x1b[31m-1", To: "track\u202e", Kind: Report, Body: "ok \x1b[2J\x1b]0;t\x07\u202edone"}, true)
+	if strings.Contains(dirty, "\x1b") || strings.Contains(dirty, "\u202e") || !strings.Contains(dirty, "@rev-1 → @track") || !strings.Contains(dirty, "ok done") {
+		t.Errorf("controls reached Format:\n%q", dirty)
+	}
 }
 
 func TestFormatShowsTheStartOfALongMessage(t *testing.T) {

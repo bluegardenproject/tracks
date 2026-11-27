@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/relay"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
@@ -79,11 +80,11 @@ func (m Model) layout() layout {
 func (m Model) head(msg relay.Message) string {
 	to := "everyone"
 	if msg.To != "" {
-		to = "@" + msg.To
+		to = "@" + termtext.SingleLine(msg.To)
 	}
 	parts := []string{
 		m.fg(theme.TextFaint).Render(m.when(msg.At)),
-		m.fg(theme.TextDefault).Bold(true).Render("@"+msg.From) + m.fg(theme.TextMuted).Render(" → ") +
+		m.fg(theme.TextDefault).Bold(true).Render("@"+termtext.SingleLine(msg.From)) + m.fg(theme.TextMuted).Render(" → ") +
 			m.fg(theme.TextDefault).Render(to),
 		widget.Badge(m.palette, kindStatus(msg.Kind)),
 	}
@@ -116,17 +117,11 @@ func (m Model) when(t time.Time) string {
 	return t.Format("Jan 2 15:04")
 }
 
-// clean is s without the control characters a message may carry, so a
-// sender's escape sequences can't restyle or move the screen; tabs
-// become spaces.
+// clean is s without escape sequences, control characters or invisible
+// format characters, so a sender's escapes can't restyle or move the
+// screen; tabs become spaces.
 func clean(s string) string {
-	s = strings.ReplaceAll(s, "\t", "    ")
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r >= 0x20 && r != 0x7f && (r < 0x80 || r > 0x9f) {
-			return r
-		}
-		return -1
-	}, s)
+	return strings.ReplaceAll(termtext.Multiline(s), "\t", "    ")
 }
 
 func firstLine(s string) string {

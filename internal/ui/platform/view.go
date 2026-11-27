@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
@@ -201,14 +202,10 @@ func (m Model) mutedText(text string) string {
 
 // muted is text in muted colour, wrapped to width.
 func (m Model) muted(text string, width int) []string {
-	return strings.Split(lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextMuted)).Width(max(1, width)).Render(text), "\n")
+	return strings.Split(lipgloss.NewStyle().Foreground(m.palette.Color(theme.TextMuted)).Width(max(1, width)).Render(termtext.Multiline(text)), "\n")
 }
 
-// cutTo is s, cut to width cells with an ellipsis.
+// cutTo is s, sanitized and cut to width cells with an ellipsis.
 func cutTo(s string, width int) string {
-	r := []rune(s)
-	if width < 1 || len(r) <= width {
-		return s
-	}
-	return string(r[:width-1]) + "…"
+	return widget.Cut(termtext.SingleLine(s), width)
 }

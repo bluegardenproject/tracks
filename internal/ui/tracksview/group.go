@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
 )
@@ -61,10 +62,11 @@ const (
 
 // shownInList is t's name as the list shows it.
 func shownInList(t source.Track) string {
+	shown := termtext.SingleLine(t.Shown())
 	if t.Under {
-		return sideCorner + sidePrefix + t.Shown()
+		return sideCorner + sidePrefix + shown
 	}
-	return t.Shown()
+	return shown
 }
 
 // sideName draws side track t's name under its main track, at most
@@ -76,5 +78,5 @@ func (m Model) sideName(t source.Track, width int, selected bool, fill lipgloss.
 		return muted.Render(cut(shownInList(t), width))
 	}
 	name := fill.Foreground(m.palette.Color(theme.TableTextDefault)).Bold(selected)
-	return muted.Render(sideCorner+sidePrefix) + name.Render(cut(t.Shown(), width-lead))
+	return muted.Render(sideCorner+sidePrefix) + name.Render(cut(termtext.SingleLine(t.Shown()), width-lead))
 }

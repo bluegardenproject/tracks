@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/bluegardenproject/tracks/internal/store"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -96,8 +96,8 @@ func checkServer(i int, d store.DevServer) (store.DevServer, error) {
 	return d, nil
 }
 
-// printable reports whether s is 1 to limit characters of text without
-// control characters.
+// printable reports whether s is 1 to limit characters of single-line
+// text without terminal escapes, control or invisible format characters.
 func printable(s string, limit int) bool {
-	return s != "" && utf8.ValidString(s) && utf8.RuneCountInString(s) <= limit && !strings.ContainsFunc(s, unicode.IsControl)
+	return s != "" && utf8.ValidString(s) && utf8.RuneCountInString(s) <= limit && termtext.SingleLine(s) == s
 }

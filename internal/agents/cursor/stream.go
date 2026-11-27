@@ -3,7 +3,8 @@ package cursor
 import (
 	"encoding/json"
 	"strings"
-	"unicode"
+
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // Stream follows a print-mode turn's `--output-format stream-json
@@ -102,7 +103,7 @@ func (s *Stream) feed(line string) string {
 		// a last piece that happens to equal its segment.
 		s.held = ""
 		s.endSegment()
-		s.Done, s.Failed, s.Result = true, e.IsError, e.Result
+		s.Done, s.Failed, s.Result = true, e.IsError, plain(e.Result)
 		if s.Failed {
 			return "\nThe turn failed: " + oneLine(e.Result, maxOther) + "\n"
 		}
@@ -113,7 +114,7 @@ func (s *Stream) feed(line string) string {
 
 // endSegment keeps the text since the last tool call as a segment.
 func (s *Stream) endSegment() {
-	if text := strings.TrimSpace(s.segment.String()); text != "" {
+	if text := strings.TrimSpace(plain(s.segment.String())); text != "" {
 		s.Segments = append(s.Segments, text)
 	}
 	s.segment.Reset()
@@ -168,17 +169,9 @@ func oneLine(s string, max int) string {
 	return s
 }
 
-// plain is s without control characters but line ends and tabs, and
-// without the characters that reorder text: no escape sequence reaches
-// the pane.
+// plain is s without escape sequences, control characters other than
+// line ends and tabs, and invisible format characters: no escape
+// sequence reaches the pane or report.
 func plain(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\n' || r == '\t':
-			return r
-		case unicode.IsControl(r), r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069, r == 0x200e, r == 0x200f:
-			return -1
-		}
-		return r
-	}, s)
+	return termtext.Multiline(s)
 }

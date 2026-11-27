@@ -3,6 +3,7 @@ package tracksview
 import (
 	"fmt"
 
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/track"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
@@ -13,10 +14,11 @@ var dismissAction = action{actionDismissFailures, "Dismiss track errors", "t", 8
 
 // failureLine says what failed, as the details list it.
 func failureLine(f track.Failure) string {
+	subject := termtext.SingleLine(f.Subject)
 	if f.Kind == track.SetupError {
-		return fmt.Sprintf("setup of %s failed (exit %d)", f.Subject, f.Code)
+		return fmt.Sprintf("setup of %s failed (exit %d)", subject, f.Code)
 	}
-	return fmt.Sprintf("server %s crashed (exit %d)", f.Subject, f.Code)
+	return fmt.Sprintf("server %s crashed (exit %d)", subject, f.Code)
 }
 
 // failureLines appends t's errors to the details' lines, under label.

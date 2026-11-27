@@ -134,10 +134,16 @@ func (m Model) setEngines(msg enginesMsg) Model {
 		e.settings = msg.settings
 	}
 	e.loaded, e.loadErr = true, msg.err
-	checks := msg.checks
+	checks := maps.Clone(msg.checks)
+	if checks == nil {
+		checks = map[string]engineCheck{}
+	}
 	for id, c := range e.checks {
-		if _, ok := checks[id]; !ok && c.checking && e.settings.Get(id) == nil {
-			checks[id] = c // an Add still looking
+		if _, ok := checks[id]; ok {
+			continue
+		}
+		if c.checking && e.settings.Get(id) == nil || (e.saving || e.pending) && e.settings.Get(id) != nil {
+			checks[id] = c
 		}
 	}
 	e.checks = checks
@@ -376,7 +382,7 @@ func (m Model) enginesKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 	if e.focus.kind == ctlInput {
 		var cmd tea.Cmd
-		e.input, cmd = e.input.Update(msg)
+		e.input, cmd = widget.UpdateInput(e.input, msg)
 		return m, cmd
 	}
 	if key == "space" {

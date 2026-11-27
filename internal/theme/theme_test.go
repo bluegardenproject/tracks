@@ -38,6 +38,20 @@ func TestParseRejects(t *testing.T) {
 	if _, err := Parse([]byte(complete + `  button.variant6.bg: "#000000"` + "\n")); err != nil {
 		t.Errorf("a theme with a retired token rejected: %v", err)
 	}
+	dirty, err := Parse([]byte(strings.Replace(complete, "display_name: t", `display_name: "Red\x1b[31m\n\u202eTheme"`, 1)))
+	if err != nil {
+		t.Fatalf("theme with escapes in display_name rejected: %v", err)
+	}
+	if dirty.DisplayName != "Red Theme" {
+		t.Errorf("DisplayName = %q, want %q", dirty.DisplayName, "Red Theme")
+	}
+	created, err := Create(t.TempDir(), "My\x1b]0;title\x07\nTheme\u202e", Default())
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.DisplayName != "My Theme" {
+		t.Errorf("created DisplayName = %q, want %q", created.DisplayName, "My Theme")
+	}
 	tests := map[string]string{
 		"missing token": strings.Replace(complete, "  text.accent:", "  # text.accent:", 1),
 		"unknown token": complete + `  text.shiny: "#000000"` + "\n",

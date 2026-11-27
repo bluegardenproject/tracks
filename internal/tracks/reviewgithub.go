@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/review"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -205,20 +206,12 @@ func parseThreads(answer []byte) ([]review.Thread, int, error) {
 	return threads, max(0, all.TotalCount-len(all.Nodes)), nil
 }
 
-// escapes matches terminal escape sequences, which a log may hold.
-var escapes = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|[@-Z\\-_])`)
-
-// plain is text from GitHub without terminal escape sequences and
-// other control characters but tabs and line ends: it goes into the
-// reviewer's brief, and from its report to a terminal.
+// plain is text from GitHub without terminal escape sequences, control
+// characters other than tabs and line ends, or invisible format
+// characters: it goes into the reviewer's brief, and from its report to
+// a terminal.
 func plain(text string) string {
-	text = escapes.ReplaceAllString(text, "")
-	return strings.Map(func(r rune) rune {
-		if r < 0x20 && r != '\t' && r != '\n' || r >= 0x7f && r <= 0x9f {
-			return -1
-		}
-		return r
-	}, text)
+	return termtext.Multiline(text)
 }
 
 // actionsJob matches a GitHub Actions job's link. Owner must start with

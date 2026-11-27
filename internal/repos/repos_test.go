@@ -123,6 +123,9 @@ func TestAddChecksEveryField(t *testing.T) {
 		{store.Repo{Name: "shop", Path: dir, BaseBranch: "--all"}, "base"},
 		{store.Repo{Name: "shop", Path: dir}, "base"}, // main, which this repo lacks
 		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", CodeOwner: "@a @b"}, "owner"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", CodeOwner: "@a\x1b[31mb"}, "owner"},
+		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk\x1b[31m"}, "base"},
+		{store.Repo{Name: "shop\u202e", Path: dir, BaseBranch: "trunk"}, "name"},
 		{store.Repo{Name: "shop", Path: dir, BaseBranch: "trunk", Prefix: strings.Repeat("x", maxPrefix+1)}, "prefix"},
 	} {
 		if _, err := s.Add(ctx, c.repo); field(err) != c.field {
@@ -195,6 +198,8 @@ func TestWebURL(t *testing.T) {
 		"/srv/git/shop.git":                            "",
 		"file:///srv/git/shop.git":                     "",
 		"../shop":                                      "",
+		"https://github.com/acme/shop\x1b]0;t\x07.git": "",
+		"git@github.com:acme/\u202eshop.git":           "",
 	} {
 		if got := webURL(remote); got != want {
 			t.Errorf("webURL(%q) = %q, want %q", remote, got, want)
@@ -206,6 +211,7 @@ func TestNameFrom(t *testing.T) {
 	for folder, want := range map[string]string{
 		"shop-web": "shop-web", " Shop Web ": "Shop Web", "Über\tApp": "ÜberApp",
 		"a/b,c\\d": "abcd", "..": "", ",..": "", ".": "",
+		"shop\x1b[31m\u202eweb":        "shopweb",
 		strings.Repeat("a", 63) + " b": strings.Repeat("a", 63),
 	} {
 		if got := nameFrom(folder); got != want {

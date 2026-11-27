@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
@@ -35,7 +36,7 @@ func newFastInput() textinput.Model {
 // fastButton is the Review button, as the Details' buttons are drawn:
 // faint until there's a link to review.
 func (m Model) fastButton() widget.Button {
-	return widget.Button{Label: fastLabel, Hot: -1, Disabled: strings.TrimSpace(m.station.fast.Value()) == "",
+	return widget.Button{Label: fastLabel, Hot: -1, Disabled: strings.TrimSpace(termtext.SingleLine(m.station.fast.Value())) == "",
 		Hover: m.station.hoverFast}
 }
 
@@ -118,29 +119,49 @@ func (m Model) fastKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 	m = m.sizeFast()
 	var cmd tea.Cmd
-	m.station.fast, cmd = m.station.fast.Update(msg)
+	m.station.fast, cmd = widget.UpdateInput(m.station.fast, msg)
 	return m, cmd
 }
 
 // fastPaste puts what's pasted on Station into Fast Review's input: a
-// link pasted anywhere on Station replaces what's there.
-func (m Model) fastPaste(msg tea.PasteMsg) (Model, tea.Cmd) {
+// PasteMsg anywhere on Station focuses the input and replaces what's
+// there; clipboard and textinput paste messages paste while focused.
+func (m Model) fastPaste(msg tea.Msg) (Model, tea.Cmd) {
 	if m.fastReview == nil || !m.fastShown() {
 		return m, nil
 	}
-	if !m.station.fast.Focused() {
-		m.station.fast.SetValue("")
+	switch v := msg.(type) {
+	case tea.PasteMsg:
+		if !m.station.fast.Focused() {
+			m.station.fast.SetValue("")
+		}
+		next, focus := m.sizeFast().focusFast()
+		var cmd tea.Cmd
+		next.station.fast, cmd = next.station.fast.Update(tea.PasteMsg{Content: strings.TrimSpace(termtext.SingleLine(v.Content))})
+		return next, tea.Batch(focus, cmd)
+	case tea.ClipboardMsg:
+		if !m.station.fast.Focused() {
+			return m, nil
+		}
+		m = m.sizeFast()
+		var cmd tea.Cmd
+		m.station.fast, cmd = m.station.fast.Update(tea.PasteMsg{Content: strings.TrimSpace(termtext.SingleLine(v.Content))})
+		return m, cmd
+	default:
+		if !m.station.fast.Focused() {
+			return m, nil
+		}
+		m = m.sizeFast()
+		var cmd tea.Cmd
+		m.station.fast, cmd = m.station.fast.Update(msg)
+		return m, cmd
 	}
-	next, focus := m.sizeFast().focusFast()
-	var cmd tea.Cmd
-	next.station.fast, cmd = next.station.fast.Update(tea.PasteMsg{Content: strings.TrimSpace(msg.Content)})
-	return next, tea.Batch(focus, cmd)
 }
 
 // startFastReview opens a Review track on the input's link, and clears
 // the input for the next one.
 func (m Model) startFastReview() (Model, tea.Cmd) {
-	link := strings.TrimSpace(m.station.fast.Value())
+	link := strings.TrimSpace(termtext.SingleLine(m.station.fast.Value()))
 	if link == "" || m.fastReview == nil {
 		return m, nil
 	}

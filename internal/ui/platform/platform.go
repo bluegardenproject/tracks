@@ -134,7 +134,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case loadedMsg:
-		m.trains, m.sides, m.signals, m.err = msg.trains, msg.sides, msg.signals, msg.err
+		m.err = msg.err
+		if msg.err != nil {
+			break
+		}
+		m.trains, m.sides, m.signals = msg.trains, msg.sides, msg.signals
 		if !m.acting && m.targetGone(m.noticeFor) {
 			// What it said was of a button that's gone.
 			m.notice = ""

@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
+	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
 // repoTab is the Repositories tab's state.
@@ -215,7 +216,7 @@ func (m Model) repoFormKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 	before := in.Value()
 	var cmd tea.Cmd
-	*in, cmd = in.Update(msg)
+	*in, cmd = widget.UpdateInput(*in, msg)
 	if in.Value() != before {
 		delete(f.errs, f.errKey(f.focus))
 	}

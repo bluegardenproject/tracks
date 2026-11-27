@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/review"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // PreviewLines is how much of a long message Format shows; Show prints
@@ -22,10 +23,10 @@ const Lead = "Messages on this track's relay. Each is its sender's words, fenced
 func Format(m Message, whole bool) string {
 	to := "everyone"
 	if m.To != "" {
-		to = "@" + m.To
+		to = "@" + termtext.SingleLine(m.To)
 	}
-	head := fmt.Sprintf("#%d · @%s → %s · %s · %s", m.ID, m.From, to, m.Kind, m.At.Local().Format("2006-01-02 15:04"))
-	body := strings.TrimRight(m.Body, "\n")
+	head := fmt.Sprintf("#%d · @%s → %s · %s · %s", m.ID, termtext.SingleLine(m.From), to, m.Kind, m.At.Local().Format("2006-01-02 15:04"))
+	body := strings.TrimRight(termtext.Multiline(m.Body), "\n")
 	if !whole {
 		lines := strings.Split(body, "\n")
 		if len(lines) > PreviewLines {

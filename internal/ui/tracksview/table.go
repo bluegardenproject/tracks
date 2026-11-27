@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/bluegardenproject/tracks/internal/theme"
+	"github.com/bluegardenproject/tracks/internal/ui/widget"
 )
 
 // columnGap is the gap between a table's columns.
@@ -45,13 +46,13 @@ func (t table) draw(m Model, width, height int) []string {
 				used += columnGap
 			}
 			if d := drawn(i, widths[i]); d != "" && lipgloss.Width(d) <= widths[i] {
-				b.WriteString(d + fill.Render(strings.Repeat(" ", widths[i]-lipgloss.Width(d))))
+				b.WriteString(d + fill.Render(strings.Repeat(" ", max(0, widths[i]-lipgloss.Width(d)))))
 				used += widths[i]
 				continue
 			}
 			v = cut(v, widths[i])
 			if i == t.right {
-				v = strings.Repeat(" ", widths[i]-lipgloss.Width(v)) + v
+				v = strings.Repeat(" ", max(0, widths[i]-lipgloss.Width(v))) + v
 			}
 			b.WriteString(style(i).Render(pad(v, widths[i])))
 			used += widths[i]
@@ -142,14 +143,7 @@ func keepVisible(selected, offset, rows, n int) int {
 	return max(0, min(offset, n-rows))
 }
 
-// cut shortens s to width, ending it with an ellipsis.
+// cut shortens s to width cells, ending it with an ellipsis.
 func cut(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:max(0, width-1)]) + "…"
+	return widget.Cut(s, width)
 }

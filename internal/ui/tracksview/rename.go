@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/theme"
 	"github.com/bluegardenproject/tracks/internal/ui/source"
 	"github.com/bluegardenproject/tracks/internal/ui/widget"
@@ -53,11 +54,12 @@ func (m Model) startRename(t source.Track) (Model, tea.Cmd) {
 	if _, _, w, h := m.renameBox(); w < 12 || h < renameHeight {
 		return m, nil
 	}
-	in := widget.NewInput(titleLimit, t.Name)
-	in.SetValue(t.Shown())
+	shown := termtext.SingleLine(t.Shown())
+	in := widget.NewInput(titleLimit, termtext.SingleLine(t.Name))
+	in.SetValue(shown)
 	in.CursorEnd()
 	cmd := in.Focus()
-	m.station.rename = &renameBox{id: t.ID, slug: t.Name, was: t.Shown(), input: in}
+	m.station.rename = &renameBox{id: t.ID, slug: t.Name, was: shown, input: in}
 	m.station.rename.scroll(m.renameTextWidth())
 	return m, cmd
 }
@@ -66,26 +68,30 @@ func (m Model) startRename(t source.Track) (Model, tea.Cmd) {
 // key, paste and mouse event.
 func (m Model) renameMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	r := m.station.rename
-	switch msg := msg.(type) {
+	switch v := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
+		switch v.String() {
 		case "enter":
 			return m.saveRename()
 		case "esc":
 			m.station.rename = nil
 			return m, nil
 		}
+	case tea.PasteMsg:
+		msg = tea.PasteMsg{Content: termtext.SingleLine(v.Content)}
+	case tea.ClipboardMsg:
+		msg = tea.PasteMsg{Content: termtext.SingleLine(v.Content)}
 	case tea.MouseClickMsg:
-		return m.renameClick(msg.Mouse())
+		return m.renameClick(v.Mouse())
 	case tea.MouseMotionMsg:
-		mouse := msg.Mouse()
+		mouse := v.Mouse()
 		r.hover, _ = m.renameTargetAt(mouse.X, mouse.Y)
 		return m, nil
 	case tea.MouseMsg:
 		return m, nil
 	}
 	var cmd tea.Cmd
-	r.input, cmd = r.input.Update(msg)
+	r.input, cmd = widget.UpdateInput(r.input, msg)
 	r.scroll(m.renameTextWidth())
 	return m, cmd
 }
@@ -120,13 +126,13 @@ func (m Model) renameClick(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 func (m Model) saveRename() (tea.Model, tea.Cmd) {
 	r := m.station.rename
 	m.station.rename = nil
-	title := strings.TrimSpace(r.input.Value())
+	title := strings.TrimSpace(termtext.SingleLine(r.input.Value()))
 	if title == r.was || m.setTitle == nil {
 		return m, nil
 	}
 	shown := title
 	if shown == "" {
-		shown = r.slug
+		shown = termtext.SingleLine(r.slug)
 	}
 	return m, func() tea.Msg {
 		if err := m.setTitle(r.id, title); err != nil {
@@ -233,7 +239,7 @@ func (m Model) renameView(w int) string {
 	title := "Rename track"
 	buttons := renameButtons(r.hover)
 	row := buttons[0].View(m.palette) + bg.Render(strings.Repeat(" ", widget.ButtonGap)) + buttons[1].View(m.palette)
-	about := bg.Foreground(m.palette.Color(theme.OverlayTextFaint)).Render(cut("Empty shows the slug, "+r.slug+".", inner))
+	about := bg.Foreground(m.palette.Color(theme.OverlayTextFaint)).Render(cut("Empty shows the slug, "+termtext.SingleLine(r.slug)+".", inner))
 	return strings.Join([]string{
 		border.Render("╭─ ") + bg.Foreground(m.palette.Color(theme.OverlayTextDefault)).Bold(true).Render(title) +
 			border.Render(" "+strings.Repeat("─", max(0, w-5-lipgloss.Width(title)))+"╮"),
@@ -273,7 +279,7 @@ func (m Model) renameInput(width int) string {
 		used++
 	}
 	if len(v) == 0 && width > 1 {
-		placeholder := cut(r.slug, width-1)
+		placeholder := cut(termtext.SingleLine(r.slug), width-1)
 		b.WriteString(field.Foreground(m.palette.Color(theme.TextFaint)).Render(placeholder))
 		used += lipgloss.Width(placeholder)
 	}

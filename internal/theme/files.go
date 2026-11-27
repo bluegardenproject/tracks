@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/bluegardenproject/tracks/internal/termtext"
 )
 
 // ErrExists is returned when a new theme's id is taken.
@@ -157,7 +159,7 @@ func (t Theme) Save(dir string) error {
 // Create writes t as a new theme called name in dir, its id made from
 // the name. It fails with ErrExists when the id is taken.
 func Create(dir, name string, t Theme) (Theme, error) {
-	name = strings.TrimSpace(name)
+	name = strings.TrimSpace(termtext.SingleLine(name))
 	id := IDFrom(name)
 	if id == "" {
 		return Theme{}, errors.New("enter a name with a letter or digit")

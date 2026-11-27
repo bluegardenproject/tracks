@@ -185,6 +185,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m.key(msg)
 	case tea.PasteMsg:
 		return m.updateInput(msg)
+	case tea.ClipboardMsg:
+		return m.updateInput(tea.PasteMsg{Content: msg.Content})
 	case tea.MouseClickMsg:
 		m.status = ""
 		return m.click(msg)
@@ -203,6 +205,8 @@ func (m Model) saved(msg SavedMsg) (Model, tea.Cmd) {
 		m.status, m.statusErr = "Couldn't save: "+msg.Err.Error(), true
 		if m.mode == modeLeave {
 			m.mode, m.saving = modeEdit, false
+			cmd := m.setFocus(0)
+			return m, tea.Batch(cmd, func() tea.Msg { return StayMsg{} })
 		}
 		return m, nil
 	}
@@ -401,9 +405,9 @@ func (m Model) updateInput(msg tea.Msg) (Model, tea.Cmd) {
 	switch {
 	case !m.focused:
 	case m.mode == modeName && m.focus == 0:
-		m.name, cmd = m.name.Update(msg)
+		m.name, cmd = widget.UpdateInput(m.name, msg)
 	case (m.mode == modeEdit) && m.focus < len(m.fields):
-		m.fields[m.focus].input, cmd = m.fields[m.focus].input.Update(msg)
+		m.fields[m.focus].input, cmd = widget.UpdateInput(m.fields[m.focus].input, msg)
 	}
 	return m, cmd
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bluegardenproject/tracks/internal/relay"
 	"github.com/bluegardenproject/tracks/internal/settings"
+	"github.com/bluegardenproject/tracks/internal/termtext"
 	"github.com/bluegardenproject/tracks/internal/track"
 )
 
@@ -124,7 +125,7 @@ const maxGitHubText = 60
 // characters and cut short: a repo's owners choose their checks' and
 // branches' names.
 func gitHubText(s string) string {
-	s = escapes.ReplaceAllString(s, "")
+	s = termtext.SingleLine(s)
 	s = strings.Map(func(r rune) rune {
 		if unicode.IsPrint(r) {
 			return r
