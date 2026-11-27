@@ -38,8 +38,13 @@ func (m Model) openEffortPicker() (Model, tea.Cmd) {
 		items = append(items, widget.PickerItem{Label: level})
 	}
 	marked := 0
-	if i := slices.Index(en.Efforts, m.typeEffort()); i >= 0 {
-		marked = i + 1
+	if cur := m.typeEffort(); cur != "" {
+		if i := slices.Index(en.Efforts, cur); i >= 0 {
+			marked = i + 1
+		} else {
+			items = append(items, widget.PickerItem{Label: cur, Detail: "not a level " + en.Name + " lists"})
+			marked = len(items) - 1
+		}
 	}
 	p := widget.NewPicker(kindTitle(m.selectedKind())+" tracks: effort", items, marked)
 	p.Cursor = marked

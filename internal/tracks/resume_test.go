@@ -41,7 +41,9 @@ func (f *fixture) ended(t *testing.T, cleaned bool) track.Track {
 func TestResume(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
+	f.types.Set("work", &settings.TrackType{Engine: "claude", Effort: "high"})
 	tr := f.ended(t, false)
+	f.types.Set("work", &settings.TrackType{Engine: "claude", Effort: "low"})
 	// Another window took the name meanwhile.
 	f.windows.windows = append(f.windows.windows, trackwin.Info{Number: 1, Window: "@other", Track: "other", Name: tr.Name})
 
@@ -60,7 +62,7 @@ func TestResume(t *testing.T) {
 	if f.windows.platforms[got.Window.ID] == "" {
 		t.Error("the resumed track's window has no Platform")
 	}
-	if e := f.engine.spec; !e.Resume || !e.Auto || e.Track.Session != "session-1" {
+	if e := f.engine.spec; !e.Resume || !e.Auto || e.Track.Session != "session-1" || e.Track.Effort != "high" {
 		t.Errorf("engine spec = %+v", e)
 	}
 	if !slices.Equal(steps, []string{"Starting Claude Code…"}) {
