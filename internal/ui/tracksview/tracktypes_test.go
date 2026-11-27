@@ -148,3 +148,13 @@ func TestTrackTypeEffort(t *testing.T) {
 		t.Errorf("down from Model should skip the hidden effort, focus %d", m.settings.types.focus)
 	}
 }
+
+func TestTrackTypeEffortFocusWhenHidden(t *testing.T) {
+	m, _ := openTypes(t)
+	m = settle(m, downKey, downKey, downKey)
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, enterKey)
+	if m.pickerFor == pickTypeEffort || m.settings.types.focus != typeModel {
+		t.Errorf("Enter on a hidden effort should act on Model: picker %d, focus %d", m.pickerFor, m.settings.types.focus)
+	}
+}

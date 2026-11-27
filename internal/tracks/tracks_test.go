@@ -523,14 +523,14 @@ func TestCreateRunsOnTheTypesAgent(t *testing.T) {
 	f := newFixture(t)
 	f.engines = settings.Engines{Claude: &settings.Engine{Model: "opus"}, Cursor: &settings.Engine{Model: "gpt-5"}}
 	f.types.Set("ask", &settings.TrackType{Engine: "cursor"})
-	f.types.Set("plan", &settings.TrackType{Engine: "claude", Model: "sonnet"})
+	f.types.Set("plan", &settings.TrackType{Engine: "claude", Model: "sonnet", Effort: "high"})
 	for _, c := range []struct {
-		kind          track.Kind
-		engine, model string
+		kind                  track.Kind
+		engine, model, effort string
 	}{
-		{track.Ask, "cursor", "gpt-5"},
-		{track.Plan, "claude", "sonnet"},
-		{track.Doc, "claude", "opus"},
+		{track.Ask, "cursor", "gpt-5", ""},
+		{track.Plan, "claude", "sonnet", "high"},
+		{track.Doc, "claude", "opus", ""},
 	} {
 		req := Request{Kind: c.kind, Prompt: "Why"}
 		if c.kind == track.Doc {
@@ -540,8 +540,8 @@ func TestCreateRunsOnTheTypesAgent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", c.kind, err)
 		}
-		if got.Track.Engine != c.engine || got.Track.Model != c.model {
-			t.Errorf("%s runs on %s, %q; want %s, %q", c.kind, got.Track.Engine, got.Track.Model, c.engine, c.model)
+		if got.Track.Engine != c.engine || got.Track.Model != c.model || got.Track.Effort != c.effort {
+			t.Errorf("%s runs on %s, %q, %q; want %s, %q, %q", c.kind, got.Track.Engine, got.Track.Model, got.Track.Effort, c.engine, c.model, c.effort)
 		}
 	}
 
@@ -561,21 +561,21 @@ func TestCreateRunsOnTheAgentPicked(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	f.engines = settings.Engines{Claude: &settings.Engine{Model: "opus"}, Cursor: &settings.Engine{}}
-	f.types.Set("ask", &settings.TrackType{Engine: "claude", Model: "sonnet"})
+	f.types.Set("ask", &settings.TrackType{Engine: "claude", Model: "sonnet", Effort: "max"})
 	for _, c := range []struct {
-		engine, model, want string
+		engine, model, want, effort string
 	}{
-		{"cursor", "gpt-5", "gpt-5"},
-		{"cursor", "", ""},
-		{"claude", "", "opus"},
-		{"claude", "haiku", "haiku"},
+		{"cursor", "gpt-5", "gpt-5", ""},
+		{"cursor", "", "", ""},
+		{"claude", "", "opus", "max"},
+		{"claude", "haiku", "haiku", "max"},
 	} {
 		got, err := f.svc.Create(ctx, Request{Kind: track.Ask, Prompt: "Why", Engine: c.engine, Model: c.model}, func(string) {})
 		if err != nil {
 			t.Fatalf("%s %q: %v", c.engine, c.model, err)
 		}
-		if got.Track.Engine != c.engine || got.Track.Model != c.want {
-			t.Errorf("picked %s %q, runs on %s %q; want %q", c.engine, c.model, got.Track.Engine, got.Track.Model, c.want)
+		if got.Track.Engine != c.engine || got.Track.Model != c.want || got.Track.Effort != c.effort {
+			t.Errorf("picked %s %q, runs on %s %q %q; want %q %q", c.engine, c.model, got.Track.Engine, got.Track.Model, got.Track.Effort, c.want, c.effort)
 		}
 	}
 
