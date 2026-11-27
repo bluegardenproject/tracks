@@ -19,7 +19,8 @@ type Spec struct {
 	// Auto is the engine's auto mode, from the Engines tab.
 	Auto bool
 	// Resume continues the track's session: the session brings back its
-	// prompt and model, so neither is passed.
+	// prompt and model, so neither is passed. The effort is: Claude's
+	// --effort holds for one session only.
 	Resume bool
 	// DraftPRs names the track's repos that open pull requests as
 	// drafts: for a side track, those whose pull requests stay drafts.

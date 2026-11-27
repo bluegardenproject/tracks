@@ -49,6 +49,7 @@ type Track struct {
 	// Engine is the agent CLI's id, Model what it was started with ("" is
 	// the engine's own default), Session the ID that resumes it.
 	Engine, Model, Session string
+	Effort                 string // the engine's --effort, "" for its own
 	Prompt                 string // as the user wrote it
 	ReviewRef              string // Review: the PR link or branch
 	Document               string // Doc: the resolved path

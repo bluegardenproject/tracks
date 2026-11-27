@@ -54,7 +54,7 @@ func TestBrokenFileIsAnError(t *testing.T) {
 
 func TestEnginesKeepWhatThisBuildDoesntKnow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.yaml")
-	newer := "theme: my_theme\nengines:\n  claude:\n    model: opus\n    effort: high # newer\n  codex: {}\n"
+	newer := "theme: my_theme\nengines:\n  claude:\n    model: opus\n    sandbox: strict # newer\n  codex: {}\n"
 	if err := os.WriteFile(path, []byte(newer), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestEnginesKeepWhatThisBuildDoesntKnow(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	for _, want := range []string{"theme: my_theme", "effort: high # newer", "codex: {}", "claude-opus-5-5", "auto: false", "cursor: {}"} {
+	for _, want := range []string{"theme: my_theme", "sandbox: strict # newer", "codex: {}", "claude-opus-5-5", "auto: false", "cursor: {}"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("saved file lacks %q:\n%s", want, data)
 		}
@@ -157,9 +157,26 @@ func TestRunsOn(t *testing.T) {
 	}
 }
 
+func TestEffortOn(t *testing.T) {
+	var s Settings
+	if got := s.EffortOn("work", "claude"); got != "" {
+		t.Errorf("unset: %q", got)
+	}
+	s.Tracks.Set("work", &TrackType{Engine: "claude", Effort: "high"})
+	if got := s.EffortOn("work", "claude"); got != "high" {
+		t.Errorf("work on Claude: %q", got)
+	}
+	if got := s.EffortOn("work", "cursor"); got != "" {
+		t.Errorf("work picked on Cursor: %q; the effort is Claude's", got)
+	}
+	if got := s.EffortOn("plan", "claude"); got != "" {
+		t.Errorf("plan unset: %q", got)
+	}
+}
+
 func TestTracksKeepWhatThisBuildDoesntKnow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.yaml")
-	newer := "tracks:\n  work:\n    engine: claude\n    effort: high # newer\n  triage: {engine: cursor}\n"
+	newer := "tracks:\n  work:\n    engine: claude\n    sandbox: strict # newer\n  triage: {engine: cursor}\n"
 	if err := os.WriteFile(path, []byte(newer), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +190,7 @@ func TestTracksKeepWhatThisBuildDoesntKnow(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	for _, want := range []string{"model: opus", "effort: high # newer", "triage: {engine: cursor}", "doc:\n        engine: cursor"} {
+	for _, want := range []string{"model: opus", "sandbox: strict # newer", "triage: {engine: cursor}", "doc:\n        engine: cursor"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("saved file lacks %q:\n%s", want, data)
 		}

@@ -11,11 +11,13 @@ type Tracks struct {
 }
 
 // TrackType is one track type's defaults: the engine its tracks run on,
-// which may not be added, and the model, "" for the engine's default
-// on the Engines tab.
+// which may not be added, the model, "" for the engine's default on the
+// Engines tab, and the effort, "" for the engine's own, for an engine
+// with effort levels.
 type TrackType struct {
 	Engine string `yaml:"engine"`
 	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
 }
 
 func (t *Tracks) field(kind string) **TrackType {
@@ -66,4 +68,13 @@ func (s Settings) RunsOn(kind string) (engine, model string) {
 		return engine, e.Model
 	}
 	return engine, ""
+}
+
+// EffortOn is the effort kind's tracks start with on engine: kind's own
+// when it names that engine, "" for the engine's own.
+func (s Settings) EffortOn(kind, engine string) string {
+	if d := s.Tracks.Get(kind); d != nil && d.Engine == engine {
+		return d.Effort
+	}
+	return ""
 }
