@@ -19,7 +19,8 @@ the v2.0.0 release; git history keeps them.
   and 11 are built, 9b in review; v1 has the Reviewer as its only train.
   Phase 2: side tracks, child
   tracks a main track orchestrates to write code in parallel, on its
-  relay, grouped under it in the Station.
+  relay, grouped under it in the Station; the main track starts, lists and
+  ends them (`tracks side new|list|end`).
 - **Agent protocol (v2)** ([docs/design/protocol.md](design/protocol.md)):
   planning. Decided 2026-11-27: plugins as packages of `train` and `track`
   components in a `tracks-plugins` repo, code in declared slots, a Plugins

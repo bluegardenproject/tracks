@@ -588,6 +588,11 @@ own. "Side track" is always two words: "sidetracked" means something else.
   track that's gone. Settled is ended, its PR merged or closed, or none
   opened. Ending it says which side tracks are left, for the user to
   settle (or end) first.
+- **The main track can end its side tracks**: `tracks side end <handle>`
+  ends one as the Station's End does. Its window and agent close; its
+  worktree, branch and PRs stay, and the Station still lists it, so the
+  user can resume it. It's for a side track whose part is done, or when
+  the user asks; a side track can't end itself or its siblings.
 - **No nesting**: a side track starts no side tracks of its own.
 
 ### Pull requests

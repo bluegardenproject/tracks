@@ -363,3 +363,30 @@ func TestMainOf(t *testing.T) {
 		t.Errorf("MainOf(main track) = %v, %v; want not a side track", ok, err)
 	}
 }
+
+func TestMainTrackEndsItsSideTrack(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	var problem Problem
+	for _, tc := range []struct{ id, to, why string }{
+		{st.ID, st.Side, "only its main track"},
+		{main.ID, "side-999999", "tracks side list"},
+	} {
+		if _, err := f.svc.EndSide(ctx, tc.id, tc.to); !errors.As(err, &problem) || !strings.Contains(err.Error(), tc.why) {
+			t.Errorf("EndSide(%s, %s): %v; want a Problem saying %q", tc.id, tc.to, err, tc.why)
+		}
+	}
+	got, err := f.svc.EndSide(ctx, main.ID, side.Prefix)
+	if err != nil || got.ID != st.ID {
+		t.Fatalf("EndSide by the prefix only it has: %+v, %v; want relay-store", got, err)
+	}
+	if saved, err := f.store.Track(ctx, st.ID); err != nil || saved.Open() {
+		t.Errorf("after EndSide the side track is open %v, %v; want it ended and kept", saved.Open(), err)
+	}
+	if _, err := f.svc.EndSide(ctx, main.ID, "@"+st.Side); !errors.As(err, &problem) || !strings.Contains(err.Error(), "already ended") {
+		t.Errorf("ending it again: %v; want a Problem saying it already ended", err)
+	}
+	if err := f.svc.End(ctx, main.ID); err != nil {
+		t.Errorf("ending the main track once its side track ended without a PR: %v", err)
+	}
+}
