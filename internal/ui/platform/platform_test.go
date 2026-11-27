@@ -426,3 +426,28 @@ func TestASideTracksLongStatus(t *testing.T) {
 		t.Errorf("switched %d times, want once", opened)
 	}
 }
+
+// A side track shows its main track under Main Track, instead of Side
+// Tracks, and its button switches to the main track's window.
+func TestBackToMainTrack(t *testing.T) {
+	var opened []string
+	m := update(t, New(Config{Theme: theme.Default(), OpenSide: func(id string) error {
+		opened = append(opened, id)
+		return nil
+	}}), tea.WindowSizeMsg{Width: 26, Height: 30}, loadedMsg{
+		sides: []Side{{ID: "main-1", Name: "api-cache", Main: true}},
+	})
+	v := view(m)
+	if !strings.Contains(v, "Main Track") || !strings.Contains(v, "api-cache") || !strings.Contains(v, "Back to main track") ||
+		strings.Contains(v, "Side Tracks") {
+		t.Fatalf("want Main Track, its name and the button, and no Side Tracks:\n%s", v)
+	}
+	next, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: rowOf(t, m, "Back to main track"), Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("a click on Back to main track did nothing")
+	}
+	update(t, next, cmd())
+	if strings.Join(opened, " ") != "main-1" {
+		t.Errorf("switched to %q, want main-1", opened)
+	}
+}

@@ -9,11 +9,11 @@ import (
 )
 
 func TestPlatformSides(t *testing.T) {
-	sides, err := platformSides([]rpc.SideTrack{
+	sides, err := platformSides(rpc.SideListResult{Sides: []rpc.SideTrack{
 		{ID: "a", Name: "relay-store", Status: "active", StatusID: "active", PRID: "none"},
 		{ID: "b", Name: "relay-cli", Title: "Relay CLI", Status: "done", StatusID: "done", PR: "2 PRs open", PRID: "open"},
 		{ID: "c", Name: "later", Status: "?", StatusID: "new-status", PR: "PR queued", PRID: "queued"},
-	}, nil)
+	}}, nil)
 	if err != nil || len(sides) != 3 {
 		t.Fatalf("platformSides = %+v, %v", sides, err)
 	}
@@ -26,7 +26,11 @@ func TestPlatformSides(t *testing.T) {
 	if s := sides[2]; s.Status.Label != "" || s.PR.Label != "" {
 		t.Errorf("a newer daemon's statuses = %+v; want no badges for what this one doesn't know", s)
 	}
-	if _, err := platformSides(nil, errors.New("no daemon")); err == nil {
+	if _, err := platformSides(rpc.SideListResult{}, errors.New("no daemon")); err == nil {
 		t.Error("the daemon's error is dropped")
+	}
+	main, err := platformSides(rpc.SideListResult{Main: &rpc.SideTrack{ID: "m", Name: "api-cache", Title: "API cache"}}, nil)
+	if err != nil || len(main) != 1 || !main[0].Main || main[0].ID != "m" || main[0].Name != "API cache" {
+		t.Errorf("a side track's main track = %+v, %v; want it marked Main, under its title", main, err)
 	}
 }

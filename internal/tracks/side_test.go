@@ -352,3 +352,14 @@ func TestSideTrackPromptNamesItsMainTrackAsShown(t *testing.T) {
 		t.Errorf("restarted side track with %+v, resume %v; want a fresh start naming API cache", s, f.engine.spec.Resume)
 	}
 }
+
+func TestMainOf(t *testing.T) {
+	ctx := context.Background()
+	f, main, st := sideFixture(t)
+	if id, name, ok, err := f.svc.MainOf(ctx, st.ID); err != nil || !ok || id != main.ID || name != "api-cache" {
+		t.Errorf("MainOf(side track) = %q, %q, %v, %v; want api-cache", id, name, ok, err)
+	}
+	if _, _, ok, err := f.svc.MainOf(ctx, main.ID); err != nil || ok {
+		t.Errorf("MainOf(main track) = %v, %v; want not a side track", ok, err)
+	}
+}

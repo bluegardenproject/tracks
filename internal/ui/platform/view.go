@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -78,7 +79,8 @@ func (m Model) layout() ([]string, []target) {
 
 // platformBody is the Platform frame's inside: under a dim Trains each
 // train, its badges and its Collect messages, then under a dim Side
-// Tracks each side track and its badges; "empty" for none.
+// Tracks each side track and its badges, "empty" for none; a side track
+// shows its Main Track instead, with a button back to it.
 func (m Model) platformBody() ([]string, []item) {
 	inner := m.width - 4
 	var body []string
@@ -115,6 +117,19 @@ func (m Model) platformBody() ([]string, []item) {
 		body = append(body, "")
 	}
 
+	if i := slices.IndexFunc(m.sides, func(s Side) bool { return s.Main }); i >= 0 {
+		// A side track's way back: its main track's name, and a button.
+		body = append(body, m.mutedText("Main Track"))
+		items = append(items, item{row: len(body), kind: targetSide, index: i, whole: true})
+		body = append(body, m.item(cutTo(m.sides[i].Name, inner)))
+		b := widget.NewButton("Back to main track", widget.ButtonDefault)
+		items = append(items, item{row: len(body), width: b.Width(), kind: targetSide, index: i})
+		body = append(body, " "+b.View(m.palette))
+		if m.notice != "" && m.noticeFor == targetSide {
+			body = append(body, m.muted(m.notice, inner)...)
+		}
+		return body, items
+	}
 	body = append(body, m.mutedText("Side Tracks"))
 	for i, s := range m.sides {
 		// Its rows, name and badges, switch to its window.

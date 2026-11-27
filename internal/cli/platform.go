@@ -43,7 +43,7 @@ func newPlatformCmd(version string) *cobra.Command {
 			m := uiplatform.New(uiplatform.Config{
 				Theme:     t,
 				Trains:    func() ([]uiplatform.Entry, error) { return platformEntries(client.TrainList(cmd.Context(), id)) },
-				Sides:     func() ([]uiplatform.Side, error) { return platformSides(client.SideList(cmd.Context(), id)) },
+				Sides:     func() ([]uiplatform.Side, error) { return platformSides(client.Sides(cmd.Context(), id)) },
 				OpenSide:  func(side string) error { return switchFromPlatform(daemon.tmux, side) },
 				Watch:     daemon.watch,
 				LoadTheme: func() (theme.Theme, error) { return loadTheme(paths) },
@@ -107,11 +107,17 @@ func platformSignals(sig rpc.SignalsResult, err error) (uiplatform.Signals, erro
 }
 
 // platformSides are side tracks, from the daemon, as the Platform shows
-// them: their badges the Station's, with its labels.
-func platformSides(sides []rpc.SideTrack, err error) ([]uiplatform.Side, error) {
+// them: their badges the Station's, with its labels. A side track's
+// main track comes first, marked Main.
+func platformSides(r rpc.SideListResult, err error) ([]uiplatform.Side, error) {
 	if err != nil {
 		return nil, err
 	}
+	var main []uiplatform.Side
+	if r.Main != nil {
+		main = []uiplatform.Side{{ID: r.Main.ID, Name: cmp.Or(r.Main.Title, r.Main.Name), Main: true}}
+	}
+	sides := r.Sides
 	out := make([]uiplatform.Side, len(sides))
 	for i, s := range sides {
 		// Named as the Station names it.
@@ -122,7 +128,7 @@ func platformSides(sides []rpc.SideTrack, err error) ([]uiplatform.Side, error) 
 			out[i].PR = pr
 		}
 	}
-	return out, nil
+	return append(main, out...), nil
 }
 
 // switchFromPlatform switches to side track id's window, on its agent

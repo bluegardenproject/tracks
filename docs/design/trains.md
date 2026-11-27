@@ -853,7 +853,9 @@ track's policy has Tracks tell it (built, step 4).
 3. The Platform's side tracks (#251): in the Platform frame, under a
    dim "Side Tracks" heading after the trains' dim "Trains", each side
    track with the Station's status and PR badges, "empty" for none; a
-   click switches to its window.
+   click switches to its window. A side track's Platform shows its main
+   track instead, under "Main Track", with a "Back to main track" button
+   that switches to the main track's window.
    Left for it from step 2: a side track's Relay Station and "N new"
    show only its own relay, not its traffic with its main track; and a
    pointer held for `@track` (in a side track) or `@side-…` (in a main

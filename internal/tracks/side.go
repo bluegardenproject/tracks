@@ -72,6 +72,16 @@ func (s *Service) SideTracks(ctx context.Context, id string) ([]track.Track, err
 	return s.Store.SideTracks(ctx, id)
 }
 
+// MainOf is side track id's main track, its ID and the name it's shown
+// under; ok is false when id isn't a side track.
+func (s *Service) MainOf(ctx context.Context, id string) (mainID, name string, ok bool, err error) {
+	t, err := s.relayTrack(ctx, id)
+	if err != nil || !side.Is(t) {
+		return "", "", false, err
+	}
+	return t.Parent, t.ParentName, true, nil
+}
+
 // makingSide notes that a side track of main track id is being made,
 // until done: End, Archive and Derail refuse it meanwhile, and it
 // refuses while one of them holds id. Both happen under s.mu, so one of
