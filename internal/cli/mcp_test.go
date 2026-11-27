@@ -90,18 +90,29 @@ func TestMCPEndToEnd(t *testing.T) {
 	if isErr || !strings.Contains(who, "@track") || !strings.Contains(who, "@side-1") {
 		t.Errorf("relay_who = %q, error %v; want the track and its side track", who, isErr)
 	}
-	if got, isErr := mainAgent.tool("proxy_status", nil); isErr || got != "No dev servers.\n" {
-		t.Errorf("proxy_status = %q, error %v", got, isErr)
+	// What tracks servers says, here a daemon without tmux's error.
+	got, isErr := mainAgent.tool("proxy_status", nil)
+	var cliOut strings.Builder
+	root := newRoot("v-test")
+	root.SetArgs([]string{"servers"})
+	root.SetOut(&cliOut)
+	if cliErr := root.ExecuteContext(ctx); (cliErr != nil) != isErr || (cliErr != nil && got != cliErr.Error()) ||
+		(cliErr == nil && got != cliOut.String()) {
+		t.Errorf("proxy_status = %q, error %v; want tracks servers' %q, %v", got, isErr, cliOut.String(), cliErr)
+	}
+	// The daemon's notices from its start, then nothing new.
+	if got, isErr := mainAgent.tool("relay_read", nil); isErr {
+		t.Errorf("relay_read = %q, error %v", got, isErr)
 	}
 	if got, isErr := mainAgent.tool("relay_read", nil); isErr || got != "No new messages." {
-		t.Errorf("relay_read = %q, error %v", got, isErr)
+		t.Errorf("relay_read again = %q, error %v", got, isErr)
 	}
 	waiting := mainAgent.start("tools/call", map[string]any{"name": "relay_wait"})
 
 	// The side track's agent finds it through TRACKS_SOCKET_DIR, as
 	// Cursor's config passes it, and names a track that isn't its own.
 	sideAgent := startMCP(t, main.ID, tokens[side.ID], paths.DataDir)
-	got, isErr := sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "report", "body": "Done: #12."})
+	got, isErr = sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "report", "body": "Done: #12."})
 	if isErr || !strings.HasPrefix(got, "Sent #") || !strings.HasSuffix(got, " to @track.") {
 		t.Errorf("relay_send = %q, error %v", got, isErr)
 	}
@@ -114,7 +125,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	// Its mistakes are told in the CLI's words.
 	mcpErr, isErr := sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "gossip", "body": "Hi"})
 	t.Setenv("TRACKS_ID", side.ID)
-	root := newRoot("v-test")
+	root = newRoot("v-test")
 	root.SetArgs([]string{"relay", "send", "--to", "track", "--kind", "gossip"})
 	root.SetIn(strings.NewReader("Hi"))
 	root.SetOut(io.Discard)
