@@ -18,6 +18,7 @@ import (
 func TestWithID(t *testing.T) {
 	for in, want := range map[string]string{
 		``:                              `{"id":"a"}`,
+		`null`:                          `{"id":"a"}`,
 		`{}`:                            `{"id":"a"}`,
 		`{"id":"b","to":"reviewer"}`:    `{"id":"a","to":"reviewer"}`,
 		`{"to":"track","kind":"event"}`: `{"id":"a","kind":"event","to":"track"}`,

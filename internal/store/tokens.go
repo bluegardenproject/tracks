@@ -17,6 +17,12 @@ func (s *Store) SetAgentToken(ctx context.Context, id, hash string) error {
 		hash, time.Now().UnixMilli(), id)
 }
 
+// DropAgentTokens forgets the tokens of track id's agents.
+func (s *Store) DropAgentTokens(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM agent_tokens WHERE track_id = ?", id)
+	return err
+}
+
 // AgentToken is the track whose agent holds the token with hash;
 // ErrNotFound for none.
 func (s *Store) AgentToken(ctx context.Context, hash string) (string, error) {

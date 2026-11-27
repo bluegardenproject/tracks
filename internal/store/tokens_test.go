@@ -38,6 +38,12 @@ func TestAgentTokens(t *testing.T) {
 	if id, err := s.AgentToken(ctx, "h3"); err != nil || id != "a" {
 		t.Errorf("AgentToken(h3) = %q, %v; want a", id, err)
 	}
+	if err := s.DropAgentTokens(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AgentToken(ctx, "h3"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a dropped token: %v, want ErrNotFound", err)
+	}
 	if err := s.DeleteTrack(ctx, "b"); err != nil {
 		t.Fatal(err)
 	}

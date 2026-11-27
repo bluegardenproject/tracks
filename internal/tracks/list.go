@@ -87,6 +87,10 @@ func (s *Service) End(ctx context.Context, id string) error {
 	if err := s.dropReview(ctx, id, "its track ended"); err != nil {
 		return err
 	}
+	// Its agent is gone with its window.
+	if err := s.Store.DropAgentTokens(ctx, id); err != nil {
+		return err
+	}
 	return s.Report(ctx, id, track.Ended)
 }
 
