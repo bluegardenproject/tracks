@@ -282,9 +282,6 @@ func (m Model) typesClick(bx, by int) (Model, tea.Cmd) {
 // pressTypeField acts on the focused field: a picker opens, the
 // checkbox toggles.
 func (m Model) pressTypeField() (Model, tea.Cmd) {
-	if !m.typeFieldShown(m.settings.types.focus) {
-		m.settings.types.focus = typeModel
-	}
 	switch m.settings.types.focus {
 	case typeAutoArchive:
 		return m.toggleAutoArchive()
@@ -303,11 +300,10 @@ func (m Model) typesKey(key string) (Model, tea.Cmd) {
 	case "right", "l":
 		t.kind = min(len(track.Kinds)-1, t.kind+1)
 	}
+	if !m.typeFieldShown(t.focus) {
+		t.focus = typeModel
+	}
 	switch key {
-	case "left", "h", "right", "l":
-		if !m.typeFieldShown(t.focus) {
-			t.focus = typeModel
-		}
 	case "up", "k", "shift+tab":
 		t.focus = max(typeRow, t.focus-1)
 		if !m.typeFieldShown(t.focus) {

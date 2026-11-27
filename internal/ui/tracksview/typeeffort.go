@@ -16,7 +16,7 @@ func (m Model) typeFieldShown(field int) bool {
 
 // typeEffort is the selected type's own effort, "" for the engine's.
 func (m Model) typeEffort() string {
-	if d := m.settings.types.tracks.Get(string(m.selectedKind())); d != nil && d.Engine == m.typeEngine().ID {
+	if d := m.settings.types.tracks.Get(string(m.selectedKind())); d != nil && d.Engine == m.typeEngine().ID && m.typeFieldShown(typeEffort) {
 		return d.Effort
 	}
 	return ""
