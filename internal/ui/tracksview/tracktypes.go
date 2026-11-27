@@ -198,8 +198,12 @@ func (m Model) typesView(width int) []string {
 // typesBody is the section above Tracks History.
 func (m Model) typesBody(width int) []string {
 	t := m.settings.types
+	focus := t.focus
+	if !m.typeFieldShown(focus) {
+		focus = typeModel
+	}
 	lit := func(field int) bool {
-		return t.hover.field == field || m.settings.editing && t.focus == field
+		return t.hover.field == field || m.settings.editing && focus == field
 	}
 	var row []string
 	for i, k := range track.Kinds {
@@ -278,6 +282,9 @@ func (m Model) typesClick(bx, by int) (Model, tea.Cmd) {
 // pressTypeField acts on the focused field: a picker opens, the
 // checkbox toggles.
 func (m Model) pressTypeField() (Model, tea.Cmd) {
+	if !m.typeFieldShown(m.settings.types.focus) {
+		m.settings.types.focus = typeModel
+	}
 	switch m.settings.types.focus {
 	case typeAutoArchive:
 		return m.toggleAutoArchive()
