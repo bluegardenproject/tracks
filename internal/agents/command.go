@@ -33,6 +33,10 @@ type Wrapper struct {
 	// BinDir, when set, is prepended to PATH so a bare `tracks`
 	// resolves even when the binary isn't on the login-shell PATH.
 	BinDir string
+
+	// Token, when set, is exported as TRACKS_AGENT_TOKEN: the agent's
+	// identity for tracks mcp.
+	Token string
 }
 
 // Command wraps an already-assembled agent command line — flags
@@ -52,6 +56,9 @@ func (w Wrapper) Command(line CommandLine) string {
 
 	env := "TRACKS_ID=" + shellx.Quote(w.TrackID) +
 		" TRACKS_SOCKET_DIR=" + shellx.Quote(w.SocketDir)
+	if w.Token != "" {
+		env += " " + TokenEnv + "=" + shellx.Quote(w.Token)
+	}
 	if w.BinDir != "" {
 		// $PATH is expanded by the outer shell that runs this line.
 		env += " PATH=" + shellx.Quote(w.BinDir) + `:"$PATH"`

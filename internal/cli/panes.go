@@ -31,21 +31,26 @@ func newPanesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			column, err := trackPanes(t, w)
-			if err != nil {
-				return err
-			}
-			if len(column) == 0 {
-				_, err := fmt.Fprintln(c.OutOrStdout(), "No panes beside the agent.")
-				return err
-			}
-			snap, err := procs.Take(c.Context())
-			if err != nil {
-				snap = procs.New(nil, nil)
-			}
-			return printPanes(c.OutOrStdout(), w.Window, column, snap)
+			return listPanes(c.Context(), c.OutOrStdout(), t, w)
 		},
 	}
+}
+
+// listPanes prints the panes beside w's agent, as tracks panes does.
+func listPanes(ctx context.Context, out io.Writer, t *tmux.Client, w trackwin.Info) error {
+	column, err := trackPanes(t, w)
+	if err != nil {
+		return err
+	}
+	if len(column) == 0 {
+		_, err := fmt.Fprintln(out, "No panes beside the agent.")
+		return err
+	}
+	snap, err := procs.Take(ctx)
+	if err != nil {
+		snap = procs.New(nil, nil)
+	}
+	return printPanes(out, w.Window, column, snap)
 }
 
 func newCloseCmd() *cobra.Command {

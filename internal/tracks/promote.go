@@ -88,16 +88,19 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 		removeWorktrees()
 		return Created{}, err
 	}
-	hooks, err := s.installHooks(work)
+	setup, err := s.installHooks(work)
+	if err == nil {
+		err = s.saveToken(undo, work.ID, setup)
+	}
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err
 	}
-	start, err := engine.Command(agents.Spec{
+	start, err := engine.Command(setup.spec(agents.Spec{
 		Track: work, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts,
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, work.Repos),
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Setup: s.hasSetup(ctx, work.Repos),
 		DevServers: s.hasDevServers(ctx, work.Repos),
-	})
+	}))
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err

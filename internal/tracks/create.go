@@ -137,16 +137,16 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		s.removeHooks(t.ID)
 	}
 
-	hooks, err := s.installHooks(t)
+	setup, err := s.installHooks(t)
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err
 	}
-	start, err := engine.Command(agents.Spec{
+	start, err := engine.Command(setup.spec(agents.Spec{
 		Track: t, Program: info.Program, Auto: conf.AutoMode(), DraftPRs: drafts, Side: s.sideSpec(ctx, t),
-		SocketDir: s.SocketDir, BinDir: s.BinDir, Hooks: hooks, Setup: s.hasSetup(ctx, t.Repos),
+		SocketDir: s.SocketDir, BinDir: s.BinDir, Setup: s.hasSetup(ctx, t.Repos),
 		DevServers: s.hasDevServers(ctx, t.Repos),
-	})
+	}))
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err
@@ -162,6 +162,14 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 		_ = s.Windows.Close(win.ID)
 		removeWorktrees()
 		return Created{}, fmt.Errorf("save the track: %w", err)
+	}
+	// Only now, with the track's row: its agent can't call Tracks' MCP
+	// server before its prompt is read.
+	if err := s.saveToken(undo, t.ID, setup); err != nil {
+		_ = s.Windows.Close(win.ID)
+		_ = s.Store.DeleteTrack(undo, t.ID)
+		removeWorktrees()
+		return Created{}, fmt.Errorf("save the agent's token: %w", err)
 	}
 	s.sideNotice(undo, t, track.Created)
 	s.startEager(undo, t)

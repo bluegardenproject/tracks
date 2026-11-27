@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,13 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), "'/data/bin/tracks' hook --engine claude --track "+id) {
 		t.Errorf("the settings don't run this track's hook: %s, %v", b, err)
 	}
+	if want := filepath.Join(dir, "claude-mcp.json"); f.engine.spec.MCPConfig != want {
+		t.Errorf("the agent starts with the MCP config %q, want %q", f.engine.spec.MCPConfig, want)
+	}
+	first := f.engine.spec.Token
+	if got, err := f.svc.AgentTrack(ctx, first); first == "" || err != nil || got != id {
+		t.Errorf("the agent's token %q is %q's, %v; want %s's", first, got, err, id)
+	}
 
 	if err := f.svc.End(ctx, id); err != nil {
 		t.Fatal(err)
@@ -45,6 +53,13 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	}
 	if f.engine.spec.Hooks == "" {
 		t.Error("a resumed track starts without its hooks")
+	}
+	if got, err := f.svc.AgentTrack(ctx, f.engine.spec.Token); f.engine.spec.Token == first || err != nil || got != id {
+		t.Errorf("the resumed agent's token is %q's, %v; want a new one, %s's", got, err, id)
+	}
+	var p Problem
+	if _, err := f.svc.AgentTrack(ctx, first); !errors.As(err, &p) {
+		t.Errorf("the last session's token: %v, want a problem", err)
 	}
 	if exists(run) {
 		t.Error("a resumed track kept the review of its last run")

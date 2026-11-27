@@ -80,12 +80,22 @@ const (
 	// Action sends a track's agent the prompt of one of its footer
 	// buttons.
 	Action = "action"
+	// Agent is the track of the agent whose token the call carries.
+	Agent = "agent"
 )
+
+// AgentResult is an agent's track.
+type AgentResult struct {
+	ID string `json:"id"`
+}
 
 // Request is one call.
 type Request struct {
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params,omitempty"`
+	// Token is an agent's token, from tracks mcp: the daemon answers
+	// for the agent's own track, and only the calls its tools make.
+	Token string `json:"token,omitempty"`
 }
 
 // Reply is one line of the answer: progress, or the last line with the

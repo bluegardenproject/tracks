@@ -38,8 +38,11 @@ type Spec struct {
 	// the pane's PATH.
 	SocketDir, BinDir string
 	// Hooks is the track's hooks, as the engine takes them: Claude's
-	// settings file, Cursor's plugin folder; "" for none.
-	Hooks string
+	// settings file, Cursor's plugin folder; "" for none. MCPConfig is
+	// Claude's file for Tracks' MCP server; Cursor's is in its plugin.
+	Hooks, MCPConfig string
+	// Token is the agent's token, exported in its pane; "" for none.
+	Token string
 }
 
 // Start is the command a track's agent pane runs, and the folder it
@@ -48,7 +51,7 @@ type Start struct{ Command, Dir string }
 
 // Wrap puts line in the pane scaffolding for s's track.
 func (s Spec) Wrap(line CommandLine) string {
-	return Wrapper{TrackID: s.Track.ID, SocketDir: s.SocketDir, BinDir: s.BinDir}.Command(line)
+	return Wrapper{TrackID: s.Track.ID, SocketDir: s.SocketDir, BinDir: s.BinDir, Token: s.Token}.Command(line)
 }
 
 // DocDir is the folder a doc track works in: the document itself when

@@ -26,8 +26,9 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			ping.ExeModified = info.ModTime().UnixNano()
 		}
 	}
-	return map[string]rpc.Handler{
-		rpc.Ping: func(context.Context, *rpc.Call) (any, error) { return ping, nil },
+	return c.agentHandlers(map[string]rpc.Handler{
+		rpc.Agent: c.agent,
+		rpc.Ping:  func(context.Context, *rpc.Call) (any, error) { return ping, nil },
 		rpc.Shutdown: func(context.Context, *rpc.Call) (any, error) {
 			shutdown()
 			return nil, nil
@@ -208,7 +209,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 			c.Tracks.SetTurn(ctx, p.ID, p.Turn)
 			return nil, c.Tracks.SeePRs(ctx, p.ID, p.PRs)
 		},
-	}
+	})
 }
 
 func (c Config) resume(ctx context.Context, call *rpc.Call) (any, error) {
