@@ -142,6 +142,7 @@ func (c Config) handlers(shutdown func()) map[string]rpc.Handler {
 		rpc.TrainEnd:     c.trainEnd,
 		rpc.SideNew:      c.sideNew,
 		rpc.SideList:     c.sideList,
+		rpc.SideEnd:      c.sideEnd,
 		rpc.Signals:      c.signals,
 		rpc.RelaySend:    c.relaySend,
 		rpc.RelayRead:    c.relayRead,

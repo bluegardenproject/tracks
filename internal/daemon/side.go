@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 
 	"github.com/bluegardenproject/tracks/internal/rpc"
@@ -45,4 +46,16 @@ func (c Config) sideList(ctx context.Context, call *rpc.Call) (any, error) {
 		out.Sides = append(out.Sides, st)
 	}
 	return out, nil
+}
+
+func (c Config) sideEnd(ctx context.Context, call *rpc.Call) (any, error) {
+	var p rpc.SideEndParams
+	if err := call.Decode(&p); err != nil {
+		return nil, err
+	}
+	st, err := c.Tracks.EndSide(ctx, p.ID, p.Handle)
+	if err != nil {
+		return nil, err
+	}
+	return rpc.SideEndResult{Name: cmp.Or(st.Title, st.Name), Handle: st.Side}, nil
 }

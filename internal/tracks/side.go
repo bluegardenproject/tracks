@@ -3,6 +3,8 @@ package tracks
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/bluegardenproject/tracks/internal/side"
 	"github.com/bluegardenproject/tracks/internal/store"
@@ -142,4 +144,38 @@ func (s *Service) sideNotice(ctx context.Context, t track.Track, e track.Event) 
 		return
 	}
 	_ = s.notice(context.WithoutCancel(ctx), t.Parent, body)
+}
+
+// EndSide ends main track id's side track named to, its handle or a
+// prefix only one of its side tracks has, as End ends any track: its
+// window closes, and its worktrees and record stay, so the Station can
+// resume it. It returns the side track.
+func (s *Service) EndSide(ctx context.Context, id, to string) (track.Track, error) {
+	main, err := s.relayTrack(ctx, id)
+	if err != nil {
+		return track.Track{}, err
+	}
+	if side.Is(main) {
+		return track.Track{}, Problem(main.Name + " is a side track: only its main track ends side tracks.")
+	}
+	sides, err := s.Store.SideTracks(ctx, main.ID)
+	if err != nil {
+		return track.Track{}, err
+	}
+	handles := make([]string, len(sides))
+	for i, st := range sides {
+		handles[i] = st.Side
+	}
+	handle, err := train.Resolve(to, handles)
+	switch {
+	case err != nil && strings.Contains(err.Error(), " could be "):
+		return track.Track{}, Problem(err.Error() + ".")
+	case err != nil:
+		return track.Track{}, Problem("No side track of " + main.Name + " is called " + to + ": tracks side list lists them.")
+	}
+	st := sides[slices.IndexFunc(sides, func(st track.Track) bool { return st.Side == handle })]
+	if !st.Open() {
+		return st, Problem("@" + handle + ", side track " + st.Name + ", has already ended.")
+	}
+	return st, s.End(ctx, st.ID)
 }

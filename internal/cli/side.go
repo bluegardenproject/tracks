@@ -19,7 +19,7 @@ import (
 func newSideCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "side",
-		Short: "start and list this track's side tracks",
+		Short: "start, list and end this track's side tracks",
 		Long: "A side track is a Work track this track, its main track, starts to write code in parallel: its own " +
 			"worktree, branch, window, agent, review and pull request. It joins this track's relay with a handle " +
 			"of its own, reports there, and reads what this track sends it. Run inside a track: the main track " +
@@ -31,7 +31,7 @@ func newSideCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(newSideNewCmd(), newSideListCmd())
+	cmd.AddCommand(newSideNewCmd(), newSideListCmd(), newSideEndCmd())
 	return cmd
 }
 
@@ -124,6 +124,29 @@ func newSideListCmd() *cobra.Command {
 				return err
 			}
 			return printSides(c.OutOrStdout(), sides)
+		},
+	}
+}
+
+func newSideEndCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "end <handle>",
+		Short: "end one of this track's side tracks",
+		Long: "Ends a side track of this track, by its handle or a prefix only it has, as ending it on the " +
+			"Station does: its window and agent close, and its worktree, branch and pull requests stay. The " +
+			"Station still lists it, and the user can resume it there.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			client, id, err := trackClient("side end")
+			if err != nil {
+				return err
+			}
+			st, err := client.SideEnd(c.Context(), id, args[0])
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Ended %s, @%s.\n", st.Name, st.Handle)
+			return err
 		},
 	}
 }
