@@ -112,21 +112,22 @@ func TestMCPEndToEnd(t *testing.T) {
 	// The side track's agent finds it through TRACKS_SOCKET_DIR, as
 	// Cursor's config passes it, and names a track that isn't its own.
 	sideAgent := startMCP(t, main.ID, tokens[side.ID], paths.DataDir)
-	got, isErr = sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "report", "body": "Done: #12."})
+	got, isErr = sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "report", "body": "Done: #12.",
+		"outcome": "pass", "refs": []string{"https://github.com/acme/api/pull/12"}})
 	if isErr || !strings.HasPrefix(got, "Sent #") || !strings.HasSuffix(got, " to @track.") {
 		t.Errorf("relay_send = %q, error %v", got, isErr)
 	}
 	text, isErr := toolText(t, mainAgent.answer(waiting))
 	if isErr || !strings.HasPrefix(text, "Messages on this track's relay.") || !strings.Contains(text, "@side-1 → @track · report") ||
-		!strings.Contains(text, "Done: #12.") {
+		!strings.Contains(text, "Done: #12.") || !strings.Contains(text, "pass") || !strings.Contains(text, "https://github.com/acme/api/pull/12") {
 		t.Errorf("relay_wait = %q, error %v; want the side track's report", text, isErr)
 	}
 
 	// Its mistakes are told in the CLI's words.
-	mcpErr, isErr := sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "gossip", "body": "Hi"})
+	mcpErr, isErr := sideAgent.tool("relay_send", map[string]any{"to": "track", "kind": "report", "body": "Hi", "outcome": "maybe"})
 	t.Setenv("TRACKS_ID", side.ID)
 	root = newRoot("v-test")
-	root.SetArgs([]string{"relay", "send", "--to", "track", "--kind", "gossip"})
+	root.SetArgs([]string{"relay", "send", "--to", "track", "--kind", "report", "--outcome", "maybe"})
 	root.SetIn(strings.NewReader("Hi"))
 	root.SetOut(io.Discard)
 	cliErr := root.ExecuteContext(ctx)
