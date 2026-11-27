@@ -47,12 +47,14 @@ the v2.0.0 release; git history keeps them.
 
 ## Follow-ups
 
-- **Migrations by name:** the store counts applied migrations
-  (`user_version`), so files are applied by position. Side tracks adding
-  migrations in parallel break it: merged out of order, a database skips
-  one and runs another twice (2026-11-27: 0029 merged before 0027 and
-  0028). Record applied migrations by name in a table, carrying over
-  today's databases by their count; `0025` already exists twice.
+- **Migrations by name** (to discuss: is it common enough to fix?): the
+  store counts applied migrations (`user_version`), so files are applied
+  by position. Side tracks adding migrations in parallel can break it:
+  merged out of order, a database skips one and runs another twice
+  (2026-11-27: 0029 merged before 0027 and 0028, caught before a
+  release). An option: record applied migrations by name in a table,
+  carrying over today's databases by their count; `0025` already exists
+  twice. The cheaper alternative: number migrations when they merge.
 - **Sandboxing plugins' code and command-running trains** (discussion):
   dropped for v2's plugins; see protocol.md, "Not in scope, yet", with
   [Sandcat](https://sandcat.virtuslab.com/latest/index.html) as an option.
