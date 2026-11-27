@@ -183,15 +183,16 @@ func TestServeWithoutTools(t *testing.T) {
 }
 
 func TestServeCancelsCallsWhenStdinCloses(t *testing.T) {
-	ended := make(chan struct{})
+	started, ended := make(chan struct{}), make(chan struct{})
 	s := Server{Tools: []Tool{{Name: "wait", Call: func(ctx context.Context, _ json.RawMessage) (string, error) {
+		close(started)
 		<-ctx.Done()
 		close(ended)
 		return "", ctx.Err()
 	}}}}
 	send, _, closeIn := session(t, s)
 	send(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait"}}`)
-	time.Sleep(20 * time.Millisecond)
+	<-started
 	closeIn()
 	select {
 	case <-ended:
