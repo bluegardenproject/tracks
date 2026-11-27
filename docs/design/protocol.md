@@ -1,7 +1,9 @@
 # Agent protocol
 
-**Status:** v2, exploring. Nothing is decided; this collects the ideas and
-the questions to plan and discuss. Built on the relay and the trains of
+**Status:** v2, planning. Plugins' shape, Tracks' MCP server and how
+plugins reach the relay were decided on 2026-11-27 ("Decided"); the
+first step, a spike on Cursor, runs. The envelope and programmable
+messages are still ideas. Built on the relay and the trains of
 [trains.md](trains.md), and on its Phase 2, side tracks.
 
 ## Problem
@@ -11,7 +13,7 @@ the questions to plan and discuss. Built on the relay and the trains of
   paragraph in their prompt, and a new feature is another paragraph.
 - **Agents are built in.** The reviewer is Tracks' own. Developers will
   want their own: a migration checker, a release note writer, a
-  dependency watcher.
+  dependency watcher, a planner that comes with its team's context.
 - **Messages only carry words.** "Rebase once #232 merges", "nobody edit
   relay.go while I do", "merge in this order once CI is green": today an
   agent writes them, another has to read, remember and act, and nothing
@@ -22,71 +24,114 @@ the questions to plan and discuss. Built on the relay and the trains of
 ## Not in scope, yet
 
 - Agents across machines. The relay is local; so is this.
+- **The conductor**: global watchers above the tracks, on a relay of
+  their own (an `@station`), e.g. a dependency watcher over every
+  track. An idea for later; v2's plugins live inside one track and its
+  side tracks.
+- Plugin kinds other than `train` and `track` (a theme, an engine, a
+  policy).
 
-## Planning: the agenda
+## Decided (2026-11-27)
 
-Planning started on 2026-11-25, with side tracks (trains.md, Phase 2)
-released in 3.9.0. The topics, in this document's sections, and the
-order to discuss them in (not the order to build them, which is under
-"Order, once it's decided"):
-
-| | Topic | Where |
-|---|---|---|
-| A | What a plugin is: its shape (A1, manifest-only or executables), where it lives, install and update, compatibility, trust, the Reviewer as a plugin | Plugins first |
-| B | The manifest: what an agent declares | The manifest |
-| C | The envelope: a message, versioned | The envelope |
-| D | Tracks as an MCP server: how agents use Tracks | Tracks as an MCP server |
-| E | Programmable messages | Programmable messages |
-| F | Many instances, and how the track finds and picks agents | Many instances |
-| G | Plugins' settings and policies, both ways | Plugins, settings and policies |
-| H | The first plugins: the Investigator, the Watcher, a research agent | Plugins first |
-| I | A command-running train's sandbox: switched on without managed settings, the hosts it may reach | trains.md, Open |
-
-Discussion order: **A1 first**, since manifest-only or executables
-decides the trust model, the install story and what the Watcher can be;
-then **D**, how plugins act; **B** and **C** follow from those two; **E**,
-the open design space, once the ground is set; F to I along the way.
-
-**Where it stands**: at A1, with this proposal on the table, not decided:
-
-- Plugins start **manifest-only**: a brief and the Tracks tools it
-  declares, no code of its own. Everything a plugin does goes through
-  Tracks, which enforces and audits its permissions.
-- A long-running agent such as the Watcher is a **lifecycle Tracks runs**,
-  not a loop the plugin ships: Tracks wakes it on the events it
-  subscribes to (an `@github` event, a train finishing, a relay message)
-  or on a timer it declares, and it answers through its tools.
-- **Executables** may come later, behind an explicit trust step of their
-  own, if a plugin turns out to need code (a parser, a protocol client).
-
-## Plugins first: the Investigator and the Watcher
-
-The Investigator and the Watcher (trains.md, formerly its step 12) move
-here: they're built as the first plugins, on the open interface below,
-rather than as two more built-in agents to migrate later. They may live
-outside the `tracks` repo, in a repo of plugins.
-
-To plan and discuss before building:
-
-| Area | Question |
+| | Decision |
 |---|---|
-| What a plugin is | A manifest and a brief only, so no code of its own runs; or may it ship executables (a watcher loop, a parser)? Manifest-only is far safer and may cover most cases. |
-| Where it lives | A repo of first-party plugins (e.g. `tracks-plugins`), and any git repo for others; one repo per plugin, or one for many? |
-| Install and update | `tracks plugin add <git url>`, pinned to a tag or commit, an update command, listed in Settings → Trains (agents) |
-| Compatibility | A plugin declares the protocol version it speaks; Tracks refuses or warns on a mismatch |
-| Trust | What a stranger's plugin may do by default (read only?); the user approves its permissions on install, as a phone's app's |
-| The Reviewer | Stays built in, or becomes a plugin once the interface exists, as its strictest test |
-| Settings | Each plugin's engine, model and prefix, as the Reviewer's frame has |
+| Where plugins live | First-party ones in a separate `tracks-plugins` repo, a folder each; later any git repo, holding one plugin or many |
+| What a plugin is | A package of **components**, each with a `kind`: `train` (an agent a track starts) or `track` (a track type beside the built-in ones). One plugin may bring a track type and the trains it uses |
+| Track types | Extend a built-in **base** only (`base: plan`): they inherit its worktrees, read-only mode and permissions, and add a brief, context, actions and the trains they suggest. No permissions of their own, for now |
+| Code | Allowed, in slots the manifest declares, nowhere else (see "Code in plugins") |
+| Trust | Nothing runs until the user approves: install pins a commit and shows the permissions, the hosts and the code's entry points; an update shows the diff and asks again when the code or the permissions changed. Code ships before a sandbox for it; the sandbox comes before anyone else's plugins are recommended |
+| The Reviewer | Stays built in; moves over last, as a plugin bundled in the binary, the strictest test of the interface |
+| Managing them | A **Plugins** tab in the Tracks window, before Settings: add, update, remove, disable, and each plugin's settings (drawn from its manifest). The CLI does the same: `tracks plugin add/list/update/remove` |
+| The relay | Plugins get the rights built-in agents have, no more: the star, the side tracks' rules (see "Plugins on the relay") |
+| Tracks' MCP server | Built **first**: every engine needs it, and it's how plugins' own MCP servers reach agents, as a gateway (see "Tracks as an MCP server") |
+| Engines | Claude and Cursor both, if the spike confirms Cursor's side; Copilot, Codex and others through the same server once they're engines |
 
-A first lean, not decided: manifest-only plugins at first, a repo of
-first-party ones, installed from git and pinned, permissions approved on
-install, the Reviewer moved over last. The fuller A1 proposal is under
-"Planning: the agenda".
+## Plugins
 
-A third candidate for the first plugins: a **research agent**, run as
-several instances at once, one per topic (see "Many instances"). It
-reads and reports, as the Investigator does, and may share its manifest
-shape.
+A plugin is a folder with a `plugin.yaml`:
+
+```yaml
+protocol: 1                     # Tracks refuses another major, warns on a newer minor
+name: acme-planning
+engines: [claude, cursor]       # for engine assets; omitted means both
+settings:                       # drawn in the Plugins tab
+  - { name: adr_dir, type: string, default: docs/adr }
+components:
+  - kind: track
+    name: custom-planner
+    base: plan
+    brief: briefs/planner.md
+    context: [ctx/adrs]         # context providers, below
+    trains: [research]          # trains it suggests to its agent
+    actions: [...]              # footer buttons
+    defaults: { engine: claude, model: opus }
+  - kind: train
+    name: research
+    lifecycle: one-shot         # or long-running
+    permissions: read           # read | commands | write (write only as a side track)
+    hosts: ["*.atlassian.net"]
+    brief: briefs/research.md
+    mcp: [servers/jira]         # its own MCP servers, through the gateway
+    requires_mcp: [datadog]     # servers the user has set up, with their credentials
+    relay:
+      sends: [report, event, question]
+      reads: true
+      subscribes: [github.ci_failed, train.done, relay.to_me]
+```
+
+### Code in plugins
+
+Code runs only in these slots, in any language, with a timeout per call,
+its contract versioned by `protocol`:
+
+| Slot | What the code does | Contract |
+|---|---|---|
+| MCP servers | Gives its agents tools of their own | Standard MCP, started by Tracks' gateway, never by the engine |
+| Context providers | Runs when a track or train starts; its output goes into the prompt, fenced as data | JSON in (track, repos, task), text out |
+| Event handlers | Runs on the events the component subscribes to, and decides | An envelope in; `deliver`, `notify`, `ask_user` or nothing out, within what the manifest declared. It never writes to the relay itself |
+| Engine assets | Skills, subagents, commands, rules for its agents | Files Tracks installs per session, as it does the reviewer's subagents and Cursor's hooks plugin |
+
+A long-running train such as the Watcher is a lifecycle Tracks runs: its
+handlers wake on events or a timer, and an agent only when there's
+something to think about.
+
+`requires_mcp` names servers the plugin needs but doesn't ship: a
+Datadog plugin uses the user's own Datadog server and credentials.
+Tracks already lists each engine's servers (`agents.ListMCP`); the
+Plugins tab says which are missing, for which engine.
+
+### Install, update, trust
+
+- `tracks plugin add <git url>[@ref]`, or a local path while developing
+  one; pinned to a commit.
+- The approval screen: the components, their permissions and hosts, the
+  code's entry points, the MCP servers it ships and requires.
+- `tracks plugin update` shows the manifest's and the code's diff; a
+  change to either asks again.
+- Disabled plugins stay installed and are hidden from tracks.
+
+### Plugins on the relay
+
+The relay stays a star per track; plugins add no rules:
+
+| Part | On the relay as | Rules |
+|---|---|---|
+| A `train` component | An instance with its own handle (`research-123`), as the reviewer | Sends to its track, reads what's addressed to it; its identity comes from its MCP token |
+| A `track` component | A track like any other, with its own relay | As work and plan tracks, side tracks included |
+| Code | Nothing of its own: a handler returns an envelope, which Tracks checks against the manifest and posts under the instance's handle | The kinds and recipients the manifest's `relay` declares |
+
+Messages to and from plugins are data: fenced for agents, plain JSON for
+code, never instructions. The Relay Station shows a plugin's messages as
+any other's, with the plugin's name beside the handle.
+
+### The first plugins
+
+In order, each adding one capability:
+
+1. **Investigator**: one-shot, read-only; the reviewer's shape.
+2. **Research agent**: one-shot, read-only, several at once, one per
+   topic; needs `hosts` (a train's sandbox, trains.md "Open").
+3. **Watcher**: long-running; needs event handlers.
 
 ## Many instances, picked by the track
 
@@ -99,29 +144,16 @@ keyed by its handle, for every kind alike; the manifest says what an
 agent is, not how many may run. Several reviewers in a track (one per
 target, [review.md](review.md)) is the first.
 
-Open: how the track's agent **finds** the agents it can start (the
-built-in trains and the installed plugins, each with what it's for and
-what it costs), and how it starts several at once (`tracks train new
-<kind> --task …` per instance, or one call for a set), with the user's
-say in how many run. Tracks as an MCP server would answer the first
-with a tool that lists them, with their manifests.
+The track's agent finds them with `agents_list` (an MCP tool, and the
+CLI), which returns the built-in trains and the installed plugins'
+manifests; it starts each with `tracks train new <kind> --task …`. No
+cap; a setting may ask the user before more than N run.
 
 ## Three layers, and a fourth to invent
 
 ### 1. The manifest: what an agent declares
 
-A plugin is a file (or a Settings entry) that declares what the agent is.
-Tracks enforces it: an agent never reaches for more than it declared.
-
-| Field | Example |
-|---|---|
-| Name, prefix | Watcher, `watch` |
-| Engine and model, as defaults | Claude, sonnet |
-| Brief | its instructions; the task goes after them |
-| Lifecycle | one-shot (reports, then done), long-running (events until a condition) |
-| Permissions | reads only / runs commands / writes (a side track) |
-| Tools | `relay`, `proxy.read`, `panes.list`, `github.read`, … |
-| Contract | the kinds it sends, its outcomes (`done`, `blocked`, `needs input`) |
+Decided: see "Plugins" for the manifest and what Tracks enforces.
 
 ### 2. The envelope: a message, versioned
 
@@ -142,19 +174,60 @@ fields Tracks acts on:
 
 ### 3. Tracks as an MCP server: how agents use Tracks
 
-Both engines speak MCP. Tracks offers its features as typed tools instead
-of commands described in prompts: `relay_send`, `relay_read`,
-`relay_wait`, `relay_who`, `proxy_status`, `panes_list`, `review_ask`,
-`train_new`, …
+Decided, and built first. `tracks mcp` is a stdio server each agent's
+engine starts; it talks to the daemon over its socket. Tracks offers its
+features as typed tools instead of commands described in prompts:
+`relay_send`, `relay_read`, `relay_wait`, `relay_who`, `proxy_status`,
+`panes_list`, `review_ask`, `agents_list`, `train_new`, …
 
-- **Identity**: each agent's server starts with a token of its own; the
-  sender is certain (the tokens trains.md leaves for later, solved for
-  all).
-- **Capabilities**: an agent sees only the tools its manifest lists.
+- **Identity**: Tracks gives each agent instance a token of its own, in
+  its pane's environment; the server reads it, so the sender is certain
+  (the tokens trains.md leaves for later, solved for all) and the
+  engine's config holds no secret.
+- **Capabilities**: the server shows an agent only the tools its
+  manifest lists, by its identity.
+- **The gateway**: a plugin's own MCP servers are started by Tracks'
+  server, not the engine, and their tools passed through under the
+  server's name (`jira_search`), only to the agents of that plugin's
+  components. The engine knows one server, `tracks`, whatever plugins
+  are installed: no per-plugin config, nothing written into a worktree,
+  the same for every engine, and every call checked against the
+  manifest and audited. Remote servers that log in with OAuth would
+  need Tracks to run the login: open.
+- **Trust, automatic**: the engine trusts one server, set up by Tracks;
+  the plugins behind it are trusted by the user's approval on install.
+  - Claude: `--mcp-config` per session (servers from it get no project
+    approval prompt), and `mcp__tracks` allowed in the `--settings` file
+    Tracks already passes.
+  - Cursor: it has no per-session MCP flag, only `~/.cursor/mcp.json`
+    and `<workspace>/.cursor/mcp.json`, and `--approve-mcps` approves
+    every server, the repo's own too. But Tracks already starts every
+    Cursor session with `--plugin-dir` (its hooks plugin); if a Cursor
+    plugin can bring MCP servers, that's a per-session config. The
+    spike checks it.
 - **Discovery**: tools carry their schemas; the prompts shrink.
 - **Receiving** stays the pointer, then `relay_read`: the agent CLIs don't
   act on a server's notifications.
 - The CLI stays for engines without MCP.
+
+#### The spike: Cursor
+
+Before the server is built on it, a side track checks, without changing
+Tracks:
+
+1. Does a plugin folder passed with `--plugin-dir` load MCP servers
+   (and rules, skills)? In what file and format?
+2. Are they trusted without a prompt, or does it take `--approve-mcps`,
+   and does that approve only the plugin's or every server?
+3. Does the pane's environment reach a stdio MCP server Cursor starts?
+4. Do MCP tool calls ask for permission in each mode Tracks runs Cursor
+   in (`--force`, plan, ask), and can one server's tools be allowed?
+5. Does `--add-dir` give a train started in its own folder read access
+   to a checkout?
+
+If 1 or 3 fails, the fallback is one static entry in
+`~/.cursor/mcp.json` (identity from the environment, nothing offered
+outside a track), or a Cursor train uses the CLI relay, as today.
 
 ### 4. Programmable messages: to invent
 
@@ -246,7 +319,7 @@ interface, in both directions:
 
 - **Plugin → Tracks, in its manifest**: its settings as a schema (name,
   type, values, default: `ask_before_human_replies: bool = true`), which
-  Tracks draws in Settings under the plugin's name; the events it
+  Tracks draws in the Plugins tab under the plugin's name; the events it
   subscribes to (`github.conflicts`, `github.ci_failed`,
   `github.review_threads`, `review.requested`, …); and the effects it
   may answer with (instruct a track, ask the user, post a report), so it
@@ -265,21 +338,32 @@ Open: whether Settings → GitHub moves into the Reviewer's plugin or
 stays Tracks' own; how a plugin's settings are validated and migrated
 across its versions.
 
-## Order, once it's decided
+## Order
 
-1. Tracks' MCP server for what exists: the relay, the proxy, the panes.
-2. The envelope's fields: `outcome`, `refs`.
-3. The manifest and plugins; the Investigator and the Watcher as the
-   first.
-4. Programmable messages: deferred delivery and leases first, the two
+1. The spike: Cursor and MCP (above).
+2. Tracks' MCP server for what exists: the relay, the proxy, the panes;
+   identity per instance; `agents_list`.
+3. In parallel, apart from 2: the envelope's fields (`outcome`,
+   `refs`); the manifest and the plugin store (`tracks plugin …`,
+   approval, the Plugins tab).
+4. On 3: a registry of train kinds and one of track types, in place of
+   the hard-coded `train.Reviewer` and `track.Kinds`.
+5. On 2 and 4: the gateway for plugins' MCP servers, then context
+   providers, then event handlers.
+6. The first plugins, in `tracks-plugins`: the Investigator, the
+   research agent, the Watcher.
+7. Programmable messages: deferred delivery and leases first, the two
    that pay off with side tracks, then the user's gates.
 
 ## Open
 
-- Everything under "Plugins first", starting with A1 ("Planning: the
-  agenda").
-- How the track finds and starts agents, several at once ("Many
-  instances").
+- What the spike finds for Cursor.
+- OAuth for remote MCP servers behind the gateway.
+- The sandbox for plugins' code: the same profile as the manifest's
+  permissions, and the hosts it may reach (trains.md, "Open": a
+  command-running train's sandbox).
+- How a plugin's settings are validated and migrated across its
+  versions.
 - Contracts: YAML in a message, or a tool call (`relay_send` with a
   `contract` argument) that Tracks validates against the vocabulary?
 - How a contract shows in the Relay Station: waiting, running, done,
