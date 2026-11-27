@@ -129,8 +129,8 @@ func (s Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 				stop()
 			}()
 			result, rerr := s.answer(callCtx, req)
-			if callCtx.Err() != nil && ctx.Err() == nil {
-				// Cancelled: the client expects no answer.
+			if callCtx.Err() != nil {
+				// Cancelled, or the client has gone: no answer.
 				return
 			}
 			write(response{JSONRPC: "2.0", ID: req.ID, Result: result, Error: rerr})

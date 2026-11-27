@@ -83,6 +83,7 @@ type Store interface {
 	RelayLog(ctx context.Context, id string) ([]relay.Message, error)
 	RelayUnseen(ctx context.Context, id, reader string) (int, error)
 	SetAgentToken(ctx context.Context, id, hash string) error
+	DropAgentTokens(ctx context.Context, id string) error
 	AgentToken(ctx context.Context, hash string) (string, error)
 }
 

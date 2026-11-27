@@ -143,7 +143,7 @@ func TestWatchedNotifiesOnWrites(t *testing.T) {
 		// A write no screen shows, so it needn't notify.
 		"ClaimPorts": true, "SavePRHealth": true, "SavePRThreads": true,
 		"AddInstruction": true, "WaitingInstructions": true, "InstructionTyped": true, "DropInstructions": true, "InstructionWaiting": true, "SetBase": true, "DropInstruction": true,
-		"SetAgentToken": true, "AgentToken": true}
+		"SetAgentToken": true, "DropAgentTokens": true, "AgentToken": true}
 	methods := reflect.TypeFor[Store]()
 	for i := range methods.NumMethod() {
 		if name := methods.Method(i).Name; !reads[name] && !tested[name] {

@@ -12,8 +12,8 @@ import (
 // agentCalls are the calls an agent's token opens: those tracks mcp's
 // tools make.
 var agentCalls = map[string]bool{
-	rpc.Agent: true, rpc.RelaySend: true, rpc.RelayRead: true, rpc.RelayShow: true, rpc.RelayWait: true,
-	rpc.RelayWho: true, rpc.Servers: true,
+	rpc.Agent: true, rpc.RelaySend: true, rpc.RelayRead: true, rpc.RelayWait: true, rpc.RelayWho: true,
+	rpc.Servers: true,
 }
 
 // agentHandlers are handlers, each answering a call that carries an
@@ -49,6 +49,9 @@ func withID(params json.RawMessage, id string) (json.RawMessage, error) {
 		if err := json.Unmarshal(params, &fields); err != nil {
 			return nil, err
 		}
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
 	}
 	fields["id"], _ = json.Marshal(id)
 	return json.Marshal(fields)

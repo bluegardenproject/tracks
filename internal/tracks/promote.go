@@ -89,9 +89,6 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 		return Created{}, err
 	}
 	setup, err := s.installHooks(work)
-	if err == nil {
-		err = s.saveToken(undo, work.ID, setup)
-	}
 	if err != nil {
 		removeWorktrees()
 		return Created{}, err
@@ -124,6 +121,10 @@ func (s *Service) Promote(ctx context.Context, id string, progress func(string))
 	s.reporting.Unlock()
 	if err = s.Store.Promote(undo, work); err == nil && work.Name != t.Name {
 		err = s.Store.Rename(undo, work.ID, work.Name)
+	}
+	// Only now: until the new agent runs, the old one keeps its token.
+	if err == nil {
+		err = s.saveToken(undo, work.ID, setup)
 	}
 	if err != nil {
 		// The agent can't be put back as it was: the track ends, and

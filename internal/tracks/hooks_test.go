@@ -39,6 +39,10 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	if err := f.svc.End(ctx, id); err != nil {
 		t.Fatal(err)
 	}
+	var p Problem
+	if _, err := f.svc.AgentTrack(ctx, first); !errors.As(err, &p) {
+		t.Errorf("an ended track's token: %v, want a problem", err)
+	}
 	f.engine.spec = agents.Spec{}
 	// A review left by a build that kept it after the track ended.
 	run := filepath.Join(f.svc.legacyReviewDir(id), "run")
@@ -57,7 +61,6 @@ func TestTracksGetTheirHooks(t *testing.T) {
 	if got, err := f.svc.AgentTrack(ctx, f.engine.spec.Token); f.engine.spec.Token == first || err != nil || got != id {
 		t.Errorf("the resumed agent's token is %q's, %v; want a new one, %s's", got, err, id)
 	}
-	var p Problem
 	if _, err := f.svc.AgentTrack(ctx, first); !errors.As(err, &p) {
 		t.Errorf("the last session's token: %v, want a problem", err)
 	}
