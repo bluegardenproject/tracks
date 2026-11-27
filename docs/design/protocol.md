@@ -204,8 +204,8 @@ features as typed tools instead of commands described in prompts:
     `.mcp.json` at its root. It's trusted without a prompt; never pass
     `--approve-mcps`, which approves the repo's own servers too and
     remembers it. Tool calls run without asking under `--force` (work
-    and review tracks); plan, ask and `-p` need an allow rule,
-    `Mcp(<server id>:*)` (see "The spike: Cursor").
+    and review tracks); plan and ask tracks ask once, and trains get an
+    allow rule, `Mcp(<server id>:*)` (see "The spike: Cursor").
 - **Discovery**: tools carry their schemas; the prompts shrink.
 - **Receiving** stays the pointer, then `relay_read`: the agent CLIs don't
   act on a server's notifications.
@@ -237,14 +237,19 @@ The setup, one file added to the hooks plugin (the folder named
             "TRACKS_AGENT_TOKEN": "${env:TRACKS_AGENT_TOKEN}"}}}}
 ```
 
-Open: the allow rule for plan and ask tracks, which run in the user's
-checkout. Trains run in Tracks' own folders, where a `.cursor/cli.json`
-is Tracks' to write. For a checkout: (a) `.cursor/cli.json` in the
-worktree, a file in the user's repo; (b) one line in
-`~/.cursor/cli-config.json`, `Mcp(plugin-tracks-tracks:*)`, harmless
-outside a track since the server offers nothing there, but a file of
-the user's; (c) the user allows it once in Cursor (where that's kept
-wasn't tried).
+Plan and ask tracks run in the user's checkout without `--force`, so
+Cursor asks once, in the track's pane, before the first `tracks` tool
+call ("Run once / Allowlist MCP Tool / Reject / Skip"). Settled
+(2026-11-27): that's fine, since those tracks are interactive. Trains
+run headless, where an unanswered call is rejected, but in Tracks' own
+folders, where Tracks writes `.cursor/cli.json`'s allow rule itself.
+Later, to save the question: a hook that allows only `tracks` calls
+(Cursor's `beforeMCPExecution`, Claude's `PreToolUse`), which Tracks
+already installs hooks for.
+
+The same holds for a server a plugin requires (`requires_mcp`, e.g. the
+user's Datadog): Cursor and Claude ask as they would without Tracks;
+the user set the server up and has the say.
 
 ### 4. Programmable messages: to invent
 
@@ -374,7 +379,8 @@ across its versions.
 
 ## Open
 
-- Cursor's allow rule for plan and ask tracks ("The spike: Cursor").
+- How a train gets only the user's servers it requires, not all of them:
+  trains are kept from the user's MCP servers on purpose.
 - OAuth for remote MCP servers behind the gateway.
 - The sandbox for plugins' code: the same profile as the manifest's
   permissions, and the hosts it may reach (trains.md, "Open": a
