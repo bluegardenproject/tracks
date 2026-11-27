@@ -13,7 +13,7 @@ var Bases = []string{"work", "ask", "plan"}
 
 // Reserved names a component can't take: the built-in track kinds and
 // the relay's own handles.
-var reserved = []string{"work", "ask", "plan", "review", "doc", "reviewer", "track"}
+var reserved = []string{"work", "ask", "plan", "review", "doc", "reviewer", "track", "tracks", "github", "user"}
 
 // Lifecycles, permissions and the relay kinds a train may send.
 var (
