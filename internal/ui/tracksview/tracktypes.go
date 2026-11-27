@@ -294,6 +294,9 @@ func (m Model) pressTypeField() (Model, tea.Cmd) {
 // typesKey handles a key while the Tracks section has focus.
 func (m Model) typesKey(key string) (Model, tea.Cmd) {
 	t := &m.settings.types
+	if !m.typeFieldShown(t.focus) {
+		t.focus = typeModel
+	}
 	switch key {
 	case "left", "h":
 		t.kind = max(0, t.kind-1)

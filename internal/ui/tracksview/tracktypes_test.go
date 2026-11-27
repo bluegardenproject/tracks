@@ -164,3 +164,18 @@ func TestTrackTypeEffortFocusWhenHidden(t *testing.T) {
 		t.Errorf("Enter on a hidden effort should act on Model: picker %d, focus %d", m.pickerFor, m.settings.types.focus)
 	}
 }
+
+func TestTrackTypeEffortSwitchingTypes(t *testing.T) {
+	m, _ := openTypes(t)
+	m.settings.types.tracks.Set("ask", &settings.TrackType{Engine: "claude", Effort: "turbo"})
+	m = settle(m, downKey, downKey, downKey)
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, rightKey)
+	if m.settings.types.focus != typeModel {
+		t.Errorf("onto Ask from a hidden effort, focus %d; want Model, as drawn", m.settings.types.focus)
+	}
+	m = settle(m, downKey, enterKey)
+	if view := plainView(m); !strings.Contains(view, "turbo") || !strings.Contains(view, "not a level Claude Code lists") || m.picker.Marked != len(m.picker.Items)-1 {
+		t.Errorf("an unknown effort should be listed and marked, marked %d:\n%s", m.picker.Marked, view)
+	}
+}
