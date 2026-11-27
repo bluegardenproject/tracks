@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bluegardenproject/tracks/internal/agents"
 	"github.com/bluegardenproject/tracks/internal/settings"
 	"github.com/bluegardenproject/tracks/internal/theme"
 )
@@ -231,14 +232,15 @@ func TestTrackTypePickersKeepTheirEngine(t *testing.T) {
 		t.Errorf("an effort picked for Claude Code after a reload moved Work to Cursor: %+v", d)
 	}
 
-	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "claude", Effort: "high"})
-	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, enterKey)
-	if m.pickerFor != pickTypeModel {
-		t.Fatalf("the model picker didn't open: %d", m.pickerFor)
-	}
+	m.engines.models["cursor"] = []agents.Model{{ID: "gpt-5", Label: "GPT-5"}}
 	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "cursor"})
+	m = settle(m, enterKey) // the hidden Effort's focus acts on Model
+	if m.pickerFor != pickTypeModel || m.pickerEngine != "cursor" {
+		t.Fatalf("the model picker didn't open on Cursor: %d, %q", m.pickerFor, m.pickerEngine)
+	}
+	m.settings.types.tracks.Set("work", &settings.TrackType{Engine: "claude", Effort: "high"})
 	m = settle(m, downKey, enterKey)
-	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "claude", Model: "opus"}) {
-		t.Errorf("a model picked for Claude Code after a reload moved Work to Cursor: %+v", d)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "cursor", Model: "gpt-5"}) {
+		t.Errorf("a model picked for Cursor after a reload moved Work to Claude Code took its effort: %+v", d)
 	}
 }
