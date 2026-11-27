@@ -46,6 +46,9 @@ the v2.0.0 release; git history keeps them.
 
 ## Follow-ups
 
+- **Sandboxing plugins' code and command-running trains** (discussion):
+  dropped for v2's plugins; see protocol.md, "Not in scope, yet", with
+  [Sandcat](https://sandcat.virtuslab.com/latest/index.html) as an option.
 - Renaming a repo that tracks use.
 - The model a track actually ran, including what Cursor's "auto" picked.
 - The folder trust prompt for Ask and Plan tracks without repos.

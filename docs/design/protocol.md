@@ -30,6 +30,14 @@ programmable messages are still ideas. Built on the relay and the trains of
   side tracks.
 - Plugin kinds other than `train` and `track` (a theme, an engine, a
   policy).
+- **A sandbox for plugins' code** (its MCP servers, context providers,
+  event handlers): Tracks starts it as the user, outside the engines'
+  permission prompts and sandboxes. Dropped for v2 (2026-11-27), to be
+  discussed as a follow-up, with the sandbox for a command-running train
+  (trains.md, "Open") and tools such as
+  [Sandcat](https://sandcat.virtuslab.com/latest/index.html): a profile
+  from the manifest (read the worktree, write the plugin's own folder,
+  reach its declared `hosts`) on macOS and Linux.
 
 ## Decided (2026-11-27)
 
@@ -39,7 +47,7 @@ programmable messages are still ideas. Built on the relay and the trains of
 | What a plugin is | A package of **components**, each with a `kind`: `train` (an agent a track starts) or `track` (a track type beside the built-in ones). One plugin may bring a track type and the trains it uses |
 | Track types | Extend a built-in **base** only (`base: plan`): they inherit its worktrees, read-only mode and permissions, and add a brief, context, actions and the trains they suggest. No permissions of their own, for now |
 | Code | Allowed, in slots the manifest declares, nowhere else (see "Code in plugins") |
-| Trust | Nothing runs until the user approves: install pins a commit and shows the permissions, the hosts and the code's entry points; an update shows the diff and asks again when the code or the permissions changed. Code ships before a sandbox for it; the sandbox comes before anyone else's plugins are recommended |
+| Trust | Nothing runs until the user approves: install pins a commit and shows the permissions, the hosts and the code's entry points; an update shows the diff and asks again when the code or the permissions changed. No sandbox for plugins' code in v2: like npm packages or editor extensions, it runs as the user once approved (see "Not in scope, yet") |
 | The Reviewer | Stays built in; moves over last, as a plugin bundled in the binary, the strictest test of the interface |
 | Managing them | A **Plugins** tab in the Tracks window, before Settings: add, update, remove, disable, and each plugin's settings (drawn from its manifest). The CLI does the same: `tracks plugin add/list/update/remove` |
 | The relay | Plugins get the rights built-in agents have, no more: the star, the side tracks' rules (see "Plugins on the relay") |
@@ -384,9 +392,8 @@ across its versions.
   session does, or only those its manifest names: the user's servers
   are the plugin's and the user's business, not Tracks'.
 - OAuth for remote MCP servers behind the gateway.
-- The sandbox for plugins' code: the same profile as the manifest's
-  permissions, and the hosts it may reach (trains.md, "Open": a
-  command-running train's sandbox).
+- Follow-up discussion: sandboxing plugins' code and command-running
+  trains, Sandcat among the options ("Not in scope, yet").
 - How a plugin's settings are validated and migrated across its
   versions.
 - Contracts: YAML in a message, or a tool call (`relay_send` with a
