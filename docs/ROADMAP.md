@@ -24,8 +24,9 @@ the v2.0.0 release; git history keeps them.
   planning. Decided 2026-11-27: plugins as packages of `train` and `track`
   components in a `tracks-plugins` repo, code in declared slots, a Plugins
   tab, and Tracks' MCP server first, as the gateway to plugins' own MCP
-  servers. Next: the Cursor spike, then the server; the envelope and the
-  plugin store alongside. The order is in protocol.md, "Order".
+  servers. A spike showed Cursor takes it through its plugin folder.
+  Next: the server; the envelope and the plugin store alongside. The
+  order is in protocol.md, "Order".
 - **GitHub on the relay** (in [trains](design/trains.md), Phase 2):
   `@github`'s events (merged, closed, conflicts, CI failed, new review
   threads) wake the track's agent, from one GraphQL query a poll. Maybe:

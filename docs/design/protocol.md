@@ -1,9 +1,9 @@
 # Agent protocol
 
 **Status:** v2, planning. Plugins' shape, Tracks' MCP server and how
-plugins reach the relay were decided on 2026-11-27 ("Decided"); the
-first step, a spike on Cursor, runs. The envelope and programmable
-messages are still ideas. Built on the relay and the trains of
+plugins reach the relay were decided on 2026-11-27 ("Decided"), and a
+spike showed how Cursor gets Tracks' MCP server. The envelope and
+programmable messages are still ideas. Built on the relay and the trains of
 [trains.md](trains.md), and on its Phase 2, side tracks.
 
 ## Problem
@@ -44,7 +44,7 @@ messages are still ideas. Built on the relay and the trains of
 | Managing them | A **Plugins** tab in the Tracks window, before Settings: add, update, remove, disable, and each plugin's settings (drawn from its manifest). The CLI does the same: `tracks plugin add/list/update/remove` |
 | The relay | Plugins get the rights built-in agents have, no more: the star, the side tracks' rules (see "Plugins on the relay") |
 | Tracks' MCP server | Built **first**: every engine needs it, and it's how plugins' own MCP servers reach agents, as a gateway (see "Tracks as an MCP server") |
-| Engines | Claude and Cursor both, if the spike confirms Cursor's side; Copilot, Codex and others through the same server once they're engines |
+| Engines | Claude and Cursor both (Cursor through its plugin folder, see the spike); Copilot, Codex and others through the same server once they're engines |
 
 ## Plugins
 
@@ -199,12 +199,13 @@ features as typed tools instead of commands described in prompts:
   - Claude: `--mcp-config` per session (servers from it get no project
     approval prompt), and `mcp__tracks` allowed in the `--settings` file
     Tracks already passes.
-  - Cursor: it has no per-session MCP flag, only `~/.cursor/mcp.json`
-    and `<workspace>/.cursor/mcp.json`, and `--approve-mcps` approves
-    every server, the repo's own too. But Tracks already starts every
-    Cursor session with `--plugin-dir` (its hooks plugin); if a Cursor
-    plugin can bring MCP servers, that's a per-session config. The
-    spike checks it.
+  - Cursor: no per-session MCP flag, but the hooks plugin Tracks
+    already passes with `--plugin-dir` can bring MCP servers: a
+    `.mcp.json` at its root. It's trusted without a prompt; never pass
+    `--approve-mcps`, which approves the repo's own servers too and
+    remembers it. Tool calls run without asking under `--force` (work
+    and review tracks); plan, ask and `-p` need an allow rule,
+    `Mcp(<server id>:*)` (see "The spike: Cursor").
 - **Discovery**: tools carry their schemas; the prompts shrink.
 - **Receiving** stays the pointer, then `relay_read`: the agent CLIs don't
   act on a server's notifications.
@@ -212,22 +213,38 @@ features as typed tools instead of commands described in prompts:
 
 #### The spike: Cursor
 
-Before the server is built on it, a side track checks, without changing
-Tracks:
+Done on 2026-11-27, with `cursor-agent` 2026.11.22. It works through
+the plugin folder; nothing goes into `~/.cursor/mcp.json`.
 
-1. Does a plugin folder passed with `--plugin-dir` load MCP servers
-   (and rules, skills)? In what file and format?
-2. Are they trusted without a prompt, or does it take `--approve-mcps`,
-   and does that approve only the plugin's or every server?
-3. Does the pane's environment reach a stdio MCP server Cursor starts?
-4. Do MCP tool calls ask for permission in each mode Tracks runs Cursor
-   in (`--force`, plan, ask), and can one server's tools be allowed?
-5. Does `--add-dir` give a train started in its own folder read access
-   to a checkout?
+| Question | Finding |
+|---|---|
+| Does a `--plugin-dir` plugin load MCP servers? | Yes: `<plugin>/.mcp.json` (or `mcp.json`), `{"mcpServers": {…}}`, at its root. The server's id is `plugin-<plugin folder>-<server>`. Skills (`skills/<name>/SKILL.md`) load too; rules (`rules/*.mdc`) are read but weren't seen in context |
+| Trusted without a prompt? | Yes, with no flag. A repo's `.cursor/mcp.json` server in the same run doesn't start; `--approve-mcps` starts it and records the approval in `~/.cursor/projects/<workspace>/mcp-approvals.json` |
+| Does the pane's environment reach the server? | Only HOME, PATH, SHELL, TERM, TMPDIR, USER and a few more, plus the config's `env`: `"env": {"TRACKS_AGENT_TOKEN": "${env:TRACKS_AGENT_TOKEN}"}` passes it. Each session starts its own server process, so parallel sessions each get their own token |
+| Do tool calls ask? | Not under `--force`. Under `--mode plan`, `--mode ask` and `-p`, they're rejected (`-p`) or ask "Run this MCP tool?" (interactive), unless `<workspace>/.cursor/cli.json` allows them: `{"permissions": {"allow": ["Mcp(<server id>:*)"]}}`, one server's tools only |
+| Does `--add-dir` give read access? | Reads aren't confined with Cursor's sandbox off: a plan-mode agent read outside its workspace with and without it. It matters only with the sandbox on (not tried) |
+| Other | `cursor-agent mcp list` ignores `--plugin-dir`. MCP tools load lazily |
 
-If 1 or 3 fails, the fallback is one static entry in
-`~/.cursor/mcp.json` (identity from the environment, nothing offered
-outside a track), or a Cursor train uses the CLI relay, as today.
+The setup, one file added to the hooks plugin (the folder named
+`tracks`, so the server's id is `plugin-tracks-tracks`):
+
+```
+<hooks>/tracks/.cursor-plugin/plugin.json   {"name": "tracks-hooks"}
+<hooks>/tracks/hooks/hooks.json             as today
+<hooks>/tracks/.mcp.json                    {"mcpServers": {"tracks": {
+    "command": "/abs/path/tracks", "args": ["mcp"],
+    "env": {"TRACKS_ID": "${env:TRACKS_ID}",
+            "TRACKS_AGENT_TOKEN": "${env:TRACKS_AGENT_TOKEN}"}}}}
+```
+
+Open: the allow rule for plan and ask tracks, which run in the user's
+checkout. Trains run in Tracks' own folders, where a `.cursor/cli.json`
+is Tracks' to write. For a checkout: (a) `.cursor/cli.json` in the
+worktree, a file in the user's repo; (b) one line in
+`~/.cursor/cli-config.json`, `Mcp(plugin-tracks-tracks:*)`, harmless
+outside a track since the server offers nothing there, but a file of
+the user's; (c) the user allows it once in Cursor (where that's kept
+wasn't tried).
 
 ### 4. Programmable messages: to invent
 
@@ -340,7 +357,7 @@ across its versions.
 
 ## Order
 
-1. The spike: Cursor and MCP (above).
+1. The spike: Cursor and MCP. Done.
 2. Tracks' MCP server for what exists: the relay, the proxy, the panes;
    identity per instance; `agents_list`.
 3. In parallel, apart from 2: the envelope's fields (`outcome`,
@@ -357,7 +374,7 @@ across its versions.
 
 ## Open
 
-- What the spike finds for Cursor.
+- Cursor's allow rule for plan and ask tracks ("The spike: Cursor").
 - OAuth for remote MCP servers behind the gateway.
 - The sandbox for plugins' code: the same profile as the manifest's
   permissions, and the hosts it may reach (trains.md, "Open": a
