@@ -1,5 +1,6 @@
 // Package platform is the Platform: the pane on a track window's left
 // that lists the track's trains, each with the Station's status badges,
+// its side tracks, or a side track's way back to its main track,
 // and under Signals its Relay Station and its PRs with open comments
 // (see docs/design/trains.md). It reads them from the daemon, again on
 // each change the daemon tells of. A click on a train opens its overlay.
@@ -36,9 +37,12 @@ type Entry struct {
 
 // Side is a side track as the Platform shows it: its name and the
 // Station's badges, its status and its PRs'; ID names it for OpenSide.
+// Main marks a side track's main track instead, its ID and name alone:
+// the Platform shows a way back to it.
 type Side struct {
 	ID, Name   string
 	Status, PR track.Status
+	Main       bool
 }
 
 // PR is a PR with open comments, under Signals: its name, what its
@@ -80,7 +84,7 @@ type Config struct {
 	Solve            func(index int) error
 	// Open opens a train, by its handle, in its overlay over the user's
 	// client; OpenSide switches the user's client to a side track's
-	// window, by its ID.
+	// window, or a side track's main track's, by its ID.
 	Open     func(handle string)
 	OpenSide func(id string) error
 }

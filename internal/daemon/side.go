@@ -30,6 +30,11 @@ func (c Config) sideList(ctx context.Context, call *rpc.Call) (any, error) {
 		return nil, err
 	}
 	out := rpc.SideListResult{Sides: []rpc.SideTrack{}}
+	if mainID, name, ok, err := c.Tracks.MainOf(ctx, p.ID); err != nil {
+		return nil, err
+	} else if ok && mainID != "" {
+		out.Main = &rpc.SideTrack{ID: mainID, Name: name}
+	}
 	for _, t := range sides {
 		status, pr := t.Status(), track.PRStatus(t.PRs)
 		st := rpc.SideTrack{ID: t.ID, Name: t.Name, Title: t.Title, Handle: t.Side, Status: status.Label, PR: pr.Label,

@@ -27,9 +27,11 @@ type SideTrack struct {
 	PRs []string `json:"prs,omitempty"`
 }
 
-// SideListResult is a main track's side tracks.
+// SideListResult is a main track's side tracks. Main is a side track's
+// main track instead, its ID and name alone; nil for a main track.
 type SideListResult struct {
 	Sides []SideTrack `json:"sides"`
+	Main  *SideTrack  `json:"main,omitempty"`
 }
 
 // SideNew makes the side track p asks for; p.Request.Side must be set.
@@ -40,6 +42,13 @@ func (c Client) SideNew(ctx context.Context, p CreateParams, progress func(strin
 
 // SideList is main track id's side tracks.
 func (c Client) SideList(ctx context.Context, id string) ([]SideTrack, error) {
+	r, err := c.Sides(ctx, id)
+	return r.Sides, err
+}
+
+// Sides is track id's side tracks, or its main track when it's a side
+// track.
+func (c Client) Sides(ctx context.Context, id string) (SideListResult, error) {
 	var r SideListResult
-	return r.Sides, c.Call(ctx, SideList, TrainListParams{ID: id}, &r, nil)
+	return r, c.Call(ctx, SideList, TrainListParams{ID: id}, &r, nil)
 }
