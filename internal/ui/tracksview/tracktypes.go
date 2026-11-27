@@ -35,6 +35,7 @@ const (
 	typeRow = iota
 	typeAgent
 	typeModel
+	typeEffort // shown for an engine with effort levels
 	typeAutoArchive
 	typeUnsaved
 )
@@ -89,6 +90,9 @@ func (m Model) setType(d *settings.TrackType) (Model, tea.Cmd) {
 	text := kindTitle(kind) + " tracks run on " + en.Name
 	if d.Model != "" {
 		text += ", model " + d.Model
+	}
+	if d.Effort != "" {
+		text += ", effort " + d.Effort
 	}
 	m.settings.notice = notice{text: text + "."}
 	return m.saveTypes()
@@ -180,7 +184,7 @@ func (m Model) listed(en agents.Engine, model string) bool {
 
 // typesIntro is the section's text above the types.
 func (m Model) typesIntro(width int) []string {
-	about := "The agent and model each type of track starts with. A type you haven't set follows the Engines tab."
+	about := "The agent and model each type of track starts with, and for Claude Code its effort. A type you haven't set follows the Engines tab."
 	lines := []string{m.fg(theme.TextDefault).Render("Track type default models")}
 	lines = append(lines, strings.Split(m.fg(theme.TextMuted).Width(max(1, width)).Render(about), "\n")...)
 	return append(lines, "")
@@ -209,6 +213,9 @@ func (m Model) typesBody(width int) []string {
 	}
 	lines := append(m.typesIntro(width), strings.Join(row, " "), "",
 		label("Agent")+m.selectField(en.Name, fw, lit(typeAgent)), model)
+	if m.typeFieldShown(typeEffort) {
+		lines = append(lines, label("Effort")+m.selectField(m.effortText(), fw, lit(typeEffort)))
+	}
 	if m.engines.settings.Get(en.ID) == nil {
 		warn := en.Name + " isn't added on the Engines tab, so " + kindTitle(m.selectedKind()) + " tracks can't start."
 		lines = append(lines, "")
@@ -233,7 +240,10 @@ func (m Model) typeAt(bx, by int) typeHit {
 			}
 			x += w + 1
 		}
-	case top + 2, top + 3:
+	case top + 2, top + 3, top + 4:
+		if by == top+4 && !m.typeFieldShown(typeEffort) {
+			break
+		}
 		if bx >= labelWidth && bx < labelWidth+m.themeFieldWidth()+2 {
 			return typeHit{-1, typeAgent + by - top - 2}
 		}
@@ -285,10 +295,22 @@ func (m Model) typesKey(key string) (Model, tea.Cmd) {
 		t.kind = max(0, t.kind-1)
 	case "right", "l":
 		t.kind = min(len(track.Kinds)-1, t.kind+1)
+	}
+	switch key {
+	case "left", "h", "right", "l":
+		if !m.typeFieldShown(t.focus) {
+			t.focus = typeModel
+		}
 	case "up", "k", "shift+tab":
 		t.focus = max(typeRow, t.focus-1)
+		if !m.typeFieldShown(t.focus) {
+			t.focus--
+		}
 	case "down", "j", "tab":
 		t.focus = min(m.lastTypeField(), t.focus+1)
+		if !m.typeFieldShown(t.focus) {
+			t.focus++
+		}
 	case "enter", "space":
 		if t.focus == typeRow {
 			t.focus = typeAgent
@@ -304,8 +326,11 @@ func (m Model) typesKey(key string) (Model, tea.Cmd) {
 // openTypePicker opens the picker for the focused field.
 func (m Model) openTypePicker() (Model, tea.Cmd) {
 	kind := kindTitle(m.selectedKind())
-	if m.settings.types.focus == typeModel {
+	switch m.settings.types.focus {
+	case typeModel:
 		return m.modelPicker(m.typeEngine(), pickTypeModel, kind+" tracks: model")
+	case typeEffort:
+		return m.openEffortPicker()
 	}
 	cur := m.typeEngine().ID
 	items := make([]widget.PickerItem, len(agents.Runners()))
@@ -326,7 +351,7 @@ func (m Model) openTypePicker() (Model, tea.Cmd) {
 }
 
 // agentPicked acts on what the agent picker did. Another agent starts
-// on its default model.
+// on its default model and effort.
 func (m Model) agentPicked(r widget.PickerResult) (Model, tea.Cmd) {
 	switch r {
 	case widget.PickerClosed:
@@ -334,11 +359,11 @@ func (m Model) agentPicked(r widget.PickerResult) (Model, tea.Cmd) {
 	case widget.PickerChosen:
 		en := agents.Runners()[m.picker.Cursor]
 		m.picker = nil
-		model := ""
+		model, effort := "", ""
 		if en.ID == m.typeEngine().ID {
-			model = m.typeModel()
+			model, effort = m.typeModel(), m.typeEffort()
 		}
-		return m.setType(&settings.TrackType{Engine: en.ID, Model: model})
+		return m.setType(&settings.TrackType{Engine: en.ID, Model: model, Effort: effort})
 	}
 	return m, nil
 }

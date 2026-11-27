@@ -96,6 +96,7 @@ func Command(s agents.Spec) (agents.Start, error) {
 	if !s.Resume {
 		line.SetIf("--model", t.Model)
 	}
+	line.SetIf("--effort", t.Effort)
 	for _, d := range dirs {
 		line.Set("--add-dir", d)
 	}

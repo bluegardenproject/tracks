@@ -20,6 +20,9 @@ type Engine struct {
 	// Preview engines are found and added on the Engines tab, but
 	// Tracks can't run tracks on them yet.
 	Preview bool
+	// Efforts are the CLI's --effort levels, lowest first; none for an
+	// engine whose model ids carry their effort.
+	Efforts []string
 }
 
 // Model is a value for the CLI's --model, and what to call it.
@@ -39,6 +42,7 @@ var (
 			{"haiku", "Haiku (latest)"},
 			{"fable", "Fable (latest)"},
 		},
+		Efforts: []string{"low", "medium", "high", "xhigh", "max"},
 	}
 	Cursor = Engine{
 		ID: "cursor", Name: "Cursor", Program: "agent",

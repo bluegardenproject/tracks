@@ -106,7 +106,7 @@ func (s *Service) create(ctx context.Context, req Request, progress func(string)
 			}
 		}
 	}
-	t.ID, t.Engine, t.Model, t.CreatedAt = s.newID(), id, model, s.now()
+	t.ID, t.Engine, t.Model, t.Effort, t.CreatedAt = s.newID(), id, model, set.EffortOn(string(req.Kind), id), s.now()
 	name, release, err := s.claimName(t)
 	if err != nil {
 		return Created{}, err

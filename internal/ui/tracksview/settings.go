@@ -66,6 +66,7 @@ const (
 	pickProxy     // what a proxy port forwards to
 	pickReviewerAgent
 	pickReviewerModel
+	pickTypeEffort // a track type's effort, for an engine with levels
 )
 
 type (
@@ -166,6 +167,8 @@ func (m Model) picked(r widget.PickerResult) (Model, tea.Cmd) {
 		return m.reviewerAgentPicked(r)
 	case pickAgent:
 		return m.agentPicked(r)
+	case pickTypeEffort:
+		return m.effortPicked(r)
 	case pickUnsaved:
 		return m.unsavedPicked(r)
 	case pickProxy:

@@ -110,3 +110,41 @@ func TestTrackTypeClicks(t *testing.T) {
 		t.Errorf("clicking the Model field should open its picker:\n%s", plainView(m))
 	}
 }
+
+func TestTrackTypeEffort(t *testing.T) {
+	m, types := openTypes(t)
+	if view := plainView(m); !strings.Contains(view, "Effort") {
+		t.Fatalf("Claude Code's tracks should show an effort:\n%s", view)
+	}
+	m = settle(m, downKey, downKey, downKey, enterKey)
+	view := plainView(m)
+	for _, want := range []string{"Work tracks: effort", "Claude Code chooses", "xhigh"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the effort picker lacks %q:\n%s", want, view)
+		}
+	}
+	m = settle(m, downKey, downKey, downKey, enterKey)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "claude", Effort: "high"}) {
+		t.Fatalf("saved work = %+v", d)
+	}
+	if m.settings.notice.text != "Work tracks run on Claude Code, effort high." {
+		t.Errorf("notice %q", m.settings.notice.text)
+	}
+
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, enterKey, downKey, downKey, downKey, downKey, downKey, enterKey)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "claude", Model: "claude-opus-5-5", Effort: "high"}) {
+		t.Errorf("a new model should keep the effort: %+v", d)
+	}
+
+	m = settle(m, tea.KeyPressMsg{Code: tea.KeyUp}, enterKey, downKey, enterKey)
+	if d := types.saved.Get("work"); d == nil || *d != (settings.TrackType{Engine: "cursor"}) {
+		t.Errorf("Cursor has no effort: %+v", d)
+	}
+	if view := plainView(m); strings.Contains(view, "Effort") {
+		t.Errorf("Cursor's tracks shouldn't show an effort:\n%s", view)
+	}
+	m = settle(m, downKey, downKey)
+	if m.settings.types.focus != typeAutoArchive {
+		t.Errorf("down from Model should skip the hidden effort, focus %d", m.settings.types.focus)
+	}
+}
