@@ -1,5 +1,36 @@
 # Changelog
 
+## [3.11.0](https://github.com/bluegardenproject/tracks/compare/v3.10.0...v3.11.0) (2026-11-27)
+
+
+### Features
+
+* **mcp:** relay_send takes outcome and refs; agent tokens migrate as 0030 ([2a5cfbf](https://github.com/bluegardenproject/tracks/commit/2a5cfbfdd91a05cf76c6eac135f071df5efc2440))
+* **mcp:** tracks mcp, Tracks' own MCP server for track agents ([23c03a0](https://github.com/bluegardenproject/tracks/commit/23c03a0e987c1f35cd959a6a73498e639e1e9d8b))
+* **platform:** a side track's Platform leads back to its main track ([a5672d1](https://github.com/bluegardenproject/tracks/commit/a5672d128cd8ab4d5b17686c7f2c72d2bdbe0c57))
+* **plugins:** the plugin manifest and store, with tracks plugin ([7503388](https://github.com/bluegardenproject/tracks/commit/7503388c452006278cc6a75eea13c93d45f3bf35))
+* **relay:** outcome and refs, the envelope's first fields ([59a90f9](https://github.com/bluegardenproject/tracks/commit/59a90f9e393eec490e868c0b1afabbc47a5f4231))
+* **side:** a main track ends its side tracks with tracks side end ([b44600f](https://github.com/bluegardenproject/tracks/commit/b44600f22569ac9e9a2f176349991c841dd6998f))
+* **side:** side tracks ask their main track first and report blockers ([6f20d31](https://github.com/bluegardenproject/tracks/commit/6f20d316834293709c44ee322bc957e96c28448a))
+
+
+### Bug Fixes
+
+* **mcp:** the reviewer's warns on agent tokens ([48e8952](https://github.com/bluegardenproject/tracks/commit/48e8952c6708e701d67705919676f51b72fa2a8f))
+* **plugins:** code passed off as a brief asks again on update ([5dd53ed](https://github.com/bluegardenproject/tracks/commit/5dd53edd4ba0fda491563360cd6270d932234849))
+* **relaystation:** wrap a ref wider than the popup; omit empty refs from JSON ([318bdec](https://github.com/bluegardenproject/tracks/commit/318bdec29b4d7e448ba4e98892bc5aca54077659))
+
+
+### Documentation
+
+* **protocol:** Cursor's MCP prompt in plan and ask tracks is settled ([e2a1218](https://github.com/bluegardenproject/tracks/commit/e2a12180f3f4e5392ebb2eef98269d3c5463cd2c))
+* **protocol:** no sandbox for plugins' code in v2, a follow-up discussion ([c057a90](https://github.com/bluegardenproject/tracks/commit/c057a90b872b26836b92148494d9586329323642))
+* **protocol:** plugin decisions, Tracks' MCP server first, the Cursor spike ([85a1fe5](https://github.com/bluegardenproject/tracks/commit/85a1fe501aab0a3ab30f2fbea5ee75851f938ff0))
+* **protocol:** the Cursor spike's findings ([77415c3](https://github.com/bluegardenproject/tracks/commit/77415c3ddfb9d0a089c8b7dc76ab8fec695af6bc))
+* **protocol:** Tracks keeps its own trains safe, plugins answer for themselves ([5dc6765](https://github.com/bluegardenproject/tracks/commit/5dc6765f2e53e6b1b2ad7ba6ec2c3af67a10fc39))
+* **roadmap:** migrations by name is to discuss first ([2037e1d](https://github.com/bluegardenproject/tracks/commit/2037e1d05b7dc02ab07cd0cb2a28843218262560))
+* **roadmap:** record applied migrations by name ([f95e8d5](https://github.com/bluegardenproject/tracks/commit/f95e8d51391a822c0fd5c7e466cd60df496505ea))
+
 ## [3.10.0](https://github.com/bluegardenproject/tracks/compare/v3.9.0...v3.10.0) (2026-11-27)
 
 
