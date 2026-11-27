@@ -229,18 +229,18 @@ func (s *Service) restackOne(ctx context.Context, id, name, mainID string, pr tr
 			// No main track to decide: the side track hears it.
 			to = upper.ID
 		}
-		return s.postGitHub(ctx, to, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event)
+		return s.postGitHub(ctx, to, named+" Its branch or commit isn't one Tracks puts into a command: you decide.", relay.Event, pr.URL)
 	}
 	if err := s.Store.SetBase(ctx, upper.ID, name, base); err != nil {
 		return err
 	}
 	if !upper.Open() {
-		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event)
+		return s.postGitHub(ctx, mainID, named+" It has ended: you decide.", relay.Event, pr.URL)
 	}
 	if err := s.instruct(ctx, upper.ID, instructionRestack, pr.URL, actions.SideRestack(ref, gitHubText(lowerName), base, head)); err != nil {
 		return err
 	}
-	return s.postGitHub(ctx, mainID, named+" Tracks tells it to restack, once its agent is free.", relay.Notice)
+	return s.postGitHub(ctx, mainID, named+" Tracks tells it to restack, once its agent is free.", relay.Notice, pr.URL)
 }
 
 // dropBeforeRestack drops what waits for side track upper that the

@@ -15,7 +15,7 @@ func (c Config) relaySend(ctx context.Context, call *rpc.Call) (any, error) {
 	if err := call.Decode(&p); err != nil {
 		return nil, err
 	}
-	m, err := c.Tracks.RelaySend(ctx, p.ID, p.To, p.Kind, p.Body)
+	m, err := c.Tracks.RelaySend(ctx, p.ID, p.To, p.Kind, p.Body, p.Fields)
 	if err != nil {
 		return nil, err
 	}

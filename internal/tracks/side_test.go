@@ -74,7 +74,7 @@ func TestSideRelay(t *testing.T) {
 	if _, err := f.svc.RelayRead(ctx, main.ID, relay.TrackHandle); err != nil {
 		t.Fatal(err)
 	}
-	report, err := f.svc.RelaySend(ctx, st.ID, "@track", relay.Report, "PR #231 is ready.")
+	report, err := f.svc.RelaySend(ctx, st.ID, "@track", relay.Report, "PR #231 is ready.", relay.Fields{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestSideRelay(t *testing.T) {
 		t.Errorf("main track read %+v, %v; want the side track's report", msgs, err)
 	}
 
-	question, err := f.svc.RelaySend(ctx, main.ID, side.Prefix, relay.Question, "Which table?")
+	question, err := f.svc.RelaySend(ctx, main.ID, side.Prefix, relay.Question, "Which table?", relay.Fields{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestSideRelay(t *testing.T) {
 	}
 
 	var problem Problem
-	if _, err := f.svc.RelaySend(ctx, st.ID, side.Prefix, relay.Question, "Hi?"); !errors.As(err, &problem) {
+	if _, err := f.svc.RelaySend(ctx, st.ID, side.Prefix, relay.Question, "Hi?", relay.Fields{}); !errors.As(err, &problem) {
 		t.Errorf("a side track sent to a side track: %v, want a Problem", err)
 	}
 	who, err := f.svc.RelayWho(ctx, main.ID)
@@ -142,7 +142,7 @@ func TestMainTrackWaitsForItsSideTracks(t *testing.T) {
 	if err != nil || len(unread) == 0 || unread[len(unread)-1].Body != "@"+st.Side+" left: it ended." {
 		t.Errorf("main track's relay holds %+v, %v; want the side track's left notice last", unread, err)
 	}
-	if _, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Still there?"); !errors.As(err, &problem) {
+	if _, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Still there?", relay.Fields{}); !errors.As(err, &problem) {
 		t.Errorf("sending to an ended side track: %v, want a Problem", err)
 	}
 	if err := f.svc.End(ctx, main.ID); !errors.As(err, &problem) || !strings.Contains(err.Error(), "PR #231 open") {
@@ -253,7 +253,7 @@ func TestSideTrackReadsBothRelays(t *testing.T) {
 	if _, err := f.svc.RelayRead(ctx, st.ID, relay.TrackHandle); err != nil {
 		t.Fatal(err)
 	}
-	question, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Which table?")
+	question, err := f.svc.RelaySend(ctx, main.ID, st.Side, relay.Question, "Which table?", relay.Fields{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package tracks
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -44,7 +45,8 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	msgs = relayOf(t, f)
-	if len(msgs) != 2 || msgs[1].From != handle || msgs[1].To != relay.TrackHandle || msgs[1].Kind != relay.Report || msgs[1].Body != "Fine.\nREVIEW OUTCOME: pass" {
+	if len(msgs) != 2 || msgs[1].From != handle || msgs[1].To != relay.TrackHandle || msgs[1].Kind != relay.Report || msgs[1].Body != "Fine.\nREVIEW OUTCOME: pass" ||
+		msgs[1].Outcome != relay.Pass {
 		t.Fatalf("after the report: %+v", msgs)
 	}
 	if report, err := f.svc.WaitReview(ctx, "r", ""); err != nil || !strings.Contains(report, "Fine.") {
@@ -54,7 +56,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Errorf("tracks review printed the report, yet the relay has %+v unread, %v", unread, err)
 	}
 
-	asked, err := f.svc.RelaySend(ctx, "r", "reviewer", relay.Question, "Why the cache?")
+	asked, err := f.svc.RelaySend(ctx, "r", "reviewer", relay.Question, "Why the cache?", relay.Fields{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Errorf("tracks review --ask didn't post its question: %+v", last)
 	}
 	// @github's event comes in while tracks review waits.
-	if err := f.svc.postGitHub(ctx, "r", "PR acme/api#1 has conflicts with main.", relay.Event); err != nil {
+	if err := f.svc.postGitHub(ctx, "r", "PR acme/api#1 has conflicts with main.", relay.Event, "https://github.com/acme/api/pull/1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.ReviewReply(ctx, "r", run, "It's held briefly."); err != nil {
@@ -95,7 +97,8 @@ func TestTheReviewerOnTheRelay(t *testing.T) {
 		t.Fatalf("the second answer: %q, %v", answer, err)
 	}
 	unread, err := f.svc.RelayRead(ctx, "r", relay.TrackHandle)
-	if err != nil || len(unread) != 2 || unread[0].From != relay.GitHubHandle || unread[1].Body != "It's held briefly." {
+	if err != nil || len(unread) != 2 || unread[0].From != relay.GitHubHandle || unread[1].Body != "It's held briefly." ||
+		!slices.Equal(unread[0].Refs.PRs, []string{"https://github.com/acme/api/pull/1"}) {
 		t.Errorf("after the second answer, unread %+v, %v; want @github's event, then the answer again", unread, err)
 	}
 

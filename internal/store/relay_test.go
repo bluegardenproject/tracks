@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -112,5 +113,39 @@ func TestRelay(t *testing.T) {
 	}
 	if got := ids("track"); len(got) != 0 {
 		t.Errorf("a deleted track's relay: %v", got)
+	}
+}
+
+func TestRelayOutcomeAndRefs(t *testing.T) {
+	ctx := context.Background()
+	s := open(t, filepath.Join(t.TempDir(), "tracks.db"))
+	if err := s.AddTrack(ctx, track.Track{ID: "a", Kind: track.Work, Name: "a", Engine: "claude", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	refs := relay.Refs{PRs: []string{"https://github.com/acme/api/pull/12"}, Files: []string{"internal/relay/relay.go"}}
+	with, err := s.AddRelayMessage(ctx, "a", relay.Message{From: "side-1", To: "track", Kind: relay.Report, Body: "Done.",
+		Outcome: relay.Done, Refs: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	without, err := s.AddRelayMessage(ctx, "a", relay.Message{From: "track", To: "side-1", Kind: relay.Question, Body: "Why?"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.RelayMessage(ctx, "a", with.ID)
+	if err != nil || got.Outcome != relay.Done || !reflect.DeepEqual(got.Refs, refs) {
+		t.Errorf("read back %+v, %v", got, err)
+	}
+	got, err = s.RelayMessage(ctx, "a", without.ID)
+	if err != nil || got.Outcome != "" || !got.Refs.Empty() || got.Refs.PRs != nil {
+		t.Errorf("a message without fields read back %+v, %v", got, err)
+	}
+	log, err := s.RelayLog(ctx, "a")
+	if err != nil || len(log) != 2 || log[0].Outcome != relay.Done || !reflect.DeepEqual(log[0].Refs, refs) {
+		t.Errorf("the log %+v, %v", log, err)
+	}
+	var stored string
+	if err := s.db.QueryRowContext(ctx, "SELECT refs FROM relay_messages WHERE id = ?", without.ID).Scan(&stored); err != nil || stored != "" {
+		t.Errorf("a message without refs stored %q, %v", stored, err)
 	}
 }

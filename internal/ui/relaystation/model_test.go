@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -182,4 +183,49 @@ func TestStates(t *testing.T) {
 func updated(m Model, msg tea.Msg) (Model, tea.Cmd) {
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd
+}
+
+var osc = regexp.MustCompile(`\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)`)
+
+func TestShowsOutcomeAndRefs(t *testing.T) {
+	msg := relay.Message{ID: 5, From: "side-1", To: relay.TrackHandle, Kind: relay.Report, Body: "All done.", At: now,
+		Outcome: relay.Done, Refs: relay.Refs{PRs: []string{"https://github.com/acme/api/pull/12"}, Files: []string{"internal/relay/relay.go"}}}
+	m := run(80, 30, Loaded{Messages: []relay.Message{msg}})
+	raw := m.render()
+	if !strings.Contains(raw, "\x1b]8;;https://github.com/acme/api/pull/12") {
+		t.Errorf("the PR isn't a link: %q", raw)
+	}
+	out := osc.ReplaceAllString(plain(m), "")
+	lines := strings.Split(out, "\n")
+	head := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "@side-1") })
+	if head < 0 || !strings.Contains(lines[head], " report ") || !strings.Contains(lines[head], " done ") {
+		t.Fatalf("the head has no outcome badge:\n%s", out)
+	}
+	if !strings.Contains(lines[head+1], "PR acme/api#12 · internal/relay/relay.go") || !strings.Contains(lines[head+2], "All done.") {
+		t.Errorf("the refs aren't between the head and the body:\n%s", out)
+	}
+}
+
+func TestRefsWrap(t *testing.T) {
+	files := []string{"internal/relay/envelope.go", "internal/relay/format.go", "internal/store/relay.go", "internal/cli/relay.go"}
+	m := run(40, 30, Loaded{Messages: []relay.Message{{ID: 1, From: "side-1", To: relay.TrackHandle, Kind: relay.Report,
+		Body: "x", At: now, Refs: relay.Refs{Files: files}}}})
+	out := plain(m)
+	for _, f := range files {
+		if !strings.Contains(out, f) {
+			t.Errorf("%s is cut off:\n%s", f, out)
+		}
+	}
+}
+
+func TestOutcomeBadgesAreThemeStates(t *testing.T) {
+	for _, o := range append(slices.Clone(relay.Outcomes), "later") {
+		s := outcomeStatus(o)
+		if !slices.Contains(theme.All, theme.Token("state."+s.Badge+".bg")) || !slices.Contains(theme.All, theme.Token("state."+s.Badge+".text")) {
+			t.Errorf("%s's badge %q isn't a theme state", o, s.Badge)
+		}
+	}
+	if outcomeStatus(relay.Blocked).Badge != "danger" || outcomeStatus(relay.Pass).Badge != "success" {
+		t.Error("blocked or pass drawn in the wrong state")
+	}
 }

@@ -55,6 +55,9 @@ func (m Model) layout() layout {
 			continue
 		}
 		add(mark+m.head(msg), i)
+		for _, line := range m.refLines(msg.Refs, width) {
+			add(indent+line, i)
+		}
 		body := strings.Split(lipgloss.Wrap(clean(strings.TrimRight(msg.Body, "\n")), width, ""), "\n")
 		shown := body
 		if !m.open[msg.ID] && len(body) > FoldLines+1 {
@@ -75,7 +78,7 @@ func (m Model) layout() layout {
 }
 
 // head is a message's first line: when, from whom to whom, its kind,
-// and whether it waits for its pointer.
+// its outcome, and whether it waits for its pointer.
 func (m Model) head(msg relay.Message) string {
 	to := "everyone"
 	if msg.To != "" {
@@ -86,6 +89,9 @@ func (m Model) head(msg relay.Message) string {
 		m.fg(theme.TextDefault).Bold(true).Render("@"+msg.From) + m.fg(theme.TextMuted).Render(" → ") +
 			m.fg(theme.TextDefault).Render(to),
 		widget.Badge(m.palette, kindStatus(msg.Kind)),
+	}
+	if msg.Outcome != "" {
+		parts = append(parts, widget.Badge(m.palette, outcomeStatus(msg.Outcome)))
 	}
 	if m.waiting[msg.ID] {
 		parts = append(parts, widget.Badge(m.palette, notDelivered))
@@ -104,6 +110,62 @@ func kindStatus(k relay.Kind) track.Status {
 		badge = track.BadgeWarning
 	}
 	return track.Status{ID: string(k), Label: string(k), Badge: badge}
+}
+
+// outcomeStatus is a message's outcome as a badge: pass and done
+// succeed, blocked fails, needs-input waits on someone.
+func outcomeStatus(o relay.Outcome) track.Status {
+	badge := track.BadgeInfo
+	switch o {
+	case relay.Pass, relay.Done:
+		badge = track.BadgeSuccess
+	case relay.Blocked:
+		badge = track.BadgeDanger
+	case relay.NeedsInput:
+		badge = track.BadgeWarning
+	}
+	return track.Status{ID: string(o), Label: clean(string(o)), Badge: badge}
+}
+
+// refLines are a message's refs, packed into lines of width: its PRs as
+// owner/name#123, each a link to the PR, then its files.
+func (m Model) refLines(refs relay.Refs, width int) []string {
+	type item struct{ label, link string }
+	var items []item
+	for _, pr := range refs.PRs {
+		it := item{label: "PR " + clean(relay.PRLabel(pr))}
+		if relay.CheckRefs(relay.Refs{PRs: []string{pr}}) == nil {
+			it.link = pr
+		}
+		items = append(items, it)
+	}
+	for _, f := range refs.Files {
+		items = append(items, item{label: clean(f)})
+	}
+	const sep = " · "
+	var lines []string
+	line, used := "", 0
+	for _, it := range items {
+		w := lipgloss.Width(it.label)
+		if used > 0 && used+len(sep)+w > width {
+			lines = append(lines, line)
+			line, used = "", 0
+		}
+		if used > 0 {
+			line += m.fg(theme.TextFaint).Render(sep)
+			used += len(sep)
+		}
+		st := m.fg(theme.TextMuted)
+		if it.link != "" {
+			st = m.fg(theme.TextAccent).Underline(true).Hyperlink(it.link)
+		}
+		line += st.Render(it.label)
+		used += w
+	}
+	if used > 0 {
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // when is t as the Relay Station shows it: the time alone today, the

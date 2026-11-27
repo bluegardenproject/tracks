@@ -51,12 +51,15 @@ func newReviewHandle(prefix string, taken func(string) bool) (string, error) {
 }
 
 // postReview posts text, the report or an answer of track id's reviewer,
-// as its message to the track, and keeps the message's number in dir, so
-// the tracks review that prints it can mark it read. The caller holds
-// s.reviewMu.
+// as its message to the track, a report with its outcome, and keeps the
+// message's number in dir, so the tracks review that prints it can mark
+// it read. The caller holds s.reviewMu.
 func (s *Service) postReview(ctx context.Context, id, dir string, kind relay.Kind, text string) error {
-	m, err := s.Store.AddRelayMessage(ctx, id, relay.Message{From: reviewHandle(dir), To: relay.TrackHandle,
-		Kind: kind, Body: text, At: s.now()})
+	m := relay.Message{From: reviewHandle(dir), To: relay.TrackHandle, Kind: kind, Body: text, At: s.now()}
+	if kind == relay.Report {
+		m.Outcome = reviewOutcome(text)
+	}
+	m, err := s.Store.AddRelayMessage(ctx, id, m)
 	if err != nil {
 		return err
 	}
@@ -66,6 +69,18 @@ func (s *Service) postReview(ctx context.Context, id, dir string, kind relay.Kin
 		}
 	}
 	return writeWhole(filepath.Join(dir, string(kind)+".msg"), strconv.FormatInt(m.ID, 10))
+}
+
+// reviewOutcome is the outcome of a reviewer's report, read from its
+// REVIEW OUTCOME line; none for a report without one.
+func reviewOutcome(report string) relay.Outcome {
+	switch train.OutcomeOf(report) {
+	case train.Pass:
+		return relay.Pass
+	case train.Blocked:
+		return relay.Blocked
+	}
+	return ""
 }
 
 // printedMessage is the number of the relay message of the report or

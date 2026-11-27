@@ -172,7 +172,7 @@ fields Tracks acts on:
 ```json
 { "v": 1, "id": 42, "from": "watch-000123", "to": "track", "kind": "event",
   "at": "…", "outcome": "blocked",
-  "refs": { "pr": "https://…/pull/234", "files": ["internal/relay/relay.go"] },
+  "refs": { "prs": ["https://…/pull/234"], "files": ["internal/relay/relay.go"] },
   "body": "CI failed on lint: …" }
 ```
 
@@ -180,6 +180,10 @@ fields Tracks acts on:
 - `refs` link PRs in the Relay Station and feed overlap detection.
 - Today's messages are the envelope without the new fields: agents of
   today keep working.
+- Built: `outcome` (`pass`, `blocked`, `done`, `needs-input`) and `refs`
+  (PR URLs, `#123` for a PR of the track's repo, repo-relative files; at
+  most 20), checked in `internal/relay`; `tracks relay send --outcome
+  --ref`; the reviewer's report and `@github`'s events set them.
 
 ### 3. Tracks as an MCP server: how agents use Tracks
 

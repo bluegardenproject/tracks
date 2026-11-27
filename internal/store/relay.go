@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bluegardenproject/tracks/internal/relay"
@@ -15,9 +17,17 @@ func (s *Store) AddRelayMessage(ctx context.Context, id string, m relay.Message)
 	if m.At.IsZero() {
 		m.At = time.Now()
 	}
+	refs := ""
+	if !m.Refs.Empty() {
+		b, err := json.Marshal(m.Refs)
+		if err != nil {
+			return relay.Message{}, err
+		}
+		refs = string(b)
+	}
 	res, err := s.db.ExecContext(ctx,
-		"INSERT INTO relay_messages (track_id, sender, recipient, kind, body, at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, m.From, m.To, string(m.Kind), m.Body, m.At.UnixMilli())
+		"INSERT INTO relay_messages (track_id, sender, recipient, kind, body, at, outcome, refs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, m.From, m.To, string(m.Kind), m.Body, m.At.UnixMilli(), string(m.Outcome), refs)
 	if err != nil {
 		return relay.Message{}, err
 	}
@@ -30,7 +40,7 @@ func (s *Store) AddRelayMessage(ctx context.Context, id string, m relay.Message)
 // track, but none it sent.
 func (s *Store) RelayUnread(ctx context.Context, id, reader string) ([]relay.Message, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT id, sender, recipient, kind, body, at FROM relay_messages "+
+		"SELECT "+relayColumns+" FROM relay_messages "+
 			"WHERE track_id = ? AND id > COALESCE((SELECT last_id FROM relay_cursors WHERE track_id = ? AND reader = ?), 0) "+
 			"AND sender != ? AND (? = ? OR recipient IN (?, '')) ORDER BY id",
 		id, id, reader, reader, reader, relay.TrackHandle, reader)
@@ -66,7 +76,7 @@ func (s *Store) MarkRelayRead(ctx context.Context, id, reader string, upTo int64
 // RelayLog is every message on track id's relay, oldest first.
 func (s *Store) RelayLog(ctx context.Context, id string) ([]relay.Message, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT id, sender, recipient, kind, body, at FROM relay_messages WHERE track_id = ? ORDER BY id", id)
+		"SELECT "+relayColumns+" FROM relay_messages WHERE track_id = ? ORDER BY id", id)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +107,7 @@ func (s *Store) RelayUnseen(ctx context.Context, id, reader string) (int, error)
 // has none such.
 func (s *Store) RelayMessage(ctx context.Context, id string, msg int64) (relay.Message, error) {
 	row := s.db.QueryRowContext(ctx,
-		"SELECT id, sender, recipient, kind, body, at FROM relay_messages WHERE track_id = ? AND id = ?", id, msg)
+		"SELECT "+relayColumns+" FROM relay_messages WHERE track_id = ? AND id = ?", id, msg)
 	m, err := scanRelay(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return relay.Message{}, ErrNotFound
@@ -105,13 +115,20 @@ func (s *Store) RelayMessage(ctx context.Context, id string, msg int64) (relay.M
 	return m, err
 }
 
+const relayColumns = "id, sender, recipient, kind, body, at, outcome, refs"
+
 func scanRelay(row interface{ Scan(...any) error }) (relay.Message, error) {
 	var m relay.Message
-	var kind string
+	var kind, outcome, refs string
 	var at int64
-	if err := row.Scan(&m.ID, &m.From, &m.To, &kind, &m.Body, &at); err != nil {
+	if err := row.Scan(&m.ID, &m.From, &m.To, &kind, &m.Body, &at, &outcome, &refs); err != nil {
 		return relay.Message{}, err
 	}
-	m.Kind, m.At = relay.Kind(kind), time.UnixMilli(at)
+	m.Kind, m.At, m.Outcome = relay.Kind(kind), time.UnixMilli(at), relay.Outcome(outcome)
+	if refs != "" {
+		if err := json.Unmarshal([]byte(refs), &m.Refs); err != nil {
+			return relay.Message{}, fmt.Errorf("message %d's refs: %w", m.ID, err)
+		}
+	}
 	return m, nil
 }

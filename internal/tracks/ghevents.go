@@ -84,10 +84,14 @@ func baseOf(pr track.PR) string {
 }
 
 // postGitHub posts body to track id's relay from @github, an event
-// that wakes its agent, or a notice, which doesn't.
-func (s *Service) postGitHub(ctx context.Context, id, body string, kind relay.Kind) error {
-	_, err := s.Store.AddRelayMessage(ctx, id, relay.Message{From: relay.GitHubHandle, To: relay.TrackHandle,
-		Kind: kind, Body: body, At: s.now()})
+// that wakes its agent, or a notice, which doesn't, with the PR at
+// prURL as its ref.
+func (s *Service) postGitHub(ctx context.Context, id, body string, kind relay.Kind, prURL string) error {
+	m := relay.Message{From: relay.GitHubHandle, To: relay.TrackHandle, Kind: kind, Body: body, At: s.now()}
+	if refs := (relay.Refs{PRs: []string{prURL}}); relay.CheckRefs(refs) == nil {
+		m.Refs = refs
+	}
+	_, err := s.Store.AddRelayMessage(ctx, id, m)
 	return err
 }
 

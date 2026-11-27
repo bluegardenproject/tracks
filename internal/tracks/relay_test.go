@@ -15,7 +15,7 @@ func TestRelaySend(t *testing.T) {
 	ctx := context.Background()
 	f, _, worktree := trainsFixture(t, "cursor")
 	var problem Problem
-	if _, err := f.svc.RelaySend(ctx, "r", "reviewer", relay.Question, "Why?"); !errors.As(err, &problem) {
+	if _, err := f.svc.RelaySend(ctx, "r", "reviewer", relay.Question, "Why?", relay.Fields{}); !errors.As(err, &problem) {
 		t.Errorf("sending to a reviewer that isn't there: %v, want a Problem", err)
 	}
 	startReview(t, f, worktree)
@@ -30,10 +30,14 @@ func TestRelaySend(t *testing.T) {
 		{"track", relay.Question, `no train called "track"`},
 		{"reviewer", relay.Notice, "isn't a kind of message"},
 	} {
-		_, err := f.svc.RelaySend(ctx, "r", tc.to, tc.kind, "Why?")
+		_, err := f.svc.RelaySend(ctx, "r", tc.to, tc.kind, "Why?", relay.Fields{})
 		if !errors.As(err, &problem) || !strings.Contains(err.Error(), tc.why) {
 			t.Errorf("sending %s to %s: %v, want a Problem saying %q", tc.kind, tc.to, err, tc.why)
 		}
+	}
+	if _, err := f.svc.RelaySend(ctx, "r", "reviewer", relay.Question, "Why?", relay.Fields{Outcome: relay.NeedsInput}); !errors.As(err, &problem) ||
+		!strings.Contains(err.Error(), "without --outcome") {
+		t.Errorf("a question with an outcome to the reviewer: %v, want a Problem", err)
 	}
 	who, _ := f.svc.RelayWho(ctx, "r")
 	if msgs, err := f.store.RelayUnread(ctx, "r", who[1].Handle); err != nil || len(msgs) != 1 || msgs[0].Kind != relay.Notice {

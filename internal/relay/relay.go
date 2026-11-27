@@ -41,14 +41,17 @@ var Kinds = []Kind{Report, Event, Question, Answer}
 const MaxBody = 64 << 10
 
 // Message is one message on a track's relay. To is "" for a notice to
-// everyone on it.
+// everyone on it. Outcome and Refs are optional: a message without
+// them is one from before they were.
 type Message struct {
-	ID   int64     `json:"id"`
-	From string    `json:"from"`
-	To   string    `json:"to"`
-	Kind Kind      `json:"kind"`
-	Body string    `json:"body"`
-	At   time.Time `json:"at"`
+	ID      int64     `json:"id"`
+	From    string    `json:"from"`
+	To      string    `json:"to"`
+	Kind    Kind      `json:"kind"`
+	Body    string    `json:"body"`
+	At      time.Time `json:"at"`
+	Outcome Outcome   `json:"outcome,omitempty"`
+	Refs    Refs      `json:"refs,omitzero"`
 }
 
 // ErrStar means a message would go other than through the track: a

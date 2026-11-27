@@ -28,12 +28,14 @@ type RelayIDParams struct {
 	ID string `json:"id"`
 }
 
-// RelaySendParams is a message from track ID to To.
+// RelaySendParams is a message from track ID to To, with its outcome
+// and refs as the sender gave them.
 type RelaySendParams struct {
 	ID   string     `json:"id"`
 	To   string     `json:"to"`
 	Kind relay.Kind `json:"kind"`
 	Body string     `json:"body"`
+	relay.Fields
 }
 
 // RelayShowParams names one message of track ID's relay.
@@ -74,11 +76,11 @@ type RelayWhoResult struct {
 	Members []Member `json:"members"`
 }
 
-// RelaySend sends body, of kind, from track id to to, and returns the
-// message as sent.
-func (c Client) RelaySend(ctx context.Context, id, to string, kind relay.Kind, body string) (relay.Message, error) {
+// RelaySend sends body, of kind, from track id to to, with f's outcome
+// and refs, and returns the message as sent.
+func (c Client) RelaySend(ctx context.Context, id, to string, kind relay.Kind, body string, f relay.Fields) (relay.Message, error) {
 	var r RelayMessages
-	err := c.Call(ctx, RelaySend, RelaySendParams{ID: id, To: to, Kind: kind, Body: body}, &r, nil)
+	err := c.Call(ctx, RelaySend, RelaySendParams{ID: id, To: to, Kind: kind, Body: body, Fields: f}, &r, nil)
 	if err != nil || len(r.Messages) == 0 {
 		return relay.Message{}, err
 	}
